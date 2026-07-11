@@ -10,3 +10,13 @@ data/
 
 config/active.json
 config/1
+
+# Go
+bin/
+*.exe
+*.test
+vendor/
+
+# local tool / session
+.omo/
+work/session.secret

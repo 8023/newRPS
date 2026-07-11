@@ -90,6 +90,10 @@
     "roomWords": ["小屋", "房间", "剧场", "擂台"]
   },
   "roomTags": ["轻松", "认真", "排位", "惩罚", "聊天"],
+  "accessControl": {
+    "maxOnlinePerIp": 3,
+    "maxCreatesPer10Min": 5
+  },
   "nameWar": {
     "penaltyPrefix": "失名者",
     "loserPanelTitle": "名字争夺战失格者",

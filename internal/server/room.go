@@ -1,0 +1,612 @@
+package server
+
+import (
+	crand "crypto/rand"
+	"fmt"
+	mrand "math/rand"
+	"strings"
+
+	"github.com/doumiao/newRPS/internal/types"
+)
+
+const (
+	defaultRoomName         = "新的锤子剪刀布房间"
+	defaultOthelloRoomName  = "新的黑白棋房间"
+	defaultTicTacToeRoomName = "新的井字棋房间"
+)
+
+func (s *Server) roomCode() string {
+	for {
+		b := make([]byte, 3)
+		_, _ = randRead(b)
+		code := fmt.Sprintf("DM-%s", strings.ToUpper(fmt.Sprintf("%x", b)[:4]))
+		exists := false
+		for _, room := range s.rooms {
+			if room.Code == code {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			return code
+		}
+	}
+}
+
+func randRead(b []byte) (int, error) {
+	return cryptoRandRead(b)
+}
+
+func (s *Server) seatOf(room *RoomState, playerID string) (types.SeatKey, bool) {
+	if room.Seats[types.SeatA] != nil && room.Seats[types.SeatA].GetID() == playerID {
+		return types.SeatA, true
+	}
+	if room.Seats[types.SeatB] != nil && room.Seats[types.SeatB].GetID() == playerID {
+		return types.SeatB, true
+	}
+	return "", false
+}
+
+func (s *Server) roomHasPlayer(room *RoomState, playerID string) bool {
+	if _, ok := s.seatOf(room, playerID); ok {
+		return true
+	}
+	return containsString(room.SpectatorIDs, playerID)
+}
+
+func occupantName(occupant SeatOccupant) string {
+	if occupant == nil {
+		return "空位"
+	}
+	if occupant.IsBot() {
+		return occupant.(*BotSeat).Bot.Name
+	}
+	return occupant.(*HumanSeat).Player.DisplayName
+}
+
+func isHumanOccupant(occupant SeatOccupant) bool {
+	return occupant != nil && !occupant.IsBot()
+}
+
+func (s *Server) shouldCloseRoom(room *RoomState) bool {
+	return !isHumanOccupant(room.Seats[types.SeatA]) &&
+		!isHumanOccupant(room.Seats[types.SeatB]) &&
+		len(room.SpectatorIDs) == 0
+}
+
+func (s *Server) cleanupRoomIfEmpty(room *RoomState) bool {
+	if !s.shouldCloseRoom(room) {
+		return false
+	}
+	if t := s.botTimers[room.ID]; t != nil {
+		t.Stop()
+		delete(s.botTimers, room.ID)
+	}
+	s.clearOthelloSettlementTimer(room.ID)
+	s.clearTicTacToeGiveawayTimer(room.ID)
+	s.clearRoomBroadcastTimer(room.ID)
+	delete(s.rooms, room.ID)
+	s.broadcastLobby()
+	return true
+}
+
+func publicRoomSettings(settings types.RoomSettings) types.RoomSettings {
+	out := settings
+	out.Password = ""
+	return sanitizeRoomSettings(out)
+}
+
+func (s *Server) hideOpponentChoices(room *RoomState) map[types.SeatKey]any {
+	if room.Phase == types.PhaseResult || room.Phase == types.PhasePunishment {
+		out := map[types.SeatKey]any{}
+		for k, v := range room.RevealedChoices {
+			out[k] = v
+		}
+		return out
+	}
+	hidden := map[types.SeatKey]any{}
+	for _, seat := range []types.SeatKey{types.SeatA, types.SeatB} {
+		if _, ok := room.Choices[seat]; ok && room.Choices[seat] != "" {
+			hidden[seat] = "hidden"
+		}
+	}
+	return hidden
+}
+
+func (s *Server) roomSnapshot(room *RoomState, includeChat, includeHistory bool) types.RoomSnapshot {
+	for _, id := range append([]string{}, room.SpectatorIDs...) {
+		if player := s.players[id]; player != nil {
+			if s.refreshNameWarState(player, nowMs()) {
+				s.refreshPlayerSnapshots(player)
+			}
+		}
+	}
+	for _, seat := range []types.SeatKey{types.SeatA, types.SeatB} {
+		if occ := room.Seats[seat]; occ != nil && !occ.IsBot() {
+			if player := s.players[occ.GetID()]; player != nil {
+				if s.refreshNameWarState(player, nowMs()) {
+					s.refreshPlayerSnapshots(player)
+				}
+			}
+		}
+	}
+	spectators := make([]types.PublicPlayer, 0, len(room.SpectatorIDs))
+	for _, id := range room.SpectatorIDs {
+		if player := s.players[id]; player != nil {
+			spectators = append(spectators, s.publicPlayer(player))
+		}
+	}
+	seats := map[types.SeatKey]any{
+		types.SeatA: nil,
+		types.SeatB: nil,
+	}
+	for _, seat := range []types.SeatKey{types.SeatA, types.SeatB} {
+		occ := room.Seats[seat]
+		if occ == nil {
+			seats[seat] = nil
+		} else if occ.IsBot() {
+			seats[seat] = occ.(*BotSeat).Bot
+		} else {
+			seats[seat] = occ.(*HumanSeat).Player
+		}
+	}
+	ready := map[types.SeatKey]bool{
+		types.SeatA: room.Ready[types.SeatA],
+		types.SeatB: room.Ready[types.SeatB],
+	}
+	score := map[types.SeatKey]int{types.SeatA: room.Score[types.SeatA], types.SeatB: room.Score[types.SeatB]}
+	seatedScore := map[types.SeatKey]int{types.SeatA: room.SeatedScore[types.SeatA], types.SeatB: room.SeatedScore[types.SeatB]}
+	seatStats := map[types.SeatKey]types.SeatStats{
+		types.SeatA: room.SeatStats[types.SeatA],
+		types.SeatB: room.SeatStats[types.SeatB],
+	}
+	history := []types.RoundHistoryItem{}
+	if includeHistory {
+		limit := roomHistoryPageSize
+		if len(room.RoundHistory) < limit {
+			limit = len(room.RoundHistory)
+		}
+		history = append(history, room.RoundHistory[:limit]...)
+	}
+	chat := []types.ChatMessage{}
+	if includeChat {
+		chat = append(chat, room.Chat...)
+	}
+	choices := s.hideOpponentChoices(room)
+	snap := types.RoomSnapshot{
+		ID:                room.ID,
+		Code:              room.Code,
+		UpdatedAt:         room.UpdatedAt,
+		Settings:          publicRoomSettings(room.Settings),
+		Status:            room.Status,
+		Phase:             room.Phase,
+		Seats:             seats,
+		Spectators:        spectators,
+		Ready:             ready,
+		Choices:           choices,
+		Othello:           room.Othello,
+		TicTacToe:         room.TicTacToe,
+		ResultText:        room.ResultText,
+		PunishedPlayerIDs: room.PunishedPlayerIDs,
+		Proofs:            room.Proofs,
+		Score:             score,
+		SeatedScore:       seatedScore,
+		SeatStats:         seatStats,
+		RoundHistory:      history,
+		RoundHistoryTotal: len(room.RoundHistory),
+		Chat:              chat,
+	}
+	if room.Phase == types.PhaseResult || room.Phase == types.PhasePunishment {
+		if room.RevealedChoices != nil {
+			rc := map[types.SeatKey]types.Move{}
+			for k, v := range room.RevealedChoices {
+				rc[k] = v
+			}
+			snap.RevealedChoices = rc
+		}
+	}
+	return sanitizeRoomSnapshot(snap)
+}
+
+func (s *Server) roomRole(room *RoomState, playerID string) string {
+	if seat, ok := s.seatOf(room, playerID); ok {
+		return "战斗席 " + string(seat)
+	}
+	if containsString(room.SpectatorIDs, playerID) {
+		return "观战"
+	}
+	return "房间"
+}
+
+func (s *Server) canUseBattleSeat(room *RoomState, player *PlayerState) bool {
+	if !room.Settings.EnableRanked {
+		return true
+	}
+	return ptrBool(player.ExtremeModeEnabled) == room.Settings.EnableExtremeRanked
+}
+
+func (s *Server) rankedSeatRestrictionText(room *RoomState, player *PlayerState) string {
+	if !room.Settings.EnableRanked || s.canUseBattleSeat(room, player) {
+		return ""
+	}
+	if room.Settings.EnableExtremeRanked {
+		return "非极限模式玩家只能观战极限排位房"
+	}
+	return "极限模式玩家只能观战普通排位房"
+}
+
+func (s *Server) canAutoSeatOnJoin(room *RoomState, player *PlayerState) bool {
+	if !s.canUseBattleSeat(room, player) {
+		return false
+	}
+	if room.Phase == types.PhasePunishment || room.Phase == types.PhaseResult {
+		return false
+	}
+	if room.Phase == types.PhaseChoosing && (room.Choices[types.SeatA] != "" || room.Choices[types.SeatB] != "") {
+		return false
+	}
+	return true
+}
+
+func (s *Server) makeBot(difficulty types.BotDifficulty) *BotSeat {
+	difficultyName := string(difficulty)
+	for _, d := range s.cfg.Bots.Difficulties {
+		if d.ID == difficulty {
+			difficultyName = d.Name
+			break
+		}
+	}
+	return &BotSeat{Bot: types.BotPlayer{
+		ID:         "bot-" + randomID(),
+		Name:       "机器人（" + difficultyName + "）",
+		Difficulty: difficulty,
+		IsBot:      true,
+	}}
+}
+
+func (s *Server) normalizeRoomTags(settings types.RoomSettings) []string {
+	if !settings.EnableTags {
+		return []string{}
+	}
+	allowed := map[string]struct{}{}
+	for _, t := range s.cfg.RoomTags {
+		allowed[t] = struct{}{}
+	}
+	var out []string
+	seen := map[string]struct{}{}
+	for _, tag := range settings.Tags {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			continue
+		}
+		if _, ok := allowed[tag]; !ok {
+			continue
+		}
+		if _, ok := seen[tag]; ok {
+			continue
+		}
+		seen[tag] = struct{}{}
+		out = append(out, tag)
+		if len(out) >= 5 {
+			break
+		}
+	}
+	return out
+}
+
+func (s *Server) selectedPunishmentIDs(settings types.RoomSettings) []string {
+	rawIDs := settings.PunishmentIDs
+	if len(rawIDs) == 0 && settings.PunishmentID != "" {
+		rawIDs = []string{settings.PunishmentID}
+	}
+	var valid []string
+	seen := map[string]struct{}{}
+	for _, id := range rawIDs {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		found := false
+		for _, p := range s.cfg.Punishments {
+			if p.ID == id {
+				found = true
+				break
+			}
+		}
+		if found {
+			seen[id] = struct{}{}
+			valid = append(valid, id)
+		}
+	}
+	if len(valid) > 0 {
+		return valid
+	}
+	if len(s.cfg.Punishments) > 0 {
+		return []string{s.cfg.Punishments[0].ID}
+	}
+	return nil
+}
+
+func (s *Server) selectedPunishments(settings types.RoomSettings) []types.PunishmentConfig {
+	ids := s.selectedPunishmentIDs(settings)
+	var out []types.PunishmentConfig
+	for _, id := range ids {
+		for _, p := range s.cfg.Punishments {
+			if p.ID == id {
+				out = append(out, p)
+				break
+			}
+		}
+	}
+	return out
+}
+
+func (s *Server) primaryPunishmentForSettings(settings types.RoomSettings) *types.PunishmentConfig {
+	ids := s.selectedPunishmentIDs(settings)
+	if len(ids) == 0 {
+		return nil
+	}
+	lastID := ids[len(ids)-1]
+	for i := range s.cfg.Punishments {
+		if s.cfg.Punishments[i].ID == lastID {
+			return &s.cfg.Punishments[i]
+		}
+	}
+	return nil
+}
+
+func (s *Server) roomNamePoolForSettings(settings types.RoomSettings) *types.RoomNamePool {
+	if settings.EnablePunishment && settings.PunishmentSource == "player" {
+		return s.cfg.PlayerPunishmentRoomNamePool
+	}
+	if settings.EnablePunishment {
+		p := s.primaryPunishmentForSettings(settings)
+		if p != nil {
+			return p.RoomNamePool
+		}
+	}
+	return nil
+}
+
+func (s *Server) uniqueRoomName(baseName string) string {
+	name := baseName
+	if name == "" {
+		name = defaultRoomName
+	}
+	counter := 2
+	for {
+		exists := false
+		for _, room := range s.rooms {
+			if room.Settings.Name == name {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			return name
+		}
+		name = fmt.Sprintf("%s %d", baseName, counter)
+		counter++
+	}
+}
+
+func (s *Server) generatedRoomName(settings types.RoomSettings) string {
+	if settings.GameID == types.GameOthello && !settings.EnablePunishment {
+		return s.uniqueRoomName(defaultOthelloRoomName)
+	}
+	if settings.GameID == types.GameTicTacToe && !settings.EnablePunishment {
+		return s.uniqueRoomName(defaultTicTacToeRoomName)
+	}
+	pool := s.roomNamePoolForSettings(settings)
+	if pool == nil {
+		if strings.TrimSpace(settings.Name) != "" {
+			return settings.Name
+		}
+		return defaultRoomName
+	}
+	subject := randomFromF(pool.Subjects)
+	roomWord := randomFromF(pool.RoomWords)
+	adjective := ""
+	if len(pool.Adjectives) > 0 && randFloat() < 0.75 {
+		adjective = randomFromF(pool.Adjectives)
+	}
+	base := adjective + subject + roomWord
+	return s.uniqueRoomName(base)
+}
+
+func randFloat() float64 {
+	return mrand.Float64()
+}
+
+func (s *Server) normalizeRoomName(settings types.RoomSettings) string {
+	cleanName := strings.TrimSpace(settings.Name)
+	runes := []rune(cleanName)
+	if len(runes) > 24 {
+		cleanName = string(runes[:24])
+	}
+	if cleanName == "" || cleanName == defaultRoomName || cleanName == defaultOthelloRoomName || cleanName == defaultTicTacToeRoomName {
+		return s.generatedRoomName(settings)
+	}
+	return cleanName
+}
+
+func (s *Server) randomRoomBackground(settings types.RoomSettings) string {
+	if !settings.EnablePunishment || settings.PunishmentSource == "player" {
+		return ""
+	}
+	p := s.primaryPunishmentForSettings(settings)
+	if p == nil || len(p.RoomBackgroundImages) == 0 {
+		return ""
+	}
+	return randomFromF(p.RoomBackgroundImages)
+}
+
+func (s *Server) humanPlayerFromSeat(room *RoomState, seat types.SeatKey) *PlayerState {
+	occ := room.Seats[seat]
+	if occ == nil || occ.IsBot() {
+		return nil
+	}
+	return s.players[occ.GetID()]
+}
+
+func (s *Server) isHumanVsHumanRoom(room *RoomState) bool {
+	return isHumanOccupant(room.Seats[types.SeatA]) && isHumanOccupant(room.Seats[types.SeatB])
+}
+
+func (s *Server) canLeaveRoom(player *PlayerState, reason LeaveReason) LeaveResult {
+	if player.RoomID == "" {
+		return LeaveResult{OK: true}
+	}
+	room := s.rooms[player.RoomID]
+	if room == nil {
+		return LeaveResult{OK: true}
+	}
+	isProtected := reason == LeaveManual || reason == LeaveSwitchRoom || reason == LeaveSpectate
+	if room.Settings.GameID == types.GameOthello && room.Phase == types.PhaseChoosing {
+		if _, ok := s.seatOf(room, player.ID); ok && isProtected {
+			return LeaveResult{OK: false, Error: "黑白棋对局进行中不能离开战斗席，可以申请认输、逃跑或等待对局结束"}
+		}
+	}
+	if room.Settings.GameID == types.GameTicTacToe && room.Phase == types.PhaseChoosing {
+		if _, ok := s.seatOf(room, player.ID); ok && isProtected {
+			return LeaveResult{OK: false, Error: "井字棋对局进行中不能离开战斗席，请等待对局结束"}
+		}
+	}
+	if room.Phase != types.PhasePunishment {
+		return LeaveResult{OK: true}
+	}
+	isPunished := containsString(room.PunishedPlayerIDs, player.ID)
+	if isPunished && isProtected {
+		return LeaveResult{OK: false, Error: "惩罚完成前不能离开房间"}
+	}
+	return LeaveResult{OK: true}
+}
+
+func (s *Server) clearSeatForPlayer(room *RoomState, seat types.SeatKey) {
+	var leavingID string
+	if occ := room.Seats[seat]; occ != nil {
+		leavingID = occ.GetID()
+		delete(room.DisconnectForfeits, leavingID)
+	}
+	room.Seats[seat] = nil
+	room.Ready[seat] = false
+	delete(room.Choices, seat)
+	room.Score[seat] = 0
+	room.SeatedScore[seat] = 0
+	room.SeatStats[seat] = emptySeatStats()
+	if room.ForgiveAdvantage != nil && leavingID != "" {
+		if room.ForgiveAdvantage.BeneficiaryID == leavingID || room.ForgiveAdvantage.TargetID == leavingID {
+			room.ForgiveAdvantage = nil
+		}
+	}
+	if room.Settings.GameID == types.GameOthello && room.Phase != types.PhaseResult && room.Phase != types.PhaseChoosing {
+		s.resetOthelloRoom(room)
+	}
+	if room.Settings.GameID == types.GameTicTacToe && room.Phase != types.PhaseResult && room.Phase != types.PhaseChoosing {
+		s.resetTicTacToeRoom(room)
+	}
+}
+
+func (s *Server) leaveRoom(player *PlayerState, reason LeaveReason) LeaveResult {
+	if player.RoomID == "" {
+		return LeaveResult{OK: true}
+	}
+	leaveCheck := s.canLeaveRoom(player, reason)
+	if !leaveCheck.OK {
+		return leaveCheck
+	}
+	room := s.rooms[player.RoomID]
+	if room == nil {
+		if c := s.clients[player.SocketID]; c != nil {
+			s.clientLeaveRoom(c, player.RoomID)
+		}
+		player.RoomID = ""
+		return LeaveResult{OK: true}
+	}
+	s.handlePunishmentDeparture(room, player, reason)
+	if reason == LeaveManual || reason == LeaveSwitchRoom {
+		s.roomNotice(room, playerShortName(player)+" 离开了房间。")
+	}
+	if reason == LeaveAdminKick {
+		s.roomNotice(room, playerShortName(player)+" 被管理员移出房间。")
+	}
+	if reason == LeaveAdminKick && (room.Settings.GameID == types.GameOthello || room.Settings.GameID == types.GameTicTacToe) &&
+		room.Phase == types.PhaseChoosing {
+		if _, ok := s.seatOf(room, player.ID); ok {
+			s.createDisconnectForfeit(room, player)
+			s.applyDisconnectForfeit(room, player)
+		}
+	}
+	if seat, ok := s.seatOf(room, player.ID); ok {
+		s.clearSeatForPlayer(room, seat)
+	}
+	if c := s.clients[player.SocketID]; c != nil {
+		s.clientLeaveRoom(c, room.ID)
+	}
+	filtered := room.SpectatorIDs[:0]
+	for _, id := range room.SpectatorIDs {
+		if id != player.ID {
+			filtered = append(filtered, id)
+		}
+	}
+	room.SpectatorIDs = filtered
+	player.RoomID = ""
+	roomDeleted := s.cleanupRoomIfEmpty(room)
+	if !roomDeleted {
+		s.broadcastRoom(room.ID, false)
+		s.broadcastLobby()
+	}
+	return LeaveResult{OK: true}
+}
+
+func (s *Server) clearDisconnectForfeit(player *PlayerState) {
+	if player.RoomID == "" {
+		return
+	}
+	room := s.rooms[player.RoomID]
+	if room != nil {
+		delete(room.DisconnectForfeits, player.ID)
+	}
+}
+
+func (s *Server) createDisconnectForfeit(room *RoomState, player *PlayerState) {
+	if room.Phase != types.PhaseChoosing {
+		return
+	}
+	if room.Settings.GameID == types.GameRPS && !room.Settings.EnableRanked {
+		return
+	}
+	if room.Settings.GameID == types.GameOthello && room.Othello == nil {
+		return
+	}
+	if room.Settings.GameID == types.GameTicTacToe && room.TicTacToe == nil {
+		return
+	}
+	loserSeat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		return
+	}
+	winnerSeat := oppositeSeat(loserSeat)
+	winner := room.Seats[winnerSeat]
+	if winner == nil || winner.IsBot() {
+		return
+	}
+	stake := effectiveRankedStake(room.Settings)
+	if room.Settings.GameID == types.GameOthello {
+		stake = 0
+	}
+	room.DisconnectForfeits[player.ID] = DisconnectForfeit{
+		LoserID:        player.ID,
+		LoserSeat:      loserSeat,
+		LoserName:      playerShortName(player),
+		WinnerID:       winner.GetID(),
+		WinnerSeat:     winnerSeat,
+		WinnerName:     occupantName(winner),
+		Stake:          stake,
+		BaseStake:      room.Settings.Stake,
+		RankMultiplier: rankMultiplierFor(room.Settings),
+	}
+}
+
+func cryptoRandRead(b []byte) (int, error) {
+	return crand.Read(b)
+}

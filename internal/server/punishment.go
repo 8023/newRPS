@@ -1,0 +1,472 @@
+package server
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+
+	"github.com/doumiao/newRPS/internal/types"
+)
+
+func (s *Server) punishmentPlayersForResult(room *RoomState, result types.RoundResult) []*PlayerState {
+	if !room.Settings.EnablePunishment {
+		return nil
+	}
+	var punishSeats []types.SeatKey
+	if result == types.ResultDoubleLoss {
+		punishSeats = []types.SeatKey{types.SeatA, types.SeatB}
+	} else if result == types.ResultDraw {
+		if room.Settings.TieDoublePunish {
+			punishSeats = []types.SeatKey{types.SeatA, types.SeatB}
+		}
+	} else {
+		punishSeats = []types.SeatKey{oppositeSeat(types.SeatKey(result))}
+	}
+	var out []*PlayerState
+	for _, seat := range punishSeats {
+		occ := room.Seats[seat]
+		if occ == nil || occ.IsBot() {
+			continue
+		}
+		if p := s.players[occ.GetID()]; p != nil {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func (s *Server) addRoundHistory(room *RoomState, item types.RoundHistoryItem) {
+	item = sanitizeRoundHistoryItem(item)
+	room.RoundHistory = append([]types.RoundHistoryItem{item}, room.RoundHistory...)
+	s.emitToRoom(room.ID, "room:historyAppend", map[string]any{
+		"roomId": room.ID,
+		"item":   item,
+		"total":  len(room.RoundHistory),
+	})
+	s.requestPersist("lazy")
+}
+
+func (s *Server) currentPunishment(room *RoomState) *types.PunishmentConfig {
+	selected := s.selectedPunishments(room.Settings)
+	if len(selected) == 0 {
+		return nil
+	}
+	p := selected[randIntn(len(selected))]
+	return &p
+}
+
+func randIntn(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	return int(nowMs()%int64(n)+int64(n)) % n
+}
+
+func (s *Server) punishmentNameForRoom(room *RoomState, punishment *types.PunishmentConfig) string {
+	if room.Settings.PunishmentSource == "player" {
+		return "玩家发布任务"
+	}
+	if punishment != nil {
+		return punishment.Name
+	}
+	return ""
+}
+
+func (s *Server) buildPunishmentTasks(room *RoomState, punishedPlayers []*PlayerState, result types.RoundResult, punishment *types.PunishmentConfig) []types.PunishmentTask {
+	// 始终返回非 nil 切片，避免 history 里 punishmentTasks: null
+	out := make([]types.PunishmentTask, 0, len(punishedPlayers))
+	for _, player := range punishedPlayers {
+		var assigner *PlayerState
+		var systemTask *punishmentTaskResult
+		if room.Settings.PunishmentSource == "player" {
+			assigner = s.taskAssigner(room, player.ID)
+		} else {
+			systemTask = s.punishmentTaskForPlayer(player, punishment)
+		}
+		task := types.PunishmentTask{
+			PlayerID:     player.ID,
+			PlayerName:   playerShortName(player),
+			FactionID:    player.FactionID,
+			FactionLabel: player.FactionLabel,
+			TaskText:     "",
+		}
+		if systemTask != nil {
+			task.TaskText = systemTask.TaskText
+			task.BackgroundImage = systemTask.BackgroundImage
+			if systemTask.BackgroundOpacity != nil {
+				task.BackgroundOpacity = systemTask.BackgroundOpacity
+			}
+		}
+		if assigner != nil {
+			task.AssignedBy = assigner.ID
+			task.AssignedByName = assigner.Name
+		}
+		out = append(out, task)
+	}
+	return out
+}
+
+func (s *Server) taskAssigner(room *RoomState, punishedPlayerID string) *PlayerState {
+	punishedSeat, ok := s.seatOf(room, punishedPlayerID)
+	if !ok {
+		return nil
+	}
+	return s.humanPlayerFromSeat(room, oppositeSeat(punishedSeat))
+}
+
+type punishmentTaskResult struct {
+	TaskText          string
+	BackgroundImage   string
+	BackgroundOpacity *float64
+}
+
+func (s *Server) punishmentTaskForPlayer(player *PlayerState, punishment *types.PunishmentConfig) *punishmentTaskResult {
+	if punishment == nil {
+		op := 0.22
+		return &punishmentTaskResult{TaskText: "请完成本局惩罚。", BackgroundOpacity: &op}
+	}
+	var task *types.PunishmentTaskConfig
+	if len(punishment.Tasks) > 0 {
+		t := punishment.Tasks[randIntn(len(punishment.Tasks))]
+		task = &t
+	}
+	variant := ""
+	if task != nil && task.Variants != nil {
+		variant = strings.TrimSpace(task.Variants[player.FactionID])
+	}
+	if variant == "" && punishment.Variants != nil {
+		variant = strings.TrimSpace(punishment.Variants[player.FactionID])
+	}
+	taskText := cleanTaskText(variant, player.FactionLabel)
+	if taskText == "" {
+		taskText = cleanTaskText(punishment.Description, player.FactionLabel)
+	}
+	op := 0.22
+	if task != nil {
+		op = task.BackgroundOpacity
+	}
+	bg := ""
+	if task != nil && len(task.BackgroundImages) > 0 {
+		bg = task.BackgroundImages[randIntn(len(task.BackgroundImages))]
+	}
+	return &punishmentTaskResult{TaskText: taskText, BackgroundImage: bg, BackgroundOpacity: &op}
+}
+
+func cleanTaskText(taskText, factionLabel string) string {
+	taskText = strings.TrimSpace(taskText)
+	if factionLabel != "" {
+		re := regexp.MustCompile(`^` + regexp.QuoteMeta(factionLabel) + `[：:]\s*`)
+		taskText = re.ReplaceAllString(taskText, "")
+	}
+	re2 := regexp.MustCompile(`^(男性阵营|女性阵营|男娘阵营|其他阵营)[：:]\s*`)
+	taskText = re2.ReplaceAllString(taskText, "")
+	return strings.TrimSpace(taskText)
+}
+
+func (s *Server) attachProofToLatestHistory(room *RoomState, proof types.HistoryProof) {
+	if len(room.RoundHistory) == 0 {
+		return
+	}
+	latest := &room.RoundHistory[0]
+	var taskText string
+	for _, t := range latest.PunishmentTasks {
+		if t.PlayerID == proof.PlayerID {
+			taskText = t.TaskText
+			break
+		}
+	}
+	filtered := latest.Proofs[:0]
+	for _, p := range latest.Proofs {
+		if p.PlayerID != proof.PlayerID {
+			filtered = append(filtered, p)
+		}
+	}
+	if proof.TaskText == "" {
+		proof.TaskText = taskText
+	}
+	latest.Proofs = append(filtered, proof)
+}
+
+func (s *Server) updateProofInLatestHistory(room *RoomState, playerID string, next types.HistoryProof) {
+	if len(room.RoundHistory) == 0 {
+		return
+	}
+	latest := &room.RoundHistory[0]
+	for i := range latest.Proofs {
+		if latest.Proofs[i].PlayerID == playerID {
+			p := latest.Proofs[i]
+			if next.Status != "" {
+				p.Status = next.Status
+			}
+			if next.ReviewedBy != "" {
+				p.ReviewedBy = next.ReviewedBy
+			}
+			if next.ReviewedAt != nil {
+				p.ReviewedAt = next.ReviewedAt
+			}
+			if next.RejectReason != "" {
+				p.RejectReason = next.RejectReason
+			}
+			if next.RedoTaskText != "" {
+				p.RedoTaskText = next.RedoTaskText
+			}
+			if next.Text != "" {
+				p.Text = next.Text
+			}
+			if next.ImageURL != "" {
+				p.ImageURL = next.ImageURL
+			}
+			latest.Proofs[i] = p
+			return
+		}
+	}
+}
+
+func (s *Server) updatePunishmentTask(room *RoomState, playerID, taskText string, assignedBy *PlayerState) {
+	if len(room.RoundHistory) == 0 {
+		return
+	}
+	latest := &room.RoundHistory[0]
+	for i := range latest.PunishmentTasks {
+		if latest.PunishmentTasks[i].PlayerID == playerID {
+			latest.PunishmentTasks[i].TaskText = taskText
+			if assignedBy != nil {
+				latest.PunishmentTasks[i].AssignedBy = assignedBy.ID
+				latest.PunishmentTasks[i].AssignedByName = assignedBy.Name
+			}
+			return
+		}
+	}
+}
+
+func (s *Server) oppositeForgiveProof(room *RoomState, reviewerID, targetID string) *types.PunishmentProof {
+	for i := range room.Proofs {
+		proof := &room.Proofs[i]
+		if proof.PlayerID == reviewerID && proof.Status == "approved" &&
+			proof.ReviewedBy == targetID && proof.RejectReason == "对方选择放过你" {
+			return proof
+		}
+	}
+	return nil
+}
+
+func (s *Server) applyForgiveReview(room *RoomState, reviewerID, targetID string) string {
+	opposite := s.oppositeForgiveProof(room, reviewerID, targetID)
+	if opposite == nil {
+		room.ForgiveAdvantage = &forgiveAdvantage{BeneficiaryID: reviewerID, TargetID: targetID}
+		return "对方选择放过你"
+	}
+	room.ForgiveAdvantage = nil
+	opposite.RejectReason = "双方互相放过，下一局正常开始。"
+	s.updateProofInLatestHistory(room, reviewerID, types.HistoryProof{RejectReason: "双方互相放过，下一局正常开始。"})
+	return "双方互相放过，下一局正常开始。"
+}
+
+func (s *Server) setupPunishmentOrNext(room *RoomState, result types.RoundResult) {
+	if !room.Settings.EnablePunishment {
+		return
+	}
+	humanIDs := make([]string, 0)
+	for _, p := range s.punishmentPlayersForResult(room, result) {
+		humanIDs = append(humanIDs, p.ID)
+	}
+	if len(humanIDs) == 0 {
+		return
+	}
+	room.Phase = types.PhasePunishment
+	room.Status = "punishment"
+	room.PunishedPlayerIDs = humanIDs
+	room.LockedSeatIDs = map[string]struct{}{}
+	for _, playerID := range humanIDs {
+		room.LockedSeatIDs[playerID] = struct{}{}
+		if player := s.players[playerID]; player != nil {
+			player.Stats.Punishments++
+		}
+		if seat, ok := s.seatOf(room, playerID); ok {
+			ss := room.SeatStats[seat]
+			ss.Punishments++
+			room.SeatStats[seat] = ss
+		}
+	}
+}
+
+func (s *Server) punishmentComplete(room *RoomState) bool {
+	for _, playerID := range room.PunishedPlayerIDs {
+		var task *types.PunishmentTask
+		if len(room.RoundHistory) > 0 {
+			for i := range room.RoundHistory[0].PunishmentTasks {
+				if room.RoundHistory[0].PunishmentTasks[i].PlayerID == playerID {
+					task = &room.RoundHistory[0].PunishmentTasks[i]
+					break
+				}
+			}
+		}
+		if room.Settings.PunishmentSource == "player" && (task == nil || strings.TrimSpace(task.TaskText) == "") {
+			return false
+		}
+		var proof *types.PunishmentProof
+		for i := range room.Proofs {
+			if room.Proofs[i].PlayerID == playerID {
+				proof = &room.Proofs[i]
+				break
+			}
+		}
+		if proof == nil {
+			return false
+		}
+		if !room.Settings.RequireOpponentConfirm {
+			if proof.Status == "rejected" {
+				return false
+			}
+			continue
+		}
+		if proof.Status != "approved" && proof.ConfirmedBy == "" {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Server) opponentIsBot(room *RoomState, playerID string) bool {
+	seat, ok := s.seatOf(room, playerID)
+	if !ok {
+		return false
+	}
+	opp := room.Seats[oppositeSeat(seat)]
+	return opp != nil && opp.IsBot()
+}
+
+func (s *Server) humanOpponent(room *RoomState, playerID string) *PlayerState {
+	seat, ok := s.seatOf(room, playerID)
+	if !ok {
+		return nil
+	}
+	return s.humanPlayerFromSeat(room, oppositeSeat(seat))
+}
+
+func proofNeedsReview(proof types.PunishmentProof) bool {
+	return proof.Status == "pending" || proof.Status == "rejected"
+}
+
+func (s *Server) canReviewPlayer(room *RoomState, reviewerID, targetID string) bool {
+	rs, ok1 := s.seatOf(room, reviewerID)
+	ts, ok2 := s.seatOf(room, targetID)
+	return ok1 && ok2 && rs != ts
+}
+
+func (s *Server) approveProofBySystem(room *RoomState, playerID, message string) bool {
+	var proof *types.PunishmentProof
+	for i := range room.Proofs {
+		if room.Proofs[i].PlayerID == playerID {
+			proof = &room.Proofs[i]
+			break
+		}
+	}
+	if proof == nil || proof.Status == "approved" {
+		return false
+	}
+	reviewedAt := nowMs()
+	proof.Status = "approved"
+	proof.ConfirmedBy = "system-auto-forgive"
+	proof.ReviewedBy = "system-auto-forgive"
+	proof.ReviewedAt = &reviewedAt
+	proof.RejectReason = message
+	s.updateProofInLatestHistory(room, playerID, types.HistoryProof{
+		Status: "approved", ReviewedBy: "system-auto-forgive", ReviewedAt: &reviewedAt, RejectReason: message,
+	})
+	return true
+}
+
+func (s *Server) submitSystemPunishmentProof(room *RoomState, player *PlayerState, message string) {
+	var taskText string
+	if len(room.RoundHistory) > 0 {
+		for _, t := range room.RoundHistory[0].PunishmentTasks {
+			if t.PlayerID == player.ID {
+				taskText = t.TaskText
+				break
+			}
+		}
+	}
+	for _, p := range room.Proofs {
+		if p.PlayerID == player.ID && p.RedoTaskText != "" {
+			taskText = p.RedoTaskText
+		}
+	}
+	submittedAt := nowMs()
+	filtered := room.Proofs[:0]
+	for _, p := range room.Proofs {
+		if p.PlayerID != player.ID {
+			filtered = append(filtered, p)
+		}
+	}
+	room.Proofs = append(filtered, types.PunishmentProof{
+		PlayerID: player.ID, Text: message, TaskText: taskText, Status: "approved",
+		ConfirmedBy: "system-timeout", ReviewedBy: "system-timeout", ReviewedAt: &submittedAt,
+		RejectReason: message, SubmittedAt: submittedAt,
+	})
+	s.attachProofToLatestHistory(room, types.HistoryProof{
+		PlayerID: player.ID, PlayerName: playerShortName(player), Text: message, TaskText: taskText,
+		Status: "approved", ReviewedBy: "system-timeout", ReviewedAt: &submittedAt,
+		RejectReason: message, SubmittedAt: submittedAt,
+	})
+}
+
+func (s *Server) finishPunishmentIfComplete(room *RoomState) bool {
+	if room.Phase == types.PhasePunishment && s.punishmentComplete(room) {
+		s.resetForNextRound(room)
+		return true
+	}
+	return false
+}
+
+func (s *Server) resetForNextRound(room *RoomState) {
+	s.prepareNextChoice(room)
+	room.PunishedPlayerIDs = []string{}
+	room.Proofs = []types.PunishmentProof{}
+	room.LockedSeatIDs = map[string]struct{}{}
+	s.broadcastRoom(room.ID, true)
+}
+
+func (s *Server) handlePunishmentDeparture(room *RoomState, player *PlayerState, reason LeaveReason) {
+	if room.Phase != types.PhasePunishment {
+		return
+	}
+	isPunished := containsString(room.PunishedPlayerIDs, player.ID)
+	var latest *types.RoundHistoryItem
+	if len(room.RoundHistory) > 0 {
+		latest = &room.RoundHistory[0]
+	}
+	if isPunished && (reason == LeaveDisconnectTimeout || reason == LeaveAdminKick) {
+		playerName := playerShortName(player)
+		message := fmt.Sprintf("%s 超时未返回，系统已处理本局惩罚。", playerName)
+		if reason == LeaveAdminKick {
+			message = fmt.Sprintf("%s 被管理员移出，系统已处理本局惩罚。", playerName)
+		}
+		s.submitSystemPunishmentProof(room, player, message)
+		delete(room.LockedSeatIDs, player.ID)
+		s.roomNotice(room, message)
+		if s.finishPunishmentIfComplete(room) {
+			return
+		}
+	}
+	if latest != nil {
+		for _, task := range latest.PunishmentTasks {
+			if task.AssignedBy == player.ID && strings.TrimSpace(task.TaskText) == "" {
+				s.updatePunishmentTask(room, task.PlayerID, "对方已离开，请提交文字说明完成本局惩罚。", nil)
+				s.roomNotice(room, fmt.Sprintf("%s 离开，系统已为 %s 发布兜底任务。", playerShortName(player), task.PlayerName))
+			}
+		}
+	}
+	for _, proof := range append([]types.PunishmentProof{}, room.Proofs...) {
+		if proofNeedsReview(proof) && s.canReviewPlayer(room, player.ID, proof.PlayerID) {
+			target := s.players[proof.PlayerID]
+			s.approveProofBySystem(room, proof.PlayerID, "审核方离开，系统已自动放过对方。")
+			name := "对方"
+			if target != nil {
+				name = playerShortName(target)
+			}
+			s.roomNotice(room, fmt.Sprintf("%s 离开，系统已自动放过 %s。", playerShortName(player), name))
+		}
+	}
+	s.finishPunishmentIfComplete(room)
+}

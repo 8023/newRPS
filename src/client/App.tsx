@@ -10,7 +10,10 @@ const dailyAnnouncementKey = "rps-online-daily-announcement";
 const defaultRoomName = "新的锤子剪刀布房间";
 const defaultOthelloRoomName = "新的黑白棋房间";
 const defaultTicTacToeRoomName = "新的井字棋房间";
-const maxImageUploadBytes = 8 * 1024 * 1024;
+const maxOriginalImageBytes = 10 * 1024 * 1024;
+const maxProofUploadBytes = 2 * 1024 * 1024;
+const maxProofPixels = 4_000_000;
+const maxAspectRatio = 21 / 9;
 const leaderboardRefreshMs = 10 * 60 * 1000;
 const othelloBoardThemes = [
   { id: "classic", name: "经典绿", description: "传统棋盘，最清楚耐看。", board: "#2f8a64", cell: "#38a474", line: "rgba(18, 72, 52, 0.55)", hover: "#45b883", border: "#2f7a5c", blackDisc: "radial-gradient(circle at 32% 28%, #5f6670, #10151a 64%)", whiteDisc: "radial-gradient(circle at 32% 28%, #ffffff, #d8e1e8 70%)", blackRing: "#e3eef5", whiteRing: "#2b4f40" },
@@ -75,7 +78,7 @@ async function ensureSessionToken() {
 async function connectSocketWithSession() {
   const token = await ensureSessionToken();
   socket.auth = { token };
-  if (!socket.connected) socket.connect();
+  if (!socket.connected) await socket.connect();
   return token;
 }
 
@@ -132,32 +135,89 @@ function stickChatToBottom(element: HTMLElement | null, stickRef: MutableRefObje
   scrollToBottomSoon(element);
 }
 
-async function compressImageForUpload(file: File) {
-  if (!file.type.startsWith("image/")) return file;
-  const bitmap = await createImageBitmap(file);
-  const maxSide = 1600;
-  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
-  const width = Math.max(1, Math.round(bitmap.width * scale));
-  const height = Math.max(1, Math.round(bitmap.height * scale));
+/**
+ * 证明图上传前处理：
+ * 选文件 → 长宽比(>21:9拒绝) → 原图大小(>10MB拒绝) → 像素数(>4MP等比缩放) → Canvas → WebP 85%
+ */
+async function prepareProofImageForUpload(file: File): Promise<File> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("请选择图片文件（jpg/png/webp 等）");
+  }
+  if (file.size > maxOriginalImageBytes) {
+    throw new Error("原图超过 10MB，请换一张更小的图片");
+  }
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error("无法读取图片，请换一张有效的图片文件");
+  }
+  const { width: rawW, height: rawH } = bitmap;
+  if (!rawW || !rawH) {
+    bitmap.close?.();
+    throw new Error("图片尺寸无效");
+  }
+  const ratio = Math.max(rawW, rawH) / Math.min(rawW, rawH);
+  if (ratio > maxAspectRatio + 1e-6) {
+    bitmap.close?.();
+    throw new Error("图片长宽比超过 21:9，请裁剪后再上传");
+  }
+  const pixels = rawW * rawH;
+  let scale = 1;
+  if (pixels > maxProofPixels) {
+    scale = Math.sqrt(maxProofPixels / pixels);
+  }
+  const width = Math.max(1, Math.round(rawW * scale));
+  const height = Math.max(1, Math.round(rawH * scale));
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext("2d");
   if (!context) {
     bitmap.close?.();
-    return file;
+    throw new Error("浏览器不支持图片处理，请换一个浏览器");
   }
   context.drawImage(bitmap, 0, 0, width, height);
   bitmap.close?.();
   const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, "image/webp", 0.82);
-  }) ?? await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, "image/jpeg", 0.86);
+    canvas.toBlob(resolve, "image/webp", 0.85);
   });
-  if (!blob || blob.size >= file.size) return file;
-  const extension = blob.type === "image/webp" ? "webp" : "jpg";
-  const baseName = file.name.replace(/\.[^.]+$/, "") || "image";
-  return new File([blob], `${baseName}-compressed.${extension}`, { type: blob.type, lastModified: Date.now() });
+  if (!blob) throw new Error("图片转 WebP 失败，请换一张图片");
+  if (blob.size > maxProofUploadBytes) {
+    throw new Error("压缩后图片仍超过 2MB，请换一张更小的图或降低分辨率");
+  }
+  const baseName = file.name.replace(/\.[^.]+$/, "") || "proof";
+  return new File([blob], `${baseName}.webp`, { type: "image/webp", lastModified: Date.now() });
+}
+
+/** 后台管理图：允许较大体积，尽量转 WebP，失败则原样上传 */
+async function compressAdminImageForUpload(file: File): Promise<File> {
+  if (!file.type.startsWith("image/")) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const maxSide = 2400;
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      bitmap.close?.();
+      return file;
+    }
+    context.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close?.();
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/webp", 0.85);
+    });
+    if (!blob || blob.size >= file.size) return file;
+    const baseName = file.name.replace(/\.[^.]+$/, "") || "image";
+    return new File([blob], `${baseName}.webp`, { type: "image/webp", lastModified: Date.now() });
+  } catch {
+    return file;
+  }
 }
 
 function playerSyncKey(player: PublicPlayer) {
@@ -239,7 +299,7 @@ function normalWinRatePlayers(players: PublicPlayer[]) {
 
 function replacePlayerInRoom(room: RoomSnapshot, player: PublicPlayer) {
   let changed = false;
-  const seats = { ...room.seats };
+  const seats = { ...(room.seats || { A: null, B: null }) };
   for (const seat of ["A", "B"] as SeatKey[]) {
     const occupant = seats[seat];
     if (occupant?.id === player.id && !("isBot" in occupant)) {
@@ -247,7 +307,7 @@ function replacePlayerInRoom(room: RoomSnapshot, player: PublicPlayer) {
       changed = true;
     }
   }
-  const spectators = room.spectators.map((spectator) => {
+  const spectators = (room.spectators || []).map((spectator) => {
     if (spectator.id !== player.id) return spectator;
     changed = true;
     return player;
@@ -263,26 +323,130 @@ function replaceLobbyVersusPlayer(versus: LobbySnapshot["rooms"][number]["versus
 }
 
 function replacePlayerInLobby(lobby: LobbySnapshot, player: PublicPlayer) {
-  const players = lobby.players.map((item) => item.id === player.id ? player : item);
+  const players = (lobby.players || []).map((item) => item.id === player.id ? player : item);
   return {
     ...lobby,
     players,
     normalLeaderboard: normalWinRatePlayers(players),
     rankedLeaderboard: rankedPlayers(players),
-    rooms: lobby.rooms.map((roomInfo) => ({
+    rooms: (lobby.rooms || []).map((roomInfo) => ({
       ...roomInfo,
-      versus: replaceLobbyVersusPlayer(roomInfo.versus, player)
+      versus: replaceLobbyVersusPlayer(roomInfo.versus || { A: null, B: null }, player)
     }))
   };
 }
 
 function normalizeLobbySnapshot(snapshot: LobbySnapshot, old?: LobbySnapshot | null) {
-  const lobbyChat = snapshot.lobbyChat.length === 0 && old ? old.lobbyChat : snapshot.lobbyChat;
+  const players = snapshot.players || [];
+  const lobbyChat = (!snapshot.lobbyChat || snapshot.lobbyChat.length === 0) && old ? old.lobbyChat : (snapshot.lobbyChat || []);
   return {
     ...snapshot,
+    players,
+    rooms: snapshot.rooms || [],
+    suggestions: snapshot.suggestions || [],
     lobbyChat,
-    normalLeaderboard: normalWinRatePlayers(snapshot.players),
-    rankedLeaderboard: rankedPlayers(snapshot.players)
+    normalLeaderboard: normalWinRatePlayers(players),
+    rankedLeaderboard: rankedPlayers(players)
+  };
+}
+
+/** 兜底：Go nil slice/map → JSON null 时，避免前端 .includes/.map 白屏 */
+function normalizeRoundHistoryItem(item: RoomSnapshot["roundHistory"][number]): RoomSnapshot["roundHistory"][number] {
+  return {
+    ...item,
+    punishmentTasks: item.punishmentTasks || [],
+    punishedNames: item.punishedNames || [],
+    proofs: item.proofs || [],
+    tictactoeLine: item.tictactoeLine || undefined
+  };
+}
+
+function normalizeOthello(state: RoomSnapshot["othello"]): RoomSnapshot["othello"] {
+  if (!state) return state;
+  return {
+    ...state,
+    legalMoves: state.legalMoves || [],
+    settlementEvents: state.settlementEvents || [],
+    rankedDelta: state.rankedDelta || { A: 0, B: 0 },
+    board: state.board || Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => null))
+  };
+}
+
+function normalizeTicTacToe(state: RoomSnapshot["tictactoe"]): RoomSnapshot["tictactoe"] {
+  if (!state) return state;
+  return {
+    ...state,
+    winningLine: state.winningLine || undefined,
+    rankedDelta: state.rankedDelta || { A: 0, B: 0 },
+    board: state.board || Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => null))
+  };
+}
+
+function normalizeRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
+  const seats = room.seats || { A: null, B: null };
+  return {
+    ...room,
+    settings: {
+      ...room.settings,
+      tags: room.settings?.tags || [],
+      punishmentIds: room.settings?.punishmentIds || []
+    },
+    spectators: room.spectators || [],
+    punishedPlayerIds: room.punishedPlayerIds || [],
+    proofs: room.proofs || [],
+    roundHistory: (room.roundHistory || []).map(normalizeRoundHistoryItem),
+    chat: room.chat || [],
+    choices: room.choices || {},
+    ready: room.ready || { A: false, B: false },
+    score: room.score || { A: 0, B: 0 },
+    seatedScore: room.seatedScore || { A: 0, B: 0 },
+    seatStats: room.seatStats || {
+      A: { wins: 0, losses: 0, draws: 0, punishments: 0 },
+      B: { wins: 0, losses: 0, draws: 0, punishments: 0 }
+    },
+    seats: { A: seats.A ?? null, B: seats.B ?? null },
+    othello: normalizeOthello(room.othello),
+    tictactoe: normalizeTicTacToe(room.tictactoe)
+  };
+}
+
+function normalizeConfig(config: AppConfig): AppConfig {
+  return {
+    ...config,
+    genders: config.genders || [],
+    genderFactions: (config.genderFactions || []).map((faction) => ({
+      ...faction,
+      genders: faction.genders || []
+    })),
+    titles: (config.titles || []).map((segment) => ({
+      ...segment,
+      names: segment.names || [],
+      factionNames: segment.factionNames || {}
+    })),
+    punishments: (config.punishments || []).map((punishment) => ({
+      ...punishment,
+      variants: punishment.variants || {},
+      roomBackgroundImages: punishment.roomBackgroundImages || [],
+      tasks: (punishment.tasks || []).map((task) => ({
+        ...task,
+        variants: task.variants || {},
+        backgroundImages: task.backgroundImages || []
+      }))
+    })),
+    roomTags: config.roomTags || [],
+    roomInfoTags: config.roomInfoTags || {},
+    bots: {
+      names: config.bots?.names || [],
+      difficulties: config.bots?.difficulties || []
+    },
+    games: config.games || [],
+    messages: config.messages || {},
+    extremeMode: {
+      ...config.extremeMode,
+      positiveLossRates: config.extremeMode?.positiveLossRates || {},
+      negativeWinRates: config.extremeMode?.negativeWinRates || {},
+      hourlyDecay: config.extremeMode?.hourlyDecay || {}
+    }
   };
 }
 
@@ -323,7 +487,7 @@ export function App() {
     try {
       const next = await ask<MeState>("player:join", { name: cachedName, genderId: cachedGender, token, ...ensurePlayerIdentity() });
       setMe(next);
-      if (next.room) setRoom(next.room);
+      if (next.room) setRoom(normalizeRoomSnapshot(next.room));
       else setRoom(null);
       if (!isAdminRoute()) {
         setView(next.room ? "room" : "lobby");
@@ -346,32 +510,35 @@ export function App() {
 
   useEffect(() => {
     socket.on("lobby:update", (nextLobby: LobbySnapshot) => {
-      if (nextLobby.config) setConfig(nextLobby.config);
-      latestLobbyPlayersRef.current = nextLobby.players;
+      if (nextLobby.config) setConfig(normalizeConfig(nextLobby.config));
+      const normalized = normalizeLobbySnapshot(nextLobby);
+      latestLobbyPlayersRef.current = normalized.players;
       const now = Date.now();
       if (!leaderboardSnapshotAtRef.current || now - leaderboardSnapshotAtRef.current >= leaderboardRefreshMs) {
-        refreshLeaderboardSnapshot(nextLobby.players, now);
+        refreshLeaderboardSnapshot(normalized.players, now);
       }
       setLobby((old) => normalizeLobbySnapshot(nextLobby, old));
     });
     socket.on("room:update", (nextRoom: RoomSnapshot) => {
       setRoom((old) => {
-        if (old?.id === nextRoom.id && nextRoom.updatedAt < old.updatedAt) return old;
-        if (old?.id === nextRoom.id) {
+        const normalized = normalizeRoomSnapshot(nextRoom);
+        if (old?.id === normalized.id && normalized.updatedAt < old.updatedAt) return old;
+        if (old?.id === normalized.id) {
           return {
-            ...nextRoom,
-            chat: nextRoom.chat.length === 0 ? old.chat : nextRoom.chat,
-            roundHistory: nextRoom.roundHistory.length === 0 ? old.roundHistory : nextRoom.roundHistory
+            ...normalized,
+            chat: normalized.chat.length === 0 ? old.chat : normalized.chat,
+            roundHistory: normalized.roundHistory.length === 0 ? old.roundHistory : normalized.roundHistory
           };
         }
-        return nextRoom;
+        return normalized;
       });
       if (!isAdminRoute()) setView("room");
     });
     socket.on("room:historyAppend", ({ roomId, item, total }: { roomId: string; item: RoomSnapshot["roundHistory"][number]; total: number }) => {
+      const safeItem = normalizeRoundHistoryItem(item);
       setRoom((old) => old?.id === roomId ? {
         ...old,
-        roundHistory: prependCappedUnique(old.roundHistory, item, 20),
+        roundHistory: prependCappedUnique(old.roundHistory || [], safeItem, 20),
         roundHistoryTotal: total
       } : old);
     });
@@ -395,7 +562,7 @@ export function App() {
       setNotice(message || "房间已被管理员关闭。");
     });
     socket.on("config:update", (config: AppConfig) => {
-      setConfig(config);
+      setConfig(normalizeConfig(config));
     });
     socket.on("chat:append", (message: ChatMessage) => {
       if (!message.roomId) {
@@ -404,11 +571,11 @@ export function App() {
       }
       setRoom((old) => {
         if (!old || message.roomId !== old.id) return old;
-        return { ...old, chat: appendCappedUnique(old.chat, message, 200) };
+        return { ...old, chat: appendCappedUnique(old.chat || [], message, 200) };
       });
     });
     socket.on("suggestion:append", (suggestion: LobbySnapshot["suggestions"][number]) => {
-      setLobby((old) => old ? { ...old, suggestions: prependCappedUnique(old.suggestions, suggestion, 100) } : old);
+      setLobby((old) => old ? { ...old, suggestions: prependCappedUnique(old.suggestions || [], suggestion, 100) } : old);
     });
     socket.on("announcement:show", (payload: AnnouncementPayload) => {
       setAnnouncement(payload);
@@ -581,7 +748,7 @@ export function App() {
       )}
       {view === "login" && <Login config={config} onDone={(next) => {
         setMe(next);
-        if (next.room) setRoom(next.room);
+        if (next.room) setRoom(normalizeRoomSnapshot(next.room));
         setView(isAdminRoute() ? "admin" : next.room ? "room" : "lobby");
         if (next.room?.phase === "punishment") setNotice("已恢复到未完成的惩罚房间。");
       }} onError={setNotice} />}
@@ -762,7 +929,7 @@ function Lobby({ config, lobby, me, onError, onGoRoom }: { config: AppConfig; lo
         if (!ok) return;
       }
       const result = await ask<{ room: RoomSnapshot }>("room:join", { roomId, password: passwords[roomId] });
-      onGoRoom(result.room);
+      onGoRoom(normalizeRoomSnapshot(result.room));
     } catch (error) {
       onError(error instanceof Error ? error.message : "加入失败");
     }
@@ -1006,7 +1173,7 @@ function patch(next: Partial<RoomSettings>) {
   async function create() {
     try {
       const result = await ask<{ room: RoomSnapshot }>("room:create", { settings });
-      onCreated(result.room);
+      onCreated(normalizeRoomSnapshot(result.room));
     } catch (error) {
       onError(error instanceof Error ? error.message : "创建失败");
     }
@@ -1470,7 +1637,7 @@ function Room({ config, room, lobbySuggestions, me, onBack, onError }: { config:
     let cancelled = false;
     ask<{ suggestions: LobbySnapshot["suggestions"] }>("lobby:suggestions:subscribe", {})
       .then((result) => {
-        if (!cancelled) setRoomLobbySuggestions(result.suggestions);
+        if (!cancelled) setRoomLobbySuggestions(result.suggestions || []);
       })
       .catch(() => undefined);
     return () => {
@@ -1499,15 +1666,18 @@ function Room({ config, room, lobbySuggestions, me, onBack, onError }: { config:
   }
 
   async function uploadImage(file: File) {
-    const uploadFile = await compressImageForUpload(file);
-    if (uploadFile.size > maxImageUploadBytes) throw new Error("图片压缩后仍超过 8MB，请换一张或先用相册压缩。");
-    const form = new FormData();
-    form.append("token", localStorage.getItem(tokenKey) || "");
-    form.append("image", uploadFile);
-    const response = await fetch("/api/proof-image", { method: "POST", body: form });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.message || "上传失败");
-    setProofImage(data.imageUrl);
+    try {
+      const uploadFile = await prepareProofImageForUpload(file);
+      const form = new FormData();
+      form.append("token", localStorage.getItem(tokenKey) || "");
+      form.append("image", uploadFile, uploadFile.name);
+      const response = await fetch("/api/proof-image", { method: "POST", body: form });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "上传失败");
+      setProofImage(data.imageUrl);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "图片上传失败");
+    }
   }
 
   async function choose(move: Move) {
@@ -1669,7 +1839,7 @@ function Room({ config, room, lobbySuggestions, me, onBack, onError }: { config:
         offset: visibleRoundHistory.length,
         limit: 50
       });
-      setExtraHistory((old) => appendHistoryPage(old, result.items, room.roundHistory));
+      setExtraHistory((old) => appendHistoryPage(old, (result.items || []).map(normalizeRoundHistoryItem), room.roundHistory || []));
     } catch (error) {
       onError(error instanceof Error ? error.message : "加载对局记录失败");
     }
@@ -2240,48 +2410,49 @@ function occupantDisplay(occupant: SeatOccupant) {
 }
 
 function RoundHistoryCard({ item, onOpenImage }: { item: RoomSnapshot["roundHistory"][number]; onOpenImage: (imageUrl: string) => void }) {
-  const proofByPlayer = new Map(item.proofs.map((proof) => [proof.playerId, proof]));
-  const taskPlayerIds = new Set(item.punishmentTasks.map((task) => task.playerId));
-  const looseProofs = item.proofs.filter((proof) => !taskPlayerIds.has(proof.playerId));
+  const safe = normalizeRoundHistoryItem(item);
+  const proofByPlayer = new Map(safe.proofs.map((proof) => [proof.playerId, proof]));
+  const taskPlayerIds = new Set(safe.punishmentTasks.map((task) => task.playerId));
+  const looseProofs = safe.proofs.filter((proof) => !taskPlayerIds.has(proof.playerId));
   return (
     <article className="history-card">
       <header className="history-card-head">
         <div>
-          <b>第 {item.round} 局</b>
-          <small>{new Date(item.at).toLocaleTimeString()}</small>
+          <b>第 {safe.round} 局</b>
+          <small>{new Date(safe.at).toLocaleTimeString()}</small>
         </div>
         <div className="history-tags">
-          {item.gameId === "othello" && <em>⚫⚪ 黑白棋</em>}
-          {item.gameId === "tictactoe" && <em>❌⭕ 井字棋</em>}
-          {item.ranked && <em>🏆 {item.gameId === "othello" ? `${item.stake}分/子${item.rankMultiplier && item.rankMultiplier > 1 ? ` ×${item.rankMultiplier}` : ""}` : `${item.stake}分${item.rankMultiplier && item.rankMultiplier > 1 ? ` ×${item.rankMultiplier}` : ""}`}</em>}
-          {item.extremeRanked && <em>⚡ 极限</em>}
-          {item.punishedNames.length > 0 && <em>🎲 惩罚</em>}
+          {safe.gameId === "othello" && <em>⚫⚪ 黑白棋</em>}
+          {safe.gameId === "tictactoe" && <em>❌⭕ 井字棋</em>}
+          {safe.ranked && <em>🏆 {safe.gameId === "othello" ? `${safe.stake}分/子${safe.rankMultiplier && safe.rankMultiplier > 1 ? ` ×${safe.rankMultiplier}` : ""}` : `${safe.stake}分${safe.rankMultiplier && safe.rankMultiplier > 1 ? ` ×${safe.rankMultiplier}` : ""}`}</em>}
+          {safe.extremeRanked && <em>⚡ 极限</em>}
+          {safe.punishedNames.length > 0 && <em>🎲 惩罚</em>}
         </div>
       </header>
       <div className="history-duel">
         <div className="history-side">
-          <span>{item.playerA}</span>
-          <strong>{historySeatLabel(item, "A")}</strong>
+          <span>{safe.playerA}</span>
+          <strong>{historySeatLabel(safe, "A")}</strong>
         </div>
         <div className="history-result">
-          <small>{item.gameId === "othello" && item.othelloScore ? `${item.othelloScore.black} : ${item.othelloScore.white}` : item.gameId === "tictactoe" ? "3 × 3" : "VS"}</small>
-          <b>{item.resultLabel || historyResultText(item.result)}</b>
+          <small>{safe.gameId === "othello" && safe.othelloScore ? `${safe.othelloScore.black} : ${safe.othelloScore.white}` : safe.gameId === "tictactoe" ? "3 × 3" : "VS"}</small>
+          <b>{safe.resultLabel || historyResultText(safe.result)}</b>
         </div>
         <div className="history-side">
-          <span>{item.playerB}</span>
-          <strong>{historySeatLabel(item, "B")}</strong>
+          <span>{safe.playerB}</span>
+          <strong>{historySeatLabel(safe, "B")}</strong>
         </div>
       </div>
-      {item.punishedNames.length > 0 && (
+      {safe.punishedNames.length > 0 && (
         <section className="history-section">
           <div className="history-punishment-summary">
-            <b>{item.punishmentName || "惩罚"}</b>
-            <small>{item.punishedNames.join("、")}</small>
+            <b>{safe.punishmentName || "惩罚"}</b>
+            <small>{safe.punishedNames.join("、")}</small>
           </div>
-          {item.punishmentTasks.map((task) => (
+          {safe.punishmentTasks.map((task) => (
             <div
               className={`history-task ${task.backgroundImage ? "has-task-background" : ""}`}
-              key={`${item.id}-${task.playerId}-task`}
+              key={`${safe.id}-${task.playerId}-task`}
               style={task.backgroundImage ? { "--task-bg": `url(${task.backgroundImage})`, "--task-bg-opacity": String(task.backgroundOpacity ?? 0.22) } as CSSProperties : undefined}
             >
               <small>{task.playerName} 的任务{task.assignedByName ? ` · ${task.assignedByName} 发布` : ""}</small>
@@ -2302,7 +2473,7 @@ function RoundHistoryCard({ item, onOpenImage }: { item: RoomSnapshot["roundHist
         <section className="history-section">
           <b>完成证明</b>
           {looseProofs.map((proof) => (
-            <div className="history-proof" key={`${item.id}-${proof.playerId}`}>
+            <div className="history-proof" key={`${safe.id}-${proof.playerId}`}>
               <span>{proof.playerName}</span>
               <p>{proof.text}</p>
               {proof.rejectReason && <small>审核：{proof.rejectReason}</small>}
@@ -3411,11 +3582,11 @@ function AdminPanel({ config, lobby, onBack, onError }: { config: AppConfig; lob
   }
 
   async function uploadAdminImage(file: File) {
-    const uploadFile = await compressImageForUpload(file);
-    if (uploadFile.size > maxImageUploadBytes) throw new Error("图片压缩后仍超过 8MB，请换一张或先用相册压缩。");
+    const uploadFile = await compressAdminImageForUpload(file);
+    if (uploadFile.size > 8 * 1024 * 1024) throw new Error("图片超过 8MB，请换一张或先压缩");
     const form = new FormData();
     form.append("password", password);
-    form.append("image", uploadFile);
+    form.append("image", uploadFile, uploadFile.name);
     const response = await fetch("/api/admin-image", { method: "POST", body: form });
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || "上传失败");
