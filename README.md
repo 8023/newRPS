@@ -24,12 +24,14 @@
 │   ├── index.html
 │   ├── package.json
 │   └── vite.config.ts   # 构建输出到仓库根 dist/
-├── dist/                # 前端构建产物（Go 静态托管，gitignore）
-├── bin/                 # go build 产物（gitignore）
+├── dist/                # 前端构建产物（入库，Go 静态托管）
+├── bin/server           # Go 可执行文件（入库，供 docker compose 直接跑）
 ├── data/                # players.json 等（gitignore）
 ├── work/                # uploads、session.secret（gitignore）
 ├── go.mod
 ├── package.json         # 根脚本（并发 dev / 一键 build）
+├── docker-compose.yml   # debian:bookworm-slim + 挂载产物
+├── .env.example
 └── README.md
 ```
 
@@ -67,6 +69,27 @@ npm run dev:web        # Vite，代理 /api /ws /uploads → 9988
 - 前端：`http://127.0.0.1:5173`
 - 后端：`http://127.0.0.1:9988`
 
+### 方式三：Docker Compose（推荐服务器部署）
+
+仓库已包含运行产物 `bin/server`、`dist/`。使用官方 **`debian:bookworm-slim`** 挂载启动，**无需 Dockerfile、无需再 build**。
+
+```bash
+git clone <repo> && cd newRPS
+cp .env.example .env          # 可选：ADMIN_PASSWORD、SESSION_SECRET、ALLOWED_ORIGINS
+docker compose up -d
+
+docker compose ps
+docker compose logs -f gamehouse
+```
+
+- 访问：`http://服务器IP:9988`（`HOST_PORT`，默认 9988）
+- 挂载：`bin/server`、`dist`（只读）+ `data` / `work` / `config`（持久化）
+- 改源码后：`npm install --prefix web && npm run build`，再 `docker compose up -d`（如需更新远端，请一并提交 `bin/server` 与 `dist/`）
+- 停止：`docker compose down`（数据目录保留）
+
+> 说明：入库的 `bin/server` 为 Linux amd64。ARM 服务器需在对应架构上重新 `npm run build:server`。
+
+反向代理时放行 WebSocket（`/ws`），域名写进 `ALLOWED_ORIGINS`。
 ## WebSocket 协议
 
 二进制 **Protobuf** 信封（`api/proto/wire.proto`），启用 permessage-deflate。
@@ -144,3 +167,4 @@ npm run test           # go test + 前端 build
 - **惩罚流程**：创建房间默认开启「惩罚需对手确认」；系统任务与自定义任务一致，败方提交后进入 `pending` 由胜方审批，不再直接开新局。
 - **对局记录**：展示任务完成证明（状态/文字/图片/审核备注）；前端按 id 合并 history，避免覆盖丢失。
 - **黑白棋终局文案**：白给/上贡改为统计摘要，不再把每一手明细拼进结果句。
+- **Docker 部署**：`debian:bookworm-slim` + 挂载仓库内 `bin/server` / `dist/`，clone 后可直接 `docker compose up -d`（产物入库，不强制本机再 build）。

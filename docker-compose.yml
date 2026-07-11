@@ -1,0 +1,42 @@
+# 抖喵游戏屋 — 官方 Debian slim + 仓库内已构建产物（无需 Dockerfile / 无需再 build）
+#
+# git clone 后：
+#   cp .env.example .env   # 可选
+#   docker compose up -d
+#
+# 若你改了源码，在本机重新构建并提交产物后再部署：
+#   npm install --prefix web && npm run build
+#   docker compose up -d
+
+services:
+  gamehouse:
+    image: debian:bookworm-slim
+    container_name: doumiao-gamehouse
+    restart: unless-stopped
+    working_dir: /app
+    ports:
+      - "${HOST_PORT:-9988}:9988"
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "9988"
+      GO_ENV: "production"
+      TZ: "${TZ:-Asia/Shanghai}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-}"
+      SESSION_SECRET: "${SESSION_SECRET:-}"
+      SESSION_TTL_MS: "${SESSION_TTL_MS:-}"
+      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-}"
+      LOBBY_BROADCAST_DELAY_MS: "${LOBBY_BROADCAST_DELAY_MS:-}"
+      ROOM_BROADCAST_DELAY_MS: "${ROOM_BROADCAST_DELAY_MS:-}"
+      MAX_SOCKETS_PER_IP: "${MAX_SOCKETS_PER_IP:-}"
+    volumes:
+      - ./bin/server:/app/server:ro
+      - ./dist:/app/dist:ro
+      - ./config:/app/config
+      - ./data:/app/data
+      - ./work:/app/work
+    command: ["/app/server"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"

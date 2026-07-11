@@ -1,22 +1,24 @@
-# dependencies & build
+# dependencies
 node_modules/
 web/node_modules/
-dist/
+
+# 中间/其它构建产物（最终运行产物 dist/、bin/server 纳入版本库，便于 clone 后直接 docker compose）
 web/dist/
-bin/
 dist-server/
+*.exe
+*.test
 
 # runtime data
 work/
 data/
 outputs/
 config/active.json
-work/session.secret
 
 # tooling / OS
 .omo/
 .DS_Store
 *.log
-*.exe
-*.test
 vendor/
+
+# docker local env
+.env
