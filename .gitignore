@@ -1,22 +1,22 @@
+# dependencies & build
 node_modules/
+web/node_modules/
 dist/
+web/dist/
+bin/
 dist-server/
-work/
-outputs/
-data/
 
+# runtime data
+work/
+data/
+outputs/
+config/active.json
+work/session.secret
+
+# tooling / OS
+.omo/
 .DS_Store
 *.log
-
-config/active.json
-config/1
-
-# Go
-bin/
 *.exe
 *.test
 vendor/
-
-# local tool / session
-.omo/
-work/session.secret

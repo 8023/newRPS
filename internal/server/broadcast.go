@@ -1,10 +1,12 @@
 package server
 
 import (
-	"encoding/json"
+	"sort"
 	"time"
 
 	"github.com/doumiao/newRPS/internal/types"
+	"github.com/doumiao/newRPS/internal/wire"
+	"google.golang.org/protobuf/proto"
 )
 
 func (s *Server) recordBroadcast(typ string, bytes int) {
@@ -49,15 +51,17 @@ func (s *Server) lobbySnapshot(includeConfig, includeSuggestions bool) types.Lob
 			s.refreshPlayerSnapshots(player)
 		}
 	}
-	humanPlayers := make([]types.PublicPlayer, 0, len(s.players))
+	humanPlayers := make(map[string]types.LobbyPlayer, len(s.players))
 	online := 0
 	for _, player := range s.players {
-		humanPlayers = append(humanPlayers, s.publicPlayer(player))
+		lp := types.ToLobbyPlayer(s.publicPlayer(player))
+		humanPlayers[lp.ID] = lp
 		if player.Connected {
 			online++
 		}
 	}
-	rooms := make([]types.LobbyRoomInfo, 0, len(s.rooms))
+
+	rooms := make(map[string]types.LobbyRoomInfo, len(s.rooms))
 	for _, room := range s.rooms {
 		playersCount := 0
 		if room.Seats[types.SeatA] != nil {
@@ -67,39 +71,28 @@ func (s *Server) lobbySnapshot(includeConfig, includeSuggestions bool) types.Lob
 			playersCount++
 		}
 		info := types.LobbyRoomInfo{
-			ID:                     room.ID,
-			GameID:                 room.Settings.GameID,
-			Code:                   room.Code,
-			Name:                   room.Settings.Name,
-			HasPassword:            room.Settings.Password != "",
-			Players:                playersCount,
-			Spectators:             len(room.SpectatorIDs),
+			ID: room.ID, GameID: room.Settings.GameID, Code: room.Code, Name: room.Settings.Name,
+			HasPassword: room.Settings.Password != "", Players: playersCount, Spectators: len(room.SpectatorIDs),
 			Versus: map[types.SeatKey]any{
 				types.SeatA: s.lobbySeatSummary(room.Seats[types.SeatA]),
 				types.SeatB: s.lobbySeatSummary(room.Seats[types.SeatB]),
 			},
-			Status:                 room.Status,
-			RoomBackgroundImage:    room.Settings.RoomBackgroundImage,
-			EnableBot:              room.Settings.EnableBot,
-			BotDifficulty:          room.Settings.BotDifficulty,
-			EnablePunishment:       room.Settings.EnablePunishment,
-			PunishmentIDs:          room.Settings.PunishmentIDs,
-			PunishmentID:           room.Settings.PunishmentID,
-			TieDoublePunish:        room.Settings.TieDoublePunish,
-			RequireOpponentConfirm: room.Settings.RequireOpponentConfirm,
-			EnableRanked:           room.Settings.EnableRanked,
-			Stake:                  room.Settings.Stake,
-			EnableRankMultiplier:   room.Settings.EnableRankMultiplier,
-			RankMultiplier:         rankMultiplierFor(room.Settings),
-			EnableExtremeRanked:    room.Settings.EnableExtremeRanked,
+			Status: room.Status, RoomBackgroundImage: room.Settings.RoomBackgroundImage,
+			EnableBot: room.Settings.EnableBot, BotDifficulty: room.Settings.BotDifficulty,
+			EnablePunishment: room.Settings.EnablePunishment, PunishmentIDs: room.Settings.PunishmentIDs,
+			PunishmentID: room.Settings.PunishmentID, TieDoublePunish: room.Settings.TieDoublePunish,
+			RequireOpponentConfirm: room.Settings.RequireOpponentConfirm, EnableRanked: room.Settings.EnableRanked,
+			Stake: room.Settings.Stake, EnableRankMultiplier: room.Settings.EnableRankMultiplier,
+			RankMultiplier: rankMultiplierFor(room.Settings), EnableExtremeRanked: room.Settings.EnableExtremeRanked,
 		}
 		if room.Settings.EnableTags {
 			info.Tags = room.Settings.Tags
 		} else {
 			info.Tags = []string{}
 		}
-		rooms = append(rooms, info)
+		rooms[room.ID] = info
 	}
+
 	suggestions := []types.Suggestion{}
 	if includeSuggestions {
 		limit := 50
@@ -109,14 +102,9 @@ func (s *Server) lobbySnapshot(includeConfig, includeSuggestions bool) types.Lob
 		suggestions = append(suggestions, s.suggestions[:limit]...)
 	}
 	snap := types.LobbySnapshot{
-		OnlineCount:       online,
-		Players:           humanPlayers,
-		Rooms:             rooms,
-		NormalLeaderboard: []types.PublicPlayer{},
-		RankedLeaderboard: []types.PublicPlayer{},
-		Suggestions:       suggestions,
-		LobbyChat:         []types.ChatMessage{},
-		ServerStats:       s.serverStats,
+		OnlineCount: online, Players: humanPlayers, Rooms: rooms,
+		NormalLeaderboard: []types.LobbyPlayer{}, RankedLeaderboard: []types.LobbyPlayer{},
+		Suggestions: suggestions, LobbyChat: []types.ChatMessage{}, ServerStats: s.serverStats,
 	}
 	if includeConfig {
 		cfg := sanitizePublicConfig(s.publicConfig())
@@ -133,17 +121,22 @@ func (s *Server) lobbySeatSummary(occupant SeatOccupant) any {
 		bot := occupant.(*BotSeat).Bot
 		return map[string]any{"name": bot.Name, "isBot": true}
 	}
-	return map[string]any{"player": occupant.(*HumanSeat).Player}
+	// 大厅对阵只嵌精简玩家
+	p := occupant.(*HumanSeat).Player
+	return map[string]any{"player": types.ToLobbyPlayer(p)}
 }
 
 func (s *Server) emitLobbyUpdate() {
 	s.lobbyBroadcastTimer = nil
 	snapshot := s.lobbySnapshot(false, true)
+	env, nbytes, err := s.buildStateEnvelope("lobby:update", channelLobby(), snapshot)
+	if err != nil || env == nil {
+		return
+	}
 	s.serverStats.LobbyBroadcasts++
-	data, _ := json.Marshal(snapshot)
-	s.serverStats.LastLobbySnapshotBytes = len(data)
-	s.recordBroadcast("lobby", len(data))
-	s.emitToRoom(lobbyChannel, "lobby:update", snapshot)
+	s.serverStats.LastLobbySnapshotBytes = nbytes
+	s.recordBroadcast("lobby", nbytes)
+	s.emitWireToRoom(lobbyChannel, env)
 }
 
 func (s *Server) broadcastLobby() {
@@ -157,6 +150,19 @@ func (s *Server) broadcastLobby() {
 	})
 }
 
+// forceBroadcastLobby 立即全量刷新大厅（房间删除等结构性变化，避免防抖/增量漏删）。
+func (s *Server) forceBroadcastLobby() {
+	if s.lobbyBroadcastTimer != nil {
+		s.lobbyBroadcastTimer.Stop()
+		s.lobbyBroadcastTimer = nil
+	}
+	if ch := s.getSync(channelLobby()); ch != nil {
+		ch.doc = nil
+		ch.hash = ""
+	}
+	s.emitLobbyUpdate()
+}
+
 func (s *Server) emitRoomUpdate(roomID string) {
 	pending := s.roomBroadcastTimers[roomID]
 	delete(s.roomBroadcastTimers, roomID)
@@ -165,12 +171,18 @@ func (s *Server) emitRoomUpdate(roomID string) {
 		return
 	}
 	room.UpdatedAt = nowMs()
-	snapshot := s.roomSnapshot(room, false, false)
+	// 必须带上 recent history：惩罚任务文本 / 证明会写在 latest history 里。
+	// 若 includeHistory=false，客户端只能靠本地旧 history，任务发布后需手动刷新才能看见。
+	// chat 仍走 chat:append 增量，不在此重复全量下发。
+	snapshot := s.roomSnapshot(room, false, true)
+	env, nbytes, err := s.buildStateEnvelope("room:update", channelRoom(roomID), snapshot)
+	if err != nil || env == nil {
+		return
+	}
 	s.serverStats.RoomBroadcasts++
-	data, _ := json.Marshal(snapshot)
-	s.serverStats.LastRoomSnapshotBytes = len(data)
-	s.recordBroadcast("room", len(data))
-	s.emitToRoom(roomID, "room:update", snapshot)
+	s.serverStats.LastRoomSnapshotBytes = nbytes
+	s.recordBroadcast("room", nbytes)
+	s.emitWireToRoom(roomID, env)
 	if pending != nil && pending.updateLobby {
 		s.broadcastLobby()
 	}
@@ -201,8 +213,36 @@ func (s *Server) clearRoomBroadcastTimer(roomID string) {
 	delete(s.roomBroadcastTimers, roomID)
 }
 
+// broadcastPlayerUpdate 100ms 聚合后批量推送精简玩家视图。
+// 注意：必须用 RAW 推送「本批变更列表」，不能走状态通道 FULL/DELTA——
+// 否则通道文档会被替换成「仅本批玩家」，Diff 会错误地 remove 其它玩家。
 func (s *Server) broadcastPlayerUpdate(player *PlayerState) {
-	s.emitVolatileAll("player:update", s.publicPlayer(player))
+	if s.pendingPlayerUpdates == nil {
+		s.pendingPlayerUpdates = map[string]*PlayerState{}
+	}
+	s.pendingPlayerUpdates[player.ID] = player
+	if s.playerUpdateTimer != nil {
+		return
+	}
+	s.playerUpdateTimer = timeAfterFunc(100*time.Millisecond, func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.flushPlayerUpdates()
+	})
+}
+
+func (s *Server) flushPlayerUpdates() {
+	s.playerUpdateTimer = nil
+	if len(s.pendingPlayerUpdates) == 0 {
+		return
+	}
+	list := make([]types.LobbyPlayer, 0, len(s.pendingPlayerUpdates))
+	for _, p := range s.pendingPlayerUpdates {
+		list = append(list, types.ToLobbyPlayer(s.publicPlayer(p)))
+	}
+	s.pendingPlayerUpdates = map[string]*PlayerState{}
+	sort.Slice(list, func(i, j int) bool { return list[i].ID < list[j].ID })
+	s.emitVolatileAll("player:batch", list)
 }
 
 func (s *Server) appendRoomChat(room *RoomState, message types.ChatMessage) {
@@ -219,6 +259,122 @@ func (s *Server) appendLobbyChat(message types.ChatMessage) {
 	}
 }
 
+func (s *Server) emitWireToRoom(room string, env *wire.Envelope) {
+	data, err := proto.Marshal(env)
+	if err != nil {
+		return
+	}
+	for _, c := range s.clients {
+		if c.inRoom(room) {
+			_ = c.writeBinary(data)
+		}
+	}
+}
+
+func (s *Server) emitWireAll(env *wire.Envelope) {
+	data, err := proto.Marshal(env)
+	if err != nil {
+		return
+	}
+	for _, c := range s.clients {
+		_ = c.writeBinary(data)
+	}
+}
+
+func (s *Server) emitWireClient(c *Client, env *wire.Envelope) {
+	if c == nil {
+		return
+	}
+	data, err := proto.Marshal(env)
+	if err != nil {
+		return
+	}
+	_ = c.writeBinary(data)
+}
+
+// 兼容旧 JSON 推送路径（chat 等即时消息仍可用 raw envelope）
+func (s *Server) emitToRoom(room string, event string, data any) {
+	env, err := s.buildRawEnvelope(event, 0, data, "")
+	if err != nil {
+		return
+	}
+	s.emitWireToRoom(room, env)
+}
+
+func (s *Server) emitVolatileAll(event string, data any) {
+	env, err := s.buildRawEnvelope(event, 0, data, "")
+	if err != nil {
+		return
+	}
+	s.emitWireAll(env)
+}
+
+func (s *Server) emitToClient(clientID string, event string, data any) {
+	c := s.clients[clientID]
+	if c == nil {
+		return
+	}
+	env, err := s.buildRawEnvelope(event, 0, data, "")
+	if err != nil {
+		return
+	}
+	s.emitWireClient(c, env)
+}
+
+// emitConfigUpdate 配置变更用状态通道（可增量）。
+func (s *Server) emitConfigUpdate() {
+	cfg := s.publicConfig()
+	env, _, err := s.buildStateEnvelope("config:update", channelConfig(), cfg)
+	if err != nil || env == nil {
+		return
+	}
+	s.emitWireAll(env)
+}
+
+func (s *Server) dropSyncChannel(name string) {
+	if s.syncChans == nil {
+		return
+	}
+	delete(s.syncChans, name)
+}
+
+// force full resync helper for one client
+func (s *Server) sendFullChannel(c *Client, channel string) {
+	switch {
+	case channel == channelLobby():
+		snap := s.lobbySnapshot(false, true)
+		env, _, err := s.buildFullEnvelope("lobby:update", channel, snap)
+		if err == nil {
+			s.emitWireClient(c, env)
+		}
+	case channel == channelConfig():
+		env, _, err := s.buildFullEnvelope("config:update", channel, s.publicConfig())
+		if err == nil {
+			s.emitWireClient(c, env)
+		}
+	case channel == channelPlayers():
+		byID := map[string]types.LobbyPlayer{}
+		for _, p := range s.players {
+			byID[p.ID] = types.ToLobbyPlayer(s.publicPlayer(p))
+		}
+		env, _, err := s.buildFullEnvelope("player:batch", channel, byID)
+		if err == nil {
+			s.emitWireClient(c, env)
+		}
+	case len(channel) > 5 && channel[:5] == "room:":
+		roomID := channel[5:]
+		room := s.rooms[roomID]
+		if room == nil {
+			return
+		}
+		snap := s.roomSnapshot(room, true, true)
+		env, _, err := s.buildFullEnvelope("room:update", channel, snap)
+		if err == nil {
+			s.emitWireClient(c, env)
+		}
+	}
+}
+
 func (s *Server) emitLobbyChatAppend(message types.ChatMessage) {
 	s.emitToRoom(lobbyChannel, "chat:append", message)
 }
@@ -232,13 +388,8 @@ func (s *Server) appendSuggestion(suggestion types.Suggestion) {
 
 func (s *Server) systemChat(text string, roomID string) {
 	message := types.ChatMessage{
-		ID:       randomID(),
-		RoomID:   roomID,
-		PlayerID: "system",
-		Author:   "系统",
-		Text:     text,
-		At:       nowMs(),
-		System:   true,
+		ID: randomID(), RoomID: roomID, PlayerID: "system", Author: "系统",
+		Text: text, At: nowMs(), System: true,
 	}
 	if roomID != "" {
 		room := s.rooms[roomID]
@@ -255,15 +406,11 @@ func (s *Server) systemChat(text string, roomID string) {
 
 func (s *Server) roomNotice(room *RoomState, text string) {
 	exp := nowMs() + 5_000
-	s.appendRoomChat(room, types.ChatMessage{
-		ID:        randomID(),
-		RoomID:    room.ID,
-		PlayerID:  "system",
-		Author:    "系统",
-		Text:      text,
-		At:        nowMs(),
-		System:    true,
-		Transient: true,
-		ExpiresAt: &exp,
-	})
+	message := types.ChatMessage{
+		ID: randomID(), RoomID: room.ID, PlayerID: "system", Author: "系统",
+		Text: text, At: nowMs(), System: true, Transient: true, ExpiresAt: &exp,
+	}
+	s.appendRoomChat(room, message)
+	// 房间广播默认不带 chat，必须单独推送，否则系统提示要刷新才看得到。
+	s.emitToRoom(room.ID, "chat:append", message)
 }

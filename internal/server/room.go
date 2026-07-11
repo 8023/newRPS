@@ -85,8 +85,10 @@ func (s *Server) cleanupRoomIfEmpty(room *RoomState) bool {
 	s.clearOthelloSettlementTimer(room.ID)
 	s.clearTicTacToeGiveawayTimer(room.ID)
 	s.clearRoomBroadcastTimer(room.ID)
+	s.dropSyncChannel(channelRoom(room.ID))
 	delete(s.rooms, room.ID)
-	s.broadcastLobby()
+	// 房间从大厅列表移除属于结构性变化，立即全量推大厅，避免他人列表残留幽灵房间。
+	s.forceBroadcastLobby()
 	return true
 }
 

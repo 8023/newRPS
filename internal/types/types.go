@@ -442,15 +442,17 @@ type LobbyRoomInfo struct {
 }
 
 type LobbySnapshot struct {
-	Config            *AppConfig      `json:"config,omitempty"`
-	OnlineCount       int             `json:"onlineCount"`
-	Players           []PublicPlayer  `json:"players"`
-	Rooms             []LobbyRoomInfo `json:"rooms"`
-	NormalLeaderboard []PublicPlayer  `json:"normalLeaderboard"`
-	RankedLeaderboard []PublicPlayer  `json:"rankedLeaderboard"`
-	Suggestions       []Suggestion    `json:"suggestions"`
-	LobbyChat         []ChatMessage   `json:"lobbyChat"`
-	ServerStats       ServerStats     `json:"serverStats"`
+	Config      *AppConfig `json:"config,omitempty"`
+	OnlineCount int        `json:"onlineCount"`
+	// Players 按 id 索引，便于增量补丁；完整资料见 player:get / 房间快照 / me
+	Players map[string]LobbyPlayer `json:"players"`
+	// Rooms 按 id 索引
+	Rooms             map[string]LobbyRoomInfo `json:"rooms"`
+	NormalLeaderboard []LobbyPlayer            `json:"normalLeaderboard"`
+	RankedLeaderboard []LobbyPlayer            `json:"rankedLeaderboard"`
+	Suggestions       []Suggestion             `json:"suggestions"`
+	LobbyChat         []ChatMessage            `json:"lobbyChat"`
+	ServerStats       ServerStats              `json:"serverStats"`
 }
 
 type TitleSegment struct {

@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package wire;
+
+option go_package = "github.com/doumiao/newRPS/internal/wire";
+
+// WebSocket 二进制信封：请求/响应/推送统一格式。
+// 状态类事件（lobby/room/players/config）使用 FULL 或 DELTA；
+// 普通 RPC 使用 RAW（payload 为 JSON 字节，兼容原有业务结构）。
+message Envelope {
+  string event = 1;
+  int64 id = 2;
+  string err = 3;
+  PayloadKind kind = 4;
+  // 同步通道：lobby | room:<id> | players | config
+  string channel = 5;
+  uint64 seq = 6;
+  // 合并后全量状态的 SHA-256 十六进制；客户端校验失败则 sync:full
+  string hash = 7;
+  // FULL：完整 JSON 文档
+  bytes full = 8;
+  // DELTA：路径补丁
+  repeated PatchOp ops = 9;
+  // RAW：原 JSON 业务载荷
+  bytes raw = 10;
+}
+
+enum PayloadKind {
+  KIND_RAW = 0;
+  KIND_FULL = 1;
+  KIND_DELTA = 2;
+}
+
+message PatchOp {
+  // JSON Pointer（RFC6901）风格，如 /players/0/connected
+  string path = 1;
+  // 新值的 JSON 编码；remove=true 时忽略
+  bytes value = 2;
+  bool remove = 3;
+}

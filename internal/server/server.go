@@ -64,7 +64,7 @@ func New() (*Server, error) {
 			lobbyDelay = time.Duration(n) * time.Millisecond
 		}
 	}
-	roomDelay := 60 * time.Millisecond
+	roomDelay := 100 * time.Millisecond
 	if v := os.Getenv("ROOM_BROADCAST_DELAY_MS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 20 {
 			roomDelay = time.Duration(n) * time.Millisecond
@@ -80,9 +80,15 @@ func New() (*Server, error) {
 	if host == "" {
 		host = "0.0.0.0"
 	}
+	// 优先仓库根 dist/（vite outDir: ../dist），兼容旧路径 web/dist
 	distDir := filepath.Join(root, "dist")
 	if _, err := os.Stat(distDir); err != nil {
-		distDir = ""
+		alt := filepath.Join(root, "web", "dist")
+		if _, err2 := os.Stat(alt); err2 == nil {
+			distDir = alt
+		} else {
+			distDir = ""
+		}
 	}
 
 	s := &Server{

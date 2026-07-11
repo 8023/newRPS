@@ -311,15 +311,11 @@ func (s *Server) punishmentComplete(room *RoomState) bool {
 				break
 			}
 		}
-		if proof == nil {
+		if proof == nil || proof.Status == "rejected" {
 			return false
 		}
-		if !room.Settings.RequireOpponentConfirm {
-			if proof.Status == "rejected" {
-				return false
-			}
-			continue
-		}
+		// 仅 approved（或带 ConfirmedBy）算完成。pending 必须等胜方审批；
+		// 关闭「需对手确认」时提交路径会立刻写成 approved。
 		if proof.Status != "approved" && proof.ConfirmedBy == "" {
 			return false
 		}

@@ -1,7 +1,7 @@
 import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, useEffect, useRef, useState } from "react";
 import { Coffee, Crown, DoorOpen, Download, ExternalLink, Eye, HeartHandshake, MessageCircle, Moon, Pencil, RefreshCcw, Save, Send, Settings, Shield, Sun, Swords, Upload, UserRound, Users } from "lucide-react";
 import { socket } from "./main";
-import type { AppConfig, BotDifficulty, ChatMessage, GenderFaction, LobbySnapshot, Move, PublicPlayer, PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant } from "../shared/types";
+import type { AppConfig, BotDifficulty, ChatMessage, GenderFaction, LobbySnapshot, Move, PublicPlayer, PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant } from "./shared/types";
 
 const tokenKey = "rps-online-token";
 const playerIdKey = "rps-player-id";
@@ -64,19 +64,34 @@ function ensurePlayerIdentity() {
   return { playerId, playerSecret };
 }
 
-async function ensureSessionToken() {
+/** 会话 token 形如 sid.exp.sig；本地预检是否仍在有效期内。 */
+function sessionTokenLooksValid(token: string | null | undefined): token is string {
+  if (!token) return false;
+  const parts = token.split(".");
+  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return false;
+  const exp = Number(parts[1]);
+  if (!Number.isFinite(exp) || exp <= Date.now()) return false;
+  return true;
+}
+
+function hasCachedLogin(): boolean {
+  // 只要本地有过进厅名字，刷新后就尝试自动 player:join（token 过期会由 ensureSessionToken 换发）。
+  return Boolean(localStorage.getItem("rps-online-name"));
+}
+
+async function ensureSessionToken(forceNew = false) {
   const existing = localStorage.getItem(tokenKey);
-  if (existing && existing.split(".").length === 3) return existing;
+  if (!forceNew && sessionTokenLooksValid(existing)) return existing;
   if (existing) localStorage.removeItem(tokenKey);
   const response = await fetch("/api/session", { method: "POST" });
   const data = await response.json();
   if (!response.ok || !data.token) throw new Error(data.message || "Session failed");
-  localStorage.setItem(tokenKey, data.token);
+  localStorage.setItem(tokenKey, String(data.token));
   return String(data.token);
 }
 
-async function connectSocketWithSession() {
-  const token = await ensureSessionToken();
+async function connectSocketWithSession(options: { forceNewToken?: boolean } = {}) {
+  const token = await ensureSessionToken(options.forceNewToken);
   socket.auth = { token };
   if (!socket.connected) await socket.connect();
   return token;
@@ -336,18 +351,31 @@ function replacePlayerInLobby(lobby: LobbySnapshot, player: PublicPlayer) {
   };
 }
 
+function coerceLobbyPlayers(raw: LobbySnapshot["players"] | Record<string, PublicPlayer> | PublicPlayer[] | null | undefined): PublicPlayer[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw as PublicPlayer[];
+  return Object.values(raw as Record<string, PublicPlayer>);
+}
+
+function coerceLobbyRooms(raw: LobbySnapshot["rooms"] | Record<string, LobbySnapshot["rooms"][number]> | null | undefined): LobbySnapshot["rooms"] {
+  if (!raw) return [] as any;
+  if (Array.isArray(raw)) return raw;
+  return Object.values(raw as Record<string, any>) as any;
+}
+
 function normalizeLobbySnapshot(snapshot: LobbySnapshot, old?: LobbySnapshot | null) {
-  const players = snapshot.players || [];
+  const players = coerceLobbyPlayers(snapshot.players as any);
+  const rooms = coerceLobbyRooms(snapshot.rooms as any);
   const lobbyChat = (!snapshot.lobbyChat || snapshot.lobbyChat.length === 0) && old ? old.lobbyChat : (snapshot.lobbyChat || []);
   return {
     ...snapshot,
     players,
-    rooms: snapshot.rooms || [],
+    rooms,
     suggestions: snapshot.suggestions || [],
     lobbyChat,
     normalLeaderboard: normalWinRatePlayers(players),
     rankedLeaderboard: rankedPlayers(players)
-  };
+  } as LobbySnapshot;
 }
 
 /** 兜底：Go nil slice/map → JSON null 时，避免前端 .includes/.map 白屏 */
@@ -359,6 +387,19 @@ function normalizeRoundHistoryItem(item: RoomSnapshot["roundHistory"][number]): 
     proofs: item.proofs || [],
     tictactoeLine: item.tictactoeLine || undefined
   };
+}
+
+/** 合并对局记录：服务端 recent history 覆盖同 id 项（任务/证明更新），并保留本地已加载的更早页。 */
+function mergeRoundHistory(
+  oldItems: RoomSnapshot["roundHistory"] | undefined,
+  nextItems: RoomSnapshot["roundHistory"] | undefined
+): RoomSnapshot["roundHistory"] {
+  const old = oldItems || [];
+  const next = (nextItems || []).map(normalizeRoundHistoryItem);
+  if (!next.length) return old;
+  const nextIds = new Set(next.map((item) => item.id));
+  const rest = old.filter((item) => !nextIds.has(item.id));
+  return [...next, ...rest];
 }
 
 function normalizeOthello(state: RoomSnapshot["othello"]): RoomSnapshot["othello"] {
@@ -457,6 +498,8 @@ export function App() {
   const [me, setMe] = useState<MeState | null>(null);
   const [leaderboardPlayersSnapshot, setLeaderboardPlayersSnapshot] = useState<PublicPlayer[]>([]);
   const [view, setView] = useState<"login" | "lobby" | "room" | "admin">(() => isAdminRoute() ? "admin" : "login");
+  // 有本地登录缓存时先进入恢复态，避免刷新时先闪一下登录页再进大厅。
+  const [restoringSession, setRestoringSession] = useState(() => !isAdminRoute() && hasCachedLogin());
   const [profileOpen, setProfileOpen] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [sponsorOpen, setSponsorOpen] = useState(false);
@@ -466,26 +509,34 @@ export function App() {
   const [connectionState, setConnectionState] = useState<"connected" | "connecting" | "disconnected">(() => socket.connected ? "connected" : "connecting");
   const [theme, setTheme] = useState<"light" | "dark">(() => (localStorage.getItem("rps-online-theme") === "dark" ? "dark" : "light"));
   const restoreInFlightRef = useRef(false);
+  const hadConnectedRef = useRef(socket.connected);
   const latestLobbyPlayersRef = useRef<PublicPlayer[]>([]);
   const leaderboardSnapshotAtRef = useRef(0);
 
   useEffect(() => {
     connectSocketWithSession().catch(() => {
-      localStorage.removeItem(tokenKey);
       setConnectionState("disconnected");
-      setNotice("连接认证失败，请刷新后重试。");
+      setRestoringSession(false);
+      setNotice("连接失败，请检查网络后刷新重试。");
     });
   }, []);
 
-  async function restoreSession(options: { showRecoveredNotice?: boolean; clearBadToken?: boolean } = {}) {
+  async function restoreSession(options: { showRecoveredNotice?: boolean } = {}) {
     if (restoreInFlightRef.current) return;
     const token = localStorage.getItem(tokenKey);
     const cachedName = localStorage.getItem("rps-online-name") || "";
     const cachedGender = localStorage.getItem("rps-online-gender") || "male";
-    if (!token || !cachedName) return;
+    if (!cachedName || !sessionTokenLooksValid(token)) {
+      setRestoringSession(false);
+      return;
+    }
+    // 未连上时绝不尝试 join，更不能因此清 token（旧逻辑会把“未连接”误判成坏 token）。
+    if (!socket.connected) return;
+
     restoreInFlightRef.current = true;
     try {
       const next = await ask<MeState>("player:join", { name: cachedName, genderId: cachedGender, token, ...ensurePlayerIdentity() });
+      if (next.token) localStorage.setItem(tokenKey, next.token);
       setMe(next);
       if (next.room) setRoom(normalizeRoomSnapshot(next.room));
       else setRoom(null);
@@ -494,11 +545,19 @@ export function App() {
         if (next.room?.phase === "punishment") setNotice("已恢复到未完成的惩罚房间。");
         else if (options.showRecoveredNotice) setNotice("连接已恢复，玩家状态已同步。");
       }
-    } catch {
-      if (options.clearBadToken) localStorage.removeItem(tokenKey);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      // 仅身份/会话类错误放弃自动登录；瞬时断线等保持缓存，下次 connect 再试。
+      if (/身份校验|Session|session|token|令牌|会话/i.test(message)) {
+        localStorage.removeItem(tokenKey);
+        setMe(null);
+        setRoom(null);
+        if (!isAdminRoute()) setView("login");
+      }
       if (options.showRecoveredNotice) setNotice("连接已恢复，但玩家状态同步失败，请刷新或重新进入。");
     } finally {
       restoreInFlightRef.current = false;
+      setRestoringSession(false);
     }
   }
 
@@ -526,8 +585,10 @@ export function App() {
         if (old?.id === normalized.id) {
           return {
             ...normalized,
+            // chat 走 chat:append；全量包若未带 chat 则保留本地
             chat: normalized.chat.length === 0 ? old.chat : normalized.chat,
-            roundHistory: normalized.roundHistory.length === 0 ? old.roundHistory : normalized.roundHistory
+            // history 必须合并：惩罚任务/证明写在 latest history，不能因空数组丢弃，也不能整包忽略更新
+            roundHistory: mergeRoundHistory(old.roundHistory, normalized.roundHistory)
           };
         }
         return normalized;
@@ -538,16 +599,39 @@ export function App() {
       const safeItem = normalizeRoundHistoryItem(item);
       setRoom((old) => old?.id === roomId ? {
         ...old,
-        roundHistory: prependCappedUnique(old.roundHistory || [], safeItem, 20),
+        roundHistory: mergeRoundHistory(old.roundHistory, [safeItem]),
         roundHistoryTotal: total
       } : old);
     });
-    socket.on("player:update", (player: PublicPlayer) => {
-      latestLobbyPlayersRef.current = latestLobbyPlayersRef.current.map((item) => item.id === player.id ? player : item);
-      setLobby((old) => old ? replacePlayerInLobby(old, player) : old);
-      setRoom((old) => old ? replacePlayerInRoom(old, player) : old);
-      setMe((old) => old?.player.id === player.id ? { ...old, player, room: old.room ? replacePlayerInRoom(old.room, player) : old.room } : old);
-    });
+    // 聚合玩家更新（player:batch 为 LobbyPlayer[]；兼容单条 player:update）
+    function applyPlayerPatches(players: PublicPlayer[]) {
+      if (!players?.length) return;
+      const byId = new Map(players.map((p) => [p.id, p]));
+      latestLobbyPlayersRef.current = latestLobbyPlayersRef.current.map((item) => byId.get(item.id) || item);
+      for (const p of players) {
+        if (!latestLobbyPlayersRef.current.some((x) => x.id === p.id)) latestLobbyPlayersRef.current.push(p);
+      }
+      setLobby((old) => {
+        if (!old) return old;
+        let next = old;
+        for (const p of players) next = replacePlayerInLobby(next, p);
+        return next;
+      });
+      setRoom((old) => {
+        if (!old) return old;
+        let next = old;
+        for (const p of players) next = replacePlayerInRoom(next, p);
+        return next;
+      });
+      setMe((old) => {
+        if (!old) return old;
+        const p = byId.get(old.player.id);
+        if (!p) return old;
+        return { ...old, player: { ...old.player, ...p }, room: old.room ? replacePlayerInRoom(old.room, { ...old.player, ...p }) : old.room };
+      });
+    }
+    socket.on("player:batch", (list: PublicPlayer[]) => applyPlayerPatches(Array.isArray(list) ? list : []));
+    socket.on("player:update", (player: PublicPlayer) => applyPlayerPatches(player ? [player] : []));
     socket.on("player:kicked", () => {
       localStorage.removeItem(tokenKey);
       setMe(null);
@@ -582,7 +666,10 @@ export function App() {
     });
     socket.on("connect", () => {
       setConnectionState("connected");
-      restoreSession({ showRecoveredNotice: true });
+      const isReconnect = hadConnectedRef.current;
+      hadConnectedRef.current = true;
+      // 首次连接不弹「已恢复」；断线重连后才提示。
+      void restoreSession({ showRecoveredNotice: isReconnect });
     });
     socket.on("disconnect", () => {
       setConnectionState("disconnected");
@@ -591,18 +678,29 @@ export function App() {
     socket.on("connect_error", (error: Error & { data?: { code?: string } }) => {
       setConnectionState("disconnected");
       const code = error?.data?.code;
-      // 只有会话相关错误才清掉 token 重新换发；身份相关（playerId/secret）不清 token。
-      if (code === "SESSION_INVALID" || code === "SESSION_EXPIRED" || code === "SESSION_MISSING" || !code) {
+      // 仅明确的会话失效才换发 token；网络抖动 / 未知错误保留 token，避免登录态被误清。
+      if (code === "SESSION_INVALID" || code === "SESSION_EXPIRED" || code === "SESSION_MISSING") {
         localStorage.removeItem(tokenKey);
-        connectSocketWithSession().catch(() => setConnectionState("disconnected"));
+        connectSocketWithSession({ forceNewToken: true }).catch(() => {
+          setConnectionState("disconnected");
+          setRestoringSession(false);
+        });
+        return;
       }
+      setRestoringSession(false);
     });
     socket.io.on("reconnect_attempt", () => setConnectionState("connecting"));
+    // StrictMode 重挂载或热更新时 connect 事件可能已错过，已连接则立刻恢复会话。
+    if (socket.connected) {
+      setConnectionState("connected");
+      void restoreSession({ showRecoveredNotice: false });
+    }
     return () => {
       socket.off("lobby:update");
       socket.off("room:update");
       socket.off("room:historyAppend");
       socket.off("player:update");
+      socket.off("player:batch");
       socket.off("player:kicked");
       socket.off("room:closed");
       socket.off("config:update");
@@ -677,10 +775,6 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    restoreSession({ clearBadToken: true });
-  }, []);
-
-  useEffect(() => {
     if (!me || isAdminRoute()) return;
     ask(view === "room" ? "lobby:unsubscribe" : "lobby:subscribe", {}).catch(() => undefined);
   }, [view, me?.player.id]);
@@ -746,8 +840,11 @@ export function App() {
           </section>
         </div>
       )}
-      {view === "login" && <Login config={config} onDone={(next) => {
+      {view === "login" && restoringSession && <section className="panel">正在恢复登录状态...</section>}
+      {view === "login" && !restoringSession && <Login config={config} onDone={(next) => {
+        if (next.token) localStorage.setItem(tokenKey, next.token);
         setMe(next);
+        setRestoringSession(false);
         if (next.room) setRoom(normalizeRoomSnapshot(next.room));
         setView(isAdminRoute() ? "admin" : next.room ? "room" : "lobby");
         if (next.room?.phase === "punishment") setNotice("已恢复到未完成的惩罚房间。");
@@ -1041,7 +1138,8 @@ function CreateRoom({ config, me, onCreated, onCancel, onError }: { config: AppC
     tags: [],
     allowProofImage: true,
     tieDoublePunish: false,
-    requireOpponentConfirm: false,
+    // 默认需要胜方审批证明（系统惩罚与自定义任务一致，避免提交后直接开新局）。
+    requireOpponentConfirm: true,
     enableRanked: false,
     stake: 5,
     enableRankMultiplier: false,
@@ -2449,34 +2547,42 @@ function RoundHistoryCard({ item, onOpenImage }: { item: RoomSnapshot["roundHist
             <b>{safe.punishmentName || "惩罚"}</b>
             <small>{safe.punishedNames.join("、")}</small>
           </div>
-          {safe.punishmentTasks.map((task) => (
-            <div
-              className={`history-task ${task.backgroundImage ? "has-task-background" : ""}`}
-              key={`${safe.id}-${task.playerId}-task`}
-              style={task.backgroundImage ? { "--task-bg": `url(${task.backgroundImage})`, "--task-bg-opacity": String(task.backgroundOpacity ?? 0.22) } as CSSProperties : undefined}
-            >
-              <small>{task.playerName} 的任务{task.assignedByName ? ` · ${task.assignedByName} 发布` : ""}</small>
-              <p>{task.taskText ? taskTextOnly(task.taskText, task.factionLabel) : "等待玩家发布任务"}</p>
-              {proofByPlayer.has(task.playerId) && (
-                <div className="history-proof inline">
-                  <span>任务反馈</span>
-                  <p>{proofByPlayer.get(task.playerId)!.text}</p>
-                  {proofByPlayer.get(task.playerId)!.rejectReason && <small>审核：{proofByPlayer.get(task.playerId)!.rejectReason}</small>}
-                  {proofByPlayer.get(task.playerId)!.imageUrl && <button className="history-proof-image-button" onClick={() => onOpenImage(proofByPlayer.get(task.playerId)!.imageUrl!)}><img src={proofByPlayer.get(task.playerId)!.imageUrl} alt="惩罚证明" loading="lazy" decoding="async" /></button>}
-                </div>
-              )}
-            </div>
-          ))}
+          {safe.punishmentTasks.map((task) => {
+            const proof = proofByPlayer.get(task.playerId);
+            return (
+              <div
+                className={`history-task ${task.backgroundImage ? "has-task-background" : ""}`}
+                key={`${safe.id}-${task.playerId}-task`}
+                style={task.backgroundImage ? { "--task-bg": `url(${task.backgroundImage})`, "--task-bg-opacity": String(task.backgroundOpacity ?? 0.22) } as CSSProperties : undefined}
+              >
+                <small>{task.playerName} 的任务{task.assignedByName ? ` · ${task.assignedByName} 发布` : ""}</small>
+                <p>{task.taskText ? taskTextOnly(task.taskText, task.factionLabel) : "等待玩家发布任务"}</p>
+                {proof ? (
+                  <div className="history-proof inline">
+                    <span>完成证明 · {historyProofStatusLabel(proof)}</span>
+                    {proof.taskText && proof.taskText !== task.taskText && <small>对应任务：{proof.taskText}</small>}
+                    <p>{proof.text || "（无文字）"}</p>
+                    {proof.rejectReason && <small>审核备注：{proof.rejectReason}</small>}
+                    {proof.redoTaskText && <small>重做任务：{proof.redoTaskText}</small>}
+                    {proof.imageUrl && <button className="history-proof-image-button" onClick={() => onOpenImage(proof.imageUrl!)}><img src={proof.imageUrl} alt="惩罚证明" loading="lazy" decoding="async" /></button>}
+                  </div>
+                ) : (
+                  <div className="history-proof inline muted"><span>完成证明</span><p>尚未提交</p></div>
+                )}
+              </div>
+            );
+          })}
         </section>
       )}
       {looseProofs.length > 0 && (
         <section className="history-section">
-          <b>完成证明</b>
+          <b>其它完成证明</b>
           {looseProofs.map((proof) => (
             <div className="history-proof" key={`${safe.id}-${proof.playerId}`}>
-              <span>{proof.playerName}</span>
-              <p>{proof.text}</p>
-              {proof.rejectReason && <small>审核：{proof.rejectReason}</small>}
+              <span>{proof.playerName || "玩家"} · {historyProofStatusLabel(proof)}</span>
+              {proof.taskText && <small>任务：{proof.taskText}</small>}
+              <p>{proof.text || "（无文字）"}</p>
+              {proof.rejectReason && <small>审核备注：{proof.rejectReason}</small>}
               {proof.imageUrl && <button className="history-proof-image-button" onClick={() => onOpenImage(proof.imageUrl!)}><img src={proof.imageUrl} alt="惩罚证明" loading="lazy" decoding="async" /></button>}
             </div>
           ))}
@@ -2494,6 +2600,16 @@ function historySeatLabel(item: RoomSnapshot["roundHistory"][number], seat: Seat
     return item.tictactoeXSeat === seat ? "❌ X" : "⭕ O";
   }
   return choiceText(seat === "A" ? item.moveA : item.moveB);
+}
+
+function historyProofStatusLabel(proof: { status?: string; confirmedBy?: string; rejectReason?: string }) {
+  if (proof.status === "approved" || proof.confirmedBy) {
+    if (proof.rejectReason === "对方选择放过你" || proof.rejectReason === "双方互相放过，下一局正常开始。") return "已放过";
+    return "已通过";
+  }
+  if (proof.status === "rejected") return "需重做";
+  if (proof.status === "pending") return "待审核";
+  return proof.status || "已提交";
 }
 
 function canAssignPunishmentTask(room: RoomSnapshot, currentPlayerId: string, punishedPlayerId: string, assignedBy?: string) {

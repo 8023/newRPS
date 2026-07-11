@@ -204,6 +204,13 @@ type Server struct {
 	lobbyBroadcastTimer *time.Timer
 	roomBroadcastTimers map[string]*roomBroadcastPending
 
+	// 状态同步通道（增量）
+	syncChans map[string]*syncChannel
+
+	// 玩家更新 100ms 聚合
+	pendingPlayerUpdates map[string]*PlayerState
+	playerUpdateTimer    *time.Timer
+
 	serverStats types.ServerStats
 
 	isProduction   bool

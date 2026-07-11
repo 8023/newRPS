@@ -19,6 +19,27 @@ func emptyPlayers(s []types.PublicPlayer) []types.PublicPlayer {
 	return s
 }
 
+func emptyLobbyPlayers(s []types.LobbyPlayer) []types.LobbyPlayer {
+	if s == nil {
+		return []types.LobbyPlayer{}
+	}
+	return s
+}
+
+func emptyLobbyPlayerMap(m map[string]types.LobbyPlayer) map[string]types.LobbyPlayer {
+	if m == nil {
+		return map[string]types.LobbyPlayer{}
+	}
+	return m
+}
+
+func emptyLobbyRoomMap(m map[string]types.LobbyRoomInfo) map[string]types.LobbyRoomInfo {
+	if m == nil {
+		return map[string]types.LobbyRoomInfo{}
+	}
+	return m
+}
+
 func emptyChat(s []types.ChatMessage) []types.ChatMessage {
 	if s == nil {
 		return []types.ChatMessage{}
@@ -68,12 +89,7 @@ func emptyPos(s []types.Pos) []types.Pos {
 	return s
 }
 
-func emptyLobbyRooms(s []types.LobbyRoomInfo) []types.LobbyRoomInfo {
-	if s == nil {
-		return []types.LobbyRoomInfo{}
-	}
-	return s
-}
+
 
 func seatBoolMap(m map[types.SeatKey]bool) map[types.SeatKey]bool {
 	if m == nil {
@@ -212,14 +228,14 @@ func sanitizeLobbyRoom(info types.LobbyRoomInfo) types.LobbyRoomInfo {
 }
 
 func sanitizeLobbySnapshot(snap types.LobbySnapshot) types.LobbySnapshot {
-	snap.Players = emptyPlayers(snap.Players)
-	rooms := emptyLobbyRooms(snap.Rooms)
-	for i := range rooms {
-		rooms[i] = sanitizeLobbyRoom(rooms[i])
+	snap.Players = emptyLobbyPlayerMap(snap.Players)
+	rooms := emptyLobbyRoomMap(snap.Rooms)
+	for id, room := range rooms {
+		rooms[id] = sanitizeLobbyRoom(room)
 	}
 	snap.Rooms = rooms
-	snap.NormalLeaderboard = emptyPlayers(snap.NormalLeaderboard)
-	snap.RankedLeaderboard = emptyPlayers(snap.RankedLeaderboard)
+	snap.NormalLeaderboard = emptyLobbyPlayers(snap.NormalLeaderboard)
+	snap.RankedLeaderboard = emptyLobbyPlayers(snap.RankedLeaderboard)
 	snap.Suggestions = emptySuggestions(snap.Suggestions)
 	snap.LobbyChat = emptyChat(snap.LobbyChat)
 	return snap

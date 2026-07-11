@@ -179,7 +179,14 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 	if sessionToken == "" {
 		sessionToken = player.Token
 	}
-	s.tokenToPlayer[sessionToken] = player.ID
+	// 与当前 WS 会话对齐，避免客户端把过期的历史 player.Token 写回 localStorage。
+	if sessionToken != "" {
+		if player.Token != "" && player.Token != sessionToken {
+			delete(s.tokenToPlayer, player.Token)
+		}
+		player.Token = sessionToken
+		s.tokenToPlayer[sessionToken] = player.ID
+	}
 	if !ptrBool(player.NameWarEnabled) {
 		player.Name = cleanName
 		player.NameWarOriginalName = cleanName
@@ -214,7 +221,7 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 	}
 	client.reply(env.ID, map[string]any{
 		"player": s.publicPlayer(player),
-		"token":  player.Token,
+		"token":  sessionToken,
 		"roomId": player.RoomID,
 		"room":   roomSnap,
 	}, "")
@@ -251,7 +258,7 @@ func (s *Server) onAdminLogin(client *Client, env wsEnvelope) {
 func (s *Server) onLobbySubscribe(client *Client, env wsEnvelope) {
 	client.joinRoom(lobbyChannel)
 	client.joinRoom(lobbySuggestionChannel)
-	_ = client.writeJSON(wsPush{E: "lobby:update", D: s.lobbySnapshot(false, true)})
+	s.sendFullChannel(client, channelLobby())
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
@@ -749,7 +756,7 @@ func (s *Server) onConfigSave(client *Client, env wsEnvelope) {
 	s.refreshAllPlayersForConfig()
 	client.reply(env.ID, map[string]any{"config": s.publicConfig()}, "")
 	s.broadcastLobby()
-	s.emitVolatileAll("config:update", s.publicConfig())
+	s.emitConfigUpdate()
 }
 
 func (s *Server) onConfigReset(client *Client, env wsEnvelope) {
@@ -770,5 +777,5 @@ func (s *Server) onConfigReset(client *Client, env wsEnvelope) {
 	s.refreshAllPlayersForConfig()
 	client.reply(env.ID, map[string]any{"config": s.publicConfig()}, "")
 	s.broadcastLobby()
-	s.emitVolatileAll("config:update", s.publicConfig())
+	s.emitConfigUpdate()
 }

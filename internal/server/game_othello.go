@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/doumiao/newRPS/internal/types"
@@ -163,11 +164,67 @@ func othelloRankedText(state *types.OthelloState) string {
 	return fmt.Sprintf("黑棋 %s，白棋 %s", formatSigned(blackDelta), formatSigned(whiteDelta))
 }
 
+// othelloSettlementSummary 终局只展示统计摘要，不再把每一手明细拼进 ResultText。
 func othelloSettlementSummary(state *types.OthelloState) string {
 	if state == nil || len(state.SettlementEvents) == 0 {
 		return ""
 	}
-	return "；本局白给/上贡：" + joinChinese(state.SettlementEvents)
+	var giveawayHands, giveawayFlips, tributeHands, forcedHands int
+	for _, e := range state.SettlementEvents {
+		switch {
+		case strings.Contains(e, "白给"):
+			giveawayHands++
+			giveawayFlips += extractLeadingIntBefore(e, "子")
+			if strings.Contains(e, "强制") {
+				forcedHands++
+			}
+		case strings.Contains(e, "上贡"):
+			tributeHands++
+		}
+	}
+	if giveawayHands == 0 && tributeHands == 0 {
+		return ""
+	}
+	var parts []string
+	if giveawayHands > 0 {
+		if giveawayFlips > 0 {
+			parts = append(parts, fmt.Sprintf("白给 %d 手（共 %d 子不计分）", giveawayHands, giveawayFlips))
+		} else {
+			parts = append(parts, fmt.Sprintf("白给 %d 手", giveawayHands))
+		}
+	}
+	if tributeHands > 0 {
+		parts = append(parts, fmt.Sprintf("上贡 %d 手", tributeHands))
+	}
+	if forcedHands > 0 {
+		parts = append(parts, fmt.Sprintf("其中强制 %d 手", forcedHands))
+	}
+	return "；本局白给/上贡：" + joinChinese(parts)
+}
+
+// extractLeadingIntBefore 从「…，N 子…」一类文案里取子数，解析失败返回 0。
+func extractLeadingIntBefore(text, marker string) int {
+	idx := strings.Index(text, marker)
+	if idx <= 0 {
+		return 0
+	}
+	// 向前扫描数字
+	end := idx
+	for end > 0 && text[end-1] == ' ' {
+		end--
+	}
+	start := end
+	for start > 0 && text[start-1] >= '0' && text[start-1] <= '9' {
+		start--
+	}
+	if start == end {
+		return 0
+	}
+	n := 0
+	for i := start; i < end; i++ {
+		n = n*10 + int(text[i]-'0')
+	}
+	return n
 }
 
 func joinChinese(parts []string) string {

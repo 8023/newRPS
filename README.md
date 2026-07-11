@@ -1,20 +1,48 @@
-# 抖喵游戏屋（Go 后端）
+# 抖喵游戏屋
 
-实时联机小游戏平台。前端 React + TypeScript，后端已 **1:1 重写为 Go**（标准库 `net/http` + `github.com/coder/websocket`）。
+实时联机小游戏平台：**Go 后端** + **React 前端**。
 
 主玩法：锤子剪刀布 / 黑白棋 / 井字棋。含大厅、房间、聊天、观战、Bot、排位、惩罚、名字争夺战、白给、极限模式、后台配置等。
 
+## 目录结构
+
+```
+.
+├── cmd/
+│   ├── server/          # Go 服务入口
+│   └── wsprobe/         # WebSocket 探针（开发用）
+├── internal/
+│   ├── config/          # 配置加载/校验（config/*.json）
+│   ├── delta/           # 通用 JSON 增量 Diff/Apply/Hash
+│   ├── server/          # 游戏逻辑、HTTP、WebSocket
+│   ├── types/           # 服务端领域类型
+│   └── wire/            # Protobuf 生成代码
+├── api/proto/           # wire.proto 协议定义
+├── config/              # default.json / active.json（运行时）
+├── web/                 # 前端（Vite + React + TS）
+│   ├── src/             # 页面、WS 客户端、样式
+│   ├── index.html
+│   ├── package.json
+│   └── vite.config.ts   # 构建输出到仓库根 dist/
+├── dist/                # 前端构建产物（Go 静态托管，gitignore）
+├── bin/                 # go build 产物（gitignore）
+├── data/                # players.json 等（gitignore）
+├── work/                # uploads、session.secret（gitignore）
+├── go.mod
+├── package.json         # 根脚本（并发 dev / 一键 build）
+└── README.md
+```
+
 ## 本地运行
 
-### 方式一：一体启动（推荐）
+### 方式一：生产一体（Go 托管前端）
 
 ```bash
-# 编译后端
-go build -o bin/server ./cmd/server
-
-# 构建前端并启动（默认端口 9988）
+# 根目录：装前端依赖 + 构建
 npm install
-npm run build
+npm install --prefix web
+npm run build          # web → dist/ 且编译 bin/server
+
 HOST=127.0.0.1 PORT=9988 ./bin/server
 ```
 
@@ -23,120 +51,96 @@ HOST=127.0.0.1 PORT=9988 ./bin/server
 ### 方式二：开发热更新
 
 ```bash
-# 终端 1：Go 后端
-HOST=127.0.0.1 PORT=9988 go run ./cmd/server
-
-# 终端 2：Vite 前端（代理到 9988）
-npm run dev:client
+# 根目录
+npm install
+npm install --prefix web
+npm run dev            # 同时起 Go(9988) + Vite(5173)
 ```
 
-- 前端开发地址：`http://127.0.0.1:5173`
-- 后端地址：`http://127.0.0.1:9988`
+或分终端：
 
-## 项目结构
+```bash
+npm run dev:server     # Go
+npm run dev:web        # Vite，代理 /api /ws /uploads → 9988
+```
 
-```
-cmd/server/          # 入口
-internal/config/     # 配置加载/校验/持久化（config/default.json → active.json）
-internal/server/     # 游戏状态、房间、WebSocket、HTTP
-internal/types/      # 前后端共享的 JSON 契约类型
-src/client/          # React 前端（原生 WebSocket 客户端）
-src/shared/types.ts  # 前端类型定义
-config/              # 默认/运行时配置
-work/uploads/        # 证明图与后台图片
-data/players.json    # 持久玩家档案
-dist/                # 前端构建产物（由 Go 静态托管）
-```
+- 前端：`http://127.0.0.1:5173`
+- 后端：`http://127.0.0.1:9988`
 
 ## WebSocket 协议
 
-替代原 Socket.IO，JSON 信封：
+二进制 **Protobuf** 信封（`api/proto/wire.proto`），启用 permessage-deflate。
 
-| 方向 | 格式 |
+| 类型 | 说明 |
 |------|------|
-| 客户端请求 | `{"e":"player:join","id":1,"d":{...}}` |
-| 服务端应答 | `{"id":1,"d":{...}}` 或 `{"id":1,"err":"错误"}` |
-| 服务端推送 | `{"e":"lobby:update","d":{...}}` |
-
-连接：`GET /ws?token=<sessionToken>`，已启用 **permessage-deflate 压缩**。
-
-事件名与原 Node 项目保持一致（`player:join`、`room:create`、`room:move`、`othello:*`、`tictactoe:*`、`punishment:*` 等共 42 个请求事件）。
+| FULL / DELTA | 状态通道 `lobby` / `room:*` / `config`；DELTA 带路径补丁 + SHA-256 |
+| RAW | RPC 请求/响应与即时推送（chat、player:batch 等） |
+| `sync:full` | 客户端哈希不一致时请求全量 |
+| `player:get` | 拉取完整 `PublicPlayer`（大厅仅下发精简 `LobbyPlayer`） |
 
 ## HTTP API
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | `/api/session` | 签发会话 token |
-| POST | `/api/proof-image` | 证明图：仅 `.webp`，≤2MB |
+| POST | `/api/proof-image` | 证明图：仅 webp，≤2MB |
 | POST | `/api/admin-image` | 后台图：jpg/png/webp |
 | GET | `/api/config/export` | 导出配置（需管理员口令） |
 | GET | `/ws` | WebSocket |
 | GET | `/uploads/*` | 上传文件 |
-| GET | `/*` | 前端静态资源 |
+| GET | `/*` | 前端静态（`dist/`） |
 
-### 证明图上传规则
+### 证明图
 
-**前端**
+- 前端：长宽比 >21:9 拒绝；原图 >10MB 拒绝；>4MP 缩放；WebP 85%
+- 后端：非 `.webp` 拒绝；>2MB 拒绝；错误信息用户可见
 
-1. 选文件  
-2. 长宽比 > 21:9 → 拒绝  
-3. 原图 > 10MB → 拒绝  
-4. 像素 > 4MP → 等比缩放至约 4MP  
-5. Canvas 绘制 → WebP 质量 85%  
-6. 上传 `/api/proof-image`
-
-**后端**
-
-1. 后缀非 `.webp` → 拒绝  
-2. 大小 > 2MB → 拒绝  
-3. 内容非有效 WebP → 拒绝  
-
-错误信息对用户可见（JSON `message` / 前端 `notice`）。
-
-### 静态缓存
-
-带 hash 的构建资源：`Cache-Control: public, max-age=31536000, immutable`  
-`index.html`：`no-cache`
+静态 hash 资源：`Cache-Control: public, max-age=31536000`
 
 ## 环境变量
 
 | 变量 | 默认 | 说明 |
 |------|------|------|
-| `HOST` | `127.0.0.1` | 监听地址 |
+| `HOST` | `0.0.0.0` | 监听地址 |
 | `PORT` | `9988` | 监听端口 |
 | `ADMIN_PASSWORD` | （空） | 后台口令 |
-| `SESSION_SECRET` | 见说明 | 会话 HMAC 密钥；未设置时读写 `work/session.secret`，避免每次重启令牌全失效 |
+| `SESSION_SECRET` | `work/session.secret` | 会话 HMAC；未设置则落盘复用 |
 | `SESSION_TTL_MS` | 24h | 会话有效期 |
-| `ALLOWED_ORIGINS` | 本机 | 逗号分隔额外 Origin |
+| `ALLOWED_ORIGINS` | 本机 | 额外 Origin |
 | `LOBBY_BROADCAST_DELAY_MS` | 300 | 大厅广播合并 |
-| `ROOM_BROADCAST_DELAY_MS` | 60 | 房间广播合并 |
+| `ROOM_BROADCAST_DELAY_MS` | 100 | 房间广播合并 |
 
 ## 后台
 
 - 入口：`/admin` 或 `#admin`，或 `Ctrl/Cmd+Shift+A`
-- 配置文件：`config/default.json`（入库）、`config/active.json`（运行时，gitignore）
+- `config/default.json` 入库；`config/active.json` 运行时（gitignore）
 
 ## 构建与测试
 
 ```bash
-npm run build          # 前端
-go build -o bin/server ./cmd/server
+npm run build:web      # 仅前端
+npm run build:server   # 仅 Go
 go test ./...
+npm run test           # go test + 前端 build
 ```
 
 ## 维护约定
 
-功能变更时同步更新本 README「最近更新记录」。需要同步 GitHub 时执行 `git commit` 与 `git push`。
+功能变更时同步更新「最近更新记录」。同步 GitHub 需 `git commit` 与 `git push`。
 
 ## 最近更新记录
 
 ### 2026-07-11
 
-- 后端由 Node.js/Express/Socket.IO **完整重写为 Go**（`net/http` + `coder/websocket`），业务 1:1 复刻：锤子剪刀布 / 黑白棋 / 井字棋、大厅房间、惩罚、排位倍率与极限、白给、名争、Bot、管理后台与配置热更新等。
-- 实时通道改为原生 WebSocket JSON 信封（替代 Socket.IO），启用 **permessage-deflate 压缩**；事件名与原 42 个请求事件及推送事件对齐。
-- 证明图上传链路调整：前端校验长宽比 21:9、原图 10MB、像素约 4MP 缩放后 WebP 85%；后端仅接受 `.webp` 且 ≤2MB，错误信息对用户可见。
-- 静态资源 `Cache-Control: public, max-age=31536000`；`index.html` 不缓存；默认监听端口 **9988**。
-- 修复创建房间白屏：Go `nil` 切片序列化为 JSON `null` 导致前端 `.includes`/`.map` 崩溃；新增出站 `jsonsafe` 清洗，集合字段统一输出 `[]` 而非 `null`。
-- 前端入口增加房间/配置/对局记录 normalize 兜底；WebSocket 握手失败时上报 `SESSION_INVALID` 以便清 token 重签。
-- 会话密钥默认落盘 `work/session.secret`，减少进程重启后全站重连鉴权失败。
-- 前端脚本与代理改为对接 Go 服务；依赖中移除 express/socket.io/multer 等 Node 服务端包。
+- **目录整理**：前端迁入 `web/`；删除旧 Node.js 后端（`src/server`、socket.io/express 等）；根目录只保留 Go 模块与编排脚本（`npm run dev` / `npm run build` / `npm start`）。
+- 后端由 Node.js/Express/Socket.IO **完整重写为 Go**；Protobuf 线协议 + 通用增量同步 + 大厅 `LobbyPlayer` 精简 + 玩家更新 100ms 聚合 + 房间广播默认 100ms。
+- 证明图前后端校验与长期静态缓存；默认端口 **9988**。
+- 修复 `nil` 切片 JSON `null` 白屏、player:batch 误删状态、哈希 HTML 转义不一致等。
+- **登录态刷新**：修复已登录用户反复刷新时在登录页/大厅间跳转；仅在 WS 连通后恢复会话，避免「未连接」误清 token。
+- **实时推送**：
+  - 房间广播带上 recent `roundHistory`（自定义任务、证明不再需要手动刷新）。
+  - 空房删除时大厅立即全量刷新；离房后补发大厅 FULL，避免幽灵房间。
+  - `roomNotice` 同步 `chat:append`，系统提示即时可见。
+- **惩罚流程**：创建房间默认开启「惩罚需对手确认」；系统任务与自定义任务一致，败方提交后进入 `pending` 由胜方审批，不再直接开新局。
+- **对局记录**：展示任务完成证明（状态/文字/图片/审核备注）；前端按 id 合并 history，避免覆盖丢失。
+- **黑白棋终局文案**：白给/上贡改为统计摘要，不再把每一手明细拼进结果句。

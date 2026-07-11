@@ -1,0 +1,334 @@
+// Package delta 提供通用 JSON 状态树的全量/增量同步原语。
+// 广播侧：Diff + Hash；接收侧：Apply + 校验 Hash。
+package delta
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"reflect"
+	"sort"
+	"strconv"
+	"strings"
+)
+
+// Op 表示一条路径级补丁（RFC6901 JSON Pointer）。
+type Op struct {
+	Path   string          `json:"path"`
+	Value  json.RawMessage `json:"value,omitempty"`
+	Remove bool            `json:"remove,omitempty"`
+}
+
+// Snapshot 将任意可 JSON 序列化的值规范化为 map/slice 树。
+func Snapshot(v any) (any, error) {
+	if v == nil {
+		return nil, nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	var out any
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Hash 对规范化树做稳定序列化后 SHA-256。
+func Hash(doc any) (string, error) {
+	canon, err := canonicalize(doc)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(canon)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// MustHash 与 Hash 相同，失败返回空串。
+func MustHash(doc any) string {
+	h, err := Hash(doc)
+	if err != nil {
+		return ""
+	}
+	return h
+}
+
+// Diff 计算 from→to 的补丁列表。from 为 nil 时返回单条根替换（调用方应改用 FULL）。
+func Diff(from, to any) ([]Op, error) {
+	if from == nil {
+		raw, err := marshalNoHTMLEscape(to)
+		if err != nil {
+			return nil, err
+		}
+		return []Op{{Path: "", Value: raw}}, nil
+	}
+	var ops []Op
+	diffValue("", from, to, &ops)
+	return ops, nil
+}
+
+// Apply 将 ops 应用到 base 的深拷贝上，返回新文档。
+func Apply(base any, ops []Op) (any, error) {
+	doc, err := deepCopy(base)
+	if err != nil {
+		return nil, err
+	}
+	for _, op := range ops {
+		if op.Path == "" {
+			if op.Remove {
+				doc = nil
+				continue
+			}
+			var v any
+			if err := json.Unmarshal(op.Value, &v); err != nil {
+				return nil, fmt.Errorf("root value: %w", err)
+			}
+			doc = v
+			continue
+		}
+		if err := applyOne(doc, op); err != nil {
+			return nil, fmt.Errorf("apply %s: %w", op.Path, err)
+		}
+	}
+	return doc, nil
+}
+
+// ToJSON 序列化文档（不转义 HTML，与浏览器 JSON.stringify 对齐，避免哈希不一致）。
+func ToJSON(doc any) ([]byte, error) {
+	return marshalNoHTMLEscape(doc)
+}
+
+// FromJSON 反序列化文档。
+func FromJSON(b []byte) (any, error) {
+	var doc any
+	if err := json.Unmarshal(b, &doc); err != nil {
+		return nil, err
+	}
+	return doc, nil
+}
+
+func deepCopy(v any) (any, error) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	var out any
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func canonicalize(v any) ([]byte, error) {
+	return marshalNoHTMLEscape(normalize(v))
+}
+
+// marshalNoHTMLEscape 关闭 encoding/json 默认的 &<> HTML 转义，
+// 否则服务端哈希与前端 JSON.stringify 对含 & 的名字会永久不一致，触发无限 sync:full。
+func marshalNoHTMLEscape(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	b := buf.Bytes()
+	// Encode 会追加 '\n'
+	if n := len(b); n > 0 && b[n-1] == '\n' {
+		b = b[:n-1]
+	}
+	return b, nil
+}
+
+// normalize 排序 map key，保证哈希稳定。
+func normalize(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		keys := make([]string, 0, len(t))
+		for k := range t {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		// json.Marshal map 本身不保证顺序；用有序切片包装不可行。
+		// 标准库 encoding/json 对 map 会按 key 排序输出，所以直接返回 map 即可。
+		out := make(map[string]any, len(t))
+		for _, k := range keys {
+			out[k] = normalize(t[k])
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i := range t {
+			out[i] = normalize(t[i])
+		}
+		return out
+	default:
+		return v
+	}
+}
+
+func equalJSON(a, b any) bool {
+	return reflect.DeepEqual(normalize(a), normalize(b))
+}
+
+func diffValue(path string, from, to any, ops *[]Op) {
+	if equalJSON(from, to) {
+		return
+	}
+	// 类型不同或一方为标量：整体替换
+	fromMap, fromIsMap := from.(map[string]any)
+	toMap, toIsMap := to.(map[string]any)
+	if fromIsMap && toIsMap {
+		// 删除
+		for k := range fromMap {
+			if _, ok := toMap[k]; !ok {
+				*ops = append(*ops, Op{Path: joinPath(path, k), Remove: true})
+			}
+		}
+		// 新增/修改
+		for k, tv := range toMap {
+			fv, ok := fromMap[k]
+			if !ok {
+				raw, _ := marshalNoHTMLEscape(tv)
+				*ops = append(*ops, Op{Path: joinPath(path, k), Value: raw})
+				continue
+			}
+			diffValue(joinPath(path, k), fv, tv, ops)
+		}
+		return
+	}
+	fromArr, fromIsArr := from.([]any)
+	toArr, toIsArr := to.([]any)
+	if fromIsArr && toIsArr {
+		// 数组：等长则按 index 局部 patch；变长则整段替换（更稳）
+		if len(fromArr) == len(toArr) {
+			same := true
+			for i := range fromArr {
+				if !equalJSON(fromArr[i], toArr[i]) {
+					same = false
+					break
+				}
+			}
+			if same {
+				return
+			}
+			for i := range toArr {
+				if !equalJSON(fromArr[i], toArr[i]) {
+					diffValue(joinPath(path, strconv.Itoa(i)), fromArr[i], toArr[i], ops)
+				}
+			}
+			return
+		}
+		raw, _ := marshalNoHTMLEscape(to)
+		*ops = append(*ops, Op{Path: path, Value: raw})
+		return
+	}
+	raw, _ := marshalNoHTMLEscape(to)
+	*ops = append(*ops, Op{Path: path, Value: raw})
+}
+
+func joinPath(base, key string) string {
+	if base == "" {
+		return "/" + escapeKey(key)
+	}
+	return base + "/" + escapeKey(key)
+}
+
+func escapeKey(k string) string {
+	k = strings.ReplaceAll(k, "~", "~0")
+	k = strings.ReplaceAll(k, "/", "~1")
+	return k
+}
+
+func unescapeKey(k string) string {
+	k = strings.ReplaceAll(k, "~1", "/")
+	k = strings.ReplaceAll(k, "~0", "~")
+	return k
+}
+
+func splitPointer(path string) []string {
+	if path == "" || path == "/" {
+		return nil
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	parts := strings.Split(path[1:], "/")
+	for i := range parts {
+		parts[i] = unescapeKey(parts[i])
+	}
+	return parts
+}
+
+func applyOne(doc any, op Op) error {
+	parts := splitPointer(op.Path)
+	if len(parts) == 0 {
+		return fmt.Errorf("empty path")
+	}
+	// 导航到父节点
+	var cur any = doc
+	for i := 0; i < len(parts)-1; i++ {
+		key := parts[i]
+		switch node := cur.(type) {
+		case map[string]any:
+			next, ok := node[key]
+			if !ok || next == nil {
+				// 自动创建中间 map
+				m := map[string]any{}
+				node[key] = m
+				cur = m
+				continue
+			}
+			cur = next
+		case []any:
+			idx, err := strconv.Atoi(key)
+			if err != nil || idx < 0 || idx >= len(node) {
+				return fmt.Errorf("bad index %s", key)
+			}
+			cur = node[idx]
+		default:
+			return fmt.Errorf("cannot descend into %T at %s", cur, key)
+		}
+	}
+	last := parts[len(parts)-1]
+	switch parent := cur.(type) {
+	case map[string]any:
+		if op.Remove {
+			delete(parent, last)
+			return nil
+		}
+		var v any
+		if err := json.Unmarshal(op.Value, &v); err != nil {
+			return err
+		}
+		parent[last] = v
+		return nil
+	case []any:
+		idx, err := strconv.Atoi(last)
+		if err != nil {
+			return err
+		}
+		if op.Remove {
+			if idx < 0 || idx >= len(parent) {
+				return nil
+			}
+			// 无法原地截断外层引用；数组 remove 改为置 null
+			parent[idx] = nil
+			return nil
+		}
+		var v any
+		if err := json.Unmarshal(op.Value, &v); err != nil {
+			return err
+		}
+		if idx >= 0 && idx < len(parent) {
+			parent[idx] = v
+			return nil
+		}
+		return fmt.Errorf("array index out of range %d", idx)
+	default:
+		return fmt.Errorf("parent is %T", cur)
+	}
+}

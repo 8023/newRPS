@@ -214,6 +214,9 @@ func (s *Server) onRoomLeave(client *Client, env wsEnvelope) {
 		return
 	}
 	client.joinRoom(lobbyChannel)
+	client.joinRoom(lobbySuggestionChannel)
+	// 离房后补一次大厅全量，避免在房期间退订 lobby 后本地列表过期。
+	s.sendFullChannel(client, channelLobby())
 	s.securityLog("room_left", map[string]any{"sid": player.ID, "ip": player.IPAddress, "event": "room:leave", "userAgent": client.userAgent})
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
@@ -962,7 +965,9 @@ func (s *Server) onPunishmentSubmit(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "等待对方发布惩罚任务")
 		return
 	}
-	approvedBySystem := s.opponentIsBot(room, player.ID) || !room.Settings.RequireOpponentConfirm || s.humanOpponent(room, player.ID) == nil
+	// 人人对战且开启「需对手确认」时保持 pending，由胜方审批（系统任务与自定义任务一致）。
+	// 仅 Bot 对战 / 无人类对手 / 房间关闭确认 时系统自动通过。
+	approvedBySystem := s.opponentIsBot(room, player.ID) || s.humanOpponent(room, player.ID) == nil || !room.Settings.RequireOpponentConfirm
 	submittedAt := nowMs()
 	filtered := room.Proofs[:0]
 	for _, pr := range room.Proofs {
@@ -987,6 +992,7 @@ func (s *Server) onPunishmentSubmit(client *Client, env wsEnvelope) {
 		PlayerID: player.ID, PlayerName: playerShortName(player), Text: cleanProofText, ImageURL: cleanImageURL,
 		TaskText: taskText, Status: status, ReviewedBy: reviewedBy, ReviewedAt: reviewedAt, SubmittedAt: submittedAt,
 	})
+	// 提交后立刻广播（含 history 中的证明），胜方无需刷新即可审核。
 	if s.punishmentComplete(room) {
 		s.resetForNextRound(room)
 	} else {
@@ -1336,13 +1342,14 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 			s.clearOthelloSettlementTimer(p.RoomID)
 			s.clearTicTacToeGiveawayTimer(p.RoomID)
 			s.clearRoomBroadcastTimer(p.RoomID)
+			s.dropSyncChannel(channelRoom(p.RoomID))
 			delete(s.rooms, p.RoomID)
 			roomDeleted = true
 		}
 	}
 	if p.Action == "clearRoomChat" && p.RoomID != "" {
 		if room := s.rooms[p.RoomID]; room != nil {
-			room.Chat = nil
+			room.Chat = []types.ChatMessage{}
 		}
 	}
 	if p.Action == "forceNext" && p.RoomID != "" {

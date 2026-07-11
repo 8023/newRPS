@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/doumiao/newRPS/internal/wire"
+	"google.golang.org/protobuf/proto"
 )
 
 type wsEnvelope struct {
@@ -17,18 +20,7 @@ type wsEnvelope struct {
 	D  json.RawMessage `json:"d,omitempty"`
 }
 
-type wsResponse struct {
-	ID  json.RawMessage `json:"id,omitempty"`
-	D   any             `json:"d,omitempty"`
-	Err string          `json:"err,omitempty"`
-}
-
-type wsPush struct {
-	E string `json:"e"`
-	D any    `json:"d"`
-}
-
-func (c *Client) writeJSON(v any) error {
+func (c *Client) writeBinary(data []byte) error {
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
 	if c.closed {
@@ -36,24 +28,36 @@ func (c *Client) writeJSON(v any) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	data, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	return c.conn.Write(ctx, websocket.MessageText, data)
+	return c.conn.Write(ctx, websocket.MessageBinary, data)
 }
 
+// reply 通过 protobuf RAW 信封返回 RPC 应答（仅 id/err/raw）。
 func (c *Client) reply(id json.RawMessage, data any, errMsg string) {
 	if len(id) == 0 {
 		return
 	}
-	resp := wsResponse{ID: id}
-	if errMsg != "" {
-		resp.Err = errMsg
-	} else {
-		resp.D = data
+	var reqID int64
+	_ = json.Unmarshal(id, &reqID)
+	if reqID == 0 {
+		// 兼容字符串 id
+		var s string
+		if json.Unmarshal(id, &s) == nil {
+			reqID, _ = strconv.ParseInt(s, 10, 64)
+		}
 	}
-	_ = c.writeJSON(resp)
+	env := &wire.Envelope{Id: reqID, Kind: wire.PayloadKind_KIND_RAW, Err: errMsg}
+	if errMsg == "" && data != nil {
+		b, err := json.Marshal(data)
+		if err != nil {
+			return
+		}
+		env.Raw = b
+	}
+	out, err := proto.Marshal(env)
+	if err != nil {
+		return
+	}
+	_ = c.writeBinary(out)
 }
 
 func (c *Client) joinRoom(room string) {
@@ -76,30 +80,6 @@ func (s *Server) clientLeaveRoom(c *Client, room string) {
 	if c != nil {
 		c.leaveRoom(room)
 	}
-}
-
-func (s *Server) emitToRoom(room string, event string, data any) {
-	msg := wsPush{E: event, D: data}
-	for _, c := range s.clients {
-		if c.inRoom(room) {
-			_ = c.writeJSON(msg)
-		}
-	}
-}
-
-func (s *Server) emitVolatileAll(event string, data any) {
-	msg := wsPush{E: event, D: data}
-	for _, c := range s.clients {
-		_ = c.writeJSON(msg)
-	}
-}
-
-func (s *Server) emitToClient(clientID string, event string, data any) {
-	c := s.clients[clientID]
-	if c == nil {
-		return
-	}
-	_ = c.writeJSON(wsPush{E: event, D: data})
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
@@ -161,16 +141,8 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	conn.SetReadLimit(1_000_000)
 
 	client := &Client{
-		id:         randomID(),
-		conn:       conn,
-		sid:        session.SID,
-		token:      token,
-		sessionExp: session.Exp,
-		ipAddress:  ipAddress,
-		rooms:      map[string]struct{}{},
-		userAgent:  userAgent,
-		host:       host,
-		origin:     origin,
+		id: randomID(), conn: conn, sid: session.SID, token: token, sessionExp: session.Exp,
+		ipAddress: ipAddress, rooms: map[string]struct{}{}, userAgent: userAgent, host: host, origin: origin,
 	}
 
 	s.mu.Lock()
@@ -179,14 +151,17 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	s.clientIDToSID[client.id] = session.SID
 	s.clientIDsByIP[ipAddress][client.id] = struct{}{}
 	s.securityLog("socket_connected", map[string]any{"sid": session.SID, "ip": ipAddress, "socketId": client.id, "userAgent": userAgent})
-	// initial pushes
 	client.joinRoom(lobbyChannel)
 	cfg := s.publicConfig()
 	lobby := s.lobbySnapshot(false, true)
 	s.mu.Unlock()
 
-	_ = client.writeJSON(wsPush{E: "config:update", D: cfg})
-	_ = client.writeJSON(wsPush{E: "lobby:update", D: lobby})
+	if env, _, err := s.buildFullEnvelope("config:update", channelConfig(), cfg); err == nil {
+		s.emitWireClient(client, env)
+	}
+	if env, _, err := s.buildFullEnvelope("lobby:update", channelLobby(), lobby); err == nil {
+		s.emitWireClient(client, env)
+	}
 
 	ctx := r.Context()
 	for {
@@ -194,14 +169,21 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			break
 		}
-		var env wsEnvelope
-		if err := json.Unmarshal(data, &env); err != nil {
+		var wenv wire.Envelope
+		if err := proto.Unmarshal(data, &wenv); err != nil {
+			// 兼容旧 JSON 文本帧
+			var env wsEnvelope
+			if json.Unmarshal(data, &env) != nil || env.E == "" {
+				continue
+			}
+			s.handleWSEvent(client, env)
 			continue
 		}
-		if env.E == "" {
+		if wenv.Event == "" {
 			continue
 		}
-		s.handleWSEvent(client, env)
+		idRaw, _ := json.Marshal(wenv.Id)
+		s.handleWSEvent(client, wsEnvelope{E: wenv.Event, ID: idRaw, D: wenv.Raw})
 	}
 
 	s.onClientDisconnect(client)
@@ -212,9 +194,36 @@ func (s *Server) handleWSEvent(client *Client, env wsEnvelope) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// global flood backstop
 	if !s.consumeRateLimit(fmt.Sprintf("socket:%s:%s", client.ipAddress, env.E), 60_000, 600) {
 		client.reply(env.ID, nil, "操作过于频繁，请稍后再试")
+		return
+	}
+
+	// 同步与资料查询
+	switch env.E {
+	case "sync:full":
+		var p struct {
+			Channel string `json:"channel"`
+		}
+		_ = decodeD(env, &p)
+		if p.Channel == "" {
+			client.reply(env.ID, nil, "channel required")
+			return
+		}
+		s.sendFullChannel(client, p.Channel)
+		client.reply(env.ID, map[string]any{"ok": true}, "")
+		return
+	case "player:get":
+		var p struct {
+			PlayerID string `json:"playerId"`
+		}
+		_ = decodeD(env, &p)
+		pl := s.players[p.PlayerID]
+		if pl == nil {
+			client.reply(env.ID, nil, "玩家不存在")
+			return
+		}
+		client.reply(env.ID, map[string]any{"player": s.publicPlayer(pl)}, "")
 		return
 	}
 
@@ -287,6 +296,7 @@ func (s *Server) onClientDisconnect(client *Client) {
 				s.broadcastRoom(room.ID, false)
 			}
 		}
+		s.broadcastPlayerUpdate(current)
 		s.broadcastLobby()
 
 		current.timerGen++
@@ -329,7 +339,6 @@ func clientIP(r *http.Request) string {
 	}
 	host := r.RemoteAddr
 	if i := strings.LastIndex(host, ":"); i >= 0 {
-		// keep IPv6 bracket forms roughly
 		h := host[:i]
 		if h != "" {
 			return h
