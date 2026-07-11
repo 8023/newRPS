@@ -269,20 +269,28 @@ func (s *Server) refreshAllPlayersForConfig() {
 	}
 }
 
-func (s *Server) onlinePlayersFromIP(ipAddress string, exceptPlayerID string) int {
+// onlinePlayersFromDevice 统计同一 deviceKey（IP+指纹）下已连接玩家数。
+func (s *Server) onlinePlayersFromDevice(deviceKey string, exceptPlayerID string) int {
+	if deviceKey == "" {
+		return 0
+	}
 	n := 0
 	for _, player := range s.players {
-		if player.Connected && player.IPAddress == ipAddress && player.ID != exceptPlayerID {
+		if player.Connected && player.DeviceKey == deviceKey && player.ID != exceptPlayerID {
 			n++
 		}
 	}
 	return n
 }
 
-func (s *Server) canCreateFromIP(ipAddress string) bool {
+// canCreateFromDevice 同 deviceKey 在 10 分钟内新建玩家次数上限。
+func (s *Server) canCreateFromDevice(deviceKey string) bool {
+	if deviceKey == "" {
+		deviceKey = "unknown"
+	}
 	now := nowMs()
 	windowMs := int64(10 * 60 * 1000)
-	attempts := s.ipCreateAttempts[ipAddress]
+	attempts := s.deviceCreateAttempts[deviceKey]
 	filtered := attempts[:0]
 	for _, t := range attempts {
 		if now-t < windowMs {
@@ -290,11 +298,11 @@ func (s *Server) canCreateFromIP(ipAddress string) bool {
 		}
 	}
 	if len(filtered) >= s.cfg.AccessControl.MaxCreatesPer10Min {
-		s.ipCreateAttempts[ipAddress] = filtered
+		s.deviceCreateAttempts[deviceKey] = filtered
 		return false
 	}
 	filtered = append(filtered, now)
-	s.ipCreateAttempts[ipAddress] = filtered
+	s.deviceCreateAttempts[deviceKey] = filtered
 	return true
 }
 

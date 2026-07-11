@@ -73,6 +73,8 @@ type PlayerState struct {
 	SocketID         string
 	Token            string
 	IPAddress        string
+	Fingerprint      string // 浏览器指纹 visitorId
+	DeviceKey        string // sha256(ip||fingerprint)，防多开维度
 	RecentMoves      []RpsMove
 	PlayerID         string // long-term identity (not public)
 	PlayerSecretHash string
@@ -162,9 +164,14 @@ type Client struct {
 	token         string
 	sessionExp    int64
 	ipAddress     string
+	// fingerprint 为浏览器 visitorId；deviceKey = sha256(ip||fp)，用于防多开
+	fingerprint   string
+	deviceKey      string
 	playerID      string
 	rooms         map[string]struct{}
 	closed        bool
+	// replaced：同 SID 被新连接顶替时置位，断线清理不再动玩家 Connected 状态
+	replaced      bool
 	userAgent     string
 	host          string
 	origin        string
@@ -188,17 +195,19 @@ type Server struct {
 	othelloSettlementTimers map[string]*time.Timer
 	ticTacToeGiveawayTimers map[string]*time.Timer
 
-	ipCreateAttempts map[string][]int64
-	suggestions      []types.Suggestion
-	lobbyChat        []types.ChatMessage
-	adminClientIDs   map[string]struct{}
-	sidToClientID    map[string]string
-	clientIDToSID    map[string]string
-	clientIDsByIP    map[string]map[string]struct{}
-	rateBuckets      map[string]*rateBucket
-	rateLimitBuckets map[string]*rateLimitBucket
+	// deviceCreateAttempts：按 deviceKey 记录 10 分钟内新建玩家时间戳
+	deviceCreateAttempts map[string][]int64
+	suggestions          []types.Suggestion
+	lobbyChat            []types.ChatMessage
+	adminClientIDs       map[string]struct{}
+	sidToClientID        map[string]string
+	clientIDToSID        map[string]string
+	// clientIDsByDevice：deviceKey → 当前套接字集合（同指纹限连）
+	clientIDsByDevice map[string]map[string]struct{}
+	rateBuckets       map[string]*rateBucket
+	rateLimitBuckets  map[string]*rateLimitBucket
 
-	recentBroadcasts []broadcastMetric
+	recentBroadcasts    []broadcastMetric
 	lobbyBroadcastDelay time.Duration
 	roomBroadcastDelay  time.Duration
 	lobbyBroadcastTimer *time.Timer
@@ -213,10 +222,10 @@ type Server struct {
 
 	serverStats types.ServerStats
 
-	isProduction   bool
-	sessionSecret  []byte
-	sessionTtlMs   int64
-	maxSocketsPerIP int
+	isProduction       bool
+	sessionSecret      []byte
+	sessionTtlMs       int64
+	maxSocketsPerDevice int
 
 	host string
 	port int

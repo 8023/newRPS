@@ -13,6 +13,11 @@ import (
 
 func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// WebSocket 升级响应尽量少塞响应头，部分 Safari 在 101 上对额外安全头更敏感。
+		if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+			next.ServeHTTP(w, r)
+			return
+		}
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "same-origin")
@@ -29,7 +34,7 @@ func (s *Server) requireTrustedOrigin(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if s.isAllowedOrigin(r.Header.Get("Origin"), r.Host) {
+		if s.isAllowedOrigin(r.Header.Get("Origin"), publicRequestHost(r)) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -52,13 +57,50 @@ func (s *Server) httpRateLimit(scope string, windowMs int64, max int) func(http.
 	}
 }
 
+// publicRequestHost 反代场景优先 X-Forwarded-Host（可能是 rps.example.com），
+// 否则用 r.Host（直连时是浏览器看到的 Host）。
+func publicRequestHost(r *http.Request) string {
+	if xf := strings.TrimSpace(r.Header.Get("X-Forwarded-Host")); xf != "" {
+		// 可能是 "a.com, b.com"
+		if i := strings.Index(xf, ","); i >= 0 {
+			xf = xf[:i]
+		}
+		return strings.TrimSpace(xf)
+	}
+	return r.Host
+}
+
+func hostOnly(hostport string) string {
+	h := strings.TrimSpace(hostport)
+	h = strings.TrimPrefix(h, "https://")
+	h = strings.TrimPrefix(h, "http://")
+	if i := strings.Index(h, "/"); i >= 0 {
+		h = h[:i]
+	}
+	// host:port 或 [ipv6]:port
+	if strings.HasPrefix(h, "[") {
+		if i := strings.Index(h, "]"); i >= 0 {
+			return h[1:i]
+		}
+	}
+	if i := strings.Index(h, ":"); i >= 0 {
+		return h[:i]
+	}
+	return h
+}
+
 func (s *Server) isAllowedOrigin(origin, requestHost string) bool {
 	if origin == "" {
 		return true
 	}
-	explicit := strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",")
-	for _, item := range explicit {
-		if strings.TrimSpace(item) == origin {
+	origin = strings.TrimSpace(origin)
+	for _, item := range strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		// 完整 Origin 或仅域名都算匹配
+		if item == origin || hostOnly(item) == hostOnly(origin) {
 			return true
 		}
 	}
@@ -66,29 +108,21 @@ func (s *Server) isAllowedOrigin(origin, requestHost string) bool {
 }
 
 func (s *Server) sameHostOrLocalDev(origin, requestHost string) bool {
-	// parse origin roughly
-	o := strings.TrimPrefix(origin, "https://")
-	o = strings.TrimPrefix(o, "http://")
-	hostname := o
-	if i := strings.Index(o, "/"); i >= 0 {
-		hostname = o[:i]
-	}
-	hostOnly := hostname
-	if i := strings.Index(hostname, ":"); i >= 0 {
-		hostOnly = hostname[:i]
-	}
+	originHost := hostOnly(origin)
 	localHosts := map[string]bool{"localhost": true, "127.0.0.1": true, "::1": true}
-	if localHosts[hostOnly] {
+	if localHosts[originHost] {
 		return true
 	}
-	if requestHost != "" && hostname == requestHost {
+	// 忽略端口差异：Origin=https://rps.rbq.io 与 Host=rps.rbq.io:443 应放行
+	reqHost := hostOnly(requestHost)
+	if reqHost != "" && originHost == reqHost {
 		return true
 	}
-	serverHost := s.host
-	if i := strings.Index(serverHost, ":"); i >= 0 {
-		serverHost = serverHost[:i]
+	serverHost := hostOnly(s.host)
+	if serverHost != "" && serverHost != "0.0.0.0" && serverHost != "::" && originHost == serverHost {
+		return true
 	}
-	return hostOnly == serverHost
+	return false
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -103,22 +137,32 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ipAddress := clientIP(r)
-	if !s.isAllowedOrigin(r.Header.Get("Origin"), r.Host) {
+	fp := r.Header.Get("X-Browser-Fingerprint")
+	if fp == "" {
+		// JSON body 可选 { "fingerprint": "..." }
+		var body struct {
+			Fingerprint string `json:"fingerprint"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		fp = body.Fingerprint
+	}
+	devKey := deviceKey(ipAddress, fp)
+	if !s.isAllowedOrigin(r.Header.Get("Origin"), publicRequestHost(r)) {
 		s.securityLog("session_origin_blocked", map[string]any{"ip": ipAddress, "origin": r.Header.Get("Origin"), "userAgent": r.UserAgent()})
 		writeJSON(w, http.StatusForbidden, map[string]string{"message": "Origin not allowed"})
 		return
 	}
 	s.mu.Lock()
-	ok := s.checkRateLimit("session:"+ipAddress, RateLimitOptions{Limit: 10, WindowMs: 60_000, CooldownMs: 60_000})
+	ok := s.checkRateLimit("session:"+devKey, RateLimitOptions{Limit: 10, WindowMs: 60_000, CooldownMs: 60_000})
 	if !ok {
 		s.mu.Unlock()
-		s.securityLog("token_issue_limited", map[string]any{"ip": ipAddress, "userAgent": r.UserAgent()})
+		s.securityLog("token_issue_limited", map[string]any{"ip": ipAddress, "device": devKey, "userAgent": r.UserAgent()})
 		writeJSON(w, http.StatusTooManyRequests, map[string]string{"message": "请求过于频繁，请稍后再试"})
 		return
 	}
 	token := s.issueSessionToken()
 	payload := s.verifySessionToken(token)
-	s.securityLog("token_issued", map[string]any{"sid": payload.SID, "ip": ipAddress, "userAgent": r.UserAgent()})
+	s.securityLog("token_issued", map[string]any{"sid": payload.SID, "ip": ipAddress, "device": devKey, "userAgent": r.UserAgent()})
 	s.mu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]any{"token": token, "expiresAt": payload.Exp})
 }

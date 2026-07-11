@@ -30,8 +30,12 @@ class GameSocket {
   private connectPromise: Promise<void> | null = null;
   private channels = new Map<string, ChannelState>();
   private resyncing = new Set<string>();
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private lastPongAt = 0;
+  private visibilityHandler: (() => void) | null = null;
+  private pageShowHandler: ((ev: PageTransitionEvent) => void) | null = null;
 
-  public auth: { token?: string } = {};
+  public auth: { token?: string; fingerprint?: string } = {};
   public connected = false;
   public io = {
     on: (event: string, handler: Handler) => {
@@ -41,6 +45,22 @@ class GameSocket {
       if (event === "reconnect_attempt") this.off("reconnect_attempt", handler);
     }
   };
+
+  constructor() {
+    // iOS Safari 切后台/回前台后 WS 常已死但 onclose 延迟；回前台主动探测并重连。
+    if (typeof document !== "undefined") {
+      this.visibilityHandler = () => {
+        if (document.visibilityState === "visible") this.ensureAlive();
+      };
+      document.addEventListener("visibilitychange", this.visibilityHandler);
+    }
+    if (typeof window !== "undefined") {
+      this.pageShowHandler = (ev: PageTransitionEvent) => {
+        if (ev.persisted) this.ensureAlive();
+      };
+      window.addEventListener("pageshow", this.pageShowHandler);
+    }
+  }
 
   on(event: string, handler: Handler) {
     if (!this.handlers.has(event)) this.handlers.set(event, new Set());
@@ -61,9 +81,10 @@ class GameSocket {
     for (const handler of [...set]) handler(data);
   }
 
-  private wsURL(token: string) {
+  private wsURL(token: string, fingerprint: string) {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    return `${proto}//${location.host}/ws?token=${encodeURIComponent(token)}`;
+    const fp = fingerprint ? `&fp=${encodeURIComponent(fingerprint)}` : "";
+    return `${proto}//${location.host}/ws?token=${encodeURIComponent(token)}${fp}`;
   }
 
   async connect() {
@@ -72,10 +93,11 @@ class GameSocket {
     }
     this.intentionallyClosed = false;
     this.authToken = String(this.auth.token || "");
+    const fingerprint = String(this.auth.fingerprint || "");
     this.emitLocal("reconnect_attempt");
     this.connectPromise = new Promise<void>((resolve, reject) => {
       try {
-        const ws = new WebSocket(this.wsURL(this.authToken));
+        const ws = new WebSocket(this.wsURL(this.authToken, fingerprint));
         ws.binaryType = "arraybuffer";
         this.ws = ws;
         let opened = false;
@@ -83,7 +105,9 @@ class GameSocket {
           opened = true;
           this.connected = true;
           this.reconnectAttempt = 0;
+          this.lastPongAt = Date.now();
           this.channels.clear();
+          this.startHeartbeat();
           this.emitLocal("connect");
           resolve();
         };
@@ -93,6 +117,7 @@ class GameSocket {
         };
         ws.onerror = () => undefined;
         ws.onclose = (ev) => {
+          this.stopHeartbeat();
           this.connected = false;
           this.ws = null;
           this.connectPromise = null;
@@ -120,13 +145,57 @@ class GameSocket {
   }
 
   private scheduleReconnect() {
-    if (this.reconnectTimer) return;
+    if (this.reconnectTimer || this.intentionallyClosed) return;
     this.reconnectAttempt += 1;
-    const delay = Math.min(5_000, 800 * this.reconnectAttempt);
+    // iOS 弱网/切后台后多给一点退避，避免秒级狂连
+    const delay = Math.min(12_000, 600 * Math.pow(1.6, this.reconnectAttempt));
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect().catch(() => undefined);
     }, delay);
+  }
+
+  private startHeartbeat() {
+    this.stopHeartbeat();
+    this.lastPongAt = Date.now();
+    // 25s 一次应用层 ping：扛住多数反代 60s 空闲超时，并探测半开连接
+    this.heartbeatTimer = setInterval(() => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+      if (Date.now() - this.lastPongAt > 70_000) {
+        // 半开：强制关掉走重连
+        try {
+          this.ws.close();
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
+      this.emit("ping", { t: Date.now() }, () => {
+        this.lastPongAt = Date.now();
+      });
+    }, 25_000);
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  /** 页面重新可见时：若已断则重连；若仍 OPEN 则立刻 ping 探活 */
+  private ensureAlive() {
+    if (this.intentionallyClosed) return;
+    if (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING) {
+      this.connected = false;
+      this.connect().catch(() => undefined);
+      return;
+    }
+    if (this.ws.readyState === WebSocket.OPEN) {
+      this.emit("ping", { t: Date.now() }, () => {
+        this.lastPongAt = Date.now();
+      });
+    }
   }
 
   private failPending(message: string) {
@@ -267,6 +336,7 @@ class GameSocket {
 
   disconnect() {
     this.intentionallyClosed = true;
+    this.stopHeartbeat();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;

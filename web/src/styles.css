@@ -2697,6 +2697,17 @@ main {
   cursor: zoom-in;
 }
 
+.punishment-task-image-button {
+  margin-top: 8px;
+}
+
+.punishment-task-image-button img,
+.proof .history-proof-image-button img,
+.proof-submit-card .history-proof-image-button img {
+  width: min(320px, 100%);
+  cursor: zoom-in;
+}
+
 .image-preview-backdrop {
   z-index: 40;
 }

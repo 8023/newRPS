@@ -89,8 +89,27 @@ docker compose logs -f gamehouse
 
 > 说明：入库的 `bin/server` 为 Linux amd64。ARM 服务器需在对应架构上重新 `npm run build:server`。
 
-反向代理时放行 WebSocket（`/ws`），域名写进 `ALLOWED_ORIGINS`。
-## WebSocket 协议
+反向代理（OpenResty/Nginx）WebSocket 必配示例：
+
+```nginx
+# 页面可用 HTTP/2；/ws 必须能完成 HTTP/1.1 Upgrade（浏览器会单独建连）
+location /ws {
+    proxy_pass http://127.0.0.1:9988;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+    proxy_buffering off;
+}
+```
+
+`ALLOWED_ORIGINS` 建议设为你的站点 Origin（如 `https://rps.rbq.io`）。  
+服务端已：**关闭 WS 压缩**（修 Safari `network connection was lost`）、20s 协议 Ping、识别 `X-Forwarded-Host`。## WebSocket 协议
 
 二进制 **Protobuf** 信封（`api/proto/wire.proto`），启用 permessage-deflate。
 
@@ -133,6 +152,17 @@ docker compose logs -f gamehouse
 | `LOBBY_BROADCAST_DELAY_MS` | 300 | 大厅广播合并 |
 | `ROOM_BROADCAST_DELAY_MS` | 100 | 房间广播合并 |
 
+### 防多开（IP + 浏览器指纹）
+
+中国公网出口常被整栋楼/公司共用，**不能只按 IP 限流**。
+
+- 前端用 [FingerprintJS](https://github.com/fingerprintjs/fingerprintjs) 生成 `visitorId`
+- 服务端 `deviceKey = sha256(ip + "\\0" + fingerprint)`
+- 配置项（字段名兼容旧版）：
+  - `accessControl.maxOnlinePerIp` → **同指纹同时在线人数上限**
+  - `accessControl.maxCreatesPer10Min` → **同指纹 10 分钟内新建玩家上限**
+- 上报路径：`POST /api/session`（Header/Body）、`/ws?fp=`、`player:join.fingerprint`
+
 ## 后台
 
 - 入口：`/admin` 或 `#admin`，或 `Ctrl/Cmd+Shift+A`
@@ -152,6 +182,17 @@ npm run test           # go test + 前端 build
 功能变更时同步更新「最近更新记录」。同步 GitHub 需 `git commit` 与 `git push`。
 
 ## 最近更新记录
+
+### 2026-07-12
+
+- **在线人数**：`player:batch` 支持插入新玩家并按 `connected` 重算人数；新上线 `forceBroadcastLobby`，修复「下线 -1 正常、上线需刷新才 +1」。
+- **WebSocket 稳定性（生产 / Safari）**：
+  - 根因确认：Safari 对 `permessage-deflate` 不兼容；`NoContextTakeover` 仍是同一扩展，不能单独救 Safari。
+  - **UA 分流压缩**：Safari / iOS 关闭压缩，Chrome 等使用 `CompressionContextTakeover` 省流量。
+  - 服务端 20s 协议 Ping；客户端 25s 应用层心跳、半开检测、回前台探活。
+  - 反代：`X-Forwarded-Host` Origin 校验；同 SID 重连先释放连接名额；WS 升级少塞响应头。
+- **防多开**：引入 FingerprintJS；`deviceKey = sha256(ip||fingerprint)`；同时在线 / 10 分钟新建 / 套接字上限均按设备键（配置字段名兼容旧版）。
+- **体验**：惩罚阶段任务图、证明图可点击放大（与对局记录一致）。
 
 ### 2026-07-11
 

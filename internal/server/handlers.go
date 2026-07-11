@@ -112,6 +112,7 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 		GenderID     string `json:"genderId"`
 		PlayerID     string `json:"playerId"`
 		PlayerSecret string `json:"playerSecret"`
+		Fingerprint  string `json:"fingerprint"`
 	}
 	_ = decodeD(env, &p)
 	cleanName := cleanText(p.Name, 12)
@@ -125,6 +126,27 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 	}
 	sid := client.sid
 	ipAddress := client.ipAddress
+	// join 可补全/刷新指纹（WS 握手时可能尚未带上）；若 deviceKey 变化需迁移套接字索引
+	prevDevice := client.deviceKey
+	if fp := normalizeFingerprint(p.Fingerprint); fp != "missing" || client.fingerprint == "" {
+		client.fingerprint = normalizeFingerprint(p.Fingerprint)
+		client.deviceKey = deviceKey(ipAddress, client.fingerprint)
+	} else if client.deviceKey == "" {
+		client.deviceKey = deviceKey(ipAddress, client.fingerprint)
+	}
+	if prevDevice != "" && prevDevice != client.deviceKey {
+		if set := s.clientIDsByDevice[prevDevice]; set != nil {
+			delete(set, client.id)
+			if len(set) == 0 {
+				delete(s.clientIDsByDevice, prevDevice)
+			}
+		}
+		if s.clientIDsByDevice[client.deviceKey] == nil {
+			s.clientIDsByDevice[client.deviceKey] = map[string]struct{}{}
+		}
+		s.clientIDsByDevice[client.deviceKey][client.id] = struct{}{}
+	}
+	device := client.deviceKey
 	var player *PlayerState
 	if p.PlayerID != "" {
 		if id := s.playerIdToID[p.PlayerID]; id != "" {
@@ -135,22 +157,22 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 	}
 	if player != nil && player.Persistent {
 		if p.PlayerSecret == "" || player.PlayerSecretHash != hashSecret(p.PlayerSecret) {
-			s.securityLog("player_identity_invalid", map[string]any{"sid": sid, "ip": ipAddress, "userAgent": client.userAgent})
+			s.securityLog("player_identity_invalid", map[string]any{"sid": sid, "ip": ipAddress, "device": device, "userAgent": client.userAgent})
 			client.reply(env.ID, nil, "玩家身份校验失败")
 			return
 		}
 	}
 	if player == nil {
-		if s.onlinePlayersFromIP(ipAddress, "") >= s.cfg.AccessControl.MaxOnlinePerIP {
-			client.reply(env.ID, nil, fmt.Sprintf("当前网络下在线人数过多，最多允许 %d 人同时在线", s.cfg.AccessControl.MaxOnlinePerIP))
+		if s.onlinePlayersFromDevice(device, "") >= s.cfg.AccessControl.MaxOnlinePerIP {
+			client.reply(env.ID, nil, fmt.Sprintf("当前设备同时在线人数过多，最多允许 %d 人同时在线", s.cfg.AccessControl.MaxOnlinePerIP))
 			return
 		}
-		if !s.canCreateFromIP(ipAddress) {
-			client.reply(env.ID, nil, fmt.Sprintf("当前网络 10 分钟内新建玩家过多，最多允许 %d 次", s.cfg.AccessControl.MaxCreatesPer10Min))
+		if !s.canCreateFromDevice(device) {
+			client.reply(env.ID, nil, fmt.Sprintf("当前设备 10 分钟内新建玩家过多，最多允许 %d 次", s.cfg.AccessControl.MaxCreatesPer10Min))
 			return
 		}
 		player = s.createPlayer(cleanName, p.GenderID, client.token, p.PlayerID, p.PlayerSecret)
-		s.securityLog("player_created", map[string]any{"sid": sid, "ip": ipAddress, "userAgent": client.userAgent})
+		s.securityLog("player_created", map[string]any{"sid": sid, "ip": ipAddress, "device": device, "fp": client.fingerprint, "userAgent": client.userAgent})
 	}
 	wasDisconnected := !player.Connected
 	hadDisconnectHold := player.DisconnectExpiresAt != nil
@@ -166,6 +188,8 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 	}
 	player.SocketID = client.id
 	player.IPAddress = ipAddress
+	player.Fingerprint = client.fingerprint
+	player.DeviceKey = device
 	player.Connected = true
 	player.CurrentSID = sid
 	player.LastSeenAt = nowMs()
@@ -228,7 +252,13 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 	if player.Persistent {
 		s.requestPersist("lazy")
 	}
-	s.broadcastLobby()
+	// 新上线/重连：玩家列表 + 在线人数都要立刻推给大厅（防抖增量容易被其它客户端漏掉 +1）
+	s.broadcastPlayerUpdate(player)
+	if wasDisconnected || previousSocketID == "" {
+		s.forceBroadcastLobby()
+	} else {
+		s.broadcastLobby()
+	}
 	if player.RoomID != "" {
 		if room := s.rooms[player.RoomID]; room != nil && room.Phase == types.PhasePunishment && hadDisconnectHold {
 			s.roomNotice(room, playerShortName(player)+" 已重新连接，恢复到未完成的惩罚房间。")

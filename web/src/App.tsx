@@ -1,6 +1,7 @@
 import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, useEffect, useRef, useState } from "react";
 import { Coffee, Crown, DoorOpen, Download, ExternalLink, Eye, HeartHandshake, MessageCircle, Moon, Pencil, RefreshCcw, Save, Send, Settings, Shield, Sun, Swords, Upload, UserRound, Users } from "lucide-react";
 import { socket } from "./main";
+import { getBrowserFingerprint } from "./fingerprint";
 import type { AppConfig, BotDifficulty, ChatMessage, GenderFaction, LobbySnapshot, Move, PublicPlayer, PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant } from "./shared/types";
 
 const tokenKey = "rps-online-token";
@@ -83,7 +84,15 @@ async function ensureSessionToken(forceNew = false) {
   const existing = localStorage.getItem(tokenKey);
   if (!forceNew && sessionTokenLooksValid(existing)) return existing;
   if (existing) localStorage.removeItem(tokenKey);
-  const response = await fetch("/api/session", { method: "POST" });
+  const fingerprint = await getBrowserFingerprint();
+  const response = await fetch("/api/session", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Browser-Fingerprint": fingerprint
+    },
+    body: JSON.stringify({ fingerprint })
+  });
   const data = await response.json();
   if (!response.ok || !data.token) throw new Error(data.message || "Session failed");
   localStorage.setItem(tokenKey, String(data.token));
@@ -91,10 +100,18 @@ async function ensureSessionToken(forceNew = false) {
 }
 
 async function connectSocketWithSession(options: { forceNewToken?: boolean } = {}) {
-  const token = await ensureSessionToken(options.forceNewToken);
-  socket.auth = { token };
+  const [token, fingerprint] = await Promise.all([
+    ensureSessionToken(options.forceNewToken),
+    getBrowserFingerprint()
+  ]);
+  socket.auth = { token, fingerprint };
   if (!socket.connected) await socket.connect();
   return token;
+}
+
+async function joinIdentityPayload() {
+  const fingerprint = await getBrowserFingerprint();
+  return { ...ensurePlayerIdentity(), fingerprint };
 }
 
 type MeState = { player: PublicPlayer; token: string; roomId?: string; room?: RoomSnapshot };
@@ -338,10 +355,16 @@ function replaceLobbyVersusPlayer(versus: LobbySnapshot["rooms"][number]["versus
 }
 
 function replacePlayerInLobby(lobby: LobbySnapshot, player: PublicPlayer) {
-  const players = (lobby.players || []).map((item) => item.id === player.id ? player : item);
+  const prev = lobby.players || [];
+  const exists = prev.some((item) => item.id === player.id);
+  // player:batch 可能带来新上线玩家；旧实现只 map 不 insert，导致在线列表/人数不涨。
+  const players = exists
+    ? prev.map((item) => (item.id === player.id ? player : item))
+    : [...prev, player];
   return {
     ...lobby,
     players,
+    onlineCount: players.filter((p) => p.connected).length,
     normalLeaderboard: normalWinRatePlayers(players),
     rankedLeaderboard: rankedPlayers(players),
     rooms: (lobby.rooms || []).map((roomInfo) => ({
@@ -349,6 +372,15 @@ function replacePlayerInLobby(lobby: LobbySnapshot, player: PublicPlayer) {
       versus: replaceLobbyVersusPlayer(roomInfo.versus || { A: null, B: null }, player)
     }))
   };
+}
+
+/** 展示用在线人数：以玩家列表 connected 为准（与 player:batch / lobby 增量保持一致）。 */
+function lobbyOnlineCount(lobby: LobbySnapshot | null | undefined) {
+  if (!lobby) return 0;
+  const players = lobby.players || [];
+  const connected = players.filter((p) => p.connected).length;
+  if (connected > 0) return connected;
+  return Number(lobby.onlineCount) || 0;
 }
 
 function coerceLobbyPlayers(raw: LobbySnapshot["players"] | Record<string, PublicPlayer> | PublicPlayer[] | null | undefined): PublicPlayer[] {
@@ -367,10 +399,14 @@ function normalizeLobbySnapshot(snapshot: LobbySnapshot, old?: LobbySnapshot | n
   const players = coerceLobbyPlayers(snapshot.players as any);
   const rooms = coerceLobbyRooms(snapshot.rooms as any);
   const lobbyChat = (!snapshot.lobbyChat || snapshot.lobbyChat.length === 0) && old ? old.lobbyChat : (snapshot.lobbyChat || []);
+  const connected = players.filter((p) => p.connected).length;
+  // 服务端 onlineCount 与 players 列表偶发短暂不一致时，以列表 connected 为准。
+  const onlineCount = connected > 0 ? connected : (Number(snapshot.onlineCount) || 0);
   return {
     ...snapshot,
     players,
     rooms,
+    onlineCount,
     suggestions: snapshot.suggestions || [],
     lobbyChat,
     normalLeaderboard: normalWinRatePlayers(players),
@@ -535,7 +571,7 @@ export function App() {
 
     restoreInFlightRef.current = true;
     try {
-      const next = await ask<MeState>("player:join", { name: cachedName, genderId: cachedGender, token, ...ensurePlayerIdentity() });
+      const next = await ask<MeState>("player:join", { name: cachedName, genderId: cachedGender, token, ...(await joinIdentityPayload()) });
       if (next.token) localStorage.setItem(tokenKey, next.token);
       setMe(next);
       if (next.room) setRoom(normalizeRoomSnapshot(next.room));
@@ -673,7 +709,8 @@ export function App() {
     });
     socket.on("disconnect", () => {
       setConnectionState("disconnected");
-      setNotice("连接已断开，正在重连。");
+      // iOS 切后台也会触发 disconnect；文案轻一点，避免误以为故障
+      setNotice("连接已断开，正在重连…");
     });
     socket.on("connect_error", (error: Error & { data?: { code?: string } }) => {
       setConnectionState("disconnected");
@@ -795,7 +832,7 @@ export function App() {
       <header className="topbar">
         <div>
           <h1>{config.site.name}</h1>
-          <span className="top-summary">{view === "room" && room ? `⚔️ ${phaseText(room.phase)}` : lobby ? `当前连接 ${lobby.onlineCount} 人` : "正在连接"}</span>
+          <span className="top-summary">{view === "room" && room ? `⚔️ ${phaseText(room.phase)}` : lobby ? `当前连接 ${lobbyOnlineCount(lobby)} 人` : "正在连接"}</span>
           <span className={`connection-pill ${connectionState}`}>{connectionStateText(connectionState)}</span>
         </div>
         <div className="top-actions">
@@ -866,7 +903,7 @@ function Login({ config, onDone, onError }: { config: AppConfig; onDone: (me: Me
 
   async function submit() {
     try {
-      const result = await ask<MeState>("player:join", { name, genderId, token: localStorage.getItem(tokenKey), ...ensurePlayerIdentity() });
+      const result = await ask<MeState>("player:join", { name, genderId, token: localStorage.getItem(tokenKey), ...(await joinIdentityPayload()) });
       localStorage.setItem(tokenKey, result.token);
       localStorage.setItem("rps-online-name", name);
       localStorage.setItem("rps-online-gender", genderId);
@@ -2035,11 +2072,25 @@ function Room({ config, room, lobbySuggestions, me, onBack, onError }: { config:
                         </div>
                       )}
                       {proof && <PunishmentStatus proof={proof} isMine={isMine} requireConfirm={room.settings.requireOpponentConfirm} />}
+                      {taskAssigned && task?.backgroundImage && (
+                        <button
+                          type="button"
+                          className="history-proof-image-button punishment-task-image-button"
+                          title="点击查看完整任务图"
+                          onClick={() => setPreviewImage(task.backgroundImage!)}
+                        >
+                          <img src={task.backgroundImage} alt="任务图片" loading="lazy" decoding="async" />
+                        </button>
+                      )}
                       {proof?.text && (
                         <div className="proof">
                           <b>已提交证明</b>
                           <p>{proof.text}</p>
-                          {proof.imageUrl && <img src={proof.imageUrl} alt="惩罚证明" loading="lazy" decoding="async" />}
+                          {proof.imageUrl && (
+                            <button type="button" className="history-proof-image-button" title="点击放大" onClick={() => setPreviewImage(proof.imageUrl!)}>
+                              <img src={proof.imageUrl} alt="惩罚证明" loading="lazy" decoding="async" />
+                            </button>
+                          )}
                         </div>
                       )}
                       {canSubmit && (
@@ -2053,7 +2104,11 @@ function Room({ config, room, lobbySuggestions, me, onBack, onError }: { config:
                                 <Upload size={16} /> 上传图片证明
                                 <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => event.target.files?.[0] && uploadImage(event.target.files[0]).catch((error) => onError(error.message))} />
                               </label>
-                              {proofImage && <img className="proof-preview" src={proofImage} alt="惩罚证明" loading="lazy" decoding="async" />}
+                              {proofImage && (
+                                <button type="button" className="history-proof-image-button" title="点击放大" onClick={() => setPreviewImage(proofImage)}>
+                                  <img className="proof-preview" src={proofImage} alt="惩罚证明" loading="lazy" decoding="async" />
+                                </button>
+                              )}
                             </>
                           ) : (
                             <p className="hint">本房间关闭了图片证明，只需要提交文字证明。</p>
@@ -3719,7 +3774,7 @@ function AdminPanel({ config, lobby, onBack, onError }: { config: AppConfig; lob
     { id: "nameWar", label: "名字争夺战", detail: draft.nameWar.penaltyPrefix },
     { id: "giveaway", label: "白给模式", detail: draft.giveaway.panelTitle },
     { id: "extremeMode", label: "极限模式", detail: `${draft.extremeMode.emoji} ${draft.extremeMode.label}` },
-    { id: "accessControl", label: "防多开", detail: `${draft.accessControl.maxOnlinePerIp} 在线 / ${draft.accessControl.maxCreatesPer10Min} 新建` },
+    { id: "accessControl", label: "防多开", detail: `同指纹 ${draft.accessControl.maxOnlinePerIp} 在线 / ${draft.accessControl.maxCreatesPer10Min} 新建` },
     { id: "bots", label: "Bot 设置", detail: `${draft.bots.difficulties.length} 个难度` },
     { id: "messages", label: "系统提示", detail: `${Object.keys(draft.messages).length} 条文案` },
     { id: "actions", label: "管理操作", detail: `${lobby.rooms.length} 房间 / ${lobby.players.length} 玩家` },
@@ -4214,15 +4269,15 @@ function AdminPanel({ config, lobby, onBack, onError }: { config: AppConfig; lob
     if (activeSection === "accessControl") {
       return (
         <div className="config-section admin-section-card">
-          <AdminSectionHeader title="防多开" subtitle="用 IP 做基础限制，降低重复注册和多开；同一浏览器 token 恢复不算新建。" />
+          <AdminSectionHeader title="防多开" subtitle="按「出口 IP + 浏览器指纹」组合限流：同一宿舍/公司共享公网 IP 时，不同浏览器互不影响；同一设备多开仍受限。长期身份 token 恢复不算新建。" />
           <div className="admin-preview-card">
             <span>当前规则</span>
-            <strong>同 IP 最多 {draft.accessControl.maxOnlinePerIp} 个在线玩家</strong>
-            <p>10 分钟内最多新建 {draft.accessControl.maxCreatesPer10Min} 个玩家。</p>
+            <strong>同指纹最多 {draft.accessControl.maxOnlinePerIp} 个在线玩家</strong>
+            <p>同指纹 10 分钟内最多新建 {draft.accessControl.maxCreatesPer10Min} 个玩家。</p>
           </div>
           <div className="config-row">
             <label className="field-label">
-              <span>同 IP 同时在线人数上限</span>
+              <span>同指纹同时在线人数上限</span>
               <input
                 type="number"
                 min={1}
@@ -4232,7 +4287,7 @@ function AdminPanel({ config, lobby, onBack, onError }: { config: AppConfig; lob
               />
             </label>
             <label className="field-label">
-              <span>同 IP 10 分钟内新建玩家上限</span>
+              <span>同指纹 10 分钟内新建玩家上限</span>
               <input
                 type="number"
                 min={1}
@@ -4242,7 +4297,7 @@ function AdminPanel({ config, lobby, onBack, onError }: { config: AppConfig; lob
               />
             </label>
           </div>
-          <p className="hint">IP 限制只能降低多开，不能完全防作弊；同一个 Wi-Fi 下的正常玩家也会共享这个限制。</p>
+          <p className="hint">指纹由 FingerprintJS 在浏览器生成，与 IP 一起哈希为设备键。清除站点数据会换指纹；配置字段名仍为 maxOnlinePerIp / maxCreatesPer10Min（兼容旧配置）。</p>
         </div>
       );
     }

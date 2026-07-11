@@ -49,9 +49,10 @@ func New() (*Server, error) {
 			ttl = n
 		}
 	}
-	maxSockets := (cfg.AccessControl.MaxOnlinePerIP) * 2
-	if maxSockets < 5 {
-		maxSockets = 5
+	// 每设备（IP+指纹）套接字上限：Safari 重连/多标签会短暂占多个连接，过紧会直接握手失败。
+	maxSockets := (cfg.AccessControl.MaxOnlinePerIP) * 4
+	if maxSockets < 12 {
+		maxSockets = 12
 	}
 	if v := os.Getenv("MAX_SOCKETS_PER_IP"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 1 {
@@ -103,11 +104,11 @@ func New() (*Server, error) {
 		botTimers:                   map[string]*time.Timer{},
 		othelloSettlementTimers:     map[string]*time.Timer{},
 		ticTacToeGiveawayTimers:     map[string]*time.Timer{},
-		ipCreateAttempts:            map[string][]int64{},
+		deviceCreateAttempts:         map[string][]int64{},
 		adminClientIDs:              map[string]struct{}{},
 		sidToClientID:               map[string]string{},
 		clientIDToSID:               map[string]string{},
-		clientIDsByIP:               map[string]map[string]struct{}{},
+		clientIDsByDevice:           map[string]map[string]struct{}{},
 		rateBuckets:                 map[string]*rateBucket{},
 		rateLimitBuckets:            map[string]*rateLimitBucket{},
 		roomBroadcastTimers:         map[string]*roomBroadcastPending{},
@@ -117,7 +118,7 @@ func New() (*Server, error) {
 		isProduction:                os.Getenv("NODE_ENV") == "production" || os.Getenv("GO_ENV") == "production",
 		sessionSecret:               secret,
 		sessionTtlMs:                ttl,
-		maxSocketsPerIP:             maxSockets,
+		maxSocketsPerDevice:         maxSockets,
 		host:                        host,
 		port:                        port,
 		uploadsDir:                  uploadsDir,
