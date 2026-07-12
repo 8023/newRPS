@@ -136,10 +136,12 @@ class GameSocket {
           const replaced = ev.code === 1008 && /replaced/i.test(reason);
 
           if (!opened) {
-            // 握手失败。1008+replaced 不是 token 坏；勿当 SESSION_INVALID 清 token。
-            const error = new Error(reason || "WebSocket 连接失败") as Error & { data?: { code?: string } };
-            if (!replaced && (ev.code === 1008 || /session|unauthorized|token|invalid/i.test(reason))) {
-              error.data = { code: "SESSION_INVALID" };
+            // 握手失败（含 HTTP 401）。浏览器常给出 1006 + 空 reason / "bad response"，
+            // 无法可靠区分；上层会限次换发 token。replaced 除外。
+            const error = new Error(reason || "WebSocket 握手失败") as Error & { data?: { code?: string } };
+            if (!replaced) {
+              // 401 Session invalid / 网关拒连 / 签名错误旧 token 均走此路径
+              error.data = { code: "SESSION_HANDSHAKE_FAILED" };
             }
             this.emitLocal("connect_error", error);
             reject(error);

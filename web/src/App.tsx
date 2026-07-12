@@ -82,6 +82,7 @@ function hasCachedLogin(): boolean {
 
 async function ensureSessionToken(forceNew = false) {
   const existing = localStorage.getItem(tokenKey);
+  // 注意：本地只能看格式/过期时间，无法验 HMAC。密钥轮换后的「假有效」token 必须 forceNew 才能换掉。
   if (!forceNew && sessionTokenLooksValid(existing)) return existing;
   if (existing) localStorage.removeItem(tokenKey);
   const fingerprint = await getBrowserFingerprint();
@@ -100,6 +101,8 @@ async function ensureSessionToken(forceNew = false) {
 }
 
 let connectSessionFlight: Promise<string> | null = null;
+/** WS 握手失败后换发 token 的次数，成功 connect 后清零 */
+let wsAuthRetryCount = 0;
 
 async function connectSocketWithSession(options: { forceNewToken?: boolean } = {}) {
   // 并发调用合并为一次（指纹异步期间重复 mount/effect 容易双开 WS）
@@ -717,6 +720,7 @@ export function App() {
     });
     socket.on("connect", () => {
       setConnectionState("connected");
+      wsAuthRetryCount = 0;
       const isReconnect = hadConnectedRef.current;
       hadConnectedRef.current = true;
       // 首次连接不弹「已恢复」；断线重连后才提示。
@@ -730,12 +734,25 @@ export function App() {
     socket.on("connect_error", (error: Error & { data?: { code?: string } }) => {
       setConnectionState("disconnected");
       const code = error?.data?.code;
-      // 仅明确的会话失效才换发 token；网络抖动 / 未知错误保留 token，避免登录态被误清。
-      if (code === "SESSION_INVALID" || code === "SESSION_EXPIRED" || code === "SESSION_MISSING") {
+      // 握手失败（401 等在浏览器里常变成 1006）或明确会话错误 → 丢弃本地 token 换发。
+      // 本地 sessionTokenLooksValid 验不了签名，密钥轮换后旧 token 会永远卡死。
+      const needNewToken =
+        code === "SESSION_INVALID" ||
+        code === "SESSION_EXPIRED" ||
+        code === "SESSION_MISSING" ||
+        code === "SESSION_HANDSHAKE_FAILED";
+      if (needNewToken) {
+        if (wsAuthRetryCount >= 2) {
+          setRestoringSession(false);
+          setNotice("连接认证失败，请刷新页面重试。");
+          return;
+        }
+        wsAuthRetryCount += 1;
         localStorage.removeItem(tokenKey);
         connectSocketWithSession({ forceNewToken: true }).catch(() => {
           setConnectionState("disconnected");
           setRestoringSession(false);
+          setNotice("连接认证失败，请刷新页面重试。");
         });
         return;
       }
