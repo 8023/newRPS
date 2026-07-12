@@ -88,9 +88,12 @@ class GameSocket {
   }
 
   async connect() {
+    // 已有连接或正在连：复用，避免同页/双标签秒级双开触发服务端 socket_duplicate
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       return this.connectPromise || Promise.resolve();
     }
+    if (this.connectPromise) return this.connectPromise;
+
     this.intentionallyClosed = false;
     this.authToken = String(this.auth.token || "");
     const fingerprint = String(this.auth.fingerprint || "");
@@ -102,6 +105,8 @@ class GameSocket {
         this.ws = ws;
         let opened = false;
         ws.onopen = () => {
+          // 若期间又建了更新的连接，忽略旧 socket 的 open
+          if (this.ws !== ws) return;
           opened = true;
           this.connected = true;
           this.reconnectAttempt = 0;
@@ -112,28 +117,38 @@ class GameSocket {
           resolve();
         };
         ws.onmessage = (event) => {
+          if (this.ws !== ws) return;
           if (event.data instanceof ArrayBuffer) this.handleBinary(new Uint8Array(event.data));
           else if (typeof event.data === "string") this.handleLegacyJSON(event.data);
         };
         ws.onerror = () => undefined;
         ws.onclose = (ev) => {
+          // 关键：旧连接被服务端顶替关闭时，不能清空当前新 this.ws，否则会误重连打成死循环
+          if (this.ws !== ws) return;
+
           this.stopHeartbeat();
           this.connected = false;
           this.ws = null;
           this.connectPromise = null;
           this.failPending("连接已断开");
+
+          const reason = ev.reason || "";
+          const replaced = ev.code === 1008 && /replaced/i.test(reason);
+
           if (!opened) {
-            // 浏览器 WebSocket 拿不到 HTTP 状态码；1008=Policy Violation 常见于服务端拒绝会话。
-            // 其余失败（网络、5xx 等）不要一律当成 SESSION_INVALID，否则会误清 token 导致登录态闪烁。
-            const error = new Error(ev.reason || "WebSocket 连接失败") as Error & { data?: { code?: string } };
-            if (ev.code === 1008 || /session|unauthorized|token|invalid/i.test(ev.reason || "")) {
+            // 握手失败。1008+replaced 不是 token 坏；勿当 SESSION_INVALID 清 token。
+            const error = new Error(reason || "WebSocket 连接失败") as Error & { data?: { code?: string } };
+            if (!replaced && (ev.code === 1008 || /session|unauthorized|token|invalid/i.test(reason))) {
               error.data = { code: "SESSION_INVALID" };
             }
             this.emitLocal("connect_error", error);
             reject(error);
             return;
           }
+
           this.emitLocal("disconnect");
+          // 同 SID 被其它标签/连接顶替：不要立刻重连（否则两标签互相踢）
+          if (replaced) return;
           if (!this.intentionallyClosed) this.scheduleReconnect();
         };
       } catch (error) {

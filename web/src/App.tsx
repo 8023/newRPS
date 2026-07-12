@@ -99,14 +99,29 @@ async function ensureSessionToken(forceNew = false) {
   return String(data.token);
 }
 
+let connectSessionFlight: Promise<string> | null = null;
+
 async function connectSocketWithSession(options: { forceNewToken?: boolean } = {}) {
-  const [token, fingerprint] = await Promise.all([
-    ensureSessionToken(options.forceNewToken),
-    getBrowserFingerprint()
-  ]);
-  socket.auth = { token, fingerprint };
-  if (!socket.connected) await socket.connect();
-  return token;
+  // 并发调用合并为一次（指纹异步期间重复 mount/effect 容易双开 WS）
+  if (connectSessionFlight && !options.forceNewToken) return connectSessionFlight;
+
+  const flight = (async () => {
+    const [token, fingerprint] = await Promise.all([
+      ensureSessionToken(options.forceNewToken),
+      getBrowserFingerprint()
+    ]);
+    socket.auth = { token, fingerprint };
+    await socket.connect();
+    return token;
+  })();
+
+  if (!options.forceNewToken) {
+    connectSessionFlight = flight.finally(() => {
+      if (connectSessionFlight === flight) connectSessionFlight = null;
+    });
+    return connectSessionFlight;
+  }
+  return flight;
 }
 
 async function joinIdentityPayload() {
