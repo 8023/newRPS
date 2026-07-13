@@ -42,13 +42,13 @@
 
 ### 运行产物（不入库，走 GitHub Release）
 
-**`bin/server` 与 `dist/` 不进入 git**，由各版本的 **GitHub Release 附件** 提供，避免仓库膨胀。
+**部署不依赖 clone 源码。** 各版本 **GitHub Release** 提供独立部署包：
 
-| 附件 | 内容 | 用途 |
-|------|------|------|
-| `newRPS-<version>-linux-amd64.tar.gz` | `bin/server` + `dist/` | Docker 挂载的只读运行时（与 `docker-compose.yml` 路径一致） |
+| 附件 | 内容 |
+|------|------|
+| `newRPS-<version>-linux-amd64.tar.gz` | `bin/server`、`dist/`、`docker-compose.yml`、`.env.example`、`config/default.json`、空 `data/`/`work/`、简要 `README.md` |
 
-发布包**仅含**上述运行时文件，不含 `docker-compose.yml` / 源码 / `config` 等（compose 与配置仍从仓库获取）。
+解压后即可 `docker compose up -d`。源码仓库仅用于开发；`bin/`、`dist/` 已 gitignore。
 
 ## 本地运行
 
@@ -86,15 +86,13 @@ npm run dev:web        # Vite，代理 /api /ws /uploads → 9988
 
 ### 方式三：Docker Compose（推荐服务器部署）
 
-使用官方 **`debian:bookworm-slim`** 挂载 `bin/server` + `dist/` 启动，**无需 Dockerfile**。运行产物从 **Release** 下载（或本机 `npm run build`）。
+**只需 Release 部署包**（不必 clone 源码）。使用官方 **`debian:bookworm-slim`**，**无需 Dockerfile**。
 
 ```bash
-git clone <repo> && cd newRPS
-
-# 下载并解压运行时（示例：2.1.22）
+# 下载并解压到任意目录（示例：2.1.22）
 gh release download v2.1.22 -p 'newRPS-*-linux-amd64.tar.gz' --repo 8023/newRPS
-tar -xzf newRPS-2.1.22-linux-amd64.tar.gz
-# 得到 ./bin/server 与 ./dist/ ，路径与 compose 挂载一致
+mkdir -p gamehouse && tar -xzf newRPS-2.1.22-linux-amd64.tar.gz -C gamehouse
+cd gamehouse
 
 cp .env.example .env          # 可选：ADMIN_PASSWORD、SESSION_SECRET、ALLOWED_ORIGINS
 docker compose up -d
@@ -103,16 +101,15 @@ docker compose ps
 docker compose logs -f gamehouse
 ```
 
-无 `gh` 时也可在 GitHub 网页下载 Release 附件后解压到仓库根目录。
+无 `gh` 时在 GitHub Release 网页下载附件即可。开发机也可 `npm run build` 后用仓库内 compose 启动。
 
 - 访问：`http://服务器IP:9988`（`HOST_PORT`，默认 9988）
 - 挂载：`bin/server`、`dist`（只读）+ `data` / `work` / `config`（持久化）
-- 本机改源码：`npm install --prefix web && npm run build`，再 `docker compose up -d`（不必把产物提交进 git）
 - 停止：`docker compose down`（数据目录保留）
 
 #### 升级服务器且不丢玩家数据
 
-更新代码 / 二进制时，**务必保留**以下目录与文件（compose 挂载卷不要删）：
+**务必保留**以下路径（不要用新包整目录覆盖掉它们）：
 
 | 路径 | 内容 | 说明 |
 |------|------|------|
@@ -120,30 +117,21 @@ docker compose logs -f gamehouse
 | `work/uploads/` | 证明图、后台上传图 | 丢了历史图片链会 404 |
 | `work/session.secret` | 会话 HMAC（未设 `SESSION_SECRET` 时） | 丢了则旧浏览器 token 全部失效 |
 | `config/active.json` | 后台改过的运行时配置 | 没有则回落 `default.json` |
-| `.env`（或部署环境变量） | `SESSION_SECRET`、`ADMIN_PASSWORD` 等 | **`SESSION_SECRET` 不要换**，否则等同全员掉登录 |
+| `.env` | `SESSION_SECRET`、`ADMIN_PASSWORD` 等 | **`SESSION_SECRET` 不要换**，否则等同全员掉登录 |
 
-可替换、不必保留的：
-
-| 路径 | 说明 |
-|------|------|
-| `bin/server` | 新版本可执行文件（Release 或本机构建） |
-| `dist/` | 新前端静态资源 |
-| `config/default.json` | 仓库默认配置（可被新版本覆盖） |
-
-示例（在宿主机备份后替换程序）：
+可用新版本覆盖的：`bin/`、`dist/`、`config/default.json`、`docker-compose.yml`。
 
 ```bash
 # 备份数据（推荐）
 tar czf backup-$(date +%F).tgz data work config/active.json .env
 
-# 拉取源码更新（compose / config 等）
-git pull
+# 解压新包到临时目录，覆盖程序与默认配置（保留 data/work/active/.env）
+tmpdir=$(mktemp -d)
+tar -xzf newRPS-2.1.22-linux-amd64.tar.gz -C "$tmpdir"
+cp -a "$tmpdir/bin" "$tmpdir/dist" "$tmpdir/docker-compose.yml" .
+cp -a "$tmpdir/config/default.json" config/default.json
+rm -rf "$tmpdir"
 
-# 下载新版本运行时并覆盖 bin/、dist/
-gh release download v2.1.22 -p 'newRPS-*-linux-amd64.tar.gz' --repo 8023/newRPS --clobber
-tar -xzf newRPS-2.1.22-linux-amd64.tar.gz
-
-# 重启（不要 docker compose down -v）
 docker compose up -d
 ```
 
@@ -315,4 +303,4 @@ npm run test           # go test + 前端 build
 - **惩罚流程**：创建房间默认开启「惩罚需对手确认」；系统任务与自定义任务一致，败方提交后进入 `pending` 由胜方审批，不再直接开新局。
 - **对局记录**：展示任务完成证明（状态/文字/图片/审核备注）；前端按 id 合并 history，避免覆盖丢失。
 - **黑白棋终局文案**：白给/上贡改为统计摘要，不再把每一手明细拼进结果句。
-- **Docker 部署**：`debian:bookworm-slim` + 挂载 `bin/server` / `dist/`（从 Release 解压或本机构建）；compose / config 仍来自仓库。
+- **Docker 部署**：Release 独立部署包（含 compose / config / env 模板 + bin/dist）；也可源码本机构建后挂载。

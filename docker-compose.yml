@@ -1,12 +1,10 @@
-# 抖喵游戏屋 — 官方 Debian slim + 挂载运行产物（无需 Dockerfile）
+# 抖喵游戏屋 — 官方 Debian slim（无需 Dockerfile）
 #
-# 运行产物 bin/server、dist/ 不在 git 中，从 GitHub Release 下载解压到本目录：
-#   gh release download vX.Y.Z -p 'newRPS-*-linux-amd64.tar.gz'
-#   tar -xzf newRPS-*-linux-amd64.tar.gz
+# 推荐：下载 Release 部署包解压后直接：
 #   cp .env.example .env   # 可选
 #   docker compose up -d
 #
-# 或本机构建：
+# 源码开发本机构建：
 #   npm install --prefix web && npm run build
 #   docker compose up -d
 
