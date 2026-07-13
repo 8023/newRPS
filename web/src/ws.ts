@@ -1,7 +1,17 @@
-// Protobuf 二进制 WebSocket 客户端 + 状态通道（FULL/DELTA + 哈希校验）。
+// Protobuf 二进制 WebSocket 客户端（全链路无 JSON 文本载荷）。
+// 状态通道：FULL / DELTA（路径补丁 + hash 校验，失败 sync:full）。
 
-import { applyOps, sha256Hex, type PatchOp as DeltaOp } from "./delta";
-import { decodeEnvelope, encodeEnvelope, jsonParse, type Envelope } from "./wire";
+import { applyOps, crc32Hex, type PatchOp as DeltaOp } from "./delta";
+import {
+  decodeEnvelope,
+  encodeEnvelope,
+  encodeRawBodyDynamic,
+  normalizeStateTree,
+  protoValueToPlain,
+  rawBodyToPlain,
+  stateDocToPlain,
+  type Envelope
+} from "./wire";
 
 type Handler = (data: any) => void;
 type AckCallback = (response: any) => void;
@@ -47,7 +57,6 @@ class GameSocket {
   };
 
   constructor() {
-    // iOS Safari 切后台/回前台后 WS 常已死但 onclose 延迟；回前台主动探测并重连。
     if (typeof document !== "undefined") {
       this.visibilityHandler = () => {
         if (document.visibilityState === "visible") this.ensureAlive();
@@ -88,7 +97,6 @@ class GameSocket {
   }
 
   async connect() {
-    // 已有连接或正在连：复用，避免同页/双标签秒级双开触发服务端 socket_duplicate
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       return this.connectPromise || Promise.resolve();
     }
@@ -105,7 +113,6 @@ class GameSocket {
         this.ws = ws;
         let opened = false;
         ws.onopen = () => {
-          // 若期间又建了更新的连接，忽略旧 socket 的 open
           if (this.ws !== ws) return;
           opened = true;
           this.connected = true;
@@ -119,37 +126,25 @@ class GameSocket {
         ws.onmessage = (event) => {
           if (this.ws !== ws) return;
           if (event.data instanceof ArrayBuffer) this.handleBinary(new Uint8Array(event.data));
-          else if (typeof event.data === "string") this.handleLegacyJSON(event.data);
         };
         ws.onerror = () => undefined;
         ws.onclose = (ev) => {
-          // 关键：旧连接被服务端顶替关闭时，不能清空当前新 this.ws，否则会误重连打成死循环
           if (this.ws !== ws) return;
-
           this.stopHeartbeat();
           this.connected = false;
           this.ws = null;
           this.connectPromise = null;
           this.failPending("连接已断开");
-
           const reason = ev.reason || "";
           const replaced = ev.code === 1008 && /replaced/i.test(reason);
-
           if (!opened) {
-            // 握手失败（含 HTTP 401）。浏览器常给出 1006 + 空 reason / "bad response"，
-            // 无法可靠区分；上层会限次换发 token。replaced 除外。
             const error = new Error(reason || "WebSocket 握手失败") as Error & { data?: { code?: string } };
-            if (!replaced) {
-              // 401 Session invalid / 网关拒连 / 签名错误旧 token 均走此路径
-              error.data = { code: "SESSION_HANDSHAKE_FAILED" };
-            }
+            if (!replaced) error.data = { code: "SESSION_HANDSHAKE_FAILED" };
             this.emitLocal("connect_error", error);
             reject(error);
             return;
           }
-
           this.emitLocal("disconnect");
-          // 同 SID 被其它标签/连接顶替：不要立刻重连（否则两标签互相踢）
           if (replaced) return;
           if (!this.intentionallyClosed) this.scheduleReconnect();
         };
@@ -164,7 +159,6 @@ class GameSocket {
   private scheduleReconnect() {
     if (this.reconnectTimer || this.intentionallyClosed) return;
     this.reconnectAttempt += 1;
-    // iOS 弱网/切后台后多给一点退避，避免秒级狂连
     const delay = Math.min(12_000, 600 * Math.pow(1.6, this.reconnectAttempt));
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
@@ -175,11 +169,9 @@ class GameSocket {
   private startHeartbeat() {
     this.stopHeartbeat();
     this.lastPongAt = Date.now();
-    // 25s 一次应用层 ping：扛住多数反代 60s 空闲超时，并探测半开连接
     this.heartbeatTimer = setInterval(() => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
       if (Date.now() - this.lastPongAt > 70_000) {
-        // 半开：强制关掉走重连
         try {
           this.ws.close();
         } catch {
@@ -200,7 +192,6 @@ class GameSocket {
     }
   }
 
-  /** 页面重新可见时：若已断则重连；若仍 OPEN 则立刻 ping 探活 */
   private ensureAlive() {
     if (this.intentionallyClosed) return;
     if (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING) {
@@ -223,23 +214,6 @@ class GameSocket {
     }
   }
 
-  private handleLegacyJSON(raw: string) {
-    try {
-      const msg = JSON.parse(raw);
-      if (typeof msg.id === "number" && this.pending.has(msg.id)) {
-        const pending = this.pending.get(msg.id)!;
-        clearTimeout(pending.timer);
-        this.pending.delete(msg.id);
-        if (msg.err) pending.reject(new Error(msg.err));
-        else pending.resolve(msg.d ?? {});
-        return;
-      }
-      if (msg.e) this.emitLocal(msg.e, msg.d);
-    } catch {
-      /* ignore */
-    }
-  }
-
   private handleBinary(buf: Uint8Array) {
     let env: Envelope;
     try {
@@ -247,81 +221,74 @@ class GameSocket {
     } catch {
       return;
     }
-    // RPC response（id 可能为 0 以外的数字；不能用 if (env.id) 漏掉合法边界）
-    if (typeof env.id === "number" && this.pending.has(env.id)) {
-      const pending = this.pending.get(env.id)!;
+    // RPC 应答：id 可能是 number；兼容 Long/string
+    const replyId = env.id != null ? Number(env.id) : NaN;
+    if (Number.isFinite(replyId) && replyId !== 0 && this.pending.has(replyId)) {
+      const pending = this.pending.get(replyId)!;
       clearTimeout(pending.timer);
-      this.pending.delete(env.id);
+      this.pending.delete(replyId);
       if (env.err) pending.reject(new Error(env.err));
-      else pending.resolve(jsonParse(env.raw) ?? {});
+      else pending.resolve(rawBodyToPlain(env.rawBody) ?? {});
       return;
     }
     if (!env.event) return;
 
-    // 状态通道 FULL / DELTA（kind 缺省为 0=RAW）
-    if (env.kind === 1 || env.kind === 2) {
-      void this.applyStateEnvelope(env);
+    // FULL 状态
+    if (env.kind === 1) {
+      void this.applyFullState(env);
       return;
     }
-    // RAW 推送（含 player:batch 聚合）
-    this.emitLocal(env.event, jsonParse(env.raw));
-  }
-
-  private async applyStateEnvelope(env: Envelope) {
-    const channel = env.channel || env.event || "";
-    const event = env.event || "";
-    if (env.kind === 1 && env.full) {
-      const doc = jsonParse(env.full);
-      this.channels.set(channel, { doc, hash: env.hash || "", seq: env.seq || 0 });
-      this.emitLocal(event, this.materializeEvent(event, doc));
-      return;
-    }
+    // DELTA：路径补丁 + 合并后哈希校验
     if (env.kind === 2) {
-      const cur = this.channels.get(channel);
-      if (!cur || cur.doc == null) {
-        this.requestFull(channel);
-        return;
-      }
-      const ops: DeltaOp[] = (env.ops || []).map((op) => ({
-        path: op.path,
-        remove: op.remove,
-        value: op.value ? jsonParse(op.value) : undefined
-      }));
-      let next: any;
-      try {
-        next = applyOps(cur.doc, ops);
-      } catch {
-        this.requestFull(channel);
-        return;
-      }
-      const hash = await sha256Hex(next);
-      if (env.hash && hash !== env.hash) {
-        this.requestFull(channel);
-        return;
-      }
-      this.channels.set(channel, { doc: next, hash: env.hash || hash, seq: env.seq || 0 });
-      this.emitLocal(event, this.materializeEvent(event, next));
+      void this.applyDeltaState(env);
+      return;
     }
+    // RAW 推送（player:batch / chat:append 等，不受状态 diff 影响）
+    this.emitLocal(env.event, rawBodyToPlain(env.rawBody));
   }
 
-  /** 将 map 形态状态展开为业务层习惯的结构 */
-  private materializeEvent(event: string, doc: any): any {
-    if (event === "lobby:update" && doc && typeof doc === "object") {
-      const players = doc.players;
-      const rooms = doc.rooms;
-      return {
-        ...doc,
-        players: Array.isArray(players) ? players : Object.values(players || {}),
-        rooms: Array.isArray(rooms) ? rooms : Object.values(rooms || {})
-      };
+  private async applyFullState(env: Envelope) {
+    const channel = env.channel || env.event || "";
+    let doc = stateDocToPlain(env.fullState);
+    doc = normalizeStateTree(doc);
+    this.channels.set(channel, { doc, hash: env.hash || "", seq: env.seq || 0 });
+    if (env.event) this.emitLocal(env.event, doc);
+  }
+
+  private async applyDeltaState(env: Envelope) {
+    const channel = env.channel || env.event || "";
+    const cur = this.channels.get(channel);
+    if (!cur || cur.doc == null) {
+      this.requestFull(channel);
+      return;
     }
-    return doc;
+    const rawOps = env.delta?.ops || [];
+    // decodeEnvelope 已把 Value Message 转成 plain（含 0）
+    const ops: DeltaOp[] = rawOps.map((op: any) => ({
+      path: op.path || "",
+      remove: Boolean(op.remove),
+      value: op.remove ? undefined : op.value !== undefined ? op.value : protoValueToPlain(op.value)
+    }));
+    let next: any;
+    try {
+      next = applyOps(cur.doc, ops);
+      next = normalizeStateTree(next);
+    } catch {
+      this.requestFull(channel);
+      return;
+    }
+    const hash = crc32Hex(next);
+    if (env.hash && hash !== env.hash) {
+      this.requestFull(channel);
+      return;
+    }
+    this.channels.set(channel, { doc: next, hash: env.hash || hash, seq: env.seq || 0 });
+    if (env.event) this.emitLocal(env.event, next);
   }
 
   private requestFull(channel: string) {
     if (!channel || this.resyncing.has(channel)) return;
     this.resyncing.add(channel);
-    // 本地通道失效，避免继续在脏状态上叠 delta
     this.channels.delete(channel);
     this.emit("sync:full", { channel }, () => {
       this.resyncing.delete(channel);
@@ -331,34 +298,56 @@ class GameSocket {
 
   emit(event: string, payload?: unknown, ack?: AckCallback) {
     const id = this.nextId++;
-    const raw = new TextEncoder().encode(JSON.stringify(payload ?? {}));
-    const body = encodeEnvelope({ event, id, kind: 0, raw });
+    const rawBody = encodeRawBodyDynamic(payload ?? {});
+    let body: Uint8Array;
+    try {
+      body = encodeEnvelope({ event, id, kind: 0, rawBody });
+    } catch (error) {
+      if (ack) ack({ error: error instanceof Error ? error.message : "编码失败" });
+      return;
+    }
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       if (ack) ack({ error: "未连接到服务器" });
       return;
     }
+    // 必须先登记 pending 再 send，避免应答先到时丢 ack（表现为按钮“点了没反应”）
     if (ack) {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         ack({ error: "请求超时" });
-      }, 20_000);
+      }, 15_000);
       this.pending.set(id, {
         resolve: (value) => ack(value),
         reject: (error) => ack({ error: error.message }),
         timer
       });
     }
-    this.ws.send(body);
+    try {
+      this.ws.send(body);
+    } catch {
+      if (ack) {
+        const pending = this.pending.get(id);
+        if (pending) {
+          clearTimeout(pending.timer);
+          this.pending.delete(id);
+        }
+        ack({ error: "发送失败" });
+      }
+    }
   }
 
-  disconnect() {
+  close() {
     this.intentionallyClosed = true;
     this.stopHeartbeat();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    this.ws?.close();
+    try {
+      this.ws?.close();
+    } catch {
+      /* ignore */
+    }
     this.ws = null;
     this.connected = false;
   }

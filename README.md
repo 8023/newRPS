@@ -18,7 +18,7 @@
 │   ├── types/           # 服务端领域类型
 │   └── wire/            # Protobuf 生成代码
 ├── api/proto/           # wire.proto 协议定义
-├── config/              # default.json / active.json（运行时）
+├── config/              # 按功能拆分的 JSON（原地读写，无 active/default 双轨）
 ├── web/                 # 前端（Vite + React + TS）
 │   ├── src/
 │   │   ├── App.tsx      # 壳：会话恢复 / 视图路由 / 顶栏
@@ -46,7 +46,7 @@
 
 | 附件 | 内容 |
 |------|------|
-| `newRPS-<version>-linux-amd64.tar.gz` | `bin/server`、`dist/`、`docker-compose.yml`、`.env.example`、`config/default.json`、空 `data/`/`work/`、简要 `README.md` |
+| `newRPS-<version>-linux-amd64.tar.gz` | `bin/server`、`dist/`、`docker-compose.yml`、`.env.example`、`config/*.json`、空 `data/`/`work/`、简要 `README.md` |
 
 解压后即可 `docker compose up -d`。源码仓库仅用于开发；`bin/`、`dist/` 已 gitignore。
 
@@ -89,9 +89,9 @@ npm run dev:web        # Vite，代理 /api /ws /uploads → 9988
 **只需 Release 部署包**（不必 clone 源码）。使用官方 **`debian:bookworm-slim`**，**无需 Dockerfile**。
 
 ```bash
-# 下载并解压到任意目录（示例：2.1.22）
-gh release download v2.1.22 -p 'newRPS-*-linux-amd64.tar.gz' --repo 8023/newRPS
-mkdir -p gamehouse && tar -xzf newRPS-2.1.22-linux-amd64.tar.gz -C gamehouse
+# 下载并解压到任意目录（示例：2.1.23）
+gh release download v2.1.23 -p 'newRPS-*-linux-amd64.tar.gz' --repo 8023/newRPS
+mkdir -p gamehouse && tar -xzf newRPS-2.1.23-linux-amd64.tar.gz -C gamehouse
 cd gamehouse
 
 cp .env.example .env          # 可选：ADMIN_PASSWORD、SESSION_SECRET、ALLOWED_ORIGINS
@@ -116,20 +116,19 @@ docker compose logs -f gamehouse
 | `data/players.json` | 玩家档案、积分、战绩等 | **核心存档** |
 | `work/uploads/` | 证明图、后台上传图 | 丢了历史图片链会 404 |
 | `work/session.secret` | 会话 HMAC（未设 `SESSION_SECRET` 时） | 丢了则旧浏览器 token 全部失效 |
-| `config/active.json` | 后台改过的运行时配置 | 没有则回落 `default.json` |
+| `config/*.json` | 后台改过的运行时配置（按功能拆分） | **整目录备份**；升级勿用空包覆盖已改配置 |
 | `.env` | `SESSION_SECRET`、`ADMIN_PASSWORD` 等 | **`SESSION_SECRET` 不要换**，否则等同全员掉登录 |
 
-可用新版本覆盖的：`bin/`、`dist/`、`config/default.json`、`docker-compose.yml`。
+可用新版本覆盖的：`bin/`、`dist/`、`docker-compose.yml`。配置仅在确认需要重置时再覆盖 `config/`。
 
 ```bash
 # 备份数据（推荐）
-tar czf backup-$(date +%F).tgz data work config/active.json .env
+tar czf backup-$(date +%F).tgz data work config .env
 
-# 解压新包到临时目录，覆盖程序与默认配置（保留 data/work/active/.env）
+# 解压新包到临时目录，覆盖程序（保留 data/work/config/.env）
 tmpdir=$(mktemp -d)
-tar -xzf newRPS-2.1.22-linux-amd64.tar.gz -C "$tmpdir"
+tar -xzf newRPS-2.1.23-linux-amd64.tar.gz -C "$tmpdir"
 cp -a "$tmpdir/bin" "$tmpdir/dist" "$tmpdir/docker-compose.yml" .
-cp -a "$tmpdir/config/default.json" config/default.json
 rm -rf "$tmpdir"
 
 docker compose up -d
@@ -238,16 +237,33 @@ location /ws {
   - `accessControl.maxCreatesPer10Min` → **同指纹 10 分钟内新建玩家上限**
 - 上报路径：`POST /api/session`（Header/Body）、`/ws?fp=`、`player:join.fingerprint`
 
-## 后台
+## 后台与配置文件
 
 - 入口：`/admin` 或 `#admin`，或 `Ctrl/Cmd+Shift+A`
-- `config/default.json` 入库；`config/active.json` 运行时（gitignore）
+- 配置在 `config/` 下**按功能拆分、原地读写**（无 active/default 双轨）。旧版单体 `default.json`/`active.json` 启动时会自动迁移并改名为 `*.bak`。
+
+| 文件 | 内容 |
+|------|------|
+| `site.json` | 站点名、简介、管理员口令 |
+| `daily-announcement.json` | 每日公告 |
+| `gender-factions.json` | 性别阵营（genders 由阵营展开） |
+| `titles.json` | 称号段 |
+| `punishments.json` | 系统惩罚池 |
+| `player-punishment-room-name-pool.json` | 玩家发布任务房名词库 |
+| `room-tags.json` / `room-info-tags.json` | 房间 Tag 与信息标签样式 |
+| `access-control.json` | 防多开 |
+| `name-war.json` / `giveaway.json` / `extreme-mode.json` | 名争 / 白给 / 极限模式文案与参数 |
+| `bots.json` / `games.json` / `messages.json` | Bot、游戏列表、提示文案 |
+
+后台「保存」会写回对应 JSON；构建脚本与服务启动会尽量把 `config/*.json` 设为可写、`bin/server` 设为可执行。
 
 ## 构建与测试
 
 ```bash
 npm run build:web      # 仅前端
-npm run build:server   # 仅 Go
+npm run build:server   # 仅 Go（并 chmod +x bin/server）
+npm run fix-perms      # config/*.json 可写 + bin/server 可执行
+npm run build          # web + server + fix-perms
 go test ./...
 npm run test           # go test + 前端 build
 ```
@@ -258,20 +274,21 @@ npm run test           # go test + 前端 build
 
 ## 最近更新记录
 
-### 2026-07-13
+### v2.1.23（2026-07-13）
 
-- **房间信息标签**：`config/default.json` 补回 `roomInfoTags`（中文名+配色）；加载时用 default 补齐旧 `active.json` 缺失项；前端 key 缺失时回退中文默认名。
-- **Safari 房间布局**：`.room-layout` 改为 `margin: -8px auto`，避免负边距取消水平居中。
-- **加密房密码框**：`stripHasFlags` 误删业务字段 `hasPassword`，大厅不显示密码输入；改为仅剥离「有同伴字段」的 protobuf presence 标记。
-- **代码审计加固**：RPC 先登记 pending 再 send；reply 编码失败仍回错误；handler panic recover；`players` 通道 resync 改 RAW batch；normalize 补齐 legalMoves 坐标 0 / 棋盘 pad；房间 `updatedAt` 缺失不丢更新；惩罚提交 UI 与数组空值防护。
-- **状态增量（方案 A）**：Protobuf `StateDelta`（路径 + Value）；合并后树 CRC-32 校验，失败 `sync:full`；ops 过多/过大回退 FULL；保留 debounce / player:batch / chat:append。
-- **黑白棋坐标**：protobufjs `toObject({defaults:false})` 会丢掉 `row/col=0`，合法手与棋盘需 `?? 0` 归一化并 pad 成 8×8。
-- **全链路 Protobuf**：线路无 JSON 文本；FULL 为类型化 `StateDocument`，DELTA 为 Value 补丁。
-- **文档（D3/D4）**：修正 WebSocket 压缩说明（UA 分流）；协议章节同步为纯 protobuf。
-- **产物策略（D1）**：`bin/server` + `dist/` 不入库，由 GitHub Release 附件分发（自 v2.1.22 起）。
-- **前端结构（A1）**：`App.tsx` 瘦身为壳；`lib/` + `ui/AppViews.tsx`；协议编解码 `wire.ts` + `gen/proto.js`。
-- **handlers guard（B1）**：`requirePlayer` / `requireRoomPlayer` 等。
-- **null 兜底（B5）** / **结算抽象（A3/A4）**：见前序提交说明。
+- **配置拆分**：取消 `default.json` / `active.json` 双轨；按功能拆成 `config/*.json` 原地读写；旧单体启动时自动迁移为 `*.bak`。构建与启动修正 `config/*.json` 写权限、`bin/server` 执行权限。
+- **独立部署包**：Release 含 `bin/server`、`dist/`、`config/*.json`、`docker-compose.yml`、`.env.example` 与简要 README，解压即可 `docker compose up -d`。
+- **战绩展示**：protobuf 省略 `0` 导致个人资料/排行榜出现 `undefined`/`NaN`（如总局数、胜负平、排位积分）；`materializePlayer` + `safePlayerStats` 统一补 0，空称号显示「暂无称号」。
+- **防多开配置字段**：`maxCreatesPer10Min` 与 protobufjs `maxCreatesPer_10Min` 错位导致后台显示 undefined、保存后看似不生效；前端归一化并修正 gen 字段名。
+- **惩罚任务占位符**：系统/玩家任务文案支持 `{loser}`（败者）、`{winner}`（胜者）昵称替换。
+- **加密房密码框**：`stripHasFlags` 不再误删业务字段 `hasPassword`；presence 标记仅在有 companion 时剥离，并还原 `false`/`0` 省略值。
+- **房间坐标 / 增量状态**：黑白棋·井字 `row/col=0` 归一化；DELTA 路径补丁 + CRC-32 合并校验；`ready`/`score` pair 缺省零值修复。
+- **房间信息标签**：`room-info-tags.json` 中文名与配色；前端 key 缺失回退默认文案。
+- **其它**：惩罚提交/审批链路加固；RPC pending 与 reply 错误回传；Safari 房间布局；产物不入库改走 GitHub Release。
+
+### 2026-07-13（前序）
+
+- **全链路 Protobuf**、状态增量方案 A、前端结构拆分、handlers guard、null 兜底等（见 git 历史）。
 
 ### 2026-07-12
 
@@ -287,7 +304,7 @@ npm run test           # go test + 前端 build
 - **同 SID 双连**：旧 socket 的 onclose 不再误清新连接；`replaced` 不盲目重连，降低双标签互踢。
 - **稳定性**：修复 `socket_duplicate` 后 `assignment to entry in nil map` panic（顶替连接与 device map 竞态）；相关 map 写入统一 ensure。
 - **欢迎公告**：默认文案增加交流 QQ 群 **432398160**（Bug 反馈 / 新功能）。
-- **配置加载**：去掉 `config.go` 内嵌默认文案，只认 `config/default.json`（及运行时 `active.json`）；缺文件/校验失败直接报错。
+- **配置加载**：去掉 `config.go` 内嵌默认文案，只认 `config/*.json` 拆分文件；缺文件/校验失败直接报错。
 
 ### 2026-07-11
 

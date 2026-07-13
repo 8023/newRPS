@@ -1,0 +1,30 @@
+{
+  "label": "极限模式",
+  "emoji": "⚡",
+  "cooldownHours": 12,
+  "positiveLossRates": {
+    "pos1": 0.9,
+    "pos2": 0.75,
+    "pos3": 0.6,
+    "pos4": 0.5
+  },
+  "negativeWinRates": {
+    "neg1": 0.9,
+    "neg2": 0.75,
+    "neg3": 0.6,
+    "neg4": 0.5
+  },
+  "hourlyDecay": {
+    "default": 2,
+    "pos1": 2,
+    "pos2": 4,
+    "pos3": 6,
+    "pos4": 10
+  },
+  "winStreakThreshold": 10,
+  "winStreakCrashChance": 0.5,
+  "crashTargetPoints": 333,
+  "forceCloseWarning": "强行关闭极限模式后，你会永久进入通用改名处，可被符合条件的极限玩家改名。",
+  "forceRenameMinPoints": 1,
+  "forceRenameProtectHours": 4
+}

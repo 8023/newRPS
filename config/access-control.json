@@ -1,0 +1,4 @@
+{
+  "maxOnlinePerIp": 3,
+  "maxCreatesPer10Min": 5
+}

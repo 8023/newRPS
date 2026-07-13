@@ -21,6 +21,7 @@ func New() (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	config.EnsureConfigPermissions()
 	root := config.GetRootDir()
 	uploadsDir := filepath.Join(root, "work", "uploads")
 	proofDir := filepath.Join(uploadsDir, "proofs")

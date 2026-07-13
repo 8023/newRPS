@@ -1,0 +1,98 @@
+{
+  "allowProofImage": {
+    "textColor": "#326749",
+    "backgroundColor": "#e3f8ec",
+    "borderColor": "#9ed9b8",
+    "label": "允许图片证明"
+  },
+  "extremeRanked": {
+    "textColor": "#7c3d00",
+    "backgroundColor": "#fff1d8",
+    "borderColor": "#ffbf75",
+    "label": "极限排位"
+  },
+  "gameOthello": {
+    "textColor": "#163c32",
+    "backgroundColor": "#dff7ec",
+    "borderColor": "#93d8b8",
+    "label": "黑白棋"
+  },
+  "gameRps": {
+    "textColor": "#4d5c6f",
+    "backgroundColor": "#eef3f8",
+    "borderColor": "#c9d6e4",
+    "label": "锤子剪刀布"
+  },
+  "gameTicTacToe": {
+    "textColor": "#5c3b82",
+    "backgroundColor": "#f0e7ff",
+    "borderColor": "#c7a8f5",
+    "label": "井字棋"
+  },
+  "noPunishment": {
+    "textColor": "#4d5c6f",
+    "backgroundColor": "#eef3f8",
+    "borderColor": "#c9d6e4",
+    "label": "无惩罚"
+  },
+  "normal": {
+    "textColor": "#3c6074",
+    "backgroundColor": "#edf8fb",
+    "borderColor": "#b7dfe9",
+    "label": "普通局"
+  },
+  "phaseChoosing": {
+    "textColor": "#6b4b00",
+    "backgroundColor": "#fff3c4",
+    "borderColor": "#ffd875",
+    "label": "出拳中"
+  },
+  "phasePunishment": {
+    "textColor": "#8a3158",
+    "backgroundColor": "#ffe2ef",
+    "borderColor": "#f3a9ca",
+    "label": "惩罚阶段"
+  },
+  "phaseReady": {
+    "textColor": "#225c8d",
+    "backgroundColor": "#e5f5ff",
+    "borderColor": "#9ed7ff",
+    "label": "等待坐满"
+  },
+  "phaseResult": {
+    "textColor": "#6b3f8d",
+    "backgroundColor": "#f1e7ff",
+    "borderColor": "#c9a9ff",
+    "label": "结算中"
+  },
+  "punishment": {
+    "textColor": "#8a3158",
+    "backgroundColor": "#ffe5f1",
+    "borderColor": "#f3a9ca",
+    "label": "惩罚开启"
+  },
+  "ranked": {
+    "textColor": "#765100",
+    "backgroundColor": "#fff0bd",
+    "borderColor": "#ffd66e",
+    "label": "排位"
+  },
+  "requireOpponentConfirm": {
+    "textColor": "#225c8d",
+    "backgroundColor": "#e1f2ff",
+    "borderColor": "#8fcaf0",
+    "label": "需要对手确认"
+  },
+  "textProofOnly": {
+    "textColor": "#5c5570",
+    "backgroundColor": "#f0edf8",
+    "borderColor": "#c8bedf",
+    "label": "仅文字证明"
+  },
+  "tieDoublePunish": {
+    "textColor": "#7b3a22",
+    "backgroundColor": "#ffe8dc",
+    "borderColor": "#ffb894",
+    "label": "平局双罚"
+  }
+}

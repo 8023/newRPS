@@ -264,13 +264,7 @@ func (s *Server) clearOthelloSettlementTimer(roomID string) {
 func (s *Server) resetOthelloRoom(room *RoomState) {
 	s.clearOthelloSettlementTimer(room.ID)
 	room.Othello = nil
-	room.Phase = types.PhaseReady
-	room.Status = "waiting"
-	room.ResultText = ""
-	room.RevealedChoices = nil
-	room.Choices = map[types.SeatKey]types.Move{}
-	room.DisconnectForfeits = map[string]DisconnectForfeit{}
-	room.Ready = map[types.SeatKey]bool{types.SeatA: false, types.SeatB: false}
+	s.resetTurnBasedRoom(room)
 }
 
 func (s *Server) startOthelloRoom(room *RoomState) {
@@ -278,14 +272,8 @@ func (s *Server) startOthelloRoom(room *RoomState) {
 		return
 	}
 	blackSeat := randomSeat()
-	room.Phase = types.PhaseChoosing
-	room.Status = "playing"
-	room.ResultText = ""
-	room.Choices = map[types.SeatKey]types.Move{}
-	room.RevealedChoices = nil
-	room.DisconnectForfeits = map[string]DisconnectForfeit{}
+	s.startTurnBasedPlaying(room)
 	room.Othello = s.freshOthelloState(blackSeat)
-	room.Ready = map[types.SeatKey]bool{types.SeatA: false, types.SeatB: false}
 }
 
 func (s *Server) scheduleOthelloReadyStart(room *RoomState) {
@@ -674,13 +662,6 @@ func (s *Server) finishOthelloGame(room *RoomState) {
 	} else {
 		result = types.RoundResult(whiteSeat)
 	}
-	punishedPlayers := s.punishmentPlayersForResult(room, result)
-	punishedNames := make([]string, len(punishedPlayers))
-	for i, p := range punishedPlayers {
-		punishedNames[i] = playerShortName(p)
-	}
-	punishment := s.currentPunishment(room)
-	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, result, punishment)
 	room.Othello.BlackCount = blackCount
 	room.Othello.WhiteCount = whiteCount
 	room.Othello.Ended = true
@@ -693,8 +674,6 @@ func (s *Server) finishOthelloGame(room *RoomState) {
 	} else {
 		room.ResultText = fmt.Sprintf("%s胜利：黑 %d，白 %d", occupantName(room.Seats[types.SeatKey(result)]), blackCount, whiteCount)
 	}
-	playerA := s.humanPlayerFromSeat(room, types.SeatA)
-	playerB := s.humanPlayerFromSeat(room, types.SeatB)
 	rankedDelta := room.Othello.RankedDelta
 	if rankedDelta == nil {
 		rankedDelta = map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}
@@ -702,77 +681,22 @@ func (s *Server) finishOthelloGame(room *RoomState) {
 	if room.Settings.EnableRanked {
 		room.ResultText += "（实时结算：" + othelloRankedText(room.Othello) + "）"
 	}
-	if result == types.ResultDraw {
-		if playerA != nil {
-			playerA.Stats.Draws++
-		}
-		if playerB != nil {
-			playerB.Stats.Draws++
-		}
-		ssA := room.SeatStats[types.SeatA]
-		ssA.Draws++
-		room.SeatStats[types.SeatA] = ssA
-		ssB := room.SeatStats[types.SeatB]
-		ssB.Draws++
-		room.SeatStats[types.SeatB] = ssB
-	} else if result == types.ResultA || result == types.ResultB {
-		loserSeat := oppositeSeat(types.SeatKey(result))
-		winner := s.humanPlayerFromSeat(room, types.SeatKey(result))
-		loser := s.humanPlayerFromSeat(room, loserSeat)
-		if winner != nil {
-			winner.Stats.Wins++
-		}
-		if loser != nil {
-			loser.Stats.Losses++
-		}
-		room.Score[types.SeatKey(result)]++
-		room.SeatedScore[types.SeatKey(result)]++
-		ssW := room.SeatStats[types.SeatKey(result)]
-		ssW.Wins++
-		room.SeatStats[types.SeatKey(result)] = ssW
-		ssL := room.SeatStats[loserSeat]
-		ssL.Losses++
-		room.SeatStats[loserSeat] = ssL
-	}
+	playerA, playerB := s.applySeatOutcome(room, result)
 	s.addOthelloOutcomeStats(playerA, playerB, result)
 	room.ResultText += othelloSettlementSummary(room.Othello)
-	if playerA != nil {
-		s.refreshPlayerSnapshots(playerA)
+	s.refreshHumans(playerA, playerB)
+	resultLabel := "黑白棋平局"
+	if result != types.ResultDraw {
+		resultLabel = occupantName(room.Seats[types.SeatKey(result)]) + "胜利"
 	}
-	if playerB != nil {
-		s.refreshPlayerSnapshots(playerB)
-	}
-	item := types.RoundHistoryItem{
-		ID: randomID(), Round: len(room.RoundHistory) + 1, At: nowMs(),
-		PlayerA: occupantName(room.Seats[types.SeatA]), PlayerB: occupantName(room.Seats[types.SeatB]),
-		MoveA: types.MoveNoMove, MoveB: types.MoveNoMove, Result: result,
-		ResultLabel: func() string {
-			if result == types.ResultDraw {
-				return "黑白棋平局"
-			}
-			return occupantName(room.Seats[types.SeatKey(result)]) + "胜利"
-		}(),
-		ResultText: room.ResultText, GameID: types.GameOthello,
-		OthelloScore: &types.OthelloScore{Black: blackCount, White: whiteCount},
-		OthelloBlackSeat: blackSeat, Ranked: room.Settings.EnableRanked,
-		PunishmentTasks: punishmentTasks, PunishedNames: punishedNames, Proofs: []types.HistoryProof{},
-	}
+	item := s.buildMatchHistoryShell(room, result, types.GameOthello, resultLabel, room.ResultText)
+	item.OthelloScore = &types.OthelloScore{Black: blackCount, White: whiteCount}
+	item.OthelloBlackSeat = blackSeat
 	if room.Settings.EnableRanked {
-		st := room.Settings.Stake
-		item.Stake = &st
-		rm := rankMultiplierFor(room.Settings)
-		item.RankMultiplier = &rm
 		es := absMax(rankedDelta[types.SeatA], rankedDelta[types.SeatB])
 		item.EffectiveStake = &es
 	}
-	if len(punishedNames) > 0 {
-		item.PunishmentName = s.punishmentNameForRoom(room, punishment)
-		if room.Settings.PunishmentSource != "player" && punishment != nil {
-			item.PunishmentDescription = punishment.Description
-		}
-	}
-	s.addRoundHistory(room, item)
-	s.setupPunishmentOrNext(room, result)
+	s.finalizeMatch(room, result, item)
 }
 
 func absMax(a, b int) int {

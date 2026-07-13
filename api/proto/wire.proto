@@ -4,25 +4,25 @@ package wire;
 
 option go_package = "github.com/doumiao/newRPS/internal/wire";
 
-// WebSocket 二进制信封：请求/响应/推送统一格式。
-// 状态类事件（lobby/room/players/config）使用 FULL 或 DELTA；
-// 普通 RPC 使用 RAW（payload 为 JSON 字节，兼容原有业务结构）。
+import "api/proto/game.proto";
+import "google/protobuf/struct.proto";
+
+// WebSocket 二进制信封：全链路 Protobuf，无 JSON 中间层。
+// FULL：类型化 StateDocument
+// DELTA：路径补丁，value 为 google.protobuf.Value（二进制）
+// RAW：RawBody（类型化推送或 Struct 动态 RPC）
 message Envelope {
   string event = 1;
   int64 id = 2;
   string err = 3;
   PayloadKind kind = 4;
-  // 同步通道：lobby | room:<id> | players | config
   string channel = 5;
   uint64 seq = 6;
-  // 合并后全量状态的 SHA-256 十六进制；客户端校验失败则 sync:full
+  // 状态文档 SHA-256 十六进制（FULL 为 proto 字节哈希；DELTA 为合并后文档哈希）
   string hash = 7;
-  // FULL：完整 JSON 文档
-  bytes full = 8;
-  // DELTA：路径补丁
-  repeated PatchOp ops = 9;
-  // RAW：原 JSON 业务载荷
-  bytes raw = 10;
+  game.StateDocument full_state = 8;
+  StateDelta delta = 9;
+  game.RawBody raw_body = 10;
 }
 
 enum PayloadKind {
@@ -31,10 +31,13 @@ enum PayloadKind {
   KIND_DELTA = 2;
 }
 
+message StateDelta {
+  repeated PatchOp ops = 1;
+}
+
 message PatchOp {
-  // JSON Pointer（RFC6901）风格，如 /players/0/connected
+  // JSON Pointer 风格路径，如 /players/xxx/connected（仅作定位，值非 JSON 文本）
   string path = 1;
-  // 新值的 JSON 编码；remove=true 时忽略
-  bytes value = 2;
+  google.protobuf.Value value = 2;
   bool remove = 3;
 }

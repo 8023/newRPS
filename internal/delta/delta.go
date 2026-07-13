@@ -4,10 +4,9 @@ package delta
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"reflect"
 	"sort"
 	"strconv"
@@ -37,14 +36,15 @@ func Snapshot(v any) (any, error) {
 	return out, nil
 }
 
-// Hash 对规范化树做稳定序列化后 SHA-256。
+// Hash 对规范化树做稳定序列化后 CRC-32（IEEE），用于状态一致性探针（非密码学）。
+// 输出 8 位小写 hex，与前端 crc32Hex 对齐。
 func Hash(doc any) (string, error) {
 	canon, err := canonicalize(doc)
 	if err != nil {
 		return "", err
 	}
-	sum := sha256.Sum256(canon)
-	return hex.EncodeToString(sum[:]), nil
+	sum := crc32.ChecksumIEEE(canon)
+	return fmt.Sprintf("%08x", sum), nil
 }
 
 // MustHash 与 Hash 相同，失败返回空串。

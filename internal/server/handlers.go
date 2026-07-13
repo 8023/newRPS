@@ -11,10 +11,16 @@ import (
 )
 
 func decodeD[T any](env wsEnvelope, out *T) error {
-	if len(env.D) == 0 || string(env.D) == "null" {
+	if env.D == nil || len(env.D) == 0 {
 		return nil
 	}
-	return json.Unmarshal(env.D, out)
+	// 入站已是 map（来自 protobuf Struct / RawBody），再绑定到 handler 结构体。
+	// structpb 数字为 float64；json 往返可写入 int/int64 字段（含 0 坐标）。
+	b, err := json.Marshal(env.D)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, out)
 }
 
 func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc) {
@@ -141,10 +147,7 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 				delete(s.clientIDsByDevice, prevDevice)
 			}
 		}
-		if s.clientIDsByDevice[client.deviceKey] == nil {
-			s.clientIDsByDevice[client.deviceKey] = map[string]struct{}{}
-		}
-		s.clientIDsByDevice[client.deviceKey][client.id] = struct{}{}
+		s.ensureDeviceSocketSet(client.deviceKey)[client.id] = struct{}{}
 	}
 	device := client.deviceKey
 	var player *PlayerState
@@ -324,9 +327,8 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 		ExtremeModeEnabled *bool `json:"extremeModeEnabled"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
-	if player == nil {
-		client.reply(env.ID, nil, "请先进入大厅")
+	player, ok := s.requirePlayer(client, env)
+	if !ok {
 		return
 	}
 	cleanName := cleanText(p.Name, 12)
@@ -438,14 +440,8 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 }
 
 func (s *Server) onGiveawayBoost(client *Client, env wsEnvelope) {
-	player := s.getPlayerByClientID(client.id)
-	if player == nil || player.RoomID == "" {
-		client.reply(env.ID, nil, "你不在房间中")
-		return
-	}
-	room := s.rooms[player.RoomID]
-	if room == nil {
-		client.reply(env.ID, nil, "你不在房间中")
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
 		return
 	}
 	if !ptrBool(player.GiveawayEnabled) {
@@ -475,9 +471,8 @@ func (s *Server) onGiveawaySubmitBoard(client *Client, env wsEnvelope) {
 		Text string `json:"text"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
-	if player == nil {
-		client.reply(env.ID, nil, "请先进入游戏")
+	player, ok := s.requirePlayerInGame(client, env)
+	if !ok {
 		return
 	}
 	if !ptrBool(player.GiveawayEnabled) || ptrFloat(player.GiveawayValue) <= 0 {
@@ -577,9 +572,8 @@ func (s *Server) onGiveawayVote(client *Client, env wsEnvelope) {
 }
 
 func (s *Server) onRankMultiplierUnlock(client *Client, env wsEnvelope) {
-	player := s.getPlayerByClientID(client.id)
-	if player == nil {
-		client.reply(env.ID, nil, "请先进入游戏")
+	player, ok := s.requirePlayerInGame(client, env)
+	if !ok {
 		return
 	}
 	if ptrBool(player.ExtremeModeEnabled) {
@@ -605,9 +599,8 @@ func (s *Server) onRankMultiplierUnlock(client *Client, env wsEnvelope) {
 }
 
 func (s *Server) onExtremeForceClose(client *Client, env wsEnvelope) {
-	player := s.getPlayerByClientID(client.id)
-	if player == nil {
-		client.reply(env.ID, nil, "请先进入游戏")
+	player, ok := s.requirePlayerInGame(client, env)
+	if !ok {
 		return
 	}
 	if !ptrBool(player.ExtremeModeEnabled) {

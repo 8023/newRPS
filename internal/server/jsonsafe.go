@@ -2,8 +2,10 @@ package server
 
 import "github.com/doumiao/newRPS/internal/types"
 
-// JSON 空值约定：Go 的 nil slice/map 会序列化成 null，前端按数组/对象调用会白屏。
-// 出站数据在此统一清洗成 [] / {}（与 Node/JS 一致）。
+// JSON 空值约定（前后端协议，B5）：
+//   - 出站：nil slice/map 一律洗成 [] / {}，禁止 JSON null（否则前端 .map/.includes 白屏）。
+//   - 前端 normalize* 只做 DELTA 合并后的薄兜底，不假设服务端会再发 null。
+// 本文件是出站清洗的唯一入口；新增字段若含 slice/map，须在 sanitize* 里接上。
 
 func emptyStrings(s []string) []string {
 	if s == nil {

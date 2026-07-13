@@ -596,6 +596,9 @@ func (s *Server) createDisconnectForfeit(room *RoomState, player *PlayerState) {
 	if room.Settings.GameID == types.GameOthello {
 		stake = 0
 	}
+	if room.DisconnectForfeits == nil {
+		room.DisconnectForfeits = map[string]DisconnectForfeit{}
+	}
 	room.DisconnectForfeits[player.ID] = DisconnectForfeit{
 		LoserID:        player.ID,
 		LoserSeat:      loserSeat,

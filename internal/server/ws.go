@@ -2,22 +2,22 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/doumiao/newRPS/internal/pbconv"
 	"github.com/doumiao/newRPS/internal/wire"
 	"google.golang.org/protobuf/proto"
 )
 
+// wsEnvelope 是入站解码后的逻辑视图（载荷已是 map / 结构，非 JSON 文本帧）。
 type wsEnvelope struct {
-	E  string          `json:"e,omitempty"`
-	ID json.RawMessage `json:"id,omitempty"`
-	D  json.RawMessage `json:"d,omitempty"`
+	E  string
+	ID int64
+	D  map[string]any
 }
 
 func (c *Client) writeBinary(data []byte) error {
@@ -31,34 +31,35 @@ func (c *Client) writeBinary(data []byte) error {
 	return c.conn.Write(ctx, websocket.MessageBinary, data)
 }
 
-// reply 通过 protobuf RAW 信封返回 RPC 应答（仅 id/err/raw）。
-func (c *Client) reply(id json.RawMessage, data any, errMsg string) {
-	if len(id) == 0 {
+// reply 通过 protobuf RAW 信封返回 RPC 应答（RawBody，无 JSON 字节）。
+// 编码失败时仍回传 err，避免客户端一直等 ack（表现为按钮无反应直至超时）。
+func (c *Client) reply(id int64, data any, errMsg string) {
+	if id == 0 {
 		return
 	}
-	var reqID int64
-	_ = json.Unmarshal(id, &reqID)
-	if reqID == 0 {
-		// 兼容字符串 id
-		var s string
-		if json.Unmarshal(id, &s) == nil {
-			reqID, _ = strconv.ParseInt(s, 10, 64)
-		}
-	}
-	env := &wire.Envelope{Id: reqID, Kind: wire.PayloadKind_KIND_RAW, Err: errMsg}
+	env := &wire.Envelope{Id: id, Kind: wire.PayloadKind_KIND_RAW, Err: errMsg}
 	if errMsg == "" && data != nil {
-		b, err := json.Marshal(data)
+		body, err := pbconv.BuildRawBody("", data)
 		if err != nil {
-			return
+			env.Err = "服务器响应编码失败"
+		} else {
+			env.RawBody = body
 		}
-		env.Raw = b
 	}
 	out, err := proto.Marshal(env)
 	if err != nil {
+		// 最后兜底：仅 id + 错误文案
+		fallback, ferr := proto.Marshal(&wire.Envelope{
+			Id: id, Kind: wire.PayloadKind_KIND_RAW, Err: "服务器响应序列化失败",
+		})
+		if ferr == nil {
+			_ = c.writeBinary(fallback)
+		}
 		return
 	}
 	_ = c.writeBinary(out)
 }
+
 
 func (c *Client) joinRoom(room string) {
 	if c.rooms == nil {
@@ -148,11 +149,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			s.mu.Lock()
 		}
 	}
-	socketsForDevice := s.clientIDsByDevice[devKey]
-	if socketsForDevice == nil {
-		socketsForDevice = map[string]struct{}{}
-		s.clientIDsByDevice[devKey] = socketsForDevice
-	}
+	socketsForDevice := s.ensureDeviceSocketSet(devKey)
 	if len(socketsForDevice) >= s.maxSocketsPerDevice {
 		s.mu.Unlock()
 		s.securityLog("socket_device_limited", map[string]any{
@@ -189,7 +186,8 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	s.clients[client.id] = client
 	s.sidToClientID[session.SID] = client.id
 	s.clientIDToSID[client.id] = session.SID
-	s.clientIDsByDevice[devKey][client.id] = struct{}{}
+	// Accept 期间旧连接 onClientDisconnect 可能删掉预创建的空 device map，这里必须再 ensure
+	s.ensureDeviceSocketSet(devKey)[client.id] = struct{}{}
 	s.securityLog("socket_connected", map[string]any{
 		"sid": session.SID, "ip": ipAddress, "device": devKey, "fp": fingerprint,
 		"socketId": client.id, "userAgent": userAgent, "compression": compressionModeName(compMode),
@@ -218,28 +216,27 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		var wenv wire.Envelope
-		if err := proto.Unmarshal(data, &wenv); err != nil {
-			// 兼容旧 JSON 文本帧
-			var env wsEnvelope
-			if json.Unmarshal(data, &env) != nil || env.E == "" {
-				continue
-			}
-			s.handleWSEvent(client, env)
+		if err := proto.Unmarshal(data, &wenv); err != nil || wenv.Event == "" {
 			continue
 		}
-		if wenv.Event == "" {
-			continue
-		}
-		// 应用层心跳：客户端周期性 ping，带 id 则 RPC 应答，保持链路活跃（配合 iOS/反代）
+		// 应用层心跳：客户端周期性 ping，带 id 则 RPC 应答
 		if wenv.Event == "ping" {
-			idRaw, _ := json.Marshal(wenv.Id)
 			if wenv.Id != 0 {
-				client.reply(idRaw, map[string]any{"t": nowMs()}, "")
+				client.reply(wenv.Id, map[string]any{"t": nowMs()}, "")
 			}
 			continue
 		}
-		idRaw, _ := json.Marshal(wenv.Id)
-		s.handleWSEvent(client, wsEnvelope{E: wenv.Event, ID: idRaw, D: wenv.Raw})
+		payload, _ := pbconv.RawBodyToFront(wenv.RawBody)
+		dmap, _ := payload.(map[string]any)
+		if dmap == nil {
+			// 数组类载荷包一层
+			if payload != nil {
+				dmap = map[string]any{"_": payload}
+			} else {
+				dmap = map[string]any{}
+			}
+		}
+		s.handleWSEvent(client, wsEnvelope{E: wenv.Event, ID: wenv.Id, D: dmap})
 	}
 
 	cancelPing()
@@ -311,6 +308,17 @@ func (s *Server) wsPingLoop(ctx context.Context, conn *websocket.Conn) {
 func (s *Server) handleWSEvent(client *Client, env wsEnvelope) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// 防止业务 handler panic 导致本连接读循环静默卡死且客户端永远等 ack
+	defer func() {
+		if rec := recover(); rec != nil {
+			s.securityLog("handler_panic", map[string]any{
+				"event": env.E, "sid": client.sid, "err": fmt.Sprint(rec),
+			})
+			if env.ID != 0 {
+				client.reply(env.ID, nil, "服务器内部错误")
+			}
+		}
+	}()
 
 	if !s.consumeRateLimit(fmt.Sprintf("socket:%s:%s", client.ipAddress, env.E), 60_000, 600) {
 		client.reply(env.ID, nil, "操作过于频繁，请稍后再试")
@@ -360,11 +368,30 @@ func (s *Server) handleWSEvent(client *Client, env wsEnvelope) {
 
 type eventHandlerFunc func(client *Client, env wsEnvelope)
 
+// ensureDeviceSocketSet 返回 deviceKey 对应的套接字集合（永不返回 nil）。
+func (s *Server) ensureDeviceSocketSet(devKey string) map[string]struct{} {
+	if s.clientIDsByDevice == nil {
+		s.clientIDsByDevice = map[string]map[string]struct{}{}
+	}
+	set := s.clientIDsByDevice[devKey]
+	if set == nil {
+		set = map[string]struct{}{}
+		s.clientIDsByDevice[devKey] = set
+	}
+	return set
+}
+
 func (s *Server) onClientDisconnect(client *Client) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	client.closed = true
+	// 被同 SID 顶替：索引已在 handleWS 里清过。此处若再 delete 空 map，
+	// 会把新连接 Accept 前预创建的 device 集合删掉，随后写入触发 nil map panic。
+	if client.replaced {
+		return
+	}
+
 	sid := s.clientIDToSID[client.id]
 	ipAddress := client.ipAddress
 	devKey := client.deviceKey
@@ -383,11 +410,6 @@ func (s *Server) onClientDisconnect(client *Client) {
 	}
 	delete(s.adminClientIDs, client.id)
 	delete(s.clients, client.id)
-
-	// 被同 SID 新连接顶替：只清连接表，不要把玩家打成离线（否则 Safari 重连会闪断+人数错乱）
-	if client.replaced {
-		return
-	}
 
 	player := s.getPlayerByClientID(client.id)
 	if player == nil {

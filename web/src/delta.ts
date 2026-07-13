@@ -1,12 +1,42 @@
-// 通用 JSON 状态树增量合并（与 internal/delta 对齐）
+// 通用状态树增量合并 + CRC32 校验（与 internal/delta 对齐）
 
 export type PatchOp = { path: string; value?: unknown; remove?: boolean };
 
-export async function sha256Hex(doc: unknown): Promise<string> {
+/** IEEE CRC-32 表（与 Go hash/crc32.ChecksumIEEE 一致） */
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32IEEE(bytes: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) {
+    crc = CRC32_TABLE[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+/**
+ * 对规范化树做 CRC-32（IEEE），返回 8 位小写 hex。
+ * 与 Go delta.Hash 对齐；仅作合并后一致性探针，非安全哈希。
+ */
+export function crc32Hex(doc: unknown): string {
   const canon = JSON.stringify(normalize(doc));
   const data = new TextEncoder().encode(canon);
-  const buf = await crypto.subtle.digest("SHA-256", data);
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const sum = crc32IEEE(data);
+  return sum.toString(16).padStart(8, "0");
+}
+
+/** @deprecated 使用 crc32Hex；保留别名避免旧引用 */
+export async function sha256Hex(doc: unknown): Promise<string> {
+  return crc32Hex(doc);
 }
 
 function normalize(v: unknown): unknown {

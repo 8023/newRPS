@@ -12,9 +12,8 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		Settings types.RoomSettings `json:"settings"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
-	if player == nil {
-		client.reply(env.ID, nil, "请先进入大厅")
+	player, ok := s.requirePlayer(client, env)
+	if !ok {
 		return
 	}
 	settings := p.Settings
@@ -164,7 +163,7 @@ func (s *Server) onRoomJoin(client *Client, env wsEnvelope) {
 		Password string `json:"password"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
+	player := s.requirePlayerQuiet(client)
 	room := s.rooms[p.RoomID]
 	if player == nil || room == nil {
 		client.reply(env.ID, nil, "房间不存在")
@@ -204,7 +203,7 @@ func (s *Server) onRoomJoin(client *Client, env wsEnvelope) {
 }
 
 func (s *Server) onRoomLeave(client *Client, env wsEnvelope) {
-	player := s.getPlayerByClientID(client.id)
+	player := s.requirePlayerQuiet(client)
 	if player == nil {
 		return
 	}
@@ -228,7 +227,7 @@ func (s *Server) onRoomHistory(client *Client, env wsEnvelope) {
 		Limit  int    `json:"limit"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
+	player := s.requirePlayerQuiet(client)
 	room := s.rooms[p.RoomID]
 	if player == nil || room == nil || player.RoomID != room.ID {
 		client.reply(env.ID, nil, "你不在这个房间里")
@@ -265,14 +264,8 @@ func (s *Server) onRoomSit(client *Client, env wsEnvelope) {
 		Seat types.SeatKey `json:"seat"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
-	if player == nil || player.RoomID == "" {
-		client.reply(env.ID, nil, "你不在房间中")
-		return
-	}
-	room := s.rooms[player.RoomID]
-	if room == nil {
-		client.reply(env.ID, nil, "你不在房间中")
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
 		return
 	}
 	if room.Phase == types.PhasePunishment {
@@ -328,14 +321,8 @@ func (s *Server) onRoomSit(client *Client, env wsEnvelope) {
 }
 
 func (s *Server) onRoomSpectate(client *Client, env wsEnvelope) {
-	player := s.getPlayerByClientID(client.id)
-	if player == nil || player.RoomID == "" {
-		client.reply(env.ID, nil, "你不在房间中")
-		return
-	}
-	room := s.rooms[player.RoomID]
-	if room == nil {
-		client.reply(env.ID, nil, "你不在房间中")
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
 		return
 	}
 	leaveCheck := s.canLeaveRoom(player, LeaveSpectate)
@@ -367,14 +354,8 @@ func (s *Server) onRoomMove(client *Client, env wsEnvelope) {
 		Move types.Move `json:"move"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
-	if player == nil || player.RoomID == "" {
-		client.reply(env.ID, nil, "你不在房间中")
-		return
-	}
-	room := s.rooms[player.RoomID]
-	if room == nil {
-		client.reply(env.ID, nil, "你不在房间中")
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
 		return
 	}
 	if room.Settings.GameID != types.GameRPS {
@@ -426,14 +407,8 @@ func (s *Server) onRoomMove(client *Client, env wsEnvelope) {
 }
 
 func (s *Server) onOthelloReady(client *Client, env wsEnvelope) {
-	player := s.getPlayerByClientID(client.id)
-	if player == nil || player.RoomID == "" {
-		client.reply(env.ID, nil, "你不在房间中")
-		return
-	}
-	room := s.rooms[player.RoomID]
-	if room == nil {
-		client.reply(env.ID, nil, "你不在房间中")
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
 		return
 	}
 	if room.Settings.GameID != types.GameOthello {
@@ -466,14 +441,8 @@ func (s *Server) onOthelloMove(client *Client, env wsEnvelope) {
 		Col int `json:"col"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
-	if player == nil || player.RoomID == "" {
-		client.reply(env.ID, nil, "你不在房间中")
-		return
-	}
-	room := s.rooms[player.RoomID]
-	if room == nil {
-		client.reply(env.ID, nil, "你不在房间中")
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
 		return
 	}
 	if room.Settings.GameID != types.GameOthello {
@@ -503,14 +472,8 @@ func (s *Server) onOthelloSettleMove(client *Client, env wsEnvelope) {
 		Mode string `json:"mode"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
-	if player == nil || player.RoomID == "" {
-		client.reply(env.ID, nil, "你不在房间中")
-		return
-	}
-	room := s.rooms[player.RoomID]
-	if room == nil {
-		client.reply(env.ID, nil, "你不在房间中")
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
 		return
 	}
 	if room.Settings.GameID != types.GameOthello {
@@ -549,14 +512,8 @@ func (s *Server) onOthelloSettleMove(client *Client, env wsEnvelope) {
 }
 
 func (s *Server) onOthelloRequestSurrender(client *Client, env wsEnvelope) {
-	player := s.getPlayerByClientID(client.id)
-	if player == nil || player.RoomID == "" {
-		client.reply(env.ID, nil, "你不在房间中")
-		return
-	}
-	room := s.rooms[player.RoomID]
-	if room == nil {
-		client.reply(env.ID, nil, "你不在房间中")
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
 		return
 	}
 	if room.Settings.GameID != types.GameOthello {
@@ -602,14 +559,8 @@ func (s *Server) onOthelloRespondSurrender(client *Client, env wsEnvelope) {
 		Accept *bool `json:"accept"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
-	if player == nil || player.RoomID == "" {
-		client.reply(env.ID, nil, "你不在房间中")
-		return
-	}
-	room := s.rooms[player.RoomID]
-	if room == nil {
-		client.reply(env.ID, nil, "你不在房间中")
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
 		return
 	}
 	if room.Settings.GameID != types.GameOthello {
@@ -661,14 +612,8 @@ func (s *Server) onOthelloRespondSurrender(client *Client, env wsEnvelope) {
 }
 
 func (s *Server) onOthelloEscape(client *Client, env wsEnvelope) {
-	player := s.getPlayerByClientID(client.id)
-	if player == nil || player.RoomID == "" {
-		client.reply(env.ID, nil, "你不在房间中")
-		return
-	}
-	room := s.rooms[player.RoomID]
-	if room == nil {
-		client.reply(env.ID, nil, "你不在房间中")
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
 		return
 	}
 	if room.Settings.GameID != types.GameOthello {
@@ -712,14 +657,8 @@ func (s *Server) onOthelloEscape(client *Client, env wsEnvelope) {
 }
 
 func (s *Server) onOthelloRestart(client *Client, env wsEnvelope) {
-	player := s.getPlayerByClientID(client.id)
-	if player == nil || player.RoomID == "" {
-		client.reply(env.ID, nil, "你不在房间中")
-		return
-	}
-	room := s.rooms[player.RoomID]
-	if room == nil {
-		client.reply(env.ID, nil, "你不在房间中")
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
 		return
 	}
 	if room.Settings.GameID != types.GameOthello {
@@ -745,14 +684,8 @@ func (s *Server) onOthelloRestart(client *Client, env wsEnvelope) {
 }
 
 func (s *Server) onTicTacToeReady(client *Client, env wsEnvelope) {
-	player := s.getPlayerByClientID(client.id)
-	if player == nil || player.RoomID == "" {
-		client.reply(env.ID, nil, "你不在房间中")
-		return
-	}
-	room := s.rooms[player.RoomID]
-	if room == nil {
-		client.reply(env.ID, nil, "你不在房间中")
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
 		return
 	}
 	if room.Settings.GameID != types.GameTicTacToe {
@@ -785,14 +718,8 @@ func (s *Server) onTicTacToeMove(client *Client, env wsEnvelope) {
 		Col int `json:"col"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
-	if player == nil || player.RoomID == "" {
-		client.reply(env.ID, nil, "你不在房间中")
-		return
-	}
-	room := s.rooms[player.RoomID]
-	if room == nil {
-		client.reply(env.ID, nil, "你不在房间中")
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
 		return
 	}
 	if room.Settings.GameID != types.GameTicTacToe {
@@ -822,14 +749,8 @@ func (s *Server) onTicTacToeGiveawayChoice(client *Client, env wsEnvelope) {
 		Mode string `json:"mode"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
-	if player == nil || player.RoomID == "" {
-		client.reply(env.ID, nil, "你不在房间中")
-		return
-	}
-	room := s.rooms[player.RoomID]
-	if room == nil {
-		client.reply(env.ID, nil, "你不在房间中")
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
 		return
 	}
 	if room.Settings.GameID != types.GameTicTacToe {
@@ -885,14 +806,8 @@ func (s *Server) onTicTacToeGiveawayChoice(client *Client, env wsEnvelope) {
 }
 
 func (s *Server) onTicTacToeRestart(client *Client, env wsEnvelope) {
-	player := s.getPlayerByClientID(client.id)
-	if player == nil || player.RoomID == "" {
-		client.reply(env.ID, nil, "你不在房间中")
-		return
-	}
-	room := s.rooms[player.RoomID]
-	if room == nil {
-		client.reply(env.ID, nil, "你不在房间中")
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
 		return
 	}
 	if room.Settings.GameID != types.GameTicTacToe {
@@ -923,7 +838,7 @@ func (s *Server) onPunishmentSubmit(client *Client, env wsEnvelope) {
 		ImageURL string `json:"imageUrl"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
+	player := s.requirePlayerQuiet(client)
 	if player == nil || player.RoomID == "" {
 		client.reply(env.ID, nil, "你当前不需要提交惩罚")
 		return
@@ -992,13 +907,14 @@ func (s *Server) onPunishmentSubmit(client *Client, env wsEnvelope) {
 		PlayerID: player.ID, PlayerName: playerShortName(player), Text: cleanProofText, ImageURL: cleanImageURL,
 		TaskText: taskText, Status: status, ReviewedBy: reviewedBy, ReviewedAt: reviewedAt, SubmittedAt: submittedAt,
 	})
-	// 提交后立刻广播（含 history 中的证明），胜方无需刷新即可审核。
+	// 先应答再广播，避免广播路径异常时客户端收不到 ack
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	// 提交后广播（含 history 中的证明），胜方无需刷新即可审核。
 	if s.punishmentComplete(room) {
 		s.resetForNextRound(room)
 	} else {
 		s.broadcastRoom(room.ID, false)
 	}
-	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
 func (s *Server) onPunishmentAssignTask(client *Client, env wsEnvelope) {
@@ -1007,14 +923,8 @@ func (s *Server) onPunishmentAssignTask(client *Client, env wsEnvelope) {
 		TaskText string `json:"taskText"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
-	if player == nil || player.RoomID == "" {
-		client.reply(env.ID, nil, "你不在房间中")
-		return
-	}
-	room := s.rooms[player.RoomID]
-	if room == nil {
-		client.reply(env.ID, nil, "你不在房间中")
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
 		return
 	}
 	if room.Phase != types.PhasePunishment || room.Settings.PunishmentSource != "player" {
@@ -1065,6 +975,12 @@ func (s *Server) onPunishmentAssignTask(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "请填写惩罚任务")
 		return
 	}
+	// 玩家发布任务也支持 {winner}/{loser}（胜者=发布方，败者=受罚方）
+	loserName := ""
+	if target := s.players[p.PlayerID]; target != nil {
+		loserName = playerShortName(target)
+	}
+	cleanTask = applyPunishmentPlaceholders(cleanTask, loserName, playerShortName(player))
 	s.updatePunishmentTask(room, p.PlayerID, cleanTask, player)
 	s.broadcastRoom(room.ID, false)
 	client.reply(env.ID, map[string]any{"ok": true}, "")
@@ -1077,14 +993,8 @@ func (s *Server) onPunishmentReview(client *Client, env wsEnvelope) {
 		RedoTaskText string `json:"redoTaskText"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
-	if player == nil || player.RoomID == "" {
-		client.reply(env.ID, nil, "你不在房间中")
-		return
-	}
-	room := s.rooms[player.RoomID]
-	if room == nil {
-		client.reply(env.ID, nil, "你不在房间中")
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
 		return
 	}
 	if _, ok := s.seatOf(room, player.ID); !ok {
@@ -1159,14 +1069,8 @@ func (s *Server) onPunishmentConfirm(client *Client, env wsEnvelope) {
 		PlayerID string `json:"playerId"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
-	if player == nil || player.RoomID == "" {
-		client.reply(env.ID, nil, "你不在房间中")
-		return
-	}
-	room := s.rooms[player.RoomID]
-	if room == nil {
-		client.reply(env.ID, nil, "你不在房间中")
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
 		return
 	}
 	if _, ok := s.seatOf(room, player.ID); !ok {
@@ -1216,9 +1120,8 @@ func (s *Server) onChatSend(client *Client, env wsEnvelope) {
 		Text   string `json:"text"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
-	if player == nil {
-		client.reply(env.ID, nil, "请先进入游戏")
+	player, ok := s.requirePlayerInGame(client, env)
+	if !ok {
 		return
 	}
 	cleanMessageText := cleanText(p.Text, 300)
@@ -1254,9 +1157,8 @@ func (s *Server) onSuggestionAdd(client *Client, env wsEnvelope) {
 		Text string `json:"text"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
-	if player == nil {
-		client.reply(env.ID, nil, "请先进入游戏")
+	player, ok := s.requirePlayerInGame(client, env)
+	if !ok {
 		return
 	}
 	cleanSuggestionText := cleanText(p.Text, 500)

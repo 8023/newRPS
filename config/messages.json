@@ -1,0 +1,8 @@
+{
+  "configInvalid": "配置格式不正确",
+  "configSaved": "配置保存成功",
+  "nameRequired": "请输入 2-12 个字符的名字",
+  "passwordWrong": "密码错误",
+  "proofRequired": "请提交惩罚证明",
+  "roomCreated": "房间创建成功"
+}

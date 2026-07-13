@@ -156,10 +156,8 @@ func (s *Server) forceBroadcastLobby() {
 		s.lobbyBroadcastTimer.Stop()
 		s.lobbyBroadcastTimer = nil
 	}
-	if ch := s.getSync(channelLobby()); ch != nil {
-		ch.doc = nil
-		ch.hash = ""
-	}
+	// 清空同步基线，强制下一包 FULL（避免增量漏删幽灵房间）
+	s.resetSyncChannel(channelLobby())
 	s.emitLobbyUpdate()
 }
 
@@ -353,14 +351,13 @@ func (s *Server) sendFullChannel(c *Client, channel string) {
 			s.emitWireClient(c, env)
 		}
 	case channel == channelPlayers():
-		byID := map[string]types.LobbyPlayer{}
+		// players 不是状态通道文档；resync 时发 RAW 批量列表，禁止走 StateDocument FULL
+		list := make([]types.LobbyPlayer, 0, len(s.players))
 		for _, p := range s.players {
-			byID[p.ID] = types.ToLobbyPlayer(s.publicPlayer(p))
+			list = append(list, types.ToLobbyPlayer(s.publicPlayer(p)))
 		}
-		env, _, err := s.buildFullEnvelope("player:batch", channel, byID)
-		if err == nil {
-			s.emitWireClient(c, env)
-		}
+		sort.Slice(list, func(i, j int) bool { return list[i].ID < list[j].ID })
+		s.emitToClient(c.id, "player:batch", list)
 	case len(channel) > 5 && channel[:5] == "room:":
 		roomID := channel[5:]
 		room := s.rooms[roomID]

@@ -81,7 +81,7 @@ func (s *Server) buildPunishmentTasks(room *RoomState, punishedPlayers []*Player
 		if room.Settings.PunishmentSource == "player" {
 			assigner = s.taskAssigner(room, player.ID)
 		} else {
-			systemTask = s.punishmentTaskForPlayer(player, punishment)
+			systemTask = s.punishmentTaskForPlayer(room, player, result, punishment)
 		}
 		task := types.PunishmentTask{
 			PlayerID:     player.ID,
@@ -120,7 +120,7 @@ type punishmentTaskResult struct {
 	BackgroundOpacity *float64
 }
 
-func (s *Server) punishmentTaskForPlayer(player *PlayerState, punishment *types.PunishmentConfig) *punishmentTaskResult {
+func (s *Server) punishmentTaskForPlayer(room *RoomState, player *PlayerState, result types.RoundResult, punishment *types.PunishmentConfig) *punishmentTaskResult {
 	if punishment == nil {
 		op := 0.22
 		return &punishmentTaskResult{TaskText: "请完成本局惩罚。", BackgroundOpacity: &op}
@@ -141,6 +141,7 @@ func (s *Server) punishmentTaskForPlayer(player *PlayerState, punishment *types.
 	if taskText == "" {
 		taskText = cleanTaskText(punishment.Description, player.FactionLabel)
 	}
+	taskText = applyPunishmentPlaceholders(taskText, playerShortName(player), s.winnerNameForResult(room, result))
 	op := 0.22
 	if task != nil {
 		op = task.BackgroundOpacity
@@ -161,6 +162,52 @@ func cleanTaskText(taskText, factionLabel string) string {
 	re2 := regexp.MustCompile(`^(男性阵营|女性阵营|男娘阵营|其他阵营)[：:]\s*`)
 	taskText = re2.ReplaceAllString(taskText, "")
 	return strings.TrimSpace(taskText)
+}
+
+// applyPunishmentPlaceholders 替换系统/自定义任务文案中的占位符：
+//   {loser}  → 败者昵称（本条任务对应的受罚玩家）
+//   {winner} → 胜者昵称（本局唯一胜者座位；平局双罚/双败时为空字符串）
+func applyPunishmentPlaceholders(taskText, loserName, winnerName string) string {
+	if taskText == "" {
+		return taskText
+	}
+	taskText = strings.ReplaceAll(taskText, "{loser}", loserName)
+	taskText = strings.ReplaceAll(taskText, "{winner}", winnerName)
+	return taskText
+}
+
+// winnerNameForResult 返回胜者展示名；无明确胜者时返回 ""。
+func (s *Server) winnerNameForResult(room *RoomState, result types.RoundResult) string {
+	var seat types.SeatKey
+	switch result {
+	case types.ResultA:
+		seat = types.SeatA
+	case types.ResultB:
+		seat = types.SeatB
+	default:
+		return ""
+	}
+	return s.seatShortName(room, seat)
+}
+
+func (s *Server) seatShortName(room *RoomState, seat types.SeatKey) string {
+	if room == nil {
+		return ""
+	}
+	occ := room.Seats[seat]
+	if occ == nil {
+		return ""
+	}
+	if occ.IsBot() {
+		if bot, ok := occ.(*BotSeat); ok {
+			return bot.Bot.Name
+		}
+		return occupantName(occ)
+	}
+	if p := s.players[occ.GetID()]; p != nil {
+		return playerShortName(p)
+	}
+	return occupantName(occ)
 }
 
 func (s *Server) attachProofToLatestHistory(room *RoomState, proof types.HistoryProof) {
@@ -278,6 +325,9 @@ func (s *Server) setupPunishmentOrNext(room *RoomState, result types.RoundResult
 	room.PunishedPlayerIDs = humanIDs
 	room.LockedSeatIDs = map[string]struct{}{}
 	for _, playerID := range humanIDs {
+		if room.LockedSeatIDs == nil {
+			room.LockedSeatIDs = map[string]struct{}{}
+		}
 		room.LockedSeatIDs[playerID] = struct{}{}
 		if player := s.players[playerID]; player != nil {
 			player.Stats.Punishments++

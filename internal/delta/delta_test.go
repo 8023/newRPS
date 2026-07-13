@@ -2,6 +2,8 @@ package delta
 
 import (
 	"encoding/json"
+	"fmt"
+	"hash/crc32"
 	"testing"
 )
 
@@ -53,6 +55,24 @@ func TestHashStable(t *testing.T) {
 	hb, _ := Hash(b)
 	if ha != hb {
 		t.Fatalf("%s != %s", ha, hb)
+	}
+	if len(ha) != 8 {
+		t.Fatalf("crc32 hex want 8 chars, got %q", ha)
+	}
+}
+
+func TestHashCRC32Known(t *testing.T) {
+	// 空对象 {} 的稳定序列化后 CRC-32 IEEE
+	doc := map[string]any{}
+	h, err := Hash(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Go json of empty map is "{}"
+	sum := crc32.ChecksumIEEE([]byte(`{}`))
+	want := fmt.Sprintf("%08x", sum)
+	if h != want {
+		t.Fatalf("got %s want %s", h, want)
 	}
 }
 

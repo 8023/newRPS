@@ -1,0 +1,363 @@
+/**
+ * 状态归一化（B5）：
+ * - 服务端 jsonsafe 已保证出站 slice/map 非 null。
+ * - 此处负责：DELTA 合并后的薄兜底、lobby chat 本地保留、history 按 id 合并、配置缺字段补全。
+ */
+import type { AppConfig, LobbySnapshot, PublicPlayer, RoomSnapshot, SeatKey } from "../shared/types";
+
+export function playerSyncKey(player: PublicPlayer) {
+  return [
+    player.name,
+    player.displayName,
+    player.genderId,
+    player.genderLabel,
+    player.factionId,
+    player.connected ? "1" : "0",
+    player.disconnectedAt || 0,
+    player.disconnectExpiresAt || 0,
+    player.stats.wins,
+    player.stats.losses,
+    player.stats.draws,
+    player.stats.punishments,
+    player.stats.rankedPoints,
+    player.stats.title,
+    player.nameWarEnabled ? "1" : "0",
+    player.nameWarPunished ? "1" : "0",
+    player.nameWarPenaltyName || "",
+    player.nameWarAllowRename ? "1" : "0",
+    player.nameWarRenameProtectedUntil || 0,
+    player.nameWarRenamedBy || "",
+    player.nameWarRenamedByName || "",
+    player.nameWarRenameWindowStartedAt || 0,
+    player.nameWarRenameCount || 0,
+    player.giveawayEnabled ? "1" : "0",
+    player.giveawayValue || 0,
+    player.giveawayClicks || 0,
+    player.giveawayBoardText || "",
+    player.giveawayBoardExpiresAt || 0,
+    player.giveawayBoardLikes || 0,
+    player.giveawayBoardDislikes || 0,
+    player.giveawayVoteWindowStartedAt || 0,
+    player.giveawayVoteCount || 0,
+    player.giveawayVoteLikesThisHour || 0,
+    player.giveawayVoteDislikesThisHour || 0,
+    player.rankMultiplierUnlocked ? "1" : "0",
+    player.extremeModeEnabled ? "1" : "0",
+    player.extremeModeToggledAt || 0,
+    player.extremeModeCooldownUntil || 0,
+    player.extremeWinStreak || 0,
+    player.extremeLastDecayHour || 0,
+    player.extremeForceClosed ? "1" : "0",
+    player.extremeForceClosedAt || 0,
+    player.extremeRenameProtectedUntil || 0,
+    player.extremeRenamedBy || "",
+    player.extremeRenamedByName || ""
+  ].join("|");
+}
+
+export function appendHistoryPage(oldItems: RoomSnapshot["roundHistory"], newItems: RoomSnapshot["roundHistory"], currentItems: RoomSnapshot["roundHistory"]) {
+  const seen = new Set([...currentItems, ...oldItems].map((item) => item.id));
+  return [...oldItems, ...newItems.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  })];
+}
+
+/** 战绩数字兜底：proto 省略 0 时避免 undefined/NaN */
+export function statNum(value: unknown, fallback = 0): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+export function normalizePublicStats(stats: PublicPlayer["stats"] | null | undefined): PublicPlayer["stats"] {
+  const s = stats || ({} as PublicPlayer["stats"]);
+  const title = typeof s.title === "string" ? s.title.trim() : "";
+  return {
+    wins: statNum(s.wins),
+    losses: statNum(s.losses),
+    draws: statNum(s.draws),
+    punishments: statNum(s.punishments),
+    rankedPoints: statNum(s.rankedPoints),
+    title: title || "暂无称号",
+    ...(s.titleSegmentId ? { titleSegmentId: s.titleSegmentId } : {})
+  };
+}
+
+export function normalizeOthelloStats(stats: PublicPlayer["othelloStats"] | null | undefined): PublicPlayer["othelloStats"] {
+  const s = stats || ({} as PublicPlayer["othelloStats"]);
+  return {
+    wins: statNum(s.wins),
+    losses: statNum(s.losses),
+    draws: statNum(s.draws),
+    games: statNum(s.games),
+    captured: statNum(s.captured),
+    lost: statNum(s.lost)
+  };
+}
+
+export function normalizePublicPlayer(player: PublicPlayer): PublicPlayer {
+  if (!player) return player;
+  return {
+    ...player,
+    stats: normalizePublicStats(player.stats),
+    othelloStats: normalizeOthelloStats(player.othelloStats)
+  };
+}
+
+export function playerWinRate(player: PublicPlayer) {
+  const stats = normalizePublicStats(player?.stats);
+  const decisive = stats.wins + stats.losses;
+  return decisive === 0 ? 0 : stats.wins / decisive;
+}
+
+export function rankedPlayers(players: PublicPlayer[]) {
+  return players
+    .filter((player) => player.connected)
+    .map(normalizePublicPlayer)
+    .sort((a, b) => b.stats.rankedPoints - a.stats.rankedPoints || b.stats.wins - a.stats.wins);
+}
+
+export function normalWinRatePlayers(players: PublicPlayer[]) {
+  return players
+    .map(normalizePublicPlayer)
+    .filter((player) => player.stats.wins + player.stats.losses + player.stats.draws >= 5)
+    .sort((a, b) => playerWinRate(b) - playerWinRate(a) || b.stats.wins - a.stats.wins)
+    .slice(0, 10);
+}
+
+export function replacePlayerInRoom(room: RoomSnapshot, player: PublicPlayer) {
+  let changed = false;
+  const seats = { ...(room.seats || { A: null, B: null }) };
+  for (const seat of ["A", "B"] as SeatKey[]) {
+    const occupant = seats[seat];
+    if (occupant?.id === player.id && !("isBot" in occupant)) {
+      seats[seat] = player;
+      changed = true;
+    }
+  }
+  const spectators = (room.spectators || []).map((spectator) => {
+    if (spectator.id !== player.id) return spectator;
+    changed = true;
+    return player;
+  });
+  return changed ? { ...room, seats, spectators } : room;
+}
+
+export function replaceLobbyVersusPlayer(versus: LobbySnapshot["rooms"][number]["versus"], player: PublicPlayer) {
+  return {
+    A: versus.A && !("isBot" in versus.A) && versus.A.player.id === player.id ? { player } : versus.A,
+    B: versus.B && !("isBot" in versus.B) && versus.B.player.id === player.id ? { player } : versus.B
+  };
+}
+
+export function replacePlayerInLobby(lobby: LobbySnapshot, player: PublicPlayer) {
+  const prev = lobby.players || [];
+  const exists = prev.some((item) => item.id === player.id);
+  // player:batch 可能带来新上线玩家；旧实现只 map 不 insert，导致在线列表/人数不涨。
+  const players = exists
+    ? prev.map((item) => (item.id === player.id ? player : item))
+    : [...prev, player];
+  return {
+    ...lobby,
+    players,
+    onlineCount: players.filter((p) => p.connected).length,
+    normalLeaderboard: normalWinRatePlayers(players),
+    rankedLeaderboard: rankedPlayers(players),
+    rooms: (lobby.rooms || []).map((roomInfo) => ({
+      ...roomInfo,
+      versus: replaceLobbyVersusPlayer(roomInfo.versus || { A: null, B: null }, player)
+    }))
+  };
+}
+
+/** 展示用在线人数：以玩家列表 connected 为准（与 player:batch / lobby 增量保持一致）。 */
+export function lobbyOnlineCount(lobby: LobbySnapshot | null | undefined) {
+  if (!lobby) return 0;
+  const players = lobby.players || [];
+  const connected = players.filter((p) => p.connected).length;
+  if (connected > 0) return connected;
+  return Number(lobby.onlineCount) || 0;
+}
+
+export function coerceLobbyPlayers(raw: LobbySnapshot["players"] | Record<string, PublicPlayer> | PublicPlayer[] | null | undefined): PublicPlayer[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw as PublicPlayer[];
+  return Object.values(raw as Record<string, PublicPlayer>);
+}
+
+export function coerceLobbyRooms(raw: LobbySnapshot["rooms"] | Record<string, LobbySnapshot["rooms"][number]> | null | undefined): LobbySnapshot["rooms"] {
+  if (!raw) return [] as any;
+  if (Array.isArray(raw)) return raw;
+  return Object.values(raw as Record<string, any>) as any;
+}
+
+export function normalizeLobbySnapshot(snapshot: LobbySnapshot, old?: LobbySnapshot | null) {
+  const players = coerceLobbyPlayers(snapshot.players as any).map(normalizePublicPlayer);
+  const rooms = coerceLobbyRooms(snapshot.rooms as any).map((room) => ({
+    ...room,
+    versus: {
+      A: room.versus?.A && !("isBot" in room.versus.A) && room.versus.A.player
+        ? { player: normalizePublicPlayer(room.versus.A.player) }
+        : room.versus?.A ?? null,
+      B: room.versus?.B && !("isBot" in room.versus.B) && room.versus.B.player
+        ? { player: normalizePublicPlayer(room.versus.B.player) }
+        : room.versus?.B ?? null
+    }
+  }));
+  const lobbyChat = (!snapshot.lobbyChat || snapshot.lobbyChat.length === 0) && old ? old.lobbyChat : (snapshot.lobbyChat || []);
+  const connected = players.filter((p) => p.connected).length;
+  // 服务端 onlineCount 与 players 列表偶发短暂不一致时，以列表 connected 为准。
+  const onlineCount = connected > 0 ? connected : (Number(snapshot.onlineCount) || 0);
+  return {
+    ...snapshot,
+    players,
+    rooms,
+    onlineCount,
+    suggestions: snapshot.suggestions || [],
+    lobbyChat,
+    normalLeaderboard: normalWinRatePlayers(players),
+    rankedLeaderboard: rankedPlayers(players)
+  } as LobbySnapshot;
+}
+
+/** 兜底：Go nil slice/map → JSON null 时，避免前端 .includes/.map 白屏 */
+export function normalizeRoundHistoryItem(item: RoomSnapshot["roundHistory"][number]): RoomSnapshot["roundHistory"][number] {
+  return {
+    ...item,
+    punishmentTasks: item.punishmentTasks || [],
+    punishedNames: item.punishedNames || [],
+    proofs: item.proofs || [],
+    tictactoeLine: item.tictactoeLine || undefined
+  };
+}
+
+/** 合并对局记录：服务端 recent history 覆盖同 id 项（任务/证明更新），并保留本地已加载的更早页。 */
+export function mergeRoundHistory(
+  oldItems: RoomSnapshot["roundHistory"] | undefined,
+  nextItems: RoomSnapshot["roundHistory"] | undefined
+): RoomSnapshot["roundHistory"] {
+  const old = oldItems || [];
+  const next = (nextItems || []).map(normalizeRoundHistoryItem);
+  if (!next.length) return old;
+  const nextIds = new Set(next.map((item) => item.id));
+  const rest = old.filter((item) => !nextIds.has(item.id));
+  return [...next, ...rest];
+}
+
+function fixPosList(list: Array<{ row?: number; col?: number }> | undefined | null): Array<{ row: number; col: number }> {
+  if (!list?.length) return [];
+  return list.map((p) => {
+    const row = Number(p?.row);
+    const col = Number(p?.col);
+    return {
+      row: Number.isFinite(row) ? row : 0,
+      col: Number.isFinite(col) ? col : 0
+    };
+  });
+}
+
+function padBoard<T>(board: (T | null)[][] | undefined | null, n: number): (T | null)[][] {
+  const out: (T | null)[][] = [];
+  for (let r = 0; r < n; r++) {
+    const src = board?.[r] || [];
+    const row: (T | null)[] = [];
+    for (let c = 0; c < n; c++) row.push(c < src.length ? (src[c] ?? null) : null);
+    out.push(row);
+  }
+  return out;
+}
+
+export function normalizeOthello(state: RoomSnapshot["othello"]): RoomSnapshot["othello"] {
+  if (!state) return state;
+  return {
+    ...state,
+    // protobufjs 可能丢掉 int 0，合法手/棋盘必须归一
+    legalMoves: fixPosList(state.legalMoves),
+    settlementEvents: state.settlementEvents || [],
+    rankedDelta: state.rankedDelta || { A: 0, B: 0 },
+    blackCount: Number(state.blackCount) || 0,
+    whiteCount: Number(state.whiteCount) || 0,
+    passCount: Number(state.passCount) || 0,
+    board: padBoard(state.board, 8)
+  };
+}
+
+export function normalizeTicTacToe(state: RoomSnapshot["tictactoe"]): RoomSnapshot["tictactoe"] {
+  if (!state) return state;
+  return {
+    ...state,
+    winningLine: state.winningLine?.length ? fixPosList(state.winningLine) : undefined,
+    rankedDelta: state.rankedDelta || { A: 0, B: 0 },
+    moveCount: Number(state.moveCount) || 0,
+    board: padBoard(state.board, 3)
+  };
+}
+
+export function normalizeRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
+  const seats = room.seats || { A: null, B: null };
+  return {
+    ...room,
+    settings: {
+      ...room.settings,
+      tags: room.settings?.tags || [],
+      punishmentIds: room.settings?.punishmentIds || []
+    },
+    spectators: room.spectators || [],
+    punishedPlayerIds: room.punishedPlayerIds || [],
+    proofs: room.proofs || [],
+    roundHistory: (room.roundHistory || []).map(normalizeRoundHistoryItem),
+    chat: room.chat || [],
+    choices: room.choices || {},
+    ready: room.ready || { A: false, B: false },
+    score: room.score || { A: 0, B: 0 },
+    seatedScore: room.seatedScore || { A: 0, B: 0 },
+    seatStats: room.seatStats || {
+      A: { wins: 0, losses: 0, draws: 0, punishments: 0 },
+      B: { wins: 0, losses: 0, draws: 0, punishments: 0 }
+    },
+    seats: { A: seats.A ?? null, B: seats.B ?? null },
+    othello: normalizeOthello(room.othello),
+    tictactoe: normalizeTicTacToe(room.tictactoe)
+  };
+}
+
+export function normalizeConfig(config: AppConfig): AppConfig {
+  return {
+    ...config,
+    genders: config.genders || [],
+    genderFactions: (config.genderFactions || []).map((faction) => ({
+      ...faction,
+      genders: faction.genders || []
+    })),
+    titles: (config.titles || []).map((segment) => ({
+      ...segment,
+      names: segment.names || [],
+      factionNames: segment.factionNames || {}
+    })),
+    punishments: (config.punishments || []).map((punishment) => ({
+      ...punishment,
+      variants: punishment.variants || {},
+      roomBackgroundImages: punishment.roomBackgroundImages || [],
+      tasks: (punishment.tasks || []).map((task) => ({
+        ...task,
+        variants: task.variants || {},
+        backgroundImages: task.backgroundImages || []
+      }))
+    })),
+    roomTags: config.roomTags || [],
+    roomInfoTags: config.roomInfoTags || {},
+    bots: {
+      names: config.bots?.names || [],
+      difficulties: config.bots?.difficulties || []
+    },
+    games: config.games || [],
+    messages: config.messages || {},
+    extremeMode: {
+      ...config.extremeMode,
+      positiveLossRates: config.extremeMode?.positiveLossRates || {},
+      negativeWinRates: config.extremeMode?.negativeWinRates || {},
+      hourlyDecay: config.extremeMode?.hourlyDecay || {}
+    }
+  };
+}

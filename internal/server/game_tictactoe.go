@@ -96,13 +96,7 @@ func (s *Server) clearTicTacToeGiveawayTimer(roomID string) {
 func (s *Server) resetTicTacToeRoom(room *RoomState) {
 	s.clearTicTacToeGiveawayTimer(room.ID)
 	room.TicTacToe = nil
-	room.Phase = types.PhaseReady
-	room.Status = "waiting"
-	room.ResultText = ""
-	room.RevealedChoices = nil
-	room.Choices = map[types.SeatKey]types.Move{}
-	room.DisconnectForfeits = map[string]DisconnectForfeit{}
-	room.Ready = map[types.SeatKey]bool{types.SeatA: false, types.SeatB: false}
+	s.resetTurnBasedRoom(room)
 }
 
 func (s *Server) startTicTacToeRoom(room *RoomState) {
@@ -111,14 +105,8 @@ func (s *Server) startTicTacToeRoom(room *RoomState) {
 	}
 	s.clearTicTacToeGiveawayTimer(room.ID)
 	xSeat := randomSeat()
-	room.Phase = types.PhaseChoosing
-	room.Status = "playing"
-	room.ResultText = ""
-	room.Choices = map[types.SeatKey]types.Move{}
-	room.RevealedChoices = nil
-	room.DisconnectForfeits = map[string]DisconnectForfeit{}
+	s.startTurnBasedPlaying(room)
 	room.TicTacToe = freshTicTacToeState(xSeat)
-	room.Ready = map[types.SeatKey]bool{types.SeatA: false, types.SeatB: false}
 }
 
 func (s *Server) scheduleTicTacToeReadyStart(room *RoomState) {
@@ -176,27 +164,15 @@ func (s *Server) finishTicTacToeGame(room *RoomState, result types.RoundResult, 
 		return
 	}
 	s.clearTicTacToeGiveawayTimer(room.ID)
-	playerA := s.humanPlayerFromSeat(room, types.SeatA)
-	playerB := s.humanPlayerFromSeat(room, types.SeatB)
 	rankedDelta := room.TicTacToe.RankedDelta
 	if rankedDelta == nil {
 		rankedDelta = map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}
 	}
 	rankedText := ""
 	streakText := ""
+	// 座位胜负统计先走公共逻辑；排位分/极限连胜仍为本局专用。
+	playerA, playerB := s.applySeatOutcome(room, result)
 	if result == types.ResultDraw {
-		if playerA != nil {
-			playerA.Stats.Draws++
-		}
-		if playerB != nil {
-			playerB.Stats.Draws++
-		}
-		ssA := room.SeatStats[types.SeatA]
-		ssA.Draws++
-		room.SeatStats[types.SeatA] = ssA
-		ssB := room.SeatStats[types.SeatB]
-		ssB.Draws++
-		room.SeatStats[types.SeatB] = ssB
 		if room.Settings.EnableRanked && room.Settings.TieDoublePunish {
 			dA, dB := s.applyRankedDrawPenaltyStake(playerA, playerB, effectiveRankedStake(room.Settings))
 			rankedDelta[types.SeatA] += dA
@@ -204,24 +180,10 @@ func (s *Server) finishTicTacToeGame(room *RoomState, result types.RoundResult, 
 			rankedText = fmt.Sprintf("（平局双扣：A %d，B %d）", dA, dB)
 		}
 	} else if result == types.ResultA || result == types.ResultB {
-		loserSeat := oppositeSeat(types.SeatKey(result))
-		winner := s.humanPlayerFromSeat(room, types.SeatKey(result))
-		loser := s.humanPlayerFromSeat(room, loserSeat)
-		if winner != nil {
-			winner.Stats.Wins++
-		}
-		if loser != nil {
-			loser.Stats.Losses++
-		}
-		room.Score[types.SeatKey(result)]++
-		room.SeatedScore[types.SeatKey(result)]++
-		ssW := room.SeatStats[types.SeatKey(result)]
-		ssW.Wins++
-		room.SeatStats[types.SeatKey(result)] = ssW
-		ssL := room.SeatStats[loserSeat]
-		ssL.Losses++
-		room.SeatStats[loserSeat] = ssL
 		if room.Settings.EnableRanked {
+			loserSeat := oppositeSeat(types.SeatKey(result))
+			winner := s.humanPlayerFromSeat(room, types.SeatKey(result))
+			loser := s.humanPlayerFromSeat(room, loserSeat)
 			wD, lD := s.applyRankedStake(winner, loser, effectiveRankedStake(room.Settings))
 			rankedDelta[types.SeatKey(result)] += wD
 			rankedDelta[loserSeat] += lD
@@ -243,48 +205,21 @@ func (s *Server) finishTicTacToeGame(room *RoomState, result types.RoundResult, 
 	} else {
 		room.ResultText = occupantName(room.Seats[types.SeatKey(result)]) + " 井字棋胜利" + rankedText + streakText
 	}
-	punishedPlayers := s.punishmentPlayersForResult(room, result)
-	punishedNames := make([]string, len(punishedPlayers))
-	for i, p := range punishedPlayers {
-		punishedNames[i] = playerShortName(p)
-	}
-	punishment := s.currentPunishment(room)
-	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, result, punishment)
-	if playerA != nil {
-		s.refreshPlayerSnapshots(playerA)
-	}
-	if playerB != nil {
-		s.refreshPlayerSnapshots(playerB)
-	}
+	s.refreshHumans(playerA, playerB)
 	resultLabel := "井字棋平局"
 	if result != types.ResultDraw {
 		resultLabel = occupantName(room.Seats[types.SeatKey(result)]) + "胜利"
 	}
-	item := types.RoundHistoryItem{
-		ID: randomID(), Round: len(room.RoundHistory) + 1, At: nowMs(),
-		PlayerA: occupantName(room.Seats[types.SeatA]), PlayerB: occupantName(room.Seats[types.SeatB]),
-		MoveA: types.MoveNoMove, MoveB: types.MoveNoMove, Result: result, ResultLabel: resultLabel,
-		ResultText: room.ResultText, GameID: types.GameTicTacToe, TicTacToeXSeat: room.TicTacToe.XSeat,
-		TicTacToeLine: winningLine, Ranked: room.Settings.EnableRanked, ExtremeRanked: room.Settings.EnableExtremeRanked,
-		PunishmentTasks: punishmentTasks, PunishedNames: punishedNames, Proofs: []types.HistoryProof{},
-	}
+	item := s.buildMatchHistoryShell(room, result, types.GameTicTacToe, resultLabel, room.ResultText)
+	item.TicTacToeXSeat = room.TicTacToe.XSeat
+	item.TicTacToeLine = winningLine
+	item.ExtremeRanked = room.Settings.EnableExtremeRanked
 	if room.Settings.EnableRanked {
-		st := room.Settings.Stake
-		item.Stake = &st
-		rm := rankMultiplierFor(room.Settings)
-		item.RankMultiplier = &rm
 		es := effectiveRankedStake(room.Settings)
 		item.EffectiveStake = &es
 	}
-	if len(punishedNames) > 0 {
-		item.PunishmentName = s.punishmentNameForRoom(room, punishment)
-		if room.Settings.PunishmentSource != "player" && punishment != nil {
-			item.PunishmentDescription = punishment.Description
-		}
-	}
-	s.addRoundHistory(room, item)
 	s.roomNotice(room, room.ResultText)
-	s.setupPunishmentOrNext(room, result)
+	s.finalizeMatch(room, result, item)
 }
 
 func (s *Server) scheduleTicTacToeGiveawayPrompt(room *RoomState) {

@@ -14,7 +14,8 @@ dist-server/
 work/
 data/
 outputs/
-config/active.json
+config/*.bak
+config/*.json.bak
 
 # tooling / OS
 .omo/

@@ -1,0 +1,37 @@
+{
+  "names": [
+    "Bot 小蓝",
+    "Bot 小粉",
+    "随机拳机",
+    "布布机器人"
+  ],
+  "difficulties": [
+    {
+      "id": "easy",
+      "name": "简单",
+      "description": "完全随机出拳。",
+      "emoji": "🌱",
+      "level": 1,
+      "strategy": "random",
+      "cardColor": "#9ed7ff"
+    },
+    {
+      "id": "normal",
+      "name": "普通",
+      "description": "观察玩家最近选择，稍微尝试反制。",
+      "emoji": "🎯",
+      "level": 3,
+      "strategy": "counter",
+      "cardColor": "#b8a7ff"
+    },
+    {
+      "id": "chaos",
+      "name": "混乱",
+      "description": "大多随机，偶尔连续使用同一招。",
+      "emoji": "🌀",
+      "level": 2,
+      "strategy": "chaos",
+      "cardColor": "#ffaad1"
+    }
+  ]
+}

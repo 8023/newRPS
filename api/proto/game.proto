@@ -1,0 +1,769 @@
+syntax = "proto3";
+
+package game;
+
+option go_package = "github.com/doumiao/newRPS/internal/wire";
+
+import "google/protobuf/struct.proto";
+
+// ── 基础 ──────────────────────────────────────────────
+
+message GenderColors {
+  string text_color = 1;
+  string background_color = 2;
+  string border_color = 3;
+}
+
+message GenderOption {
+  string id = 1;
+  string label = 2;
+  string faction_id = 3;
+}
+
+message GenderFaction {
+  string id = 1;
+  string label = 2;
+  string text_color = 3;
+  string background_color = 4;
+  string border_color = 5;
+  repeated GenderOption genders = 6;
+}
+
+message Pos {
+  int32 row = 1;
+  int32 col = 2;
+}
+
+message PublicStats {
+  int32 wins = 1;
+  int32 losses = 2;
+  int32 draws = 3;
+  int32 punishments = 4;
+  int32 ranked_points = 5;
+  string title = 6;
+  string title_segment_id = 7;
+}
+
+message LobbyStats {
+  int32 wins = 1;
+  int32 losses = 2;
+  int32 draws = 3;
+  int32 punishments = 4;
+  int32 ranked_points = 5;
+  string title = 6;
+}
+
+message OthelloStats {
+  int32 wins = 1;
+  int32 losses = 2;
+  int32 draws = 3;
+  int32 games = 4;
+  int32 captured = 5;
+  int32 lost = 6;
+}
+
+// 完整玩家（房间 / me / player:get）
+message PublicPlayer {
+  string id = 1;
+  string name = 2;
+  string gender_id = 3;
+  string gender_label = 4;
+  string faction_id = 5;
+  string faction_label = 6;
+  GenderColors faction_colors = 7;
+  string display_name = 8;
+  bool connected = 9;
+  int64 disconnected_at = 10;
+  bool has_disconnected_at = 11;
+  int64 disconnect_expires_at = 12;
+  bool has_disconnect_expires_at = 13;
+  int64 profile_updated_at = 14;
+  bool has_profile_updated_at = 15;
+
+  bool name_war_enabled = 16;
+  bool has_name_war_enabled = 17;
+  int64 name_war_toggled_at = 18;
+  bool has_name_war_toggled_at = 19;
+  string name_war_original_name = 20;
+  string name_war_penalty_name = 21;
+  bool name_war_punished = 22;
+  bool has_name_war_punished = 23;
+  bool name_war_allow_rename = 24;
+  bool has_name_war_allow_rename = 25;
+  int64 name_war_rename_protected_until = 26;
+  bool has_name_war_rename_protected_until = 27;
+  string name_war_renamed_by = 28;
+  string name_war_renamed_by_name = 29;
+  int64 name_war_rename_window_started_at = 30;
+  bool has_name_war_rename_window_started_at = 31;
+  int32 name_war_rename_count = 32;
+  bool has_name_war_rename_count = 33;
+
+  bool giveaway_enabled = 34;
+  bool has_giveaway_enabled = 35;
+  double giveaway_value = 36;
+  bool has_giveaway_value = 37;
+  int32 giveaway_clicks = 38;
+  bool has_giveaway_clicks = 39;
+  string giveaway_board_text = 40;
+  int64 giveaway_board_submitted_at = 41;
+  bool has_giveaway_board_submitted_at = 42;
+  int64 giveaway_board_expires_at = 43;
+  bool has_giveaway_board_expires_at = 44;
+  int32 giveaway_board_likes = 45;
+  bool has_giveaway_board_likes = 46;
+  int32 giveaway_board_dislikes = 47;
+  bool has_giveaway_board_dislikes = 48;
+  int32 giveaway_board_likes_this_hour = 49;
+  bool has_giveaway_board_likes_this_hour = 50;
+  int64 giveaway_board_like_window_started_at = 51;
+  bool has_giveaway_board_like_window_started_at = 52;
+  int64 giveaway_vote_window_started_at = 53;
+  bool has_giveaway_vote_window_started_at = 54;
+  int32 giveaway_vote_count = 55;
+  bool has_giveaway_vote_count = 56;
+  int32 giveaway_vote_likes_this_hour = 57;
+  bool has_giveaway_vote_likes_this_hour = 58;
+  int32 giveaway_vote_dislikes_this_hour = 59;
+  bool has_giveaway_vote_dislikes_this_hour = 60;
+
+  bool rank_multiplier_unlocked = 61;
+  bool has_rank_multiplier_unlocked = 62;
+  bool extreme_mode_enabled = 63;
+  bool has_extreme_mode_enabled = 64;
+  int64 extreme_mode_toggled_at = 65;
+  bool has_extreme_mode_toggled_at = 66;
+  int64 extreme_mode_cooldown_until = 67;
+  bool has_extreme_mode_cooldown_until = 68;
+  int32 extreme_win_streak = 69;
+  bool has_extreme_win_streak = 70;
+  int64 extreme_last_decay_hour = 71;
+  bool has_extreme_last_decay_hour = 72;
+  bool extreme_force_closed = 73;
+  bool has_extreme_force_closed = 74;
+  int64 extreme_force_closed_at = 75;
+  bool has_extreme_force_closed_at = 76;
+  int64 extreme_rename_protected_until = 77;
+  bool has_extreme_rename_protected_until = 78;
+  string extreme_renamed_by = 79;
+  string extreme_renamed_by_name = 80;
+
+  string room_id = 81;
+  bool is_admin = 82;
+  bool has_is_admin = 83;
+  PublicStats stats = 84;
+  OthelloStats othello_stats = 85;
+}
+
+// 大厅精简玩家
+message LobbyPlayer {
+  string id = 1;
+  string name = 2;
+  string gender_id = 3;
+  string gender_label = 4;
+  string faction_id = 5;
+  string faction_label = 6;
+  GenderColors faction_colors = 7;
+  string display_name = 8;
+  bool connected = 9;
+  int64 disconnected_at = 10;
+  bool has_disconnected_at = 11;
+  int64 disconnect_expires_at = 12;
+  bool has_disconnect_expires_at = 13;
+
+  bool name_war_enabled = 14;
+  bool has_name_war_enabled = 15;
+  string name_war_penalty_name = 16;
+  bool name_war_punished = 17;
+  bool has_name_war_punished = 18;
+  bool name_war_allow_rename = 19;
+  bool has_name_war_allow_rename = 20;
+  int64 name_war_rename_protected_until = 21;
+  bool has_name_war_rename_protected_until = 22;
+  string name_war_renamed_by_name = 23;
+
+  bool giveaway_enabled = 24;
+  bool has_giveaway_enabled = 25;
+  double giveaway_value = 26;
+  bool has_giveaway_value = 27;
+  string giveaway_board_text = 28;
+  int64 giveaway_board_expires_at = 29;
+  bool has_giveaway_board_expires_at = 30;
+  int32 giveaway_board_likes = 31;
+  bool has_giveaway_board_likes = 32;
+  int32 giveaway_board_dislikes = 33;
+  bool has_giveaway_board_dislikes = 34;
+
+  bool rank_multiplier_unlocked = 35;
+  bool has_rank_multiplier_unlocked = 36;
+  bool extreme_mode_enabled = 37;
+  bool has_extreme_mode_enabled = 38;
+  int32 extreme_win_streak = 39;
+  bool has_extreme_win_streak = 40;
+  bool extreme_force_closed = 41;
+  bool has_extreme_force_closed = 42;
+  int64 extreme_force_closed_at = 43;
+  bool has_extreme_force_closed_at = 44;
+  int64 extreme_rename_protected_until = 45;
+  bool has_extreme_rename_protected_until = 46;
+  string extreme_renamed_by_name = 47;
+
+  string room_id = 48;
+  LobbyStats stats = 49;
+  OthelloStats othello_stats = 50;
+}
+
+message BotPlayer {
+  string id = 1;
+  string name = 2;
+  string difficulty = 3;
+  bool is_bot = 4;
+}
+
+message SeatOccupant {
+  oneof kind {
+    PublicPlayer player = 1;
+    BotPlayer bot = 2;
+  }
+}
+
+message ChatMessage {
+  string id = 1;
+  string room_id = 2;
+  string player_id = 3;
+  string author = 4;
+  PublicPlayer author_player = 5;
+  string author_role = 6;
+  string text = 7;
+  int64 at = 8;
+  bool system = 9;
+  bool transient = 10;
+  int64 expires_at = 11;
+  bool has_expires_at = 12;
+}
+
+message Suggestion {
+  string id = 1;
+  string player_id = 2;
+  string author = 3;
+  PublicPlayer author_player = 4;
+  string text = 5;
+  int64 at = 6;
+}
+
+message RoomSettings {
+  string name = 1;
+  string password = 2;
+  string game_id = 3;
+  bool enable_bot = 4;
+  string bot_difficulty = 5;
+  bool enable_punishment = 6;
+  string punishment_source = 7;
+  string punishment_id = 8;
+  repeated string punishment_ids = 9;
+  string room_background_image = 10;
+  bool enable_tags = 11;
+  repeated string tags = 12;
+  bool allow_proof_image = 13;
+  bool has_allow_proof_image = 14;
+  bool tie_double_punish = 15;
+  bool require_opponent_confirm = 16;
+  bool enable_ranked = 17;
+  int32 stake = 18;
+  bool enable_rank_multiplier = 19;
+  int32 rank_multiplier = 20;
+  bool enable_extreme_ranked = 21;
+  string othello_board_theme = 22;
+  string tictactoe_board_theme = 23;
+}
+
+message PunishmentProof {
+  string player_id = 1;
+  string text = 2;
+  string image_url = 3;
+  string task_text = 4;
+  string status = 5;
+  string confirmed_by = 6;
+  string reviewed_by = 7;
+  int64 reviewed_at = 8;
+  bool has_reviewed_at = 9;
+  string reject_reason = 10;
+  string redo_task_text = 11;
+  int64 submitted_at = 12;
+}
+
+message SeatStats {
+  int32 wins = 1;
+  int32 losses = 2;
+  int32 draws = 3;
+  int32 punishments = 4;
+}
+
+message OthelloScore {
+  int32 black = 1;
+  int32 white = 2;
+}
+
+message PunishmentTask {
+  string player_id = 1;
+  string player_name = 2;
+  string faction_id = 3;
+  string faction_label = 4;
+  string task_text = 5;
+  string background_image = 6;
+  double background_opacity = 7;
+  bool has_background_opacity = 8;
+  string assigned_by = 9;
+  string assigned_by_name = 10;
+}
+
+message HistoryProof {
+  string player_id = 1;
+  string player_name = 2;
+  string text = 3;
+  string image_url = 4;
+  string task_text = 5;
+  string status = 6;
+  string reviewed_by = 7;
+  int64 reviewed_at = 8;
+  bool has_reviewed_at = 9;
+  string reject_reason = 10;
+  string redo_task_text = 11;
+  int64 submitted_at = 12;
+}
+
+message RoundHistoryItem {
+  string id = 1;
+  int32 round = 2;
+  int64 at = 3;
+  string player_a = 4;
+  string player_b = 5;
+  string move_a = 6;
+  string move_b = 7;
+  string result = 8;
+  string result_label = 9;
+  string result_text = 10;
+  string game_id = 11;
+  OthelloScore othello_score = 12;
+  string othello_black_seat = 13;
+  string tictactoe_x_seat = 14;
+  repeated Pos tictactoe_line = 15;
+  bool ranked = 16;
+  int32 stake = 17;
+  bool has_stake = 18;
+  int32 rank_multiplier = 19;
+  bool has_rank_multiplier = 20;
+  int32 effective_stake = 21;
+  bool has_effective_stake = 22;
+  bool extreme_ranked = 23;
+  string punishment_name = 24;
+  string punishment_description = 25;
+  repeated PunishmentTask punishment_tasks = 26;
+  repeated string punished_names = 27;
+  repeated HistoryProof proofs = 28;
+}
+
+message OthelloPendingSettlement {
+  string id = 1;
+  string seat = 2;
+  string opponent_seat = 3;
+  int32 flips = 4;
+  int32 stake = 5;
+  string next_turn = 6;
+  int64 expires_at = 7;
+  string forced = 8;
+  string resolved_as = 9;
+}
+
+message OthelloSurrenderRequest {
+  string from_seat = 1;
+  string to_seat = 2;
+  int64 created_at = 3;
+}
+
+// 棋盘格："" 空 / "black"|"white" / "X"|"O"
+message BoardRow {
+  repeated string cells = 1;
+}
+
+message IntPair {
+  string key = 1;
+  int32 value = 2;
+}
+
+message OthelloState {
+  repeated BoardRow board = 1;
+  string turn = 2;
+  string black_seat = 3;
+  repeated Pos legal_moves = 4;
+  int32 pass_count = 5;
+  int32 black_count = 6;
+  int32 white_count = 7;
+  repeated IntPair ranked_delta = 8;
+  repeated string settlement_events = 9;
+  OthelloPendingSettlement pending_settlement = 10;
+  OthelloSurrenderRequest surrender_request = 11;
+  bool ended = 12;
+  string winner = 13;
+}
+
+message TicTacToeGiveawayPrompt {
+  string seat = 1;
+  bool forced = 2;
+  int64 started_at = 3;
+  int64 expires_at = 4;
+}
+
+message TicTacToeState {
+  repeated BoardRow board = 1;
+  string turn = 2;
+  string x_seat = 3;
+  int32 move_count = 4;
+  TicTacToeGiveawayPrompt giveaway_prompt = 5;
+  repeated Pos winning_line = 6;
+  repeated IntPair ranked_delta = 7;
+  bool ended = 8;
+  string winner = 9;
+}
+
+message BoolPair {
+  string key = 1;
+  bool value = 2;
+}
+
+message StringPair {
+  string key = 1;
+  string value = 2;
+}
+
+message SeatOccupantPair {
+  string key = 1;
+  SeatOccupant value = 2;
+}
+
+message SeatStatsPair {
+  string key = 1;
+  SeatStats value = 2;
+}
+
+message RoomSnapshot {
+  string id = 1;
+  string code = 2;
+  int64 updated_at = 3;
+  RoomSettings settings = 4;
+  string status = 5;
+  string phase = 6;
+  repeated SeatOccupantPair seats = 7;
+  repeated PublicPlayer spectators = 8;
+  repeated BoolPair ready = 9;
+  // choices: key seat, value move string or empty
+  repeated StringPair choices = 10;
+  repeated StringPair revealed_choices = 11;
+  OthelloState othello = 12;
+  TicTacToeState tictactoe = 13;
+  string result_text = 14;
+  repeated string punished_player_ids = 15;
+  repeated PunishmentProof proofs = 16;
+  repeated IntPair score = 17;
+  repeated IntPair seated_score = 18;
+  repeated SeatStatsPair seat_stats = 19;
+  repeated RoundHistoryItem round_history = 20;
+  int32 round_history_total = 21;
+  repeated ChatMessage chat = 22;
+}
+
+message ServerStats {
+  int64 started_at = 1;
+  int32 room_broadcasts = 2;
+  int32 lobby_broadcasts = 3;
+  int32 disconnects = 4;
+  int32 reconnects = 5;
+  int32 last_room_snapshot_bytes = 6;
+  int32 last_lobby_snapshot_bytes = 7;
+  int32 recent_room_broadcasts = 8;
+  int32 recent_lobby_broadcasts = 9;
+  int32 average_room_snapshot_bytes = 10;
+  int32 average_lobby_snapshot_bytes = 11;
+}
+
+message VersusSeat {
+  // human seat uses nested player; bot uses bot
+  PublicPlayer player = 1;
+  BotPlayer bot = 2;
+}
+
+message VersusPair {
+  string key = 1; // A / B
+  VersusSeat value = 2;
+}
+
+message LobbyRoomInfo {
+  string id = 1;
+  string game_id = 2;
+  string code = 3;
+  string name = 4;
+  bool has_password = 5;
+  int32 players = 6;
+  int32 spectators = 7;
+  repeated VersusPair versus = 8;
+  string status = 9;
+  string room_background_image = 10;
+  bool enable_bot = 11;
+  string bot_difficulty = 12;
+  bool enable_punishment = 13;
+  repeated string punishment_ids = 14;
+  string punishment_id = 15;
+  bool tie_double_punish = 16;
+  bool require_opponent_confirm = 17;
+  bool enable_ranked = 18;
+  int32 stake = 19;
+  bool enable_rank_multiplier = 20;
+  int32 rank_multiplier = 21;
+  bool enable_extreme_ranked = 22;
+  repeated string tags = 23;
+}
+
+message LobbyPlayerEntry {
+  string id = 1;
+  LobbyPlayer player = 2;
+}
+
+message LobbyRoomEntry {
+  string id = 1;
+  LobbyRoomInfo room = 2;
+}
+
+message LobbySnapshot {
+  AppConfig config = 1;
+  int32 online_count = 2;
+  repeated LobbyPlayerEntry players = 3;
+  repeated LobbyRoomEntry rooms = 4;
+  repeated LobbyPlayer normal_leaderboard = 5;
+  repeated LobbyPlayer ranked_leaderboard = 6;
+  repeated Suggestion suggestions = 7;
+  repeated ChatMessage lobby_chat = 8;
+  ServerStats server_stats = 9;
+}
+
+// ── 配置 ──────────────────────────────────────────────
+
+message RoomNamePool {
+  repeated string adjectives = 1;
+  repeated string subjects = 2;
+  repeated string room_words = 3;
+}
+
+message RoomInfoTagStyle {
+  string label = 1;
+  string text_color = 2;
+  string background_color = 3;
+  string border_color = 4;
+}
+
+message RoomInfoTagEntry {
+  string key = 1;
+  RoomInfoTagStyle style = 2;
+}
+
+message PunishmentTaskConfig {
+  string id = 1;
+  string name = 2;
+  repeated StringPair variants = 3;
+  repeated string background_images = 4;
+  double background_opacity = 5;
+}
+
+message TitleSegment {
+  string id = 1;
+  int32 min = 2;
+  int32 max = 3;
+  repeated string names = 4;
+  // faction_id -> names joined; use nested
+  message FactionNames {
+    string faction_id = 1;
+    repeated string names = 2;
+  }
+  repeated FactionNames faction_names = 5;
+}
+
+message PunishmentConfig {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  repeated StringPair variants = 4;
+  repeated PunishmentTaskConfig tasks = 5;
+  string card_image_url = 6;
+  double card_image_opacity = 7;
+  repeated string room_background_images = 8;
+  RoomNamePool room_name_pool = 9;
+}
+
+message BotDifficultyConfig {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string emoji = 4;
+  int32 level = 5;
+  string strategy = 6;
+  string card_color = 7;
+}
+
+message GameConfig {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+}
+
+message DailyAnnouncement {
+  bool enabled = 1;
+  string title = 2;
+  string content = 3;
+  string button_text = 4;
+  string version = 5;
+}
+
+message DoublePair {
+  string key = 1;
+  double value = 2;
+}
+
+message ExtremeModeConfig {
+  string label = 1;
+  string emoji = 2;
+  int32 cooldown_hours = 3;
+  repeated DoublePair positive_loss_rates = 4;
+  repeated DoublePair negative_win_rates = 5;
+  repeated DoublePair hourly_decay = 6;
+  int32 win_streak_threshold = 7;
+  double win_streak_crash_chance = 8;
+  int32 crash_target_points = 9;
+  string force_close_warning = 10;
+  int32 force_rename_min_points = 11;
+  int32 force_rename_protect_hours = 12;
+}
+
+message SiteConfig {
+  string name = 1;
+  string description = 2;
+  // admin password never sent to clients; keep empty on wire
+  string admin_password = 3;
+}
+
+message AccessControlConfig {
+  int32 max_online_per_ip = 1;
+  // 注意：protobufjs 会把本字段编成 maxCreatesPer_10Min（数字前插下划线），
+  // 业务侧字段名为 maxCreatesPer10Min；前端 materializeConfig 会做归一化。
+  int32 max_creates_per_10_min = 2;
+}
+
+message NameWarConfig {
+  string penalty_prefix = 1;
+  string loser_panel_title = 2;
+  string escape_title = 3;
+  string rename_panel_title = 4;
+  string name_war_loser_label = 5;
+  string extreme_force_closed_label = 6;
+}
+
+message GiveawayConfig {
+  string panel_title = 1;
+  string panel_description = 2;
+  string submit_placeholder = 3;
+  string empty_text = 4;
+}
+
+message BotsConfig {
+  repeated string names = 1;
+  repeated BotDifficultyConfig difficulties = 2;
+}
+
+message AppConfig {
+  SiteConfig site = 1;
+  DailyAnnouncement daily_announcement = 2;
+  repeated GenderOption genders = 3;
+  repeated GenderFaction gender_factions = 4;
+  repeated TitleSegment titles = 5;
+  repeated PunishmentConfig punishments = 6;
+  RoomNamePool player_punishment_room_name_pool = 7;
+  repeated string room_tags = 8;
+  repeated RoomInfoTagEntry room_info_tags = 9;
+  AccessControlConfig access_control = 10;
+  NameWarConfig name_war = 11;
+  GiveawayConfig giveaway = 12;
+  ExtremeModeConfig extreme_mode = 13;
+  BotsConfig bots = 14;
+  repeated GameConfig games = 15;
+  repeated StringPair messages = 16;
+}
+
+// 状态通道 FULL 载荷
+message StateDocument {
+  oneof doc {
+    LobbySnapshot lobby = 1;
+    RoomSnapshot room = 2;
+    AppConfig config = 3;
+  }
+}
+
+// 玩家批量推送
+message PlayerBatch {
+  repeated PublicPlayer players = 1;
+}
+
+// me / join 响应
+message MeState {
+  PublicPlayer player = 1;
+  string token = 2;
+  string room_id = 3;
+  RoomSnapshot room = 4;
+}
+
+message AnnouncementPayload {
+  string id = 1;
+  string message = 2;
+  int32 duration_ms = 3;
+  int64 created_at = 4;
+}
+
+message RoomClosed {
+  string message = 1;
+}
+
+message HistoryPage {
+  string room_id = 1;
+  RoundHistoryItem item = 2;
+  int32 total = 3;
+}
+
+message OkResult {
+  bool ok = 1;
+}
+
+message PlayerResult {
+  PublicPlayer player = 1;
+}
+
+message SuggestionsResult {
+  repeated Suggestion suggestions = 1;
+}
+
+// RAW 推送/应答：类型化 oneof + Struct 动态 RPC（Struct 为 protobuf 二进制，非 JSON 文本）
+message RawBody {
+  oneof body {
+    google.protobuf.Struct dynamic = 1;
+    PlayerBatch player_batch = 2;
+    ChatMessage chat = 3;
+    Suggestion suggestion = 4;
+    PublicPlayer player = 5;
+    MeState me = 6;
+    AnnouncementPayload announcement = 7;
+    RoomClosed room_closed = 8;
+    HistoryPage history_page = 9;
+    OkResult ok = 10;
+    PlayerResult player_result = 11;
+    SuggestionsResult suggestions = 12;
+    RoomSnapshot room = 13;
+    AppConfig config = 14;
+    LobbySnapshot lobby = 15;
+  }
+}

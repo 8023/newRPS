@@ -9,6 +9,7 @@ package wire
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	structpb "google.golang.org/protobuf/types/known/structpb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -70,26 +71,23 @@ func (PayloadKind) EnumDescriptor() ([]byte, []int) {
 	return file_api_proto_wire_proto_rawDescGZIP(), []int{0}
 }
 
-// WebSocket 二进制信封：请求/响应/推送统一格式。
-// 状态类事件（lobby/room/players/config）使用 FULL 或 DELTA；
-// 普通 RPC 使用 RAW（payload 为 JSON 字节，兼容原有业务结构）。
+// WebSocket 二进制信封：全链路 Protobuf，无 JSON 中间层。
+// FULL：类型化 StateDocument
+// DELTA：路径补丁，value 为 google.protobuf.Value（二进制）
+// RAW：RawBody（类型化推送或 Struct 动态 RPC）
 type Envelope struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	Event string                 `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
-	Id    int64                  `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
-	Err   string                 `protobuf:"bytes,3,opt,name=err,proto3" json:"err,omitempty"`
-	Kind  PayloadKind            `protobuf:"varint,4,opt,name=kind,proto3,enum=wire.PayloadKind" json:"kind,omitempty"`
-	// 同步通道：lobby | room:<id> | players | config
-	Channel string `protobuf:"bytes,5,opt,name=channel,proto3" json:"channel,omitempty"`
-	Seq     uint64 `protobuf:"varint,6,opt,name=seq,proto3" json:"seq,omitempty"`
-	// 合并后全量状态的 SHA-256 十六进制；客户端校验失败则 sync:full
-	Hash string `protobuf:"bytes,7,opt,name=hash,proto3" json:"hash,omitempty"`
-	// FULL：完整 JSON 文档
-	Full []byte `protobuf:"bytes,8,opt,name=full,proto3" json:"full,omitempty"`
-	// DELTA：路径补丁
-	Ops []*PatchOp `protobuf:"bytes,9,rep,name=ops,proto3" json:"ops,omitempty"`
-	// RAW：原 JSON 业务载荷
-	Raw           []byte `protobuf:"bytes,10,opt,name=raw,proto3" json:"raw,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Event   string                 `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
+	Id      int64                  `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
+	Err     string                 `protobuf:"bytes,3,opt,name=err,proto3" json:"err,omitempty"`
+	Kind    PayloadKind            `protobuf:"varint,4,opt,name=kind,proto3,enum=wire.PayloadKind" json:"kind,omitempty"`
+	Channel string                 `protobuf:"bytes,5,opt,name=channel,proto3" json:"channel,omitempty"`
+	Seq     uint64                 `protobuf:"varint,6,opt,name=seq,proto3" json:"seq,omitempty"`
+	// 状态文档 SHA-256 十六进制（FULL 为 proto 字节哈希；DELTA 为合并后文档哈希）
+	Hash          string         `protobuf:"bytes,7,opt,name=hash,proto3" json:"hash,omitempty"`
+	FullState     *StateDocument `protobuf:"bytes,8,opt,name=full_state,json=fullState,proto3" json:"full_state,omitempty"`
+	Delta         *StateDelta    `protobuf:"bytes,9,opt,name=delta,proto3" json:"delta,omitempty"`
+	RawBody       *RawBody       `protobuf:"bytes,10,opt,name=raw_body,json=rawBody,proto3" json:"raw_body,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -173,41 +171,84 @@ func (x *Envelope) GetHash() string {
 	return ""
 }
 
-func (x *Envelope) GetFull() []byte {
+func (x *Envelope) GetFullState() *StateDocument {
 	if x != nil {
-		return x.Full
+		return x.FullState
 	}
 	return nil
 }
 
-func (x *Envelope) GetOps() []*PatchOp {
+func (x *Envelope) GetDelta() *StateDelta {
+	if x != nil {
+		return x.Delta
+	}
+	return nil
+}
+
+func (x *Envelope) GetRawBody() *RawBody {
+	if x != nil {
+		return x.RawBody
+	}
+	return nil
+}
+
+type StateDelta struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ops           []*PatchOp             `protobuf:"bytes,1,rep,name=ops,proto3" json:"ops,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StateDelta) Reset() {
+	*x = StateDelta{}
+	mi := &file_api_proto_wire_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StateDelta) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StateDelta) ProtoMessage() {}
+
+func (x *StateDelta) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_wire_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StateDelta.ProtoReflect.Descriptor instead.
+func (*StateDelta) Descriptor() ([]byte, []int) {
+	return file_api_proto_wire_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *StateDelta) GetOps() []*PatchOp {
 	if x != nil {
 		return x.Ops
 	}
 	return nil
 }
 
-func (x *Envelope) GetRaw() []byte {
-	if x != nil {
-		return x.Raw
-	}
-	return nil
-}
-
 type PatchOp struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// JSON Pointer（RFC6901）风格，如 /players/0/connected
-	Path string `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
-	// 新值的 JSON 编码；remove=true 时忽略
-	Value         []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
-	Remove        bool   `protobuf:"varint,3,opt,name=remove,proto3" json:"remove,omitempty"`
+	// JSON Pointer 风格路径，如 /players/xxx/connected（仅作定位，值非 JSON 文本）
+	Path          string          `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Value         *structpb.Value `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	Remove        bool            `protobuf:"varint,3,opt,name=remove,proto3" json:"remove,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PatchOp) Reset() {
 	*x = PatchOp{}
-	mi := &file_api_proto_wire_proto_msgTypes[1]
+	mi := &file_api_proto_wire_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -219,7 +260,7 @@ func (x *PatchOp) String() string {
 func (*PatchOp) ProtoMessage() {}
 
 func (x *PatchOp) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_wire_proto_msgTypes[1]
+	mi := &file_api_proto_wire_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -232,7 +273,7 @@ func (x *PatchOp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PatchOp.ProtoReflect.Descriptor instead.
 func (*PatchOp) Descriptor() ([]byte, []int) {
-	return file_api_proto_wire_proto_rawDescGZIP(), []int{1}
+	return file_api_proto_wire_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *PatchOp) GetPath() string {
@@ -242,7 +283,7 @@ func (x *PatchOp) GetPath() string {
 	return ""
 }
 
-func (x *PatchOp) GetValue() []byte {
+func (x *PatchOp) GetValue() *structpb.Value {
 	if x != nil {
 		return x.Value
 	}
@@ -260,7 +301,7 @@ var File_api_proto_wire_proto protoreflect.FileDescriptor
 
 const file_api_proto_wire_proto_rawDesc = "" +
 	"\n" +
-	"\x14api/proto/wire.proto\x12\x04wire\"\xf0\x01\n" +
+	"\x14api/proto/wire.proto\x12\x04wire\x1a\x14api/proto/game.proto\x1a\x1cgoogle/protobuf/struct.proto\"\xaf\x02\n" +
 	"\bEnvelope\x12\x14\n" +
 	"\x05event\x18\x01 \x01(\tR\x05event\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\x03R\x02id\x12\x10\n" +
@@ -268,14 +309,18 @@ const file_api_proto_wire_proto_rawDesc = "" +
 	"\x04kind\x18\x04 \x01(\x0e2\x11.wire.PayloadKindR\x04kind\x12\x18\n" +
 	"\achannel\x18\x05 \x01(\tR\achannel\x12\x10\n" +
 	"\x03seq\x18\x06 \x01(\x04R\x03seq\x12\x12\n" +
-	"\x04hash\x18\a \x01(\tR\x04hash\x12\x12\n" +
-	"\x04full\x18\b \x01(\fR\x04full\x12\x1f\n" +
-	"\x03ops\x18\t \x03(\v2\r.wire.PatchOpR\x03ops\x12\x10\n" +
-	"\x03raw\x18\n" +
-	" \x01(\fR\x03raw\"K\n" +
+	"\x04hash\x18\a \x01(\tR\x04hash\x122\n" +
+	"\n" +
+	"full_state\x18\b \x01(\v2\x13.game.StateDocumentR\tfullState\x12&\n" +
+	"\x05delta\x18\t \x01(\v2\x10.wire.StateDeltaR\x05delta\x12(\n" +
+	"\braw_body\x18\n" +
+	" \x01(\v2\r.game.RawBodyR\arawBody\"-\n" +
+	"\n" +
+	"StateDelta\x12\x1f\n" +
+	"\x03ops\x18\x01 \x03(\v2\r.wire.PatchOpR\x03ops\"c\n" +
 	"\aPatchOp\x12\x12\n" +
-	"\x04path\x18\x01 \x01(\tR\x04path\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\fR\x05value\x12\x16\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12,\n" +
+	"\x05value\x18\x02 \x01(\v2\x16.google.protobuf.ValueR\x05value\x12\x16\n" +
 	"\x06remove\x18\x03 \x01(\bR\x06remove*:\n" +
 	"\vPayloadKind\x12\f\n" +
 	"\bKIND_RAW\x10\x00\x12\r\n" +
@@ -296,20 +341,28 @@ func file_api_proto_wire_proto_rawDescGZIP() []byte {
 }
 
 var file_api_proto_wire_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_api_proto_wire_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_api_proto_wire_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_api_proto_wire_proto_goTypes = []any{
-	(PayloadKind)(0), // 0: wire.PayloadKind
-	(*Envelope)(nil), // 1: wire.Envelope
-	(*PatchOp)(nil),  // 2: wire.PatchOp
+	(PayloadKind)(0),       // 0: wire.PayloadKind
+	(*Envelope)(nil),       // 1: wire.Envelope
+	(*StateDelta)(nil),     // 2: wire.StateDelta
+	(*PatchOp)(nil),        // 3: wire.PatchOp
+	(*StateDocument)(nil),  // 4: game.StateDocument
+	(*RawBody)(nil),        // 5: game.RawBody
+	(*structpb.Value)(nil), // 6: google.protobuf.Value
 }
 var file_api_proto_wire_proto_depIdxs = []int32{
 	0, // 0: wire.Envelope.kind:type_name -> wire.PayloadKind
-	2, // 1: wire.Envelope.ops:type_name -> wire.PatchOp
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	4, // 1: wire.Envelope.full_state:type_name -> game.StateDocument
+	2, // 2: wire.Envelope.delta:type_name -> wire.StateDelta
+	5, // 3: wire.Envelope.raw_body:type_name -> game.RawBody
+	3, // 4: wire.StateDelta.ops:type_name -> wire.PatchOp
+	6, // 5: wire.PatchOp.value:type_name -> google.protobuf.Value
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_wire_proto_init() }
@@ -317,13 +370,14 @@ func file_api_proto_wire_proto_init() {
 	if File_api_proto_wire_proto != nil {
 		return
 	}
+	file_api_proto_game_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_wire_proto_rawDesc), len(file_api_proto_wire_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

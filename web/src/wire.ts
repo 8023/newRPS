@@ -1,13 +1,9 @@
-// 手写 protobuf wire 编解码（仅 Envelope / PatchOp），无额外 npm 依赖。
-// 与 api/proto/wire.proto 字段编号保持一致。
+// 全链路 Protobuf 编解码（无 JSON 文本载荷）。
+// 依赖 protobufjs 静态模块：src/gen/proto.js
+
+import { game, wire as wireNs } from "./gen/proto.js";
 
 export type PayloadKind = 0 | 1 | 2; // RAW FULL DELTA
-
-export type PatchOp = {
-  path: string;
-  value?: Uint8Array;
-  remove?: boolean;
-};
 
 export type Envelope = {
   event?: string;
@@ -17,173 +13,602 @@ export type Envelope = {
   channel?: string;
   seq?: number;
   hash?: string;
-  full?: Uint8Array;
-  ops?: PatchOp[];
-  raw?: Uint8Array;
+  fullState?: any;
+  delta?: any;
+  rawBody?: any;
 };
 
-/** 读 varint；用乘法避免 JS 32 位移位在 seq/id 变大时截断 */
-function readVarint(buf: Uint8Array, i: { o: number }): number {
-  let n = 0;
-  let mul = 1;
-  for (let guard = 0; guard < 10; guard++) {
-    if (i.o >= buf.length) throw new Error("varint overflow");
-    const b = buf[i.o++];
-    n += (b & 0x7f) * mul;
-    if ((b & 0x80) === 0) return n;
-    mul *= 128;
+const EnvelopeType = wireNs.Envelope;
+
+function jsToStruct(obj: Record<string, unknown>): any {
+  const fields: Record<string, any> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    fields[k] = jsToValue(v);
   }
-  throw new Error("varint too long");
+  return { fields };
 }
 
-function writeVarint(n: number, out: number[]) {
-  n = Math.max(0, Math.floor(Number(n)) || 0);
-  while (n > 0x7f) {
-    out.push((n & 0x7f) | 0x80);
-    n = Math.floor(n / 128);
+function jsToValue(v: unknown): any {
+  if (v === null || v === undefined) return { nullValue: 0 };
+  if (typeof v === "boolean") return { boolValue: v };
+  if (typeof v === "number") return { numberValue: v };
+  if (typeof v === "string") return { stringValue: v };
+  if (Array.isArray(v)) return { listValue: { values: v.map(jsToValue) } };
+  if (typeof v === "object") {
+    const fields: Record<string, any> = {};
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      fields[k] = jsToValue(val);
+    }
+    return { structValue: { fields } };
   }
-  out.push(n);
-}
-
-function readBytes(buf: Uint8Array, i: { o: number }): Uint8Array {
-  const len = readVarint(buf, i);
-  const slice = buf.subarray(i.o, i.o + len);
-  i.o += len;
-  return slice;
-}
-
-function writeBytes(bytes: Uint8Array, out: number[]) {
-  writeVarint(bytes.length, out);
-  for (let k = 0; k < bytes.length; k++) out.push(bytes[k]);
-}
-
-function writeString(s: string, out: number[]) {
-  writeBytes(new TextEncoder().encode(s), out);
-}
-
-function readString(buf: Uint8Array, i: { o: number }): string {
-  return new TextDecoder().decode(readBytes(buf, i));
-}
-
-function readPatchOp(buf: Uint8Array): PatchOp {
-  const i = { o: 0 };
-  const op: PatchOp = { path: "" };
-  while (i.o < buf.length) {
-    const tag = readVarint(buf, i);
-    const field = tag >>> 3;
-    const wt = tag & 7;
-    if (field === 1 && wt === 2) op.path = readString(buf, i);
-    else if (field === 2 && wt === 2) op.value = readBytes(buf, i);
-    else if (field === 3 && wt === 0) op.remove = readVarint(buf, i) !== 0;
-    else skip(buf, i, wt);
-  }
-  return op;
-}
-
-function writePatchOp(op: PatchOp, out: number[]) {
-  const body: number[] = [];
-  if (op.path) {
-    body.push((1 << 3) | 2);
-    writeString(op.path, body);
-  }
-  if (op.value && op.value.length) {
-    body.push((2 << 3) | 2);
-    writeBytes(op.value, body);
-  }
-  if (op.remove) {
-    body.push((3 << 3) | 0);
-    writeVarint(1, body);
-  }
-  writeBytes(new Uint8Array(body), out);
-}
-
-function skip(buf: Uint8Array, i: { o: number }, wt: number) {
-  if (wt === 0) readVarint(buf, i);
-  else if (wt === 2) {
-    const len = readVarint(buf, i);
-    i.o += len;
-  } else if (wt === 5) i.o += 4;
-  else if (wt === 1) i.o += 8;
-  else throw new Error("unsupported wire type " + wt);
+  return { stringValue: String(v) };
 }
 
 export function decodeEnvelope(buf: Uint8Array): Envelope {
-  const i = { o: 0 };
-  const env: Envelope = {};
-  while (i.o < buf.length) {
-    const tag = readVarint(buf, i);
-    const field = tag >>> 3;
-    const wt = tag & 7;
-    if (field === 1 && wt === 2) env.event = readString(buf, i);
-    else if (field === 2 && wt === 0) env.id = readVarint(buf, i);
-    else if (field === 3 && wt === 2) env.err = readString(buf, i);
-    else if (field === 4 && wt === 0) env.kind = readVarint(buf, i) as PayloadKind;
-    else if (field === 5 && wt === 2) env.channel = readString(buf, i);
-    else if (field === 6 && wt === 0) env.seq = readVarint(buf, i);
-    else if (field === 7 && wt === 2) env.hash = readString(buf, i);
-    else if (field === 8 && wt === 2) env.full = readBytes(buf, i);
-    else if (field === 9 && wt === 2) {
-      if (!env.ops) env.ops = [];
-      env.ops.push(readPatchOp(readBytes(buf, i)));
-    } else if (field === 10 && wt === 2) env.raw = readBytes(buf, i);
-    else skip(buf, i, wt);
+  const msg = EnvelopeType.decode(buf);
+  const o = EnvelopeType.toObject(msg, {
+    longs: Number,
+    enums: Number,
+    bytes: Array,
+    defaults: false,
+    arrays: true,
+    objects: true,
+    oneofs: true
+  }) as any;
+  // DELTA 的 Value 必须从 Message 实例读取：toObject(defaults:false) 会丢掉 number=0
+  let delta = o.delta;
+  if (msg.delta?.ops?.length) {
+    delta = {
+      ops: msg.delta.ops.map((op: any) => ({
+        path: op.path || "",
+        remove: Boolean(op.remove),
+        value: op.remove ? undefined : valueMsgToPlain(op.value)
+      }))
+    };
   }
-  return env;
+  return {
+    event: o.event,
+    id: o.id != null ? Number(o.id) : undefined,
+    err: o.err,
+    kind: o.kind as PayloadKind,
+    channel: o.channel,
+    seq: o.seq != null ? Number(o.seq) : undefined,
+    hash: o.hash,
+    fullState: o.fullState,
+    delta,
+    rawBody: o.rawBody
+  };
+}
+
+/** 从 protobufjs Value Message 转 plain（保留 0 / false / ""） */
+function valueMsgToPlain(v: any): any {
+  if (v == null) return null;
+  const kind = typeof v.kind === "string" ? v.kind : null;
+  if (kind === "nullValue") return null;
+  if (kind === "numberValue") {
+    const n = Number(v.numberValue);
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (kind === "stringValue") return v.stringValue ?? "";
+  if (kind === "boolValue") return Boolean(v.boolValue);
+  if (kind === "structValue") return structMsgToPlain(v.structValue);
+  if (kind === "listValue") {
+    const values = v.listValue?.values || [];
+    return values.map((x: any) => valueMsgToPlain(x));
+  }
+  // 无 oneof 信息时兜底
+  if (v.structValue) return structMsgToPlain(v.structValue);
+  if (v.listValue) return (v.listValue.values || []).map((x: any) => valueMsgToPlain(x));
+  if (typeof v.numberValue === "number") return v.numberValue;
+  if (typeof v.stringValue === "string") return v.stringValue;
+  if (typeof v.boolValue === "boolean") return v.boolValue;
+  if (v.nullValue != null) return null;
+  return null;
+}
+
+function structMsgToPlain(s: any): Record<string, any> {
+  if (!s) return {};
+  const fields = s.fields || {};
+  const out: Record<string, any> = {};
+  // protobufjs map 可能是对象或 Map
+  const entries = typeof fields.forEach === "function"
+    ? (() => {
+        const e: Array<[string, any]> = [];
+        fields.forEach((val: any, key: string) => e.push([key, val]));
+        return e;
+      })()
+    : Object.entries(fields);
+  for (const [k, val] of entries) {
+    out[k] = valueMsgToPlain(val);
+  }
+  return out;
 }
 
 export function encodeEnvelope(env: Envelope): Uint8Array {
-  const out: number[] = [];
-  if (env.event) {
-    out.push((1 << 3) | 2);
-    writeString(env.event, out);
+  const payload: any = {
+    event: env.event || "",
+    id: env.id || 0,
+    err: env.err || "",
+    kind: env.kind ?? 0,
+    channel: env.channel || "",
+    seq: env.seq || 0,
+    hash: env.hash || ""
+  };
+  if (env.fullState) payload.fullState = env.fullState;
+  if (env.delta) payload.delta = env.delta;
+  if (env.rawBody) payload.rawBody = env.rawBody;
+  const msg = EnvelopeType.create(payload);
+  return EnvelopeType.encode(msg).finish();
+}
+
+/** RPC 请求：plain object → RawBody.dynamic */
+export function encodeRawBodyDynamic(data: unknown): any {
+  const obj = (data && typeof data === "object" && !Array.isArray(data)
+    ? data
+    : { value: data }) as Record<string, unknown>;
+  return { dynamic: jsToStruct(obj) };
+}
+
+/** RAW 响应/推送 → plain JS */
+export function rawBodyToPlain(rawBody: any): any {
+  if (!rawBody) return {};
+  if (rawBody.dynamic) return structToJs(rawBody.dynamic);
+  if (rawBody.playerBatch) {
+    return (rawBody.playerBatch.players || []).map((p: any) => materializePlayer(p));
   }
-  if (env.id) {
-    out.push((2 << 3) | 0);
-    writeVarint(env.id, out);
+  if (rawBody.chat) return materializeChat(rawBody.chat);
+  if (rawBody.suggestion) return materializeSuggestion(rawBody.suggestion);
+  if (rawBody.player) return materializePlayer(rawBody.player);
+  if (rawBody.me) {
+    const me = stripHasFlags(rawBody.me);
+    if (me.room) me.room = materializeRoom(me.room);
+    if (me.player) me.player = materializePlayer(me.player);
+    return me;
   }
-  if (env.err) {
-    out.push((3 << 3) | 2);
-    writeString(env.err, out);
+  if (rawBody.announcement) return stripHasFlags(rawBody.announcement);
+  if (rawBody.roomClosed) return stripHasFlags(rawBody.roomClosed);
+  if (rawBody.historyPage) return stripHasFlags(rawBody.historyPage);
+  if (rawBody.ok) return { ok: !!rawBody.ok.ok };
+  if (rawBody.playerResult) return { player: materializePlayer(rawBody.playerResult.player) };
+  if (rawBody.suggestions) {
+    const s = stripHasFlags(rawBody.suggestions);
+    if (Array.isArray(s?.items)) s.items = s.items.map(materializeSuggestion);
+    else if (Array.isArray(s)) return s.map(materializeSuggestion);
+    return s;
   }
-  if (env.kind != null) {
-    out.push((4 << 3) | 0);
-    writeVarint(env.kind, out);
+  if (rawBody.room) return materializeRoom(rawBody.room);
+  if (rawBody.config) return materializeConfig(rawBody.config);
+  if (rawBody.lobby) return materializeLobby(rawBody.lobby);
+  return {};
+}
+
+function structToJs(s: any): any {
+  if (!s) return {};
+  const fields = s.fields || {};
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(fields)) {
+    out[k] = valueToJs(v);
   }
-  if (env.channel) {
-    out.push((5 << 3) | 2);
-    writeString(env.channel, out);
+  return out;
+}
+
+/** protobufjs toObject 后的 google.protobuf.Value → 普通 JS（含 0 / false / ""） */
+export function protoValueToPlain(v: any): any {
+  return valueToJs(v);
+}
+
+function valueToJs(v: any): any {
+  if (v == null) return null;
+  // oneof kind 字符串形式
+  if (v.kind === "nullValue") return null;
+  if (v.kind === "numberValue") return typeof v.numberValue === "number" ? v.numberValue : 0;
+  if (v.kind === "stringValue") return v.stringValue ?? "";
+  if (v.kind === "boolValue") return Boolean(v.boolValue);
+  if (v.kind === "structValue") return structToJs(v.structValue);
+  if (v.kind === "listValue") return (v.listValue?.values || []).map(valueToJs);
+  // 无 kind 时按字段探测（defaults:false 可能省略 0）
+  if ("numberValue" in v && typeof v.numberValue === "number") return v.numberValue;
+  if ("numberValue" in v && v.numberValue == null && !("stringValue" in v) && !("boolValue" in v) && !("structValue" in v) && !("listValue" in v) && !("nullValue" in v)) {
+    return 0; // 被省略的 0 不应走到这里；保守
   }
-  if (env.seq) {
-    out.push((6 << 3) | 0);
-    writeVarint(env.seq, out);
+  if ("stringValue" in v && typeof v.stringValue === "string") return v.stringValue;
+  if ("boolValue" in v && typeof v.boolValue === "boolean") return v.boolValue;
+  if (v.structValue) return structToJs(v.structValue);
+  if (v.listValue) return (v.listValue.values || []).map(valueToJs);
+  if ("nullValue" in v) return null;
+  return null;
+}
+
+/** DELTA 合并后轻量归一，与服务端 NormalizeFrontTree 对齐关键坐标 0 */
+export function normalizeStateTree(doc: any): any {
+  if (!doc || typeof doc !== "object") return doc;
+  const out = doc;
+  if (out.othello && typeof out.othello === "object") {
+    out.othello.board = padBoardMatrix(boardRows(out.othello.board), 8);
+    out.othello.legalMoves = normalizePosList(out.othello.legalMoves);
+    out.othello.blackCount = numOr(out.othello.blackCount, 0);
+    out.othello.whiteCount = numOr(out.othello.whiteCount, 0);
+    out.othello.passCount = numOr(out.othello.passCount, 0);
+    if (!Array.isArray(out.othello.settlementEvents)) out.othello.settlementEvents = [];
   }
-  if (env.hash) {
-    out.push((7 << 3) | 2);
-    writeString(env.hash, out);
+  if (out.tictactoe && typeof out.tictactoe === "object") {
+    out.tictactoe.board = padBoardMatrix(boardRows(out.tictactoe.board), 3);
+    out.tictactoe.winningLine = normalizePosList(out.tictactoe.winningLine);
+    out.tictactoe.moveCount = numOr(out.tictactoe.moveCount, 0);
   }
-  if (env.full) {
-    out.push((8 << 3) | 2);
-    writeBytes(env.full, out);
+  for (const k of ["spectators", "proofs", "roundHistory", "chat", "punishedPlayerIds", "players", "rooms", "suggestions", "lobbyChat"]) {
+    if (k in out && out[k] == null) out[k] = [];
   }
-  if (env.ops) {
-    for (const op of env.ops) {
-      out.push((9 << 3) | 2);
-      writePatchOp(op, out);
+  if (Array.isArray(out.roundHistory)) {
+    out.roundHistory = out.roundHistory.map((item: any) => ({
+      ...item,
+      tictactoeLine: normalizePosList(item?.tictactoeLine),
+      punishmentTasks: item?.punishmentTasks || [],
+      punishedNames: item?.punishedNames || [],
+      proofs: item?.proofs || []
+    }));
+  }
+  return out;
+}
+
+/**
+ * 业务字段：名字像 presence（hasX），本身就是数据，无 companion。
+ * 目前仅大厅房间 hasPassword。
+ */
+const BUSINESS_HAS_KEYS = new Set(["hasPassword"]);
+
+/**
+ * presence 配对中 companion 为 boolean 的字段。
+ * defaults:false 会丢掉 false，只剩 hasX=true —— 必须还原为 false（如 allowProofImage）。
+ * 其余 companion 按 number 0 还原（时间戳 / 计数 / 倍率等）。
+ */
+const BOOL_PRESENCE_COMPANIONS = new Set([
+  "nameWarEnabled",
+  "nameWarPunished",
+  "nameWarAllowRename",
+  "giveawayEnabled",
+  "rankMultiplierUnlocked",
+  "extremeModeEnabled",
+  "extremeForceClosed",
+  "isAdmin",
+  "allowProofImage"
+]);
+
+/**
+ * 去掉 protobuf 可选字段的 presence 标记（hasDisconnectedAt 等），并还原
+ * toObject(defaults:false) / proto3 省略的 zero 值。
+ *
+ * 规则：
+ * - hasPassword 等业务 has*：原样保留
+ * - hasX + companion 已存在：丢弃 hasX
+ * - hasX===true 且 companion 缺失：写入 false（bool）或 0（number），再丢弃 hasX
+ * - hasX===false 且无 companion：字段未设置，丢弃 hasX
+ */
+function stripHasFlags(obj: any): any {
+  if (obj == null || typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) return obj.map(stripHasFlags);
+
+  const skip = new Set<string>();
+  const restore: Record<string, boolean | number> = {};
+
+  for (const [k, v] of Object.entries(obj)) {
+    if (typeof v !== "boolean" || !/^has[A-Z]/.test(k)) continue;
+    if (BUSINESS_HAS_KEYS.has(k)) continue;
+
+    const rest = k.slice(3);
+    const companion = rest.charAt(0).toLowerCase() + rest.slice(1);
+    skip.add(k);
+
+    if (companion in obj) continue;
+    if (v === true) {
+      restore[companion] = BOOL_PRESENCE_COMPANIONS.has(companion) ? false : 0;
     }
   }
-  if (env.raw) {
-    out.push((10 << 3) | 2);
-    writeBytes(env.raw, out);
+
+  const out: any = {};
+  for (const [k, v] of Object.entries(restore)) {
+    out[k] = v;
   }
-  return new Uint8Array(out);
+  for (const [k, v] of Object.entries(obj)) {
+    if (skip.has(k)) continue;
+    out[k] = stripHasFlags(v);
+  }
+  return out;
 }
 
-export function utf8(bytes?: Uint8Array): string {
-  if (!bytes) return "";
-  return new TextDecoder().decode(bytes);
+export function stateDocToPlain(fullState: any): any {
+  if (!fullState) return null;
+  if (fullState.lobby || fullState.doc === "lobby") return materializeLobby(fullState.lobby);
+  if (fullState.room || fullState.doc === "room") return materializeRoom(fullState.room);
+  if (fullState.config || fullState.doc === "config") return materializeConfig(fullState.config);
+  return fullState;
 }
 
-export function jsonParse<T = any>(bytes?: Uint8Array): T | undefined {
-  if (!bytes || !bytes.length) return undefined;
-  return JSON.parse(utf8(bytes)) as T;
+/** protobufjs defaults:false 会丢掉 int/bool 零值；玩家战绩必须补齐，否则出现 undefined/NaN 文案 */
+function materializePlayer(player: any): any {
+  if (!player || typeof player !== "object") return player;
+  if (player.isBot) return stripHasFlags(player);
+  const p = stripHasFlags(player);
+  p.stats = materializePublicStats(p.stats);
+  p.othelloStats = materializeOthelloStats(p.othelloStats);
+  return p;
 }
+
+function materializePublicStats(stats: any): any {
+  const s = stats && typeof stats === "object" ? stats : {};
+  const title = typeof s.title === "string" ? s.title.trim() : "";
+  return {
+    wins: numOr(s.wins, 0),
+    losses: numOr(s.losses, 0),
+    draws: numOr(s.draws, 0),
+    punishments: numOr(s.punishments, 0),
+    rankedPoints: numOr(s.rankedPoints, 0),
+    title: title || "暂无称号",
+    ...(s.titleSegmentId != null && s.titleSegmentId !== ""
+      ? { titleSegmentId: s.titleSegmentId }
+      : {})
+  };
+}
+
+function materializeOthelloStats(stats: any): any {
+  const s = stats && typeof stats === "object" ? stats : {};
+  return {
+    wins: numOr(s.wins, 0),
+    losses: numOr(s.losses, 0),
+    draws: numOr(s.draws, 0),
+    games: numOr(s.games, 0),
+    captured: numOr(s.captured, 0),
+    lost: numOr(s.lost, 0)
+  };
+}
+
+function materializeSeatStats(stats: any): any {
+  const s = stats && typeof stats === "object" ? stats : {};
+  return {
+    wins: numOr(s.wins, 0),
+    losses: numOr(s.losses, 0),
+    draws: numOr(s.draws, 0),
+    punishments: numOr(s.punishments, 0)
+  };
+}
+
+function materializeChat(chat: any): any {
+  const c = stripHasFlags(chat);
+  if (c?.authorPlayer) c.authorPlayer = materializePlayer(c.authorPlayer);
+  return c;
+}
+
+function materializeSuggestion(item: any): any {
+  const s = stripHasFlags(item);
+  if (s?.authorPlayer) s.authorPlayer = materializePlayer(s.authorPlayer);
+  return s;
+}
+
+function materializeLobby(lobby: any): any {
+  if (!lobby) return null;
+  const L = stripHasFlags(lobby);
+  const players = (L.players || []).map((e: any) => materializePlayer(e.player || e)).filter(Boolean);
+  const rooms = (L.rooms || []).map((e: any) => materializeLobbyRoom(e.room || e)).filter(Boolean);
+  if (L.config) L.config = materializeConfig(L.config);
+  return {
+    ...L,
+    players,
+    rooms,
+    normalLeaderboard: (L.normalLeaderboard || []).map(materializePlayer),
+    rankedLeaderboard: (L.rankedLeaderboard || []).map(materializePlayer),
+    suggestions: (L.suggestions || []).map(materializeSuggestion),
+    lobbyChat: (L.lobbyChat || []).map(materializeChat),
+    onlineCount: L.onlineCount || players.filter((p: any) => p.connected).length
+  };
+}
+
+function materializeLobbyRoom(room: any): any {
+  if (!room) return null;
+  const r = stripHasFlags(room);
+  const versus: any = { A: null, B: null };
+  for (const item of r.versus || []) {
+    const key = item.key;
+    const val = item.value || {};
+    if (val.player) versus[key] = { player: materializePlayer(val.player) };
+    else if (val.bot) versus[key] = stripHasFlags(val.bot);
+  }
+  r.versus = versus;
+  return r;
+}
+
+function materializeRoom(room: any): any {
+  if (!room) return null;
+  const r = stripHasFlags(room);
+  r.seats = pairsToOccupantMap(r.seats);
+  r.ready = pairsToMap(r.ready, false);
+  r.choices = pairsToMap(r.choices, undefined);
+  r.revealedChoices = pairsToMap(r.revealedChoices, undefined);
+  r.score = pairsToMap(r.score, 0);
+  r.seatedScore = pairsToMap(r.seatedScore, 0);
+  const rawSeatStats = pairsToMap(r.seatStats, { wins: 0, losses: 0, draws: 0, punishments: 0 });
+  r.seatStats = {
+    A: materializeSeatStats(rawSeatStats.A),
+    B: materializeSeatStats(rawSeatStats.B)
+  };
+  if (r.othello) {
+    // protobufjs toObject(defaults:false) 会丢掉 int32 的 0，导致 row/col=0 的合法手失效
+    r.othello.board = padBoardMatrix(boardRows(r.othello.board), 8);
+    r.othello.legalMoves = normalizePosList(r.othello.legalMoves);
+    r.othello.rankedDelta = pairsToMap(r.othello.rankedDelta, 0);
+    r.othello.blackCount = numOr(r.othello.blackCount, 0);
+    r.othello.whiteCount = numOr(r.othello.whiteCount, 0);
+    r.othello.passCount = numOr(r.othello.passCount, 0);
+    if (r.othello.pendingSettlement) {
+      r.othello.pendingSettlement.flips = numOr(r.othello.pendingSettlement.flips, 0);
+      r.othello.pendingSettlement.stake = numOr(r.othello.pendingSettlement.stake, 0);
+    }
+  }
+  if (r.tictactoe) {
+    r.tictactoe.board = padBoardMatrix(boardRows(r.tictactoe.board), 3);
+    r.tictactoe.winningLine = normalizePosList(r.tictactoe.winningLine);
+    r.tictactoe.rankedDelta = pairsToMap(r.tictactoe.rankedDelta, 0);
+    r.tictactoe.moveCount = numOr(r.tictactoe.moveCount, 0);
+  }
+  // 历史里的井字连线同样可能丢 0 坐标
+  if (Array.isArray(r.roundHistory)) {
+    r.roundHistory = r.roundHistory.map((item: any) => ({
+      ...item,
+      tictactoeLine: normalizePosList(item.tictactoeLine)
+    }));
+  }
+  r.spectators = r.spectators || [];
+  r.proofs = r.proofs || [];
+  r.roundHistory = r.roundHistory || [];
+  r.chat = r.chat || [];
+  r.punishedPlayerIds = r.punishedPlayerIds || [];
+  return r;
+}
+
+function materializeConfig(cfg: any): any {
+  if (!cfg) return null;
+  const c = stripHasFlags(cfg);
+  // protobufjs 把 max_creates_per_10_min 编成 maxCreatesPer_10Min，
+  // 与业务/Go JSON 的 maxCreatesPer10Min 不一致 → 后台显示 undefined、保存后被推送覆盖回空。
+  if (c.accessControl && typeof c.accessControl === "object") {
+    const ac = c.accessControl;
+    if (ac.maxCreatesPer10Min == null && ac.maxCreatesPer_10Min != null) {
+      ac.maxCreatesPer10Min = Number(ac.maxCreatesPer_10Min);
+    }
+    if ("maxCreatesPer_10Min" in ac) delete ac.maxCreatesPer_10Min;
+    if (ac.maxOnlinePerIp != null) ac.maxOnlinePerIp = Number(ac.maxOnlinePerIp);
+    if (ac.maxCreatesPer10Min != null) ac.maxCreatesPer10Min = Number(ac.maxCreatesPer10Min);
+  }
+  if (Array.isArray(c.roomInfoTags)) {
+    const obj: any = {};
+    for (const item of c.roomInfoTags) {
+      if (item?.key) obj[item.key] = item.style || item;
+    }
+    c.roomInfoTags = obj;
+  }
+  if (Array.isArray(c.messages)) {
+    const obj: any = {};
+    for (const item of c.messages) {
+      if (item?.key != null) obj[item.key] = item.value;
+    }
+    c.messages = obj;
+  }
+  if (c.extremeMode) {
+    for (const field of ["positiveLossRates", "negativeWinRates", "hourlyDecay"]) {
+      if (Array.isArray(c.extremeMode[field])) {
+        const obj: any = {};
+        for (const item of c.extremeMode[field]) {
+          if (item?.key != null) obj[item.key] = item.value;
+        }
+        c.extremeMode[field] = obj;
+      }
+    }
+  }
+  if (Array.isArray(c.titles)) {
+    for (const t of c.titles) {
+      if (Array.isArray(t.factionNames)) {
+        const obj: any = {};
+        for (const item of t.factionNames) {
+          if (item?.factionId) obj[item.factionId] = item.names;
+        }
+        t.factionNames = obj;
+      }
+    }
+  }
+  if (Array.isArray(c.punishments)) {
+    for (const p of c.punishments) {
+      if (Array.isArray(p.variants)) {
+        const obj: any = {};
+        for (const item of p.variants) {
+          if (item?.key != null) obj[item.key] = item.value;
+        }
+        p.variants = obj;
+      }
+      if (Array.isArray(p.tasks)) {
+        for (const t of p.tasks) {
+          if (Array.isArray(t.variants)) {
+            const obj: any = {};
+            for (const item of t.variants) {
+              if (item?.key != null) obj[item.key] = item.value;
+            }
+            t.variants = obj;
+          }
+        }
+      }
+    }
+  }
+  return c;
+}
+
+function pairsToMap(arr: any, fill: any): any {
+  const cloneFill = () =>
+    typeof fill === "object" && fill !== null ? { ...fill } : fill;
+  const out: any = { A: cloneFill(), B: cloneFill() };
+  if (!Array.isArray(arr)) return out;
+  for (const item of arr) {
+    if (item?.key == null) continue;
+    // proto3 + defaults:false 会省略 false/0，pair 只剩 {key:"A"} —— 用 fill 还原
+    if (item && Object.prototype.hasOwnProperty.call(item, "value")) {
+      out[item.key] = item.value;
+    } else {
+      out[item.key] = cloneFill();
+    }
+  }
+  return out;
+}
+
+function pairsToOccupantMap(arr: any): any {
+  const out: any = { A: null, B: null };
+  if (!Array.isArray(arr)) return out;
+  for (const item of arr) {
+    const key = item?.key;
+    const val = item?.value;
+    if (!key) continue;
+    if (!val) {
+      out[key] = null;
+      continue;
+    }
+    if (val.player) out[key] = materializePlayer(val.player);
+    else if (val.bot) out[key] = stripHasFlags(val.bot);
+    else out[key] = null;
+  }
+  return out;
+}
+
+function boardRows(rows: any): any[] {
+  if (!Array.isArray(rows)) return [];
+  return rows.map((row) => {
+    const cells = row?.cells || row || [];
+    return (cells as any[]).map((c) => (c === "" || c == null ? null : c));
+  });
+}
+
+/** 保证 n×n 棋盘；缺行/列补 null（避免 proto 省略空串后尺寸变短） */
+function padBoardMatrix(matrix: any[], n: number): any[] {
+  const out: any[] = [];
+  for (let r = 0; r < n; r++) {
+    const src = Array.isArray(matrix[r]) ? matrix[r] : [];
+    const row: any[] = [];
+    for (let c = 0; c < n; c++) {
+      row.push(c < src.length ? src[c] ?? null : null);
+    }
+    out.push(row);
+  }
+  return out;
+}
+
+/** protobufjs defaults:false 会丢掉 0，坐标必须用 ?? 0 还原 */
+function normalizePosList(list: any): Array<{ row: number; col: number }> {
+  if (!Array.isArray(list)) return [];
+  return list.map((p) => ({
+    row: numOr(p?.row, 0),
+    col: numOr(p?.col, 0)
+  }));
+}
+
+function numOr(v: any, fallback: number): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+// silence unused import if tree-shaken
+void game;

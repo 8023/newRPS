@@ -70,6 +70,9 @@ func tokenLooksExpired(token string) bool {
 
 func (s *Server) checkRateLimit(key string, options RateLimitOptions) bool {
 	now := nowMs()
+	if s.rateBuckets == nil {
+		s.rateBuckets = map[string]*rateBucket{}
+	}
 	bucket := s.rateBuckets[key]
 	if bucket == nil {
 		bucket = &rateBucket{}
@@ -109,6 +112,9 @@ func rateLimitKey(event, ipAddress, sid string) string {
 
 func (s *Server) consumeRateLimit(key string, windowMs int64, max int) bool {
 	now := nowMs()
+	if s.rateLimitBuckets == nil {
+		s.rateLimitBuckets = map[string]*rateLimitBucket{}
+	}
 	current := s.rateLimitBuckets[key]
 	if current == nil || current.ResetAt <= now {
 		s.rateLimitBuckets[key] = &rateLimitBucket{ResetAt: now + windowMs, Count: 1}
