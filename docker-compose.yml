@@ -1,10 +1,12 @@
-# 抖喵游戏屋 — 官方 Debian slim + 仓库内已构建产物（无需 Dockerfile / 无需再 build）
+# 抖喵游戏屋 — 官方 Debian slim + 挂载运行产物（无需 Dockerfile）
 #
-# git clone 后：
+# 运行产物 bin/server、dist/ 不在 git 中，从 GitHub Release 下载解压到本目录：
+#   gh release download vX.Y.Z -p 'newRPS-*-linux-amd64.tar.gz'
+#   tar -xzf newRPS-*-linux-amd64.tar.gz
 #   cp .env.example .env   # 可选
 #   docker compose up -d
 #
-# 若你改了源码，在本机重新构建并提交产物后再部署：
+# 或本机构建：
 #   npm install --prefix web && npm run build
 #   docker compose up -d
 

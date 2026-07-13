@@ -2,7 +2,9 @@
 node_modules/
 web/node_modules/
 
-# 中间/其它构建产物（最终运行产物 dist/、bin/server 纳入版本库，便于 clone 后直接 docker compose）
+# 构建产物：不入库，通过 GitHub Release 分发（见 README）
+bin/
+dist/
 web/dist/
 dist-server/
 *.exe
