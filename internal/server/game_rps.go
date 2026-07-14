@@ -12,6 +12,17 @@ func isRpsMove(move types.Move) bool {
 	return move == types.MoveRock || move == types.MoveScissors || move == types.MovePaper
 }
 
+// maxRecentMoves 限制每个玩家保留的历史出拳数（Bot 反制策略只看最近一手）。
+const maxRecentMoves = 20
+
+func appendRecentMove(moves []RpsMove, move RpsMove) []RpsMove {
+	moves = append(moves, move)
+	if len(moves) > maxRecentMoves {
+		moves = moves[len(moves)-maxRecentMoves:]
+	}
+	return moves
+}
+
 func judge(a, b RpsMove) types.RoundResult {
 	if a == b {
 		return types.ResultDraw
@@ -334,10 +345,10 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 	rankedMultiplier := rankMultiplierFor(room.Settings)
 	rankedStake := effectiveRankedStake(room.Settings)
 	if playerA != nil && isRpsMove(choiceA) {
-		playerA.RecentMoves = append(playerA.RecentMoves, RpsMove(choiceA))
+		playerA.RecentMoves = appendRecentMove(playerA.RecentMoves, RpsMove(choiceA))
 	}
 	if playerB != nil && isRpsMove(choiceB) {
-		playerB.RecentMoves = append(playerB.RecentMoves, RpsMove(choiceB))
+		playerB.RecentMoves = appendRecentMove(playerB.RecentMoves, RpsMove(choiceB))
 	}
 	for _, seat := range giveawaySeats {
 		var player *PlayerState

@@ -23,7 +23,13 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 		w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ws: wss:;")
+		// worker-src blob:：heic2any 等库用 blob Worker 解码 HEIC
+		// wasm-unsafe-eval：@jsquash/webp 等 WASM 编码器
+		w.Header().Set("Content-Security-Policy",
+			"default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "+
+				"img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "+
+				"script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; "+
+				"connect-src 'self' ws: wss:;")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -60,12 +66,15 @@ func (s *Server) httpRateLimit(scope string, windowMs int64, max int) func(http.
 // publicRequestHost 反代场景优先 X-Forwarded-Host（可能是 rps.example.com），
 // 否则用 r.Host（直连时是浏览器看到的 Host）。
 func publicRequestHost(r *http.Request) string {
-	if xf := strings.TrimSpace(r.Header.Get("X-Forwarded-Host")); xf != "" {
-		// 可能是 "a.com, b.com"
-		if i := strings.Index(xf, ","); i >= 0 {
-			xf = xf[:i]
+	// 直连（无可信代理）时不信任客户端可伪造的 X-Forwarded-Host，直接用 r.Host。
+	if trustedProxyCount > 0 {
+		if xf := strings.TrimSpace(r.Header.Get("X-Forwarded-Host")); xf != "" {
+			// 可能是 "a.com, b.com"
+			if i := strings.Index(xf, ","); i >= 0 {
+				xf = xf[:i]
+			}
+			return strings.TrimSpace(xf)
 		}
-		return strings.TrimSpace(xf)
 	}
 	return r.Host
 }
@@ -162,7 +171,6 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	}
 	token := s.issueSessionToken()
 	payload := s.verifySessionToken(token)
-	s.securityLog("token_issued", map[string]any{"sid": payload.SID, "ip": ipAddress, "device": devKey, "userAgent": r.UserAgent()})
 	s.mu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]any{"token": token, "expiresAt": payload.Exp})
 }
@@ -207,6 +215,7 @@ func (s *Server) handleProofImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	// 兜底：仅接受前端已压好的 WebP，且不超过 2MB
 	r.Body = http.MaxBytesReader(w, r.Body, 2*1024*1024+1024)
 	if err := r.ParseMultipartForm(2 * 1024 * 1024); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片过大或格式错误，仅支持 webp 且不超过 2MB"})
@@ -243,7 +252,6 @@ func (s *Server) handleProofImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	// 后缀名：非 .webp 直接拒绝（用户可见错误）
 	filename := strings.ToLower(header.Filename)
 	if !strings.HasSuffix(filename, ".webp") {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "仅支持 webp 格式，请使用前端压缩后的图片"})
@@ -322,7 +330,11 @@ func (s *Server) handleConfigExport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	password := r.URL.Query().Get("password")
+	// 优先取请求头，避免口令出现在反代访问日志 / URL 里；兼容旧客户端的 query。
+	password := r.Header.Get("X-Admin-Password")
+	if password == "" {
+		password = r.URL.Query().Get("password")
+	}
 	s.mu.Lock()
 	ok := s.adminPasswordMatches(password)
 	s.mu.Unlock()
@@ -391,7 +403,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/session", s.handleSession)
 	mux.Handle("/api/proof-image", s.httpRateLimit("proof-image", 60_000, 20)(http.HandlerFunc(s.handleProofImage)))
 	mux.Handle("/api/admin-image", s.httpRateLimit("admin-image", 60_000, 12)(http.HandlerFunc(s.handleAdminImage)))
-	mux.HandleFunc("/api/config/export", s.handleConfigExport)
+	mux.Handle("/api/config/export", s.httpRateLimit("config-export", 60_000, 12)(http.HandlerFunc(s.handleConfigExport)))
 	mux.HandleFunc("/ws", s.handleWS)
 	mux.HandleFunc("/", s.serveStatic)
 

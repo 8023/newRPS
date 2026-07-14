@@ -10,7 +10,7 @@
     "build": "npm run build --prefix web && npm run build:server && npm run fix-perms",
     "build:web": "npm run build --prefix web",
     "build:server": "go build -o bin/server ./cmd/server && chmod a+x bin/server",
-    "fix-perms": "chmod a+x bin/server 2>/dev/null || true; chmod a+rw config/*.json 2>/dev/null || true",
+    "fix-perms": "chmod a+x bin/server 2>/dev/null || true; chmod 600 config/*.json 2>/dev/null || true",
     "test": "go test ./... && npm run build --prefix web",
     "start": "HOST=127.0.0.1 PORT=9988 ./bin/server"
   },

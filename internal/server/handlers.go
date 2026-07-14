@@ -5,10 +5,16 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/doumiao/newRPS/internal/config"
 	"github.com/doumiao/newRPS/internal/types"
 )
+
+// playersLogHeader 是 players.csv 的固定表头：同一张表的所有写入点必须用同一份
+// header（列数/顺序一致），否则不同 action 写出的行会错位。
+// oldName 只有 rename 会填；text 只有 giveaway_board_submit 会填（自救板内容）。
+var playersLogHeader = []string{"time", "action", "playerId", "name", "oldName", "ip", "device", "fingerprint", "text"}
 
 func decodeD[T any](env wsEnvelope, out *T) error {
 	if env.D == nil || len(env.D) == 0 {
@@ -175,7 +181,9 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 			return
 		}
 		player = s.createPlayer(cleanName, p.GenderID, client.token, p.PlayerID, p.PlayerSecret)
-		s.securityLog("player_created", map[string]any{"sid": sid, "ip": ipAddress, "device": device, "fp": client.fingerprint, "userAgent": client.userAgent})
+		s.activityLog("players", playersLogHeader, []string{
+			time.Now().Format(time.RFC3339), "create", player.ID, cleanName, "", ipAddress, device, client.fingerprint, "",
+		})
 	}
 	wasDisconnected := !player.Connected
 	hadDisconnectHold := player.DisconnectExpiresAt != nil
@@ -341,12 +349,14 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 		return
 	}
 	now := nowMs()
+	oldName := player.Name
 	nameChanged := cleanName != player.Name
 	nextNameWarEnabled := p.NameWarEnabled != nil && *p.NameWarEnabled
 	nextAllowRename := nextNameWarEnabled && p.NameWarAllowRename != nil && *p.NameWarAllowRename
 	nameWarChanged := nextNameWarEnabled != ptrBool(player.NameWarEnabled)
 	allowRenameChanged := nextAllowRename != ptrBool(player.NameWarAllowRename)
 	nextGiveawayEnabled := p.GiveawayEnabled != nil && *p.GiveawayEnabled
+	giveawayChanged := nextGiveawayEnabled != ptrBool(player.GiveawayEnabled)
 	nextExtremeModeEnabled := p.ExtremeModeEnabled != nil && *p.ExtremeModeEnabled
 	extremeModeChanged := nextExtremeModeEnabled != ptrBool(player.ExtremeModeEnabled)
 
@@ -386,6 +396,10 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 	if nameChanged {
 		player.Name = cleanName
 		player.NameWarOriginalName = cleanName
+		s.activityLog("players", playersLogHeader, []string{
+			time.Now().Format(time.RFC3339), "rename", player.ID, cleanName, oldName,
+			client.ipAddress, client.deviceKey, client.fingerprint, "",
+		})
 	}
 	exitedHardMode := ptrBool(player.NameWarAllowRename) && !nextAllowRename
 	if nameWarChanged || allowRenameChanged {
@@ -395,6 +409,16 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 		if !nextNameWarEnabled {
 			player.Stats.RankedPoints = clamp(player.Stats.RankedPoints, -999, 999)
 			s.syncTitleForRankSegment(player, false)
+		}
+		if nameWarChanged {
+			action := "nameWar_disable"
+			if nextNameWarEnabled {
+				action = "nameWar_enable"
+			}
+			s.activityLog("players", playersLogHeader, []string{
+				time.Now().Format(time.RFC3339), action, player.ID, player.Name, "",
+				client.ipAddress, client.deviceKey, client.fingerprint, "",
+			})
 		}
 	}
 	s.applyGender(player, p.GenderID)
@@ -406,6 +430,16 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 		}
 	}
 	player.GiveawayEnabled = boolPtr(nextGiveawayEnabled)
+	if giveawayChanged {
+		action := "giveaway_disable"
+		if nextGiveawayEnabled {
+			action = "giveaway_enable"
+		}
+		s.activityLog("players", playersLogHeader, []string{
+			time.Now().Format(time.RFC3339), action, player.ID, player.Name, "",
+			client.ipAddress, client.deviceKey, client.fingerprint, "",
+		})
+	}
 	if !ptrBool(player.GiveawayEnabled) && ptrFloat(player.GiveawayValue) <= 0 {
 		player.GiveawayValue = floatPtr(0)
 		player.GiveawayBoardText = ""
@@ -423,6 +457,14 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 		} else {
 			player.ExtremeModeCooldownUntil = int64Ptr(now + int64(s.cfg.ExtremeMode.CooldownHours)*3_600_000)
 		}
+		extremeAction := "extreme_disable"
+		if nextExtremeModeEnabled {
+			extremeAction = "extreme_enable"
+		}
+		s.activityLog("players", playersLogHeader, []string{
+			time.Now().Format(time.RFC3339), extremeAction, player.ID, player.Name, "",
+			client.ipAddress, client.deviceKey, client.fingerprint, "",
+		})
 	}
 	if nameChanged {
 		player.ProfileUpdatedAt = int64Ptr(now)
@@ -495,6 +537,10 @@ func (s *Server) onGiveawaySubmitBoard(client *Client, env wsEnvelope) {
 	player.GiveawayBoardDislikes = intPtr(0)
 	player.GiveawayBoardLikeWindowStartedAt = int64Ptr(now)
 	player.GiveawayBoardLikesThisHour = intPtr(0)
+	s.activityLog("players", playersLogHeader, []string{
+		time.Now().Format(time.RFC3339), "giveaway_board_submit", player.ID, player.Name, "",
+		client.ipAddress, client.deviceKey, client.fingerprint, cleanBoardText,
+	})
 	s.refreshPlayerSnapshots(player)
 	s.broadcastPlayerUpdate(player)
 	client.reply(env.ID, map[string]any{"player": s.publicPlayer(player)}, "")

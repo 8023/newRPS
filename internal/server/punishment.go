@@ -2,8 +2,10 @@ package server
 
 import (
 	"fmt"
+	"math/rand"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/doumiao/newRPS/internal/types"
 )
@@ -59,7 +61,7 @@ func randIntn(n int) int {
 	if n <= 0 {
 		return 0
 	}
-	return int(nowMs()%int64(n)+int64(n)) % n
+	return rand.Intn(n)
 }
 
 func (s *Server) punishmentNameForRoom(room *RoomState, punishment *types.PunishmentConfig) string {
@@ -96,6 +98,13 @@ func (s *Server) buildPunishmentTasks(room *RoomState, punishedPlayers []*Player
 			if systemTask.BackgroundOpacity != nil {
 				task.BackgroundOpacity = systemTask.BackgroundOpacity
 			}
+			s.activityLog("punishments", []string{
+				"time", "kind", "source", "roomId", "playerId", "playerName",
+				"targetId", "taskText", "status", "proofText", "imageFile",
+			}, []string{
+				time.Now().Format(time.RFC3339), "task", "system", room.ID, "", "",
+				player.ID, task.TaskText, "", "", "",
+			})
 		}
 		if assigner != nil {
 			task.AssignedBy = assigner.ID

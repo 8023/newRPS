@@ -202,12 +202,29 @@ func (s *Server) broadcastRoom(roomID string, updateLobby bool) {
 	s.roomBroadcastTimers[roomID] = &roomBroadcastPending{timer: timer, updateLobby: updateLobby}
 }
 
+// broadcastRoomImmediate 取消 debounce 并立刻推送房间状态（惩罚证明提交等时效场景）。
+func (s *Server) broadcastRoomImmediate(roomID string, updateLobby bool) {
+	pending := s.roomBroadcastTimers[roomID]
+	if pending != nil {
+		pending.timer.Stop()
+		if pending.updateLobby {
+			updateLobby = true
+		}
+		delete(s.roomBroadcastTimers, roomID)
+	}
+	// 借 pending 结构把 updateLobby 传给 emitRoomUpdate
+	s.roomBroadcastTimers[roomID] = &roomBroadcastPending{updateLobby: updateLobby}
+	s.emitRoomUpdate(roomID)
+}
+
 func (s *Server) clearRoomBroadcastTimer(roomID string) {
 	pending := s.roomBroadcastTimers[roomID]
 	if pending == nil {
 		return
 	}
-	pending.timer.Stop()
+	if pending.timer != nil {
+		pending.timer.Stop()
+	}
 	delete(s.roomBroadcastTimers, roomID)
 }
 

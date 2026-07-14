@@ -20,15 +20,54 @@ type wsEnvelope struct {
 	D  map[string]any
 }
 
+// writeBinary 把数据放进本连接的发送队列（非阻塞）。队列满说明客户端消费不过来，
+// 主动断开该连接，绝不在此阻塞——本方法通常在持有 s.mu 时被调用。
 func (c *Client) writeBinary(data []byte) error {
 	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
 	if c.closed {
+		c.writeMu.Unlock()
 		return fmt.Errorf("closed")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return c.conn.Write(ctx, websocket.MessageBinary, data)
+	select {
+	case c.sendCh <- data:
+		c.writeMu.Unlock()
+		return nil
+	default:
+		c.writeMu.Unlock()
+		// 慢消费者：发送队列已满，断开以免拖累全局锁
+		_ = c.conn.Close(websocket.StatusPolicyViolation, "slow consumer")
+		c.shutdown()
+		return fmt.Errorf("send queue full")
+	}
+}
+
+// shutdown 幂等地停掉写协程（关闭 done）并标记连接不可再写。
+func (c *Client) shutdown() {
+	c.closeOnce.Do(func() {
+		c.writeMu.Lock()
+		c.closed = true
+		c.writeMu.Unlock()
+		close(c.done)
+	})
+}
+
+// writeLoop 是本连接唯一的写协程：串行发送，保证顺序，与全局锁解耦。
+func (c *Client) writeLoop() {
+	for {
+		select {
+		case <-c.done:
+			return
+		case data := <-c.sendCh:
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			err := c.conn.Write(ctx, websocket.MessageBinary, data)
+			cancel()
+			if err != nil {
+				_ = c.conn.Close(websocket.StatusInternalError, "write error")
+				c.shutdown()
+				return
+			}
+		}
+	}
 }
 
 // reply 通过 protobuf RAW 信封返回 RPC 应答（RawBody，无 JSON 字节）。
@@ -127,7 +166,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	// 先顶掉同 SID 旧连接并释放设备名额，再检查上限。
 	if prevID, ok := s.sidToClientID[session.SID]; ok {
 		if prev := s.clients[prevID]; prev != nil {
-			s.securityLog("socket_duplicate", map[string]any{"sid": session.SID, "ip": ipAddress, "device": prev.deviceKey, "oldSocketId": prevID, "userAgent": userAgent})
+			// 同 SID 顶替旧连接是正常重连/多标签行为，不是错误，不打日志。
 			prevKey := prev.deviceKey
 			if prevKey == "" {
 				prevKey = deviceKey(prev.ipAddress, prev.fingerprint)
@@ -141,9 +180,9 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			delete(s.clients, prev.id)
 			delete(s.clientIDToSID, prev.id)
 			delete(s.sidToClientID, session.SID)
-			prev.closed = true
 			prev.replaced = true
 			prevConn := prev.conn
+			prev.shutdown()
 			s.mu.Unlock()
 			_ = prevConn.Close(websocket.StatusPolicyViolation, "replaced")
 			s.mu.Lock()
@@ -180,7 +219,9 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		id: randomID(), conn: conn, sid: session.SID, token: token, sessionExp: session.Exp,
 		ipAddress: ipAddress, fingerprint: fingerprint, deviceKey: devKey,
 		rooms: map[string]struct{}{}, userAgent: userAgent, host: host, origin: origin,
+		sendCh: make(chan []byte, 256), done: make(chan struct{}),
 	}
+	go client.writeLoop()
 
 	s.mu.Lock()
 	s.clients[client.id] = client
@@ -188,20 +229,26 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	s.clientIDToSID[client.id] = session.SID
 	// Accept 期间旧连接 onClientDisconnect 可能删掉预创建的空 device map，这里必须再 ensure
 	s.ensureDeviceSocketSet(devKey)[client.id] = struct{}{}
-	s.securityLog("socket_connected", map[string]any{
-		"sid": session.SID, "ip": ipAddress, "device": devKey, "fp": fingerprint,
-		"socketId": client.id, "userAgent": userAgent, "compression": compressionModeName(compMode),
+	// 连接明细已完整落盘 connections.csv（见下方 activityLog），不再重复打到 stdout。
+	s.activityLog("connections", []string{
+		"time", "action", "sid", "ip", "device", "fingerprint", "socketId", "userAgent", "compression",
+	}, []string{
+		time.Now().Format(time.RFC3339), "connect", session.SID, ipAddress, devKey, fingerprint,
+		client.id, userAgent, compressionModeName(compMode),
 	})
 	client.joinRoom(lobbyChannel)
 	cfg := s.publicConfig()
 	lobby := s.lobbySnapshot(false, true)
+	// buildFullEnvelope 会读写共享的 syncChans，必须在锁内构建；发送在锁外做。
+	cfgEnv, _, cfgErr := s.buildFullEnvelope("config:update", channelConfig(), cfg)
+	lobbyEnv, _, lobbyErr := s.buildFullEnvelope("lobby:update", channelLobby(), lobby)
 	s.mu.Unlock()
 
-	if env, _, err := s.buildFullEnvelope("config:update", channelConfig(), cfg); err == nil {
-		s.emitWireClient(client, env)
+	if cfgErr == nil {
+		s.emitWireClient(client, cfgEnv)
 	}
-	if env, _, err := s.buildFullEnvelope("lobby:update", channelLobby(), lobby); err == nil {
-		s.emitWireClient(client, env)
+	if lobbyErr == nil {
+		s.emitWireClient(client, lobbyEnv)
 	}
 
 	// 服务端主动 Ping：穿透反向代理空闲超时，并保活 iOS Safari 后台/锁屏场景。
@@ -240,6 +287,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cancelPing()
+	// onClientDisconnect 内部已统一调用 client.shutdown()，这里不用重复调用。
 	s.onClientDisconnect(client)
 	_ = conn.Close(websocket.StatusNormalClosure, "")
 }
@@ -385,7 +433,8 @@ func (s *Server) onClientDisconnect(client *Client) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	client.closed = true
+	// 通过 shutdown 统一在 writeMu 下置 closed 并停掉写协程，避免跨锁写标志位。
+	client.shutdown()
 	// 被同 SID 顶替：索引已在 handleWS 里清过。此处若再 delete 空 map，
 	// 会把新连接 Accept 前预创建的 device 集合删掉，随后写入触发 nil map panic。
 	if client.replaced {
@@ -415,7 +464,13 @@ func (s *Server) onClientDisconnect(client *Client) {
 	if player == nil {
 		return
 	}
-	s.securityLog("socket_disconnected", map[string]any{"sid": player.ID, "ip": ipAddress, "socketId": client.id, "userAgent": client.userAgent})
+	// 连接明细已完整落盘 connections.csv（见下方 activityLog），不再重复打到 stdout。
+	s.activityLog("connections", []string{
+		"time", "action", "sid", "ip", "device", "fingerprint", "socketId", "userAgent", "compression",
+	}, []string{
+		time.Now().Format(time.RFC3339), "disconnect", player.ID, ipAddress, client.deviceKey, client.fingerprint,
+		client.id, client.userAgent, "",
+	})
 	s.serverStats.Disconnects++
 	s.clearDisconnectHold(player)
 	player.SocketID = ""
@@ -481,10 +536,23 @@ func (s *Server) onClientDisconnect(client *Client) {
 	})
 }
 
+// trustedProxyCount 表示前置可信反向代理层数（TRUSTED_PROXY_COUNT，默认 1）。
+// X-Forwarded-For 由每一跳代理向右追加，客户端可伪造最左侧条目；因此真实客户端
+// 位于从右数第 trustedProxyCount 个。设为 0 表示直连、完全忽略 XFF（防伪造）。
+var trustedProxyCount = 1
+
 func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		return strings.TrimSpace(parts[0])
+	if trustedProxyCount > 0 {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			idx := len(parts) - trustedProxyCount
+			if idx < 0 {
+				idx = 0
+			}
+			if ip := strings.TrimSpace(parts[idx]); ip != "" {
+				return ip
+			}
+		}
 	}
 	host := r.RemoteAddr
 	if i := strings.LastIndex(host, ":"); i >= 0 {

@@ -87,7 +87,7 @@ button:hover,
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 0.6;
   transform: none;
 }
 
@@ -144,7 +144,7 @@ main {
   box-shadow: 0 8px 22px var(--shadow);
 }
 
-.topbar > div:first-child {
+.topbar>div:first-child {
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -958,7 +958,7 @@ main {
   aspect-ratio: 1;
   border-radius: 999px;
   display: block;
-  box-shadow: inset 0 5px 7px rgba(255,255,255,0.18), inset 0 -5px 8px rgba(0,0,0,0.2), 0 2px 5px rgba(0,0,0,0.18);
+  box-shadow: inset 0 5px 7px rgba(255, 255, 255, 0.18), inset 0 -5px 8px rgba(0, 0, 0, 0.2), 0 2px 5px rgba(0, 0, 0, 0.18);
 }
 
 .preview-disc.black {
@@ -1107,12 +1107,12 @@ main {
   z-index: 2;
 }
 
-.room-card > * {
+.room-card>* {
   position: relative;
   z-index: 1;
 }
 
-.room-card > div:first-child {
+.room-card>div:first-child {
   min-width: 0;
   display: grid;
   align-content: start;
@@ -1154,7 +1154,7 @@ main {
   font-weight: 900;
 }
 
-.room-versus-line > span {
+.room-versus-line>span {
   min-width: 0;
   max-width: 190px;
   overflow: hidden;
@@ -1162,15 +1162,15 @@ main {
   white-space: nowrap;
 }
 
-.room-versus-line > span.bot,
-.room-versus-line > span.empty {
+.room-versus-line>span.bot,
+.room-versus-line>span.empty {
   border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
   border-radius: 999px;
   background: color-mix(in srgb, var(--primary) 10%, var(--panel-solid));
   padding: 4px 8px;
 }
 
-.room-versus-line > span.bot {
+.room-versus-line>span.bot {
   border-color: color-mix(in srgb, var(--pink-border) 50%, var(--border));
   background: color-mix(in srgb, var(--pink) 12%, var(--panel-solid));
 }
@@ -1287,7 +1287,7 @@ main {
   line-height: 1.25;
 }
 
-.giveaway-placeholder-panel > div {
+.giveaway-placeholder-panel>div {
   display: grid;
   place-content: center;
   gap: 8px;
@@ -1584,7 +1584,7 @@ main {
   isolation: isolate;
 }
 
-.room-header > div {
+.room-header>div {
   min-width: 0;
 }
 
@@ -1596,7 +1596,7 @@ main {
   flex: 0 0 auto;
 }
 
-.room-header > * {
+.room-header>* {
   position: relative;
   z-index: 1;
 }
@@ -1837,7 +1837,7 @@ main {
   word-break: break-word;
 }
 
-.seat-card > button {
+.seat-card>button {
   justify-self: start;
 }
 
@@ -1895,6 +1895,7 @@ main {
     opacity: 0;
     transform: translateY(6px) scale(0.96);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -2104,6 +2105,7 @@ main {
     transform: translateY(0) scale(0.92);
     opacity: 0.62;
   }
+
   to {
     transform: translateY(-5px) scale(1.08);
     opacity: 1;
@@ -2128,22 +2130,33 @@ main {
   aspect-ratio: 1;
   display: grid;
   grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
   border: 3px solid color-mix(in srgb, var(--othello-border, #2f7a5c) 75%, var(--border));
   border-radius: 8px;
   overflow: hidden;
   background: var(--othello-board, #2f8a64);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.16), 0 18px 36px rgba(44, 89, 78, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), 0 18px 36px rgba(44, 89, 78, 0.18);
 }
 
-.othello-cell {
+/* 棋子/落子提示不再是 button 的子元素（见下方 .othello-disc 注释），
+   由 wrap 负责 grid 定位 + 作为绝对定位棋子的参照系；button 只管铺满与交互态。 */
+.othello-cell-wrap {
   position: relative;
   min-width: 0;
   min-height: 0;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
+  /* 不用 grid 撑子元素，棋子绝对居中，避免把格子撑成矩形 */
+}
+
+.othello-cell {
+  display: block;
+  width: 100%;
+  height: 100%;
   border: 1px solid var(--othello-line, rgba(18, 72, 52, 0.55));
   border-radius: 0;
   background: var(--othello-cell, #38a474);
-  display: grid;
-  place-items: center;
   padding: 0;
 }
 
@@ -2151,13 +2164,22 @@ main {
   background: var(--othello-hover, #45b883);
 }
 
+/* 棋子：格子边长的 50%，不参与布局流。
+   现在是 .othello-cell-wrap 的兄弟节点而非 button 的子元素——button 的
+   disabled 变暗（opacity:.6）只影响格子自身，不会和这里的 opacity 按乘法叠加，
+   0.8 就是棋子真实的显示透明度，比原来被压暗到 0.6 更清晰。 */
 .othello-disc {
-  display: block;
-  width: 72%;
-  min-width: 14px;
-  aspect-ratio: 1;
-  border-radius: 999px;
-  box-shadow: inset 0 8px 12px rgba(255,255,255,0.18), inset 0 -8px 14px rgba(0,0,0,0.18), 0 4px 8px rgba(0,0,0,0.2);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 50%;
+  height: 50%;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0.8;
+  box-shadow: inset 0 8px 12px rgba(255, 255, 255, 0.18), inset 0 -8px 14px rgba(0, 0, 0, 0.18), 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .othello-disc.black {
@@ -2170,14 +2192,19 @@ main {
   background: var(--othello-white-disc, radial-gradient(circle at 32% 28%, #ffffff, #d8e1e8 70%));
 }
 
+/* 合法落子提示：更小，与棋子区分 */
 .othello-legal-dot {
-  display: block;
-  width: 28%;
-  min-width: 7px;
-  aspect-ratio: 1;
-  border-radius: 999px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 20%;
+  height: 20%;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  border-radius: 50%;
+  pointer-events: none;
   background: rgba(255, 255, 255, 0.46);
-  border: 2px solid rgba(255, 255, 255, 0.7);
+  border: 2px solid rgba(255, 255, 255, .7);
 }
 
 .othello-legend {
@@ -2334,7 +2361,7 @@ main {
   border-radius: 8px;
   overflow: hidden;
   background: var(--ttt-board, color-mix(in srgb, #8b5cf6 12%, var(--panel-solid)));
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.16), 0 18px 36px color-mix(in srgb, var(--ttt-border, #5b4689) 28%, transparent);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), 0 18px 36px color-mix(in srgb, var(--ttt-border, #5b4689) 28%, transparent);
 }
 
 .tictactoe-cell {
@@ -2390,14 +2417,14 @@ main {
 }
 
 .move-panel h3,
-.chat-panel > h3,
+.chat-panel>h3,
 .sticky-panel-title {
   color: var(--page-text);
   font-size: 15px;
   line-height: 1.25;
 }
 
-.chat-panel > h3,
+.chat-panel>h3,
 .sticky-panel-title {
   display: flex;
   align-items: center;
@@ -2551,7 +2578,7 @@ main {
   padding-bottom: 7px;
 }
 
-.history-card-head > div:first-child {
+.history-card-head>div:first-child {
   display: grid;
   gap: 2px;
 }
@@ -2698,10 +2725,81 @@ main {
 .history-proof img,
 .history-proof-image-button img {
   width: min(260px, 100%);
+  min-height: 120px;
+  object-fit: contain;
+  background: color-mix(in srgb, var(--primary) 8%, var(--panel-soft));
   border-radius: 8px;
   border: 1px solid var(--border);
   display: block;
   cursor: zoom-in;
+}
+
+.proof-image-wrap {
+  position: relative;
+  width: min(320px, 100%);
+  min-height: 140px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--primary) 10%, var(--panel-soft));
+  overflow: hidden;
+}
+
+.proof-image-wrap img {
+  width: 100%;
+  min-height: 140px;
+  object-fit: contain;
+  display: block;
+  cursor: zoom-in;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.proof-image-wrap img.is-loaded {
+  opacity: 1;
+}
+
+.proof-image-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.proof-image-loading-bar {
+  width: min(70%, 180px);
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 18%, var(--border));
+  overflow: hidden;
+}
+
+.proof-image-loading-bar>i {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--primary) 40%, #fff));
+  animation: proof-load-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes proof-load-slide {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(280%);
+  }
+}
+
+.proof-image-wrap.is-ready .proof-image-loading {
+  display: none;
 }
 
 .punishment-task-image-button {
@@ -3094,7 +3192,7 @@ main {
   padding: 10px;
 }
 
-.proof-submit-card > b {
+.proof-submit-card>b {
   color: var(--page-text);
 }
 
@@ -3126,7 +3224,7 @@ main {
   gap: 7px;
 }
 
-.tag-list-editor > span {
+.tag-list-editor>span {
   color: var(--muted);
   font-size: 13px;
   font-weight: 800;
@@ -3630,8 +3728,8 @@ main {
 }
 
 .profile-name-field small,
-.profile-gender-field > span,
-.profile-gender-field > small {
+.profile-gender-field>span,
+.profile-gender-field>small {
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
@@ -4132,8 +4230,8 @@ main {
   padding: 9px;
 }
 
-.task-card > *,
-.history-task > * {
+.task-card>*,
+.history-task>* {
   position: relative;
   z-index: 1;
 }
@@ -4248,9 +4346,9 @@ main {
     justify-content: stretch;
   }
 
-  .othello-risk-actions > button,
-  .othello-surrender-actions > button,
-  .othello-settlement-actions > button {
+  .othello-risk-actions>button,
+  .othello-surrender-actions>button,
+  .othello-settlement-actions>button {
     flex: 1 1 140px;
   }
 
@@ -4268,7 +4366,7 @@ main {
     justify-content: stretch;
   }
 
-  .tictactoe-giveaway-actions > button {
+  .tictactoe-giveaway-actions>button {
     flex: 1 1 140px;
   }
 
@@ -4613,7 +4711,7 @@ main {
   }
 
   .move-panel h3,
-  .chat-panel > h3,
+  .chat-panel>h3,
   .sticky-panel-title {
     font-size: 14px;
   }

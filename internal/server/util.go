@@ -83,7 +83,8 @@ func cleanText(value string, max int) string {
 	return s
 }
 
-var safeUploadRe = regexp.MustCompile(`(?i)^/uploads/(?:proofs|admin)/[0-9a-z-]+\.(?:jpg|png|webp)$`)
+// randomID 使用 RawURLEncoding，可能含 '_' 与 '-'
+var safeUploadRe = regexp.MustCompile(`(?i)^/uploads/(?:proofs|admin)/[0-9a-z._-]+\.(?:jpg|png|webp)$`)
 
 func safeUploadURL(value string) string {
 	if safeUploadRe.MatchString(value) {
@@ -129,16 +130,10 @@ func randomFrom[T any](values []T) T {
 	return values[int(b[0])%len(values)]
 }
 
+// randomFromF 历史上用纳秒取模选择，连续调用（同一房名的多个词）随机性极差；
+// 改为走 crypto/rand 的 randomFrom。
 func randomFromF[T any](values []T) T {
-	if len(values) == 0 {
-		var zero T
-		return zero
-	}
-	n := int(time.Now().UnixNano())
-	if n < 0 {
-		n = -n
-	}
-	return values[n%len(values)]
+	return randomFrom(values)
 }
 
 func escapeRegExp(value string) string {

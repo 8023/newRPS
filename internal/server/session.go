@@ -124,11 +124,90 @@ func (s *Server) consumeRateLimit(key string, windowMs int64, max int) bool {
 	return current.Count <= max
 }
 
-func (s *Server) securityLog(event string, details map[string]any) {
-	// JSON-ish structured log
-	parts := []string{fmt.Sprintf(`"ts":"%s"`, time.Now().UTC().Format(time.RFC3339)), fmt.Sprintf(`"event":"%s"`, event)}
-	for k, v := range details {
-		parts = append(parts, fmt.Sprintf(`"%s":%q`, k, fmt.Sprint(v)))
+// pruneEphemeralState 定期清理只增不减的限流/防多开 map，避免长期运行内存泄漏。
+// 调用方须持有 s.mu。
+func (s *Server) pruneEphemeralState() {
+	now := nowMs()
+	const idleMs = int64(10 * 60 * 1000)
+	for k, b := range s.rateBuckets {
+		if b == nil {
+			delete(s.rateBuckets, k)
+			continue
+		}
+		if b.CooldownUntil > now {
+			continue
+		}
+		newest := int64(0)
+		for _, t := range b.Hits {
+			if t > newest {
+				newest = t
+			}
+		}
+		if newest == 0 || now-newest > idleMs {
+			delete(s.rateBuckets, k)
+		}
 	}
-	fmt.Printf("{%s}\n", strings.Join(parts, ","))
+	for k, b := range s.rateLimitBuckets {
+		if b == nil || b.ResetAt <= now {
+			delete(s.rateLimitBuckets, k)
+		}
+	}
+	for k, attempts := range s.deviceCreateAttempts {
+		fresh := false
+		for _, t := range attempts {
+			if now-t < idleMs {
+				fresh = true
+				break
+			}
+		}
+		if !fresh {
+			delete(s.deviceCreateAttempts, k)
+		}
+	}
+}
+
+// errorLogHeader 是 error.csv 的固定表头：所有拒绝/失败类事件的字段并集。
+// 每行只填该事件用到的列，其余列留空——和 connections/rooms 等表一样是标准 CSV，
+// 不再把明细塞成一整块 JSON 字符串。
+var errorLogHeader = []string{
+	"time", "event", "sid", "ip", "device", "fingerprint", "userAgent",
+	"origin", "host", "rawHost", "xffHost", "reason", "limit", "compression", "wsEvent", "err",
+}
+
+// errorDetailColumn 把 securityLog 调用方用的字段名映射到 error.csv 的固定列名。
+// - "fp" 是浏览器指纹，和 connections.csv 里的 "fingerprint" 列对齐。
+// - 调用方 details 里的 "event" 是触发问题的具体业务事件名（如 room:move），
+//   和 securityLog 自身的 event 参数（"rate_limit" 这类事件分类）是两回事，
+//   映射到 "wsEvent" 列，避免同名覆盖。
+func errorDetailColumn(key string) string {
+	switch key {
+	case "fp":
+		return "fingerprint"
+	case "event":
+		return "wsEvent"
+	default:
+		return key
+	}
+}
+
+// securityLog 记录真正的拒绝/失败类安全事件（鉴权失败、限流、越权等）。
+// 这些事件不会中断服务进程，只落盘 work/logs/{周}/error.csv，不再打到终端——
+// 命令行只保留"进程无法继续运行"级别的致命错误（见 cmd/server/main.go：New()/Run() 失败直接 os.Exit）。
+func (s *Server) securityLog(event string, details map[string]any) {
+	row := make(map[string]string, len(errorLogHeader))
+	row["time"] = time.Now().Format(time.RFC3339)
+	row["event"] = event
+	for k, v := range details {
+		row[errorDetailColumn(k)] = fmt.Sprint(v)
+	}
+	fields := make([]string, len(errorLogHeader))
+	for i, col := range errorLogHeader {
+		fields[i] = row[col]
+	}
+	s.activityLog("error", errorLogHeader, fields)
+}
+
+// errorLog 供只有一句错误信息、没有结构化字段的场景使用（如持久化读写失败）。
+func (s *Server) errorLog(event, errMsg string) {
+	s.securityLog(event, map[string]any{"err": errMsg})
 }

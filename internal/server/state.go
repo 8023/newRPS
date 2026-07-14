@@ -160,6 +160,11 @@ type Client struct {
 	id            string
 	conn          *websocket.Conn
 	writeMu       sync.Mutex
+	// 每连接独立发送队列 + 写协程：广播/应答在持锁状态下只做非阻塞入队，
+	// 真正的网络写在 writeLoop 里完成，避免慢客户端在 s.mu 下卡住全局。
+	sendCh        chan []byte
+	done          chan struct{}
+	closeOnce     sync.Once
 	sid           string
 	token         string
 	sessionExp    int64
@@ -241,8 +246,8 @@ type Server struct {
 	persistDirty     bool
 	persistScheduled bool
 	immediateScheduled bool
-	persistQueue     chan struct{}
-	shuttingDown     bool
+	// 活动日志异步落盘队列（Run 启动消费者）
+	logCh chan activityLogEntry
 
 	startedAt int64
 }

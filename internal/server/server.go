@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"net/http"
@@ -78,6 +79,12 @@ func New() (*Server, error) {
 			port = n
 		}
 	}
+	// 可信反向代理层数：决定 X-Forwarded-For/Host 的信任方式（默认 1，直连可设 0）。
+	if v := os.Getenv("TRUSTED_PROXY_COUNT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			trustedProxyCount = n
+		}
+	}
 	host := os.Getenv("HOST")
 	if host == "" {
 		host = "0.0.0.0"
@@ -128,6 +135,7 @@ func New() (*Server, error) {
 		dataDir:                     dataDir,
 		playersFile:                 filepath.Join(dataDir, "players.json"),
 		distDir:                     distDir,
+		logCh:                       make(chan activityLogEntry, 1024),
 		startedAt:                   nowMs(),
 	}
 	exportConfigText = config.ExportConfigText
@@ -138,10 +146,19 @@ func New() (*Server, error) {
 func (s *Server) Run() error {
 	s.loadPlayersFromDisk()
 	s.scheduleExtremeHourlyDecay()
+	go s.runActivityLogConsumer()
 	go func() {
 		ticker := time.NewTicker(60 * time.Second)
 		for range ticker.C {
 			s.flushPersist()
+		}
+	}()
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		for range ticker.C {
+			s.mu.Lock()
+			s.pruneEphemeralState()
+			s.mu.Unlock()
 		}
 	}()
 
@@ -161,11 +178,12 @@ func (s *Server) Run() error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	select {
-	case sig := <-sigCh:
-		fmt.Printf("[server] %v received, flushing players...\n", sig)
-		s.shuttingDown = true
+	case <-sigCh:
 		s.flushPersist()
-		_ = httpServer.Close()
+		// 优雅关停：给在途请求 / WebSocket 5 秒收尾，而非硬切。
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = httpServer.Shutdown(shutdownCtx)
 		return nil
 	case err := <-errCh:
 		if err == http.ErrServerClosed {

@@ -89,9 +89,9 @@ npm run dev:web        # Vite，代理 /api /ws /uploads → 9988
 **只需 Release 部署包**（不必 clone 源码）。使用官方 **`debian:bookworm-slim`**，**无需 Dockerfile**。
 
 ```bash
-# 下载并解压到任意目录（示例：2.1.23）
-gh release download v2.1.23 -p 'newRPS-*-linux-amd64.tar.gz' --repo 8023/newRPS
-mkdir -p gamehouse && tar -xzf newRPS-2.1.23-linux-amd64.tar.gz -C gamehouse
+# 下载并解压到任意目录（示例：2.1.24）
+gh release download v2.1.24 -p 'newRPS-*-linux-amd64.tar.gz' --repo 8023/newRPS
+mkdir -p gamehouse && tar -xzf newRPS-2.1.24-linux-amd64.tar.gz -C gamehouse
 cd gamehouse
 
 cp .env.example .env          # 可选：ADMIN_PASSWORD、SESSION_SECRET、ALLOWED_ORIGINS
@@ -127,7 +127,7 @@ tar czf backup-$(date +%F).tgz data work config .env
 
 # 解压新包到临时目录，覆盖程序（保留 data/work/config/.env）
 tmpdir=$(mktemp -d)
-tar -xzf newRPS-2.1.23-linux-amd64.tar.gz -C "$tmpdir"
+tar -xzf newRPS-2.1.24-linux-amd64.tar.gz -C "$tmpdir"
 cp -a "$tmpdir/bin" "$tmpdir/dist" "$tmpdir/docker-compose.yml" .
 rm -rf "$tmpdir"
 
@@ -135,29 +135,6 @@ docker compose up -d
 ```
 
 > 说明：Release 中的 `bin/server` 为 **Linux amd64**。ARM 服务器需在对应架构上重新 `npm run build:server`。
-
-反向代理（OpenResty/Nginx）WebSocket 必配示例：
-
-```nginx
-# 页面可用 HTTP/2；/ws 必须能完成 HTTP/1.1 Upgrade（浏览器会单独建连）
-location /ws {
-    proxy_pass http://127.0.0.1:9988;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Host $host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_read_timeout 3600s;
-    proxy_send_timeout 3600s;
-    proxy_buffering off;
-}
-```
-
-`ALLOWED_ORIGINS` 建议设为你的站点 Origin（如 `https://rps.rbq.io`）。
-
-服务端：20s 协议 Ping、识别 `X-Forwarded-Host`；WebSocket 压缩见下节（**按 UA 分流**，不是全局关闭，也不是全局强制 deflate）。
 
 ## WebSocket 协议
 
@@ -223,6 +200,8 @@ location /ws {
 | `SESSION_SECRET` | `work/session.secret` | 会话 HMAC；未设置则落盘复用 |
 | `SESSION_TTL_MS` | 24h | 会话有效期 |
 | `ALLOWED_ORIGINS` | 本机 | 额外 Origin |
+| `TRUSTED_PROXY_COUNT` | `1` | 可信反向代理层数，决定 `X-Forwarded-For`/`X-Forwarded-Host` 信任方式；直连部署（无反代）需设为 `0`，否则客户端可伪造来源 IP 绕过限流/防多开 |
+| `MAX_SOCKETS_PER_IP` | 按防多开人数上限 ×4（至少 12） | 单设备（IP+指纹）WebSocket 套接字上限 |
 | `LOBBY_BROADCAST_DELAY_MS` | 300 | 大厅广播合并 |
 | `ROOM_BROADCAST_DELAY_MS` | 100 | 房间广播合并 |
 
@@ -255,24 +234,40 @@ location /ws {
 | `name-war.json` / `giveaway.json` / `extreme-mode.json` | 名争 / 白给 / 极限模式文案与参数 |
 | `bots.json` / `games.json` / `messages.json` | Bot、游戏列表、提示文案 |
 
-后台「保存」会写回对应 JSON；构建脚本与服务启动会尽量把 `config/*.json` 设为可写、`bin/server` 设为可执行。
+后台「保存」会写回对应 JSON；服务启动时会把 `config/*.json` 权限收紧为 `0600`（仅运行用户可读写，防同机其他用户读取其中的管理员口令），`bin/server` 设为可执行。
 
 ## 构建与测试
 
 ```bash
 npm run build:web      # 仅前端
 npm run build:server   # 仅 Go（并 chmod +x bin/server）
-npm run fix-perms      # config/*.json 可写 + bin/server 可执行
+npm run fix-perms      # config/*.json 收紧为仅属主可读写（0600）+ bin/server 可执行
 npm run build          # web + server + fix-perms
 go test ./...
 npm run test           # go test + 前端 build
 ```
 
-## 维护约定
-
-功能变更时同步更新「最近更新记录」。同步 GitHub 需 `git commit` 与 `git push`。
-
 ## 最近更新记录
+
+### v2.1.24（2026-07-15）
+
+- **黑白棋棋子清晰度**：`disabled` 格子整体变暗（`opacity:.6`）会连带压暗棋子；棋子改为格子外层的独立兄弟节点，格子变暗与棋子透明度（固定 0.8）互不影响，格子仍是正方形、棋子占格子边长 50%。
+- **Chrome 无法选择 HEIC 证明图**：`<input accept="image/*">` 通配符会用 Chrome 内置的图片扩展名表过滤文件选择器，该表不含 heic/heif，导致即使额外列了 `.heic,.heif` 也可能被隐藏；改为只列具体扩展名/MIME，不再用通配符，选完文件后的校验/压缩/上传流程不变。
+- **安全与稳定性加固**：
+  - WebSocket 广播/应答不再在持有全局锁时做同步网络写，改为每连接独立发送队列 + 写协程，避免单个慢客户端拖慢全服；连接队列写满会主动断开该连接。
+  - 修复握手阶段在锁外操作共享同步状态可能触发的并发 panic。
+  - `X-Forwarded-For` / `X-Forwarded-Host` 改为按 `TRUSTED_PROXY_COUNT`（默认 1）解析可信代理层数，不再无条件信任客户端可伪造的最左侧值。
+  - 管理员口令改为恒定时间比较；`config/*.json` 权限收紧为 `0600`；`/api/config/export` 增加专属限流，口令改用请求头传递（不再出现在 URL / 反代访问日志里）。
+  - 管理员踢人（kick）不再删除持久玩家的存档（积分/战绩/称号），只强制其下线，账号可正常重新登录。
+  - 惩罚/房名等随机选择改为真随机（原实现按时间戳取模，可预测且同毫秒内取值相同）。
+  - 限流、防多开、玩家历史出拳等内存状态定期清理，避免长期运行内存增长。
+  - 进程收到关停信号时改为 `Shutdown`（原为 `Close`），给在途 HTTP 请求收尾时间，而不是硬切。
+- **日志体系重做**：
+  - 命令行只保留启动横幅和「进程无法继续运行」级别的致命错误；连接、建号、改名、白给/名字争夺战/极限模式开关、留言、聊天、惩罚等事件不再打印到终端，全部落盘到 `work/logs/{ISO年+周}/*.csv`。
+  - 新增 `error.csv` 记录鉴权失败、限流、越权等拒绝/异常事件，字段拆成标准 CSV 列（而非一整块 JSON 字符串）。
+  - `players.csv` 补充 `rename`（改名）、`giveaway_enable`/`giveaway_disable`、`giveaway_board_submit`（白给自救板内容）、`nameWar_enable`/`nameWar_disable`、`extreme_enable`/`extreme_disable` 等操作记录。
+  - `chat.csv` 的 `channel` 只保留 `room` / `lobby` 两种取值；留言板（原 `lobby_suggestion`）并入 `lobby`，对应真正在用的「大厅聊天」体验。
+- **文档**：README 删除反向代理配置示例与维护约定说明；补充 `TRUSTED_PROXY_COUNT`、`MAX_SOCKETS_PER_IP` 环境变量说明。
 
 ### v2.1.23（2026-07-13）
 

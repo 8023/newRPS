@@ -2,7 +2,9 @@ package server
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/doumiao/newRPS/internal/types"
 )
@@ -151,7 +153,12 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	player.RoomID = roomID
 	client.leaveRoom(lobbyChannel)
 	client.joinRoom(roomID)
-	s.securityLog("room_created", map[string]any{"sid": player.ID, "ip": player.IPAddress, "roomId": roomID, "event": "room:create", "userAgent": client.userAgent})
+	s.activityLog("rooms", []string{
+		"time", "action", "roomId", "code", "roomName", "gameId", "playerId", "playerName", "ip",
+	}, []string{
+		time.Now().Format(time.RFC3339), "create", roomID, room.Code, settings.Name, string(settings.GameID),
+		player.ID, playerShortName(player), player.IPAddress,
+	})
 	s.roomNotice(room, playerShortName(player)+" 进入房间，坐在战斗席 A。")
 	client.reply(env.ID, map[string]any{"room": s.roomSnapshot(room, true, true)}, "")
 	s.broadcastRoom(roomID, true)
@@ -195,7 +202,12 @@ func (s *Server) onRoomJoin(client *Client, env wsEnvelope) {
 	}
 	client.leaveRoom(lobbyChannel)
 	client.joinRoom(room.ID)
-	s.securityLog("room_joined", map[string]any{"sid": player.ID, "ip": player.IPAddress, "roomId": room.ID, "event": "room:join", "userAgent": client.userAgent})
+	s.activityLog("rooms", []string{
+		"time", "action", "roomId", "code", "roomName", "gameId", "playerId", "playerName", "ip",
+	}, []string{
+		time.Now().Format(time.RFC3339), "join", room.ID, room.Code, room.Settings.Name, string(room.Settings.GameID),
+		player.ID, playerShortName(player), player.IPAddress,
+	})
 	s.roomNotice(room, fmt.Sprintf("%s 进入房间，位置：%s。", playerShortName(player), joinRole))
 	s.maybeStartChoosing(room)
 	client.reply(env.ID, map[string]any{"room": s.roomSnapshot(room, true, true)}, "")
@@ -216,7 +228,6 @@ func (s *Server) onRoomLeave(client *Client, env wsEnvelope) {
 	client.joinRoom(lobbySuggestionChannel)
 	// 离房后补一次大厅全量，避免在房期间退订 lobby 后本地列表过期。
 	s.sendFullChannel(client, channelLobby())
-	s.securityLog("room_left", map[string]any{"sid": player.ID, "ip": player.IPAddress, "event": "room:leave", "userAgent": client.userAgent})
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
@@ -909,12 +920,23 @@ func (s *Server) onPunishmentSubmit(client *Client, env wsEnvelope) {
 	})
 	// 先应答再广播，避免广播路径异常时客户端收不到 ack
 	client.reply(env.ID, map[string]any{"ok": true}, "")
-	// 提交后广播（含 history 中的证明），胜方无需刷新即可审核。
+	// 证明提交后立即推送（不走 debounce），胜方尽快看到图片/文字。
 	if s.punishmentComplete(room) {
 		s.resetForNextRound(room)
 	} else {
-		s.broadcastRoom(room.ID, false)
+		s.broadcastRoomImmediate(room.ID, false)
 	}
+	imageFile := ""
+	if cleanImageURL != "" {
+		imageFile = filepath.Base(cleanImageURL)
+	}
+	s.activityLog("punishments", []string{
+		"time", "kind", "source", "roomId", "playerId", "playerName",
+		"targetId", "taskText", "status", "proofText", "imageFile",
+	}, []string{
+		time.Now().Format(time.RFC3339), "proof", "", room.ID, player.ID, playerShortName(player),
+		"", taskText, status, cleanProofText, imageFile,
+	})
 }
 
 func (s *Server) onPunishmentAssignTask(client *Client, env wsEnvelope) {
@@ -975,14 +997,16 @@ func (s *Server) onPunishmentAssignTask(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "请填写惩罚任务")
 		return
 	}
-	// 玩家发布任务也支持 {winner}/{loser}（胜者=发布方，败者=受罚方）
-	loserName := ""
-	if target := s.players[p.PlayerID]; target != nil {
-		loserName = playerShortName(target)
-	}
-	cleanTask = applyPunishmentPlaceholders(cleanTask, loserName, playerShortName(player))
+	// 玩家临时任务：直接使用原文，不替换 {winner}/{loser}（占位符仅用于系统任务配置）
 	s.updatePunishmentTask(room, p.PlayerID, cleanTask, player)
-	s.broadcastRoom(room.ID, false)
+	s.broadcastRoomImmediate(room.ID, false)
+	s.activityLog("punishments", []string{
+		"time", "kind", "source", "roomId", "playerId", "playerName",
+		"targetId", "taskText", "status", "proofText", "imageFile",
+	}, []string{
+		time.Now().Format(time.RFC3339), "task", "player", room.ID, player.ID, playerShortName(player),
+		p.PlayerID, cleanTask, "", "", "",
+	})
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
@@ -1136,6 +1160,7 @@ func (s *Server) onChatSend(client *Client, env wsEnvelope) {
 		ID: randomID(), RoomID: p.RoomID, PlayerID: player.ID,
 		Author: player.DisplayName, AuthorPlayer: &pub, Text: cleanMessageText, At: nowMs(),
 	}
+	scope := "lobby"
 	if p.RoomID != "" {
 		room := s.rooms[p.RoomID]
 		if room == nil || player.RoomID != p.RoomID {
@@ -1145,10 +1170,18 @@ func (s *Server) onChatSend(client *Client, env wsEnvelope) {
 		message.AuthorRole = s.roomRole(room, player.ID)
 		s.appendRoomChat(room, message)
 		s.emitToRoom(p.RoomID, "chat:append", message)
+		scope = "room"
 	} else {
 		s.appendLobbyChat(message)
 		s.emitLobbyChatAppend(message)
 	}
+	// channel=room 房间聊天；channel=lobby 大厅公共频道（p.RoomID=="" 分支目前无前端入口，
+	// 实际的"大厅聊天"体验是留言板 onSuggestionAdd，也用 channel=lobby 写进同一张表）
+	s.activityLog("chat", []string{
+		"time", "channel", "roomId", "playerId", "playerName", "text",
+	}, []string{
+		time.Now().Format(time.RFC3339), scope, p.RoomID, player.ID, playerShortName(player), cleanMessageText,
+	})
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
@@ -1173,6 +1206,13 @@ func (s *Server) onSuggestionAdd(client *Client, env wsEnvelope) {
 	}
 	s.appendSuggestion(suggestion)
 	s.emitToRoom(lobbySuggestionChannel, "suggestion:append", suggestion)
+	// 留言板是实际可用的"大厅聊天"体验（onChatSend 的空 roomId 分支前端从未触发过），
+	// 合并进 chat.csv 时统一用 channel=lobby，和房间聊天的 channel=room 对应，只留两种取值。
+	s.activityLog("chat", []string{
+		"time", "channel", "roomId", "playerId", "playerName", "text",
+	}, []string{
+		time.Now().Format(time.RFC3339), "lobby", "", player.ID, playerShortName(player), cleanSuggestionText,
+	})
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
@@ -1295,21 +1335,32 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 	}
 	if p.Action == "kick" && p.PlayerID != "" {
 		if pl := s.players[p.PlayerID]; pl != nil {
+			socketID := pl.SocketID
 			s.leaveRoom(pl, LeaveAdminKick)
 			s.clearDisconnectHold(pl)
-			delete(s.players, pl.ID)
-			delete(s.tokenToPlayer, pl.Token)
-			if pl.PlayerID != "" {
-				delete(s.playerIdToID, pl.PlayerID)
+			if socketID != "" {
+				s.emitToClient(socketID, "player:kicked", map[string]any{})
 			}
 			if pl.CurrentSID != "" && s.sidToPlayerID[pl.CurrentSID] == pl.ID {
 				delete(s.sidToPlayerID, pl.CurrentSID)
 			}
 			if pl.Persistent {
-				s.requestPersist("important")
-			}
-			if pl.SocketID != "" {
-				s.emitToClient(pl.SocketID, "player:kicked", map[string]any{})
+				// 持久玩家只下线、保留存档；serializePlayers 只写内存现存玩家，
+				// 直接 delete 会把该玩家积分/战绩从 players.json 里永久抹掉。
+				now := nowMs()
+				pl.Connected = false
+				pl.SocketID = ""
+				pl.DisconnectedAt = &now
+				pl.DisconnectExpiresAt = nil
+				pl.LastSeenAt = now
+				s.refreshPlayerSnapshots(pl)
+				s.requestPersist("lazy")
+			} else {
+				delete(s.players, pl.ID)
+				delete(s.tokenToPlayer, pl.Token)
+				if pl.PlayerID != "" {
+					delete(s.playerIdToID, pl.PlayerID)
+				}
 			}
 		}
 	}
@@ -1340,7 +1391,12 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 		changedPlayerRoomID = pl.RoomID
 	}
 	client.reply(env.ID, map[string]any{"ok": true}, "")
-	s.broadcastLobby()
+	if roomDeleted {
+		// 房间删除属结构性变化，立即全量推大厅，避免他人列表残留幽灵房间。
+		s.forceBroadcastLobby()
+	} else {
+		s.broadcastLobby()
+	}
 	if p.RoomID != "" && !roomDeleted {
 		s.broadcastRoom(p.RoomID, false)
 	}

@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"time"
 
@@ -76,7 +75,7 @@ func (s *Server) loadPlayersFromDisk() {
 	}
 	var list []persistedPlayer
 	if err := json.Unmarshal(data, &list); err != nil {
-		fmt.Println("[players] load failed:", err)
+		s.errorLog("players_load_failed", err.Error())
 		return
 	}
 	now := nowMs()
@@ -163,7 +162,6 @@ func (s *Server) loadPlayersFromDisk() {
 		s.playerIdToID[player.PlayerID] = player.ID
 		s.tokenToPlayer[player.Token] = player.ID
 	}
-	fmt.Printf("[players] loaded %d players\n", len(s.players))
 }
 
 func idOr(s string) string { return s }
@@ -187,28 +185,38 @@ func orInt64(p *int64, d int64) *int64 {
 	return p
 }
 
+func (s *Server) markPersistDirty() {
+	s.persistMu.Lock()
+	s.persistDirty = true
+	s.persistMu.Unlock()
+}
+
 func (s *Server) writeSnapshot() {
+	// 仅在序列化期间持 s.mu；磁盘 I/O 放到锁外，避免拖慢全服。
+	s.mu.Lock()
 	snapshot := s.serializePlayers()
+	s.mu.Unlock()
+
 	data, err := json.MarshalIndent(snapshot, "", "  ")
 	if err != nil {
-		fmt.Println("[players] persist failed:", err)
-		s.persistDirty = true
+		s.errorLog("players_persist_failed", err.Error())
+		s.markPersistDirty()
 		return
 	}
 	if err := os.MkdirAll(s.dataDir, 0o755); err != nil {
-		fmt.Println("[players] persist failed:", err)
-		s.persistDirty = true
+		s.errorLog("players_persist_failed", err.Error())
+		s.markPersistDirty()
 		return
 	}
 	tmp := s.playersFile + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		fmt.Println("[players] persist failed:", err)
-		s.persistDirty = true
+		s.errorLog("players_persist_failed", err.Error())
+		s.markPersistDirty()
 		return
 	}
 	if err := os.Rename(tmp, s.playersFile); err != nil {
-		fmt.Println("[players] persist failed:", err)
-		s.persistDirty = true
+		s.errorLog("players_persist_failed", err.Error())
+		s.markPersistDirty()
 	}
 }
 
@@ -227,9 +235,7 @@ func (s *Server) requestPersist(mode string) {
 			if s.persistDirty {
 				s.persistDirty = false
 				s.persistMu.Unlock()
-				s.mu.Lock()
 				s.writeSnapshot()
-				s.mu.Unlock()
 				return
 			}
 			s.persistMu.Unlock()
@@ -247,9 +253,7 @@ func (s *Server) requestPersist(mode string) {
 		if s.persistDirty {
 			s.persistDirty = false
 			s.persistMu.Unlock()
-			s.mu.Lock()
 			s.writeSnapshot()
-			s.mu.Unlock()
 			return
 		}
 		s.persistMu.Unlock()
@@ -262,8 +266,6 @@ func (s *Server) flushPersist() {
 	s.persistDirty = false
 	s.persistMu.Unlock()
 	if dirty {
-		s.mu.Lock()
 		s.writeSnapshot()
-		s.mu.Unlock()
 	}
 }

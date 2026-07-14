@@ -342,7 +342,7 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
     });
   }, [config.punishments, config.bots.difficulties, config.roomTags]);
 
-function patch(next: Partial<RoomSettings>) {
+  function patch(next: Partial<RoomSettings>) {
     setSettings((old) => {
       const merged = { ...old, ...next };
       if (!customRoomName && next.gameId) {
@@ -466,249 +466,249 @@ function patch(next: Partial<RoomSettings>) {
           <button type="button" className="icon-button" onClick={onCancel}>×</button>
         </div>
         <div className="create-scroll-area">
-        <div className="create-box">
-          <div className="create-section game-create-section">
-            <h3>游戏</h3>
-            <div className="game-choice-grid">
-              {config.games.map((game) => (
-                <button
-                  type="button"
-                  className={`game-choice-card ${settings.gameId === game.id ? "active" : ""}`}
-                  key={game.id}
-                  onClick={() => patch({ gameId: game.id })}
-                >
-                  <span className="game-choice-icon" aria-hidden="true">{gameIcon(game.id)}</span>
-                  <span className="game-choice-copy">
-                    <strong>{game.name}</strong>
-                    <small>{game.description}</small>
-                  </span>
-                </button>
-              ))}
-            </div>
-            {settings.gameId === "othello" && <p className="hint">黑白棋支持真人 1v1、观战、聊天、排位和惩罚；Bot 不开放，排位房会支持白给/上贡结算。</p>}
-            {settings.gameId === "tictactoe" && <p className="hint">井字棋支持真人 1v1、观战、聊天、排位和惩罚；双方准备后随机 X/O 先手，Bot 暂不开放。</p>}
-            {settings.gameId === "othello" && (
-              <div className="othello-theme-grid">
-                {othelloBoardThemes.map((theme) => (
+          <div className="create-box">
+            <div className="create-section game-create-section">
+              <h3>游戏</h3>
+              <div className="game-choice-grid">
+                {config.games.map((game) => (
                   <button
                     type="button"
-                    className={`othello-theme-card ${settings.othelloBoardTheme === theme.id ? "active" : ""}`}
-                    key={theme.id}
-                    onClick={() => patch({ othelloBoardTheme: theme.id })}
-                    style={{
-                      "--theme-board": theme.board,
-                      "--theme-cell": theme.cell,
-                      "--theme-line": theme.line,
-                      "--theme-border": theme.border,
-                      "--theme-black-disc": theme.blackDisc,
-                      "--theme-white-disc": theme.whiteDisc,
-                      "--theme-black-ring": theme.blackRing,
-                      "--theme-white-ring": theme.whiteRing
-                    } as CSSProperties}
+                    className={`game-choice-card ${settings.gameId === game.id ? "active" : ""}`}
+                    key={game.id}
+                    onClick={() => patch({ gameId: game.id })}
                   >
-                    <span className="othello-theme-preview">
-                      <i><b className="preview-disc black" /></i>
-                      <i />
-                      <i />
-                      <i><b className="preview-disc white" /></i>
+                    <span className="game-choice-icon" aria-hidden="true">{gameIcon(game.id)}</span>
+                    <span className="game-choice-copy">
+                      <strong>{game.name}</strong>
+                      <small>{game.description}</small>
                     </span>
-                    <strong>{theme.name}</strong>
-                    <small>{theme.description}</small>
                   </button>
                 ))}
               </div>
-            )}
-            {settings.gameId === "tictactoe" && (
-              <div className="tictactoe-theme-grid">
-                {tictactoeBoardThemes.map((theme) => (
-                  <button
-                    type="button"
-                    className={`tictactoe-theme-card ${settings.tictactoeBoardTheme === theme.id ? "active" : ""}`}
-                    key={theme.id}
-                    onClick={() => patch({ tictactoeBoardTheme: theme.id })}
-                    style={{
-                      "--ttt-board": theme.board,
-                      "--ttt-cell": theme.cell,
-                      "--ttt-line": theme.line,
-                      "--ttt-border": theme.border,
-                      "--ttt-x": theme.x,
-                      "--ttt-o": theme.o
-                    } as CSSProperties}
-                  >
-                    <span className="tictactoe-theme-preview">
-                      <i>×</i>
-                      <i />
-                      <i>○</i>
-                      <i />
-                      <i>×</i>
-                      <i />
-                      <i>○</i>
-                      <i />
-                      <i>×</i>
-                    </span>
-                    <strong>{theme.name}</strong>
-                    <small>{theme.description}</small>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="create-section">
-            <h3>基础</h3>
-            <input value={settings.name} onKeyDown={preventEnterSubmit} onChange={(event) => { setCustomRoomName(true); patch({ name: event.target.value }); }} placeholder="房间名" />
-            <input value={settings.password || ""} onKeyDown={preventEnterSubmit} onChange={(event) => patch({ password: event.target.value || undefined })} placeholder="房间密码，可不填" />
-            <Toggle label="显示房间 Tag" value={settings.enableTags ?? false} onChange={(value) => patch({ enableTags: value })} />
-            {settings.enableTags && (
-              <TagPicker
-                options={config.roomTags}
-                value={settings.tags || []}
-                onChange={(tags) => patch({ tags })}
-              />
-            )}
-          </div>
-          <div className="create-section">
-            <h3>对手</h3>
-            <Toggle label="开启 Bot" value={settings.enableBot} disabled={settings.gameId === "othello" || settings.gameId === "tictactoe" || (settings.enablePunishment && settings.punishmentSource === "player") || settings.enableRanked} onChange={(value) => patch({ enableBot: value })} />
-            {settings.gameId === "othello" && <p className="hint">黑白棋暂不支持 Bot。</p>}
-            {settings.gameId === "tictactoe" && <p className="hint">井字棋暂不支持 Bot。</p>}
-            {settings.enablePunishment && settings.punishmentSource === "player" && <p className="hint">玩家发布任务模式需要真人对战，不能开启 Bot。</p>}
-            {settings.enableRanked && <p className="hint">排位战需要真人对战，不能开启 Bot。</p>}
-            {settings.enableBot && (
-              <div className="bot-difficulty-grid">
-                {config.bots.difficulties.map((difficulty) => (
-                  <button
-                    type="button"
-                    className={`bot-difficulty-card ${settings.botDifficulty === difficulty.id ? "active" : ""}`}
-                    key={difficulty.id}
-                    onClick={() => patch({ botDifficulty: difficulty.id })}
-                    style={{ "--bot-card-color": difficulty.cardColor || "#9ed7ff" } as CSSProperties}
-                  >
-                    <span className="bot-card-emoji">{difficulty.emoji || "🤖"}</span>
-                    <strong>{difficulty.name}</strong>
-                    <em>{botStars(difficulty.level || 1)}</em>
-                    <small>{difficulty.description}</small>
-                    <b>{botStrategyText(difficulty.strategy)}</b>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="create-section">
-            <h3>玩法</h3>
-            <div className="ranked-choice-grid">
-              <button type="button" className={`ranked-choice-card ${!settings.enableRanked ? "active" : ""}`} onClick={() => patch({ enableRanked: false, enableExtremeRanked: false })}>
-                <span>🎮 普通局</span>
-                <small>不增加/减少排位积分，可以和 Bot 对战。</small>
-              </button>
-              {(settings.gameId === "othello" ? ([1, 2, 5, 10] as const) : ([5, 10, 20] as const)).map((stake) => (
-                <button type="button" className={`ranked-choice-card ${settings.enableRanked && settings.stake === stake ? "active" : ""}`} key={stake} onClick={() => patch({ enableRanked: true, stake, enableExtremeRanked: Boolean(me.extremeModeEnabled) })}>
-                  <span>{settings.gameId === "othello" ? "🏆 黑白棋排位" : settings.gameId === "tictactoe" ? "🏆 井字棋排位" : me.extremeModeEnabled ? "⚡ 极限排位" : "🏆 排位"} {stake}{settings.gameId === "othello" ? " 分/子" : " 分"}</span>
-                  <small>{settings.gameId === "othello" ? `每翻掉对方 1 子立即结算 ${stake} 分，终局不重复结算。` : me.extremeModeEnabled ? "只能创建极限排位房；非极限玩家无法进入。" : `胜利 +${stake}，失败 -${stake}；普通平局不扣分，平局双罚时双方 -${stake}。`}</small>
-                </button>
-              ))}
+              {settings.gameId === "othello" && <p className="hint">黑白棋支持真人 1v1、观战、聊天、排位和惩罚；Bot 不开放，排位房会支持白给/上贡结算。</p>}
+              {settings.gameId === "tictactoe" && <p className="hint">井字棋支持真人 1v1、观战、聊天、排位和惩罚；双方准备后随机 X/O 先手，Bot 暂不开放。</p>}
+              {settings.gameId === "othello" && (
+                <div className="othello-theme-grid">
+                  {othelloBoardThemes.map((theme) => (
+                    <button
+                      type="button"
+                      className={`othello-theme-card ${settings.othelloBoardTheme === theme.id ? "active" : ""}`}
+                      key={theme.id}
+                      onClick={() => patch({ othelloBoardTheme: theme.id })}
+                      style={{
+                        "--theme-board": theme.board,
+                        "--theme-cell": theme.cell,
+                        "--theme-line": theme.line,
+                        "--theme-border": theme.border,
+                        "--theme-black-disc": theme.blackDisc,
+                        "--theme-white-disc": theme.whiteDisc,
+                        "--theme-black-ring": theme.blackRing,
+                        "--theme-white-ring": theme.whiteRing
+                      } as CSSProperties}
+                    >
+                      <span className="othello-theme-preview">
+                        <i><b className="preview-disc black" /></i>
+                        <i />
+                        <i />
+                        <i><b className="preview-disc white" /></i>
+                      </span>
+                      <strong>{theme.name}</strong>
+                      <small>{theme.description}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {settings.gameId === "tictactoe" && (
+                <div className="tictactoe-theme-grid">
+                  {tictactoeBoardThemes.map((theme) => (
+                    <button
+                      type="button"
+                      className={`tictactoe-theme-card ${settings.tictactoeBoardTheme === theme.id ? "active" : ""}`}
+                      key={theme.id}
+                      onClick={() => patch({ tictactoeBoardTheme: theme.id })}
+                      style={{
+                        "--ttt-board": theme.board,
+                        "--ttt-cell": theme.cell,
+                        "--ttt-line": theme.line,
+                        "--ttt-border": theme.border,
+                        "--ttt-x": theme.x,
+                        "--ttt-o": theme.o
+                      } as CSSProperties}
+                    >
+                      <span className="tictactoe-theme-preview">
+                        <i>×</i>
+                        <i />
+                        <i>○</i>
+                        <i />
+                        <i>×</i>
+                        <i />
+                        <i>○</i>
+                        <i />
+                        <i>×</i>
+                      </span>
+                      <strong>{theme.name}</strong>
+                      <small>{theme.description}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            {settings.gameId === "othello" && <p className="hint">黑白棋排位按实时翻子结算，可选 1/2/5/10 分/子；支持倍率和极限模式，但两者不能同时开启。</p>}
-            {settings.gameId === "tictactoe" && <p className="hint">井字棋排位按胜负固定分结算，可选 5/10/20 分；支持倍率和极限模式。</p>}
-            {settings.enableBot && <p className="hint">开启 Bot 时不能选择排位战。</p>}
-            {settings.enableRanked && me.extremeModeEnabled && (
-              <div className="multiplier-box extreme-mode-box">
-                <div className="multiplier-head">
-                  <strong>⚡ 极限排位已开启</strong>
-                  <span>禁用倍率</span>
+            <div className="create-section">
+              <h3>基础</h3>
+              <input value={settings.name} onKeyDown={preventEnterSubmit} onChange={(event) => { setCustomRoomName(true); patch({ name: event.target.value }); }} placeholder="房间名" />
+              <input value={settings.password || ""} onKeyDown={preventEnterSubmit} onChange={(event) => patch({ password: event.target.value || undefined })} placeholder="房间密码，可不填" />
+              <Toggle label="显示房间 Tag" value={settings.enableTags ?? false} onChange={(value) => patch({ enableTags: value })} />
+              {settings.enableTags && (
+                <TagPicker
+                  options={config.roomTags}
+                  value={settings.tags || []}
+                  onChange={(tags) => patch({ tags })}
+                />
+              )}
+            </div>
+            <div className="create-section">
+              <h3>对手</h3>
+              <Toggle label="开启 Bot" value={settings.enableBot} disabled={settings.gameId === "othello" || settings.gameId === "tictactoe" || (settings.enablePunishment && settings.punishmentSource === "player") || settings.enableRanked} onChange={(value) => patch({ enableBot: value })} />
+              {settings.gameId === "othello" && <p className="hint">黑白棋暂不支持 Bot。</p>}
+              {settings.gameId === "tictactoe" && <p className="hint">井字棋暂不支持 Bot。</p>}
+              {settings.enablePunishment && settings.punishmentSource === "player" && <p className="hint">玩家发布任务模式需要真人对战，不能开启 Bot。</p>}
+              {settings.enableRanked && <p className="hint">排位战需要真人对战，不能开启 Bot。</p>}
+              {settings.enableBot && (
+                <div className="bot-difficulty-grid">
+                  {config.bots.difficulties.map((difficulty) => (
+                    <button
+                      type="button"
+                      className={`bot-difficulty-card ${settings.botDifficulty === difficulty.id ? "active" : ""}`}
+                      key={difficulty.id}
+                      onClick={() => patch({ botDifficulty: difficulty.id })}
+                      style={{ "--bot-card-color": difficulty.cardColor || "#9ed7ff" } as CSSProperties}
+                    >
+                      <span className="bot-card-emoji">{difficulty.emoji || "🤖"}</span>
+                      <strong>{difficulty.name}</strong>
+                      <em>{botStars(difficulty.level || 1)}</em>
+                      <small>{difficulty.description}</small>
+                      <b>{botStrategyText(difficulty.strategy)}</b>
+                    </button>
+                  ))}
                 </div>
-                <p className="hint">极限排位会按你的极限模式分段调整加减分；非极限玩家无法进入这个房间。</p>
+              )}
+            </div>
+            <div className="create-section">
+              <h3>玩法</h3>
+              <div className="ranked-choice-grid">
+                <button type="button" className={`ranked-choice-card ${!settings.enableRanked ? "active" : ""}`} onClick={() => patch({ enableRanked: false, enableExtremeRanked: false })}>
+                  <span>🎮 普通局</span>
+                  <small>不增加/减少排位积分，可以和 Bot 对战。</small>
+                </button>
+                {(settings.gameId === "othello" ? ([1, 2, 5, 10] as const) : ([5, 10, 20] as const)).map((stake) => (
+                  <button type="button" className={`ranked-choice-card ${settings.enableRanked && settings.stake === stake ? "active" : ""}`} key={stake} onClick={() => patch({ enableRanked: true, stake, enableExtremeRanked: Boolean(me.extremeModeEnabled) })}>
+                    <span>{settings.gameId === "othello" ? "🏆 黑白棋排位" : settings.gameId === "tictactoe" ? "🏆 井字棋排位" : me.extremeModeEnabled ? "⚡ 极限排位" : "🏆 排位"} {stake}{settings.gameId === "othello" ? " 分/子" : " 分"}</span>
+                    <small>{settings.gameId === "othello" ? `每翻掉对方 1 子立即结算 ${stake} 分，终局不重复结算。` : me.extremeModeEnabled ? "只能创建极限排位房；非极限玩家无法进入。" : `胜利 +${stake}，失败 -${stake}；普通平局不扣分，平局双罚时双方 -${stake}。`}</small>
+                  </button>
+                ))}
               </div>
-            )}
-            {settings.enableRanked && !me.extremeModeEnabled && (
-              <p className="hint">你没有开启极限模式，因此只能创建普通排位房。</p>
-            )}
-            {settings.enableRanked && (
-              <div className="multiplier-box">
-                <div className="multiplier-head">
-                  <strong>倍率模式</strong>
-                  <span>{settings.enableRankMultiplier ? `x${settings.rankMultiplier || 1}` : "未开启"}</span>
+              {settings.gameId === "othello" && <p className="hint">黑白棋排位按实时翻子结算，可选 1/2/5/10 分/子；支持倍率和极限模式，但两者不能同时开启。</p>}
+              {settings.gameId === "tictactoe" && <p className="hint">井字棋排位按胜负固定分结算，可选 5/10/20 分；支持倍率和极限模式。</p>}
+              {settings.enableBot && <p className="hint">开启 Bot 时不能选择排位战。</p>}
+              {settings.enableRanked && me.extremeModeEnabled && (
+                <div className="multiplier-box extreme-mode-box">
+                  <div className="multiplier-head">
+                    <strong>⚡ 极限排位已开启</strong>
+                    <span>禁用倍率</span>
+                  </div>
+                  <p className="hint">极限排位会按你的极限模式分段调整加减分；非极限玩家无法进入这个房间。</p>
                 </div>
-                {me.extremeModeEnabled ? (
-                  <p className="hint danger-hint">极限模式不能开启倍率房间，也不能进入倍率房；黑白棋极限排位会按每次翻子实时套用极限折扣。</p>
-                ) : !me.rankMultiplierUnlocked ? (
-                  <>
-                    <p className="hint">提交 200 排位积分后，本次服务器运行期间可创建 2倍 / 5倍 / 10倍排位房。</p>
-                    <button type="button" className="soft-button" disabled={me.stats.rankedPoints < 200} onClick={unlockMultiplierMode}>提交 200 积分解锁</button>
-                    {me.stats.rankedPoints < 200 && <p className="hint danger-hint">你的排位积分不足 200，暂时不能解锁。</p>}
-                  </>
-                ) : (
-                  <>
-                    <div className="multiplier-choice-grid">
-                      {([1, 2, 5, 10] as const).map((multiplier) => (
-                        <button
-                          type="button"
-                          className={`ranked-choice-card ${rankMultiplierForSettings(settings) === multiplier ? "active" : ""}`}
-                          key={multiplier}
-                          onClick={() => patch({ enableRankMultiplier: multiplier > 1, rankMultiplier: multiplier })}
-                        >
-                          <span>{multiplier === 1 ? "普通倍率" : `x${multiplier} 倍房`}</span>
-                          <small>{multiplier === 1 ? "按基础赌分结算。" : settings.gameId === "othello" ? `每翻 1 子按 ${settings.stake * multiplier} 分结算。` : `胜负按 ${settings.stake * multiplier} 分结算。`}</small>
-                        </button>
-                      ))}
-                    </div>
-                    <p className="hint">当前：排位 {settings.stake}{settings.gameId === "othello" ? " 分/子" : " 分"} × {rankMultiplierForSettings(settings)} 倍 = {settings.gameId === "othello" ? `每翻 1 子 ${settings.stake * rankMultiplierForSettings(settings)} 分` : `胜负 ${settings.stake * rankMultiplierForSettings(settings)} 分`}。</p>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-          <div className="create-section">
-            <h3>惩罚</h3>
-            <Toggle label="惩罚模式" value={settings.enablePunishment} onChange={(value) => patch({ enablePunishment: value })} />
-            {settings.gameId === "othello" && <p className="hint">黑白棋惩罚会在终局、认输、逃跑或断线判负后触发；平局双罚开启时黑白棋平局双方都要惩罚。</p>}
-            {settings.gameId === "tictactoe" && <p className="hint">井字棋惩罚会在终局或断线判负后触发；平局双罚开启时井字棋平局双方都要惩罚。</p>}
-            {settings.enablePunishment && (
-              <>
-                <Select value={settings.punishmentSource || "system"} onChange={(value) => patch({ punishmentSource: value as RoomSettings["punishmentSource"] })} options={[
-                  { value: "system", label: "系统任务" },
-                  { value: "player", label: "玩家发布" }
-                ]} />
-                {(settings.punishmentSource || "system") === "system" ? (
-                  <>
-                    <p className="hint">已选择 {selectedPunishmentIdsForConfig(config, settings).length} 个惩罚池；每局会先随机一个惩罚池，再随机任务。</p>
-                    <div className="punishment-choice-grid">
-                      {config.punishments.map((punishment) => {
-                        const active = selectedPunishmentIdsForConfig(config, settings).includes(punishment.id);
-                        return (
+              )}
+              {settings.enableRanked && !me.extremeModeEnabled && (
+                <p className="hint">你没有开启极限模式，因此只能创建普通排位房。</p>
+              )}
+              {settings.enableRanked && (
+                <div className="multiplier-box">
+                  <div className="multiplier-head">
+                    <strong>倍率模式</strong>
+                    <span>{settings.enableRankMultiplier ? `x${settings.rankMultiplier || 1}` : "未开启"}</span>
+                  </div>
+                  {me.extremeModeEnabled ? (
+                    <p className="hint danger-hint">极限模式不能开启倍率房间，也不能进入倍率房；黑白棋极限排位会按每次翻子实时套用极限折扣。</p>
+                  ) : !me.rankMultiplierUnlocked ? (
+                    <>
+                      <p className="hint">提交 200 排位积分后，本次服务器运行期间可创建 2倍 / 5倍 / 10倍排位房。</p>
+                      <button type="button" className="soft-button" disabled={me.stats.rankedPoints < 200} onClick={unlockMultiplierMode}>提交 200 积分解锁</button>
+                      {me.stats.rankedPoints < 200 && <p className="hint danger-hint">你的排位积分不足 200，暂时不能解锁。</p>}
+                    </>
+                  ) : (
+                    <>
+                      <div className="multiplier-choice-grid">
+                        {([1, 2, 5, 10] as const).map((multiplier) => (
                           <button
                             type="button"
-                            className={`punishment-choice-card ${active ? "active" : ""}`}
-                            key={punishment.id}
-                            onClick={() => togglePunishment(punishment.id)}
-                            style={{
-                              "--punishment-bg": punishment.cardImageUrl ? `url(${punishment.cardImageUrl})` : "none",
-                              "--punishment-bg-opacity": String(punishment.cardImageOpacity ?? 0.26)
-                            } as CSSProperties}
+                            className={`ranked-choice-card ${rankMultiplierForSettings(settings) === multiplier ? "active" : ""}`}
+                            key={multiplier}
+                            onClick={() => patch({ enableRankMultiplier: multiplier > 1, rankMultiplier: multiplier })}
                           >
-                            <div className="punishment-choice-meta">
-                              <em>{active ? "已选" : "可选"}</em>
-                              <em>{punishmentTasks(punishment, config).length} 个任务</em>
-                            </div>
-                            <span>{punishment.name}</span>
-                            <small>{punishment.description}</small>
+                            <span>{multiplier === 1 ? "普通倍率" : `x${multiplier} 倍房`}</span>
+                            <small>{multiplier === 1 ? "按基础赌分结算。" : settings.gameId === "othello" ? `每翻 1 子按 ${settings.stake * multiplier} 分结算。` : `胜负按 ${settings.stake * multiplier} 分结算。`}</small>
                           </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                ) : (
-                  <p className="hint">本局结算后，由对手临时写惩罚任务；任务不会保存到后台配置。</p>
-                )}
-                <Toggle label="平局双罚" value={settings.tieDoublePunish} onChange={(value) => patch({ tieDoublePunish: value })} />
-                {settings.enableRanked && settings.tieDoublePunish && (
-                  <p className="hint">排位平局双罚开启时，平局双方都会扣 {settings.stake} 分。</p>
-                )}
-                <Toggle label="惩罚需对手确认" value={settings.requireOpponentConfirm} onChange={(value) => patch({ requireOpponentConfirm: value })} />
-                <Toggle label="允许图片证明" value={settings.allowProofImage ?? true} onChange={(value) => patch({ allowProofImage: value })} />
-              </>
-            )}
+                        ))}
+                      </div>
+                      <p className="hint">当前：排位 {settings.stake}{settings.gameId === "othello" ? " 分/子" : " 分"} × {rankMultiplierForSettings(settings)} 倍 = {settings.gameId === "othello" ? `每翻 1 子 ${settings.stake * rankMultiplierForSettings(settings)} 分` : `胜负 ${settings.stake * rankMultiplierForSettings(settings)} 分`}。</p>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="create-section">
+              <h3>惩罚</h3>
+              <Toggle label="惩罚模式" value={settings.enablePunishment} onChange={(value) => patch({ enablePunishment: value })} />
+              {settings.gameId === "othello" && <p className="hint">黑白棋惩罚会在终局、认输、逃跑或断线判负后触发；平局双罚开启时黑白棋平局双方都要惩罚。</p>}
+              {settings.gameId === "tictactoe" && <p className="hint">井字棋惩罚会在终局或断线判负后触发；平局双罚开启时井字棋平局双方都要惩罚。</p>}
+              {settings.enablePunishment && (
+                <>
+                  <Select value={settings.punishmentSource || "system"} onChange={(value) => patch({ punishmentSource: value as RoomSettings["punishmentSource"] })} options={[
+                    { value: "system", label: "系统任务" },
+                    { value: "player", label: "玩家发布" }
+                  ]} />
+                  {(settings.punishmentSource || "system") === "system" ? (
+                    <>
+                      <p className="hint">已选择 {selectedPunishmentIdsForConfig(config, settings).length} 个惩罚池；每局会先随机一个惩罚池，再随机任务。</p>
+                      <div className="punishment-choice-grid">
+                        {config.punishments.map((punishment) => {
+                          const active = selectedPunishmentIdsForConfig(config, settings).includes(punishment.id);
+                          return (
+                            <button
+                              type="button"
+                              className={`punishment-choice-card ${active ? "active" : ""}`}
+                              key={punishment.id}
+                              onClick={() => togglePunishment(punishment.id)}
+                              style={{
+                                "--punishment-bg": punishment.cardImageUrl ? `url(${punishment.cardImageUrl})` : "none",
+                                "--punishment-bg-opacity": String(punishment.cardImageOpacity ?? 0.26)
+                              } as CSSProperties}
+                            >
+                              <div className="punishment-choice-meta">
+                                <em>{active ? "已选" : "可选"}</em>
+                                <em>{punishmentTasks(punishment, config).length} 个任务</em>
+                              </div>
+                              <span>{punishment.name}</span>
+                              <small>{punishment.description}</small>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="hint">本局结算后，由对手临时写惩罚任务；任务不会保存到后台配置。</p>
+                  )}
+                  <Toggle label="平局双罚" value={settings.tieDoublePunish} onChange={(value) => patch({ tieDoublePunish: value })} />
+                  {settings.enableRanked && settings.tieDoublePunish && (
+                    <p className="hint">排位平局双罚开启时，平局双方都会扣 {settings.stake} 分。</p>
+                  )}
+                  <Toggle label="惩罚需对手确认" value={settings.requireOpponentConfirm} onChange={(value) => patch({ requireOpponentConfirm: value })} />
+                  <Toggle label="允许图片证明" value={settings.allowProofImage ?? true} onChange={(value) => patch({ allowProofImage: value })} />
+                </>
+              )}
+            </div>
           </div>
-        </div>
         </div>
         <div className="modal-actions">
           <button type="button" onClick={onCancel}>取消</button>
@@ -877,7 +877,7 @@ export function Room({ config, room, lobbySuggestions, me, onBack, onError }: { 
       : "离开后，服务器会自动处理你负责的审核或任务"
     : room.settings.gameId === "tictactoe" && room.phase === "choosing" && mySeat
       ? "井字棋对局进行中不能离开战斗席"
-    : "离开房间";
+      : "离开房间";
 
   useEffect(() => {
     if (!mySeat || room.phase === "choosing" && !choices[mySeat]) setLocalChoice(null);
@@ -937,17 +937,34 @@ export function Room({ config, room, lobbySuggestions, me, onBack, onError }: { 
   }
 
   async function uploadImage(file: File) {
+    let localPreview = "";
     try {
       const uploadFile = await prepareProofImageForUpload(file);
+      // 立刻本地预览（blob，不显示「加载中」）
+      localPreview = URL.createObjectURL(uploadFile);
+      setProofImage(localPreview);
       const form = new FormData();
       form.append("token", localStorage.getItem(tokenKey) || "");
-      form.append("image", uploadFile, uploadFile.name);
+      form.append("image", uploadFile, uploadFile.name.endsWith(".webp") ? uploadFile.name : "proof.webp");
       const response = await fetch("/api/proof-image", { method: "POST", body: form });
-      const data = await response.json();
+      let data: { message?: string; imageUrl?: string } = {};
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error(response.ok ? "服务器响应无效" : `上传失败（${response.status}）`);
+      }
       if (!response.ok) throw new Error(data.message || "上传失败");
+      if (!data.imageUrl) throw new Error("服务器未返回图片地址");
+      // 提交必须用服务端 URL；展示切到远端（ProofImage 已处理缓存 onLoad）
       setProofImage(data.imageUrl);
     } catch (error) {
+      setProofImage("");
       onError(error instanceof Error ? error.message : "图片上传失败");
+    } finally {
+      if (localPreview) {
+        const url = localPreview;
+        window.setTimeout(() => URL.revokeObjectURL(url), 3000);
+      }
     }
   }
 
@@ -1209,8 +1226,8 @@ export function Room({ config, room, lobbySuggestions, me, onBack, onError }: { 
                           {isMine && <p className="hint">等待对方发布任务，发布后你就可以提交证明。</p>}
                           {canAssignTask && (
                             <>
-                              <p className="hint">请给对方发布一个本局临时惩罚任务。可用 {"{loser}"} / {"{winner}"} 占位符。</p>
-                              <textarea value={taskInputs[playerId] || ""} onChange={(event) => setTaskInputs((old) => ({ ...old, [playerId]: event.target.value }))} placeholder="{loser} 需要拥抱 {winner}" />
+                              <p className="hint">请给对方发布一个本局临时惩罚任务。</p>
+                              <textarea value={taskInputs[playerId] || ""} onChange={(event) => setTaskInputs((old) => ({ ...old, [playerId]: event.target.value }))} placeholder="例如：面向镜头比个耶并拍照证明" />
                               <button className="primary" onClick={() => assignPunishmentTask(playerId)}>发布任务</button>
                             </>
                           )}
@@ -1234,7 +1251,7 @@ export function Room({ config, room, lobbySuggestions, me, onBack, onError }: { 
                           <p>{proof.text}</p>
                           {proof.imageUrl && (
                             <button type="button" className="history-proof-image-button" title="点击放大" onClick={() => setPreviewImage(proof.imageUrl!)}>
-                              <img src={proof.imageUrl} alt="惩罚证明" loading="lazy" decoding="async" />
+                              <ProofImage src={proof.imageUrl} alt="惩罚证明" />
                             </button>
                           )}
                         </div>
@@ -1248,11 +1265,15 @@ export function Room({ config, room, lobbySuggestions, me, onBack, onError }: { 
                             <>
                               <label className="upload">
                                 <Upload size={16} /> 上传图片证明
-                                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => event.target.files?.[0] && uploadImage(event.target.files[0]).catch((error) => onError(error.message))} />
+                                {/* Chrome 的 accept="image/*" 通配符会用内置图片扩展名表过滤文件选择器，
+                                    该表不含 heic/heif，导致即使同时列了 .heic/.heif 也可能被隐藏；
+                                    这里去掉通配符、只列具体扩展名/MIME，纯粹影响系统选择器的可见文件，
+                                    不改变选完文件之后的校验/压缩/上传流程。 */}
+                                <input type="file" accept=".jpg,.jpeg,.png,.webp,.heic,.heif,.gif,.bmp,image/jpeg,image/png,image/webp,image/gif,image/bmp" onChange={(event) => event.target.files?.[0] && uploadImage(event.target.files[0]).catch((error) => onError(error.message))} />
                               </label>
                               {proofImage && (
                                 <button type="button" className="history-proof-image-button" title="点击放大" onClick={() => setPreviewImage(proofImage)}>
-                                  <img className="proof-preview" src={proofImage} alt="惩罚证明" loading="lazy" decoding="async" />
+                                  <ProofImage className="proof-preview" src={proofImage} alt="惩罚证明" />
                                 </button>
                               )}
                             </>
@@ -1427,7 +1448,7 @@ export function TicTacToePanel({ room, me, now, onMove, onReady, onRestart, onGi
                       ? "强制白给中，系统正在随机落子..."
                       : giveawayPrompt
                         ? isMyGiveawayPrompt ? "请选择不白给或白给落子。" : `等待 ${giveawayPromptName} 选择是否白给。`
-                    : isMyTurn ? "轮到你落子。" : `轮到 ${turnName} 落子。`}
+                        : isMyTurn ? "轮到你落子。" : `轮到 ${turnName} 落子。`}
           </p>
         </div>
         {state && (
@@ -1613,17 +1634,19 @@ export function OthelloPanel({ room, me, now, onMove, onSettle, onRestart, onRea
         {(state?.board || Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => null))).map((row, rowIndex) => row.map((cell, colIndex) => {
           const legal = legalKeys.has(`${rowIndex}-${colIndex}`);
           return (
-            <button
-              type="button"
-              className={`othello-cell ${cell || ""} ${legal ? "legal" : ""}`}
-              key={`${rowIndex}-${colIndex}`}
-              disabled={!isMyTurn || !legal}
-              onClick={() => onMove(rowIndex, colIndex)}
-              aria-label={`第 ${rowIndex + 1} 行第 ${colIndex + 1} 列`}
-            >
+            // 棋子/落子提示挪到 button 外层作为兄弟节点：button 的 disabled 变暗
+            // (opacity:.6) 只应影响格子自身，不应连带压暗棋子，两者需要独立的合成层级。
+            <div className="othello-cell-wrap" key={`${rowIndex}-${colIndex}`}>
+              <button
+                type="button"
+                className={`othello-cell ${cell || ""} ${legal ? "legal" : ""}`}
+                disabled={!isMyTurn || !legal}
+                onClick={() => onMove(rowIndex, colIndex)}
+                aria-label={`第 ${rowIndex + 1} 行第 ${colIndex + 1} 列`}
+              />
               {cell && <span className={`othello-disc ${cell}`} />}
               {!cell && legal && <span className="othello-legal-dot" />}
-            </button>
+            </div>
           );
         }))}
       </div>
@@ -1772,7 +1795,11 @@ export function RoundHistoryCard({ item, onOpenImage }: { item: RoomSnapshot["ro
                     <p>{proof.text || "（无文字）"}</p>
                     {proof.rejectReason && <small>审核备注：{proof.rejectReason}</small>}
                     {proof.redoTaskText && <small>重做任务：{proof.redoTaskText}</small>}
-                    {proof.imageUrl && <button className="history-proof-image-button" onClick={() => onOpenImage(proof.imageUrl!)}><img src={proof.imageUrl} alt="惩罚证明" loading="lazy" decoding="async" /></button>}
+                    {proof.imageUrl && (
+                      <button className="history-proof-image-button" onClick={() => onOpenImage(proof.imageUrl!)}>
+                        <ProofImage src={proof.imageUrl} alt="惩罚证明" />
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="history-proof inline muted"><span>完成证明</span><p>尚未提交</p></div>
@@ -1791,7 +1818,11 @@ export function RoundHistoryCard({ item, onOpenImage }: { item: RoomSnapshot["ro
               {proof.taskText && <small>任务：{proof.taskText}</small>}
               <p>{proof.text || "（无文字）"}</p>
               {proof.rejectReason && <small>审核备注：{proof.rejectReason}</small>}
-              {proof.imageUrl && <button className="history-proof-image-button" onClick={() => onOpenImage(proof.imageUrl!)}><img src={proof.imageUrl} alt="惩罚证明" loading="lazy" decoding="async" /></button>}
+              {proof.imageUrl && (
+                <button className="history-proof-image-button" onClick={() => onOpenImage(proof.imageUrl!)}>
+                  <ProofImage src={proof.imageUrl} alt="惩罚证明" />
+                </button>
+              )}
             </div>
           ))}
         </section>
@@ -1850,6 +1881,58 @@ export function OfflineBadge({ player, now }: { player: PublicPlayer; now: numbe
   if (player.connected) return null;
   const seconds = player.disconnectExpiresAt ? Math.max(0, Math.ceil((player.disconnectExpiresAt - now) / 1000)) : 0;
   return <em className="offline-badge">离线 {seconds}s</em>;
+}
+
+/** 证明图：blob 立刻显示；远端图显示加载态。处理缓存图 onLoad 不触发导致一直「加载中」。 */
+export function ProofImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  const isLocal = src.startsWith("blob:") || src.startsWith("data:");
+  const [loaded, setLoaded] = useState(isLocal);
+  const [failed, setFailed] = useState(false);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    const local = src.startsWith("blob:") || src.startsWith("data:");
+    setFailed(false);
+    if (local) {
+      setLoaded(true);
+      return;
+    }
+    setLoaded(false);
+    // 下一帧检查：缓存命中时 complete 已为 true，不会再触发 onLoad
+    const id = window.requestAnimationFrame(() => {
+      const el = imgRef.current;
+      if (el && el.complete && el.naturalWidth > 0) setLoaded(true);
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [src]);
+
+  if (isLocal) {
+    return <img className={className} src={src} alt={alt} />;
+  }
+  return (
+    <span className={`proof-image-wrap ${loaded ? "is-ready" : ""} ${className || ""}`}>
+      {!loaded && !failed && (
+        <span className="proof-image-loading">
+          <span>图片加载中…</span>
+          <span className="proof-image-loading-bar" aria-hidden="true"><i /></span>
+        </span>
+      )}
+      {failed ? (
+        <span className="proof-image-loading">图片加载失败</span>
+      ) : (
+        <img
+          ref={imgRef}
+          src={src}
+          alt={alt}
+          loading="eager"
+          decoding="async"
+          className={loaded ? "is-loaded" : ""}
+          onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
+        />
+      )}
+    </span>
+  );
 }
 
 export function PunishmentStatus({ proof, isMine, requireConfirm }: { proof: RoomSnapshot["proofs"][number]; isMine: boolean; requireConfirm: boolean }) {
@@ -1985,7 +2068,7 @@ export function SeatView({ seat, room, me, now, onSit }: { seat: SeatKey; room: 
           ? othelloTurn ? `${othelloColorLabel}落子中` : othelloColorLabel
           : room.settings.gameId === "tictactoe"
             ? tictactoeTurn ? `${tictactoeMarkLabel}落子中` : tictactoeMarkLabel
-          : choice ? choiceText(choice) : room.seats.A && room.seats.B ? "🤔 等待出拳" : "⏳ 等人"}
+            : choice ? choiceText(choice) : room.seats.A && room.seats.B ? "🤔 等待出拳" : "⏳ 等人"}
       </p>
       {occupant && !("isBot" in occupant) && <SeatStatsView stats={stats} />}
     </div>
@@ -2086,7 +2169,7 @@ export function gameInfoTag(config: AppConfig, gameId: RoomSettings["gameId"]) {
     ? roomInfoTag(config, "gameOthello", "", "⚫⚪ ")
     : gameId === "tictactoe"
       ? roomInfoTag(config, "gameTicTacToe", "", "❌⭕ ")
-    : roomInfoTag(config, "gameRps");
+      : roomInfoTag(config, "gameRps");
 }
 
 export function punishmentSelectionText(config: AppConfig, settings: Pick<RoomSettings, "punishmentId" | "punishmentIds">) {
@@ -2138,11 +2221,11 @@ export function Leaderboard({ title, players }: { title: string; players: Public
         {players.map((player, index) => {
           const stats = safePlayerStats(player);
           return (
-          <p className="rank-row rich" key={player.id}>
-            <span>{index + 1}. <PlayerBadge player={player} compact /></span>
-            <small>{stats.wins}胜 {stats.losses}负 {stats.draws}平 · {stats.punishments}惩罚</small>
-            <b>{winRateText(player)} · {stats.rankedPoints}分</b>
-          </p>
+            <p className="rank-row rich" key={player.id}>
+              <span>{index + 1}. <PlayerBadge player={player} compact /></span>
+              <small>{stats.wins}胜 {stats.losses}负 {stats.draws}平 · {stats.punishments}惩罚</small>
+              <b>{winRateText(player)} · {stats.rankedPoints}分</b>
+            </p>
           );
         })}
         {players.length === 0 && <p className="empty">暂无在线玩家</p>}
@@ -2259,31 +2342,31 @@ export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPl
             const oCap = Number(ot.captured) || 0;
             const oLost = Number(ot.lost) || 0;
             return (
-            <article className="global-rank-card" key={`${tab}-${player.id}`}>
-              <div className="global-rank-main">
-                <span className="rank-index">#{index + 1}</span>
-                <PlayerBadge player={player} compact />
-                <span className={`online-dot ${player.connected ? "online" : "offline"}`}>{player.connected ? "在线" : "离线"}</span>
-              </div>
-              <div className="global-rank-stats">
-                {isOthelloLeaderboardTab(tab) ? (
-                  <>
-                    <span>{oWins}胜 {oLosses}负 {oDraws}平</span>
-                    <span>吃 {oCap}</span>
-                    <span>被吃 {oLost}</span>
-                    <span>净值 {oCap - oLost}</span>
-                  </>
-                ) : (
-                  <>
-                    <span>{stats.rankedPoints} 分</span>
-                    <span>{stats.wins}胜 {stats.losses}负 {stats.draws}平</span>
-                    <span>{stats.punishments} 惩罚</span>
-                    <span>胜率 {winRateText(player)}</span>
-                  </>
-                )}
-              </div>
-              <LeaderboardExtra player={player} tab={tab} now={now} />
-            </article>
+              <article className="global-rank-card" key={`${tab}-${player.id}`}>
+                <div className="global-rank-main">
+                  <span className="rank-index">#{index + 1}</span>
+                  <PlayerBadge player={player} compact />
+                  <span className={`online-dot ${player.connected ? "online" : "offline"}`}>{player.connected ? "在线" : "离线"}</span>
+                </div>
+                <div className="global-rank-stats">
+                  {isOthelloLeaderboardTab(tab) ? (
+                    <>
+                      <span>{oWins}胜 {oLosses}负 {oDraws}平</span>
+                      <span>吃 {oCap}</span>
+                      <span>被吃 {oLost}</span>
+                      <span>净值 {oCap - oLost}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>{stats.rankedPoints} 分</span>
+                      <span>{stats.wins}胜 {stats.losses}负 {stats.draws}平</span>
+                      <span>{stats.punishments} 惩罚</span>
+                      <span>胜率 {winRateText(player)}</span>
+                    </>
+                  )}
+                </div>
+                <LeaderboardExtra player={player} tab={tab} now={now} />
+              </article>
             );
           })}
           {ranked.length === 0 && <p className="empty">暂无玩家上榜</p>}
@@ -2864,9 +2947,9 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
 
   async function exportConfig() {
     try {
-      const response = await fetch(`/api/config/export?password=${encodeURIComponent(password)}`, {
+      const response = await fetch("/api/config/export", {
         method: "GET",
-        headers: { "Accept": "application/json" }
+        headers: { "Accept": "application/json", "X-Admin-Password": password }
       });
       if (!response.ok) {
         const data = await response.json().catch(() => null);
@@ -3126,7 +3209,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
       const punishment = draft.punishments[selectedIndex];
       return (
         <div className="config-section admin-section-card">
-          <AdminSectionHeader title="惩罚池" subtitle="编辑系统惩罚、阵营任务版本、随机房名，以及玩家发布任务模式的房名。任务文案可用 {loser}（败者昵称）、{winner}（胜者昵称）。" />
+          <AdminSectionHeader title="惩罚池" subtitle="编辑系统惩罚、阵营任务版本、随机房名，以及玩家发布任务模式的房名。系统任务文案可用 {loser}/{winner} 插入败者/胜者昵称。" />
           <div className="punishment-manager">
             <aside className="punishment-index-panel">
               <input value={punishmentSearch} onChange={(event) => setPunishmentSearch(event.target.value)} placeholder="搜索惩罚名称 / ID / 简介" />
@@ -3251,7 +3334,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                         {draft.genderFactions.map((faction) => (
                           <label key={`${punishment.id}-${task.id}-${faction.id}`}>
                             <span>{faction.label}任务版本</span>
-                            <textarea value={task.variants?.[faction.id] || ""} onChange={(event) => patchPunishmentTask(patch, draft, selectedIndex, taskIndex, { ...task, variants: { ...(task.variants || {}), [faction.id]: event.target.value } })} placeholder={`给${faction.label}的任务，可用 {loser}/{winner}，如：{loser} 需要拥抱 {winner}`} />
+                            <textarea value={task.variants?.[faction.id] || ""} onChange={(event) => patchPunishmentTask(patch, draft, selectedIndex, taskIndex, { ...task, variants: { ...(task.variants || {}), [faction.id]: event.target.value } })} placeholder={`系统任务·${faction.label}，可用 {loser}/{winner}，如：{loser} 需要拥抱 {winner}`} />
                           </label>
                         ))}
                       </div>

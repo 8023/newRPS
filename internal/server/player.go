@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/subtle"
 	"fmt"
 	"math"
 	"math/rand"
@@ -17,7 +18,12 @@ func (s *Server) publicConfig() types.AppConfig {
 }
 
 func (s *Server) adminPasswordMatches(password string) bool {
-	return s.cfg.Site.AdminPassword != "" && password == s.cfg.Site.AdminPassword
+	expected := s.cfg.Site.AdminPassword
+	if expected == "" {
+		return false
+	}
+	// 恒定时间比较，避免按字符早退泄露口令长度/前缀。
+	return subtle.ConstantTimeCompare([]byte(password), []byte(expected)) == 1
 }
 
 func (s *Server) titleSegmentFor(points int) *types.TitleSegment {

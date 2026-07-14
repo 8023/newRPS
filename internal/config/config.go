@@ -21,8 +21,8 @@ import (
 	"github.com/doumiao/newRPS/internal/types"
 )
 
-// 配置文件权限：部署后任意用户可写（后台保存 / 容器挂载）。
-const configFileMode = 0o666
+// 配置文件权限：仅属主可读写（含明文管理员口令，禁止同机其他用户读取）。
+const configFileMode = 0o600
 
 // 拆分后的功能配置文件名（缺一即加载失败，除非仍存在旧单体文件可迁移）。
 var splitConfigFiles = []string{
@@ -833,7 +833,7 @@ func ExportConfigText() (string, error) {
 	return string(data) + "\n", nil
 }
 
-// EnsureConfigPermissions 将 config/*.json 设为可写、bin/server 设为可执行（部署后可选调用）。
+// EnsureConfigPermissions 将 config/*.json 设为仅属主可读写（0600）、bin/server 设为可执行（部署后可选调用）。
 func EnsureConfigPermissions() {
 	dir := configDir()
 	entries, err := os.ReadDir(dir)
