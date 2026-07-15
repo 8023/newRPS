@@ -249,6 +249,13 @@ npm run test           # go test + 前端 build
 
 ## 最近更新记录
 
+### v2.1.25（2026-07-15）
+
+- **聊天持久化**：房间聊天与大厅留言板改为写入 SQLite（`data/chat.db`，`mattn/go-sqlite3`），重启不再丢失历史；历史通过 `chat:load` / `chat:loadOlder` 分页拉取（瀑布流，滚到顶部自动加载更早 100 条），实时增量走新的 `chat:new` 频道推送。
+- **留言板并入聊天**：大厅原有的独立「留言板」（`suggestion:add`）下线，与大厅聊天合并为同一套 UI/存储，房间内的「大厅」tab 与大厅页共用同一份数据。
+- **@提及**：聊天可以点头像 @ 某位玩家，被 @ 的消息气泡高亮显示；每条消息最多记录 20 个提及对象。
+- **构建方式变更**：`bin/server` 恢复为 CGO 动态链接（`CGO_ENABLED=1`，因为 sqlite3 驱动需要 CGO），不再是 v2.1.24 的纯静态二进制；`docker-compose.yml` 基础镜像由 `debian:bookworm-slim` 换为 `debian:trixie-slim`（更高版本 glibc），避免构建机 glibc 版本高于运行环境导致二进制无法启动。**升级注意**：沿用旧部署包（`docker-compose.yml` 仍是 `bookworm-slim`）的用户需要拉取本次 Release 包中的新 `docker-compose.yml`，否则新二进制可能因 glibc 版本不够而无法启动。
+
 ### v2.1.24（2026-07-15）
 
 - **黑白棋棋子清晰度**：`disabled` 格子整体变暗（`opacity:.6`）会连带压暗棋子；棋子改为格子外层的独立兄弟节点，格子变暗与棋子透明度（固定 0.8）互不影响，格子仍是正方形、棋子占格子边长 50%。
