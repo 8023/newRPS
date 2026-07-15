@@ -146,7 +146,7 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		Score: map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0},
 		SeatedScore: map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0},
 		SeatStats: map[types.SeatKey]types.SeatStats{types.SeatA: emptySeatStats(), types.SeatB: emptySeatStats()},
-		RoundHistory: []types.RoundHistoryItem{}, Chat: []types.ChatMessage{}, LockedSeatIDs: map[string]struct{}{},
+		RoundHistory: []types.RoundHistoryItem{}, LockedSeatIDs: map[string]struct{}{},
 		DisconnectForfeits: map[string]DisconnectForfeit{}, CreatedAt: nowMs(),
 	}
 	s.rooms[roomID] = room
@@ -1141,14 +1141,20 @@ func (s *Server) onPunishmentConfirm(client *Client, env wsEnvelope) {
 func (s *Server) onChatSend(client *Client, env wsEnvelope) {
 	var p struct {
 		RoomID string `json:"roomId"`
-		Text   string `json:"text"`
+		Text     string   `json:"text"`
+		Mentions []string `json:"mentions"`
 	}
 	_ = decodeD(env, &p)
 	player, ok := s.requirePlayerInGame(client, env)
 	if !ok {
 		return
 	}
-	cleanMessageText := cleanText(p.Text, 300)
+	// 大厅聊天（roomId==""）允许更长文本，保留原留言板体验；房间聊天 300。
+	maxLen := 300
+	if p.RoomID == "" {
+		maxLen = 500
+	}
+	cleanMessageText := cleanText(p.Text, maxLen)
 	if cleanMessageText == "" {
 		client.reply(env.ID, nil, "请输入聊天内容")
 		return
@@ -1159,8 +1165,8 @@ func (s *Server) onChatSend(client *Client, env wsEnvelope) {
 	message := types.ChatMessage{
 		ID: randomID(), RoomID: p.RoomID, PlayerID: player.ID,
 		Author: player.DisplayName, AuthorPlayer: &pub, Text: cleanMessageText, At: nowMs(),
+		Mentions: normalizeMentions(p.Mentions),
 	}
-	scope := "lobby"
 	if p.RoomID != "" {
 		room := s.rooms[p.RoomID]
 		if room == nil || player.RoomID != p.RoomID {
@@ -1168,52 +1174,93 @@ func (s *Server) onChatSend(client *Client, env wsEnvelope) {
 			return
 		}
 		message.AuthorRole = s.roomRole(room, player.ID)
-		s.appendRoomChat(room, message)
-		s.emitToRoom(p.RoomID, "chat:append", message)
-		scope = "room"
-	} else {
-		s.appendLobbyChat(message)
-		s.emitLobbyChatAppend(message)
 	}
-	// channel=room 房间聊天；channel=lobby 大厅公共频道（p.RoomID=="" 分支目前无前端入口，
-	// 实际的"大厅聊天"体验是留言板 onSuggestionAdd，也用 channel=lobby 写进同一张表）
-	s.activityLog("chat", []string{
-		"time", "channel", "roomId", "playerId", "playerName", "text",
-	}, []string{
-		time.Now().Format(time.RFC3339), scope, p.RoomID, player.ID, playerShortName(player), cleanMessageText,
-	})
+	// 持久化 + 实时推送（房间/大厅由 RoomID 区分）。
+	s.deliverChat(message, true)
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
-func (s *Server) onSuggestionAdd(client *Client, env wsEnvelope) {
+// normalizeMentions 去重并限制被 @ 玩家 id 数量上限，防止刷屏 / 过大 payload。
+func normalizeMentions(ids []string) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	const maxMentions = 20
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+		if len(out) >= maxMentions {
+			break
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// onChatLoad 返回某聊天频道最近一页（默认 100 条，升序）+ 是否还有更早历史。
+func (s *Server) onChatLoad(client *Client, env wsEnvelope) {
 	var p struct {
-		Text string `json:"text"`
+		RoomID string `json:"roomId"`
 	}
 	_ = decodeD(env, &p)
-	player, ok := s.requirePlayerInGame(client, env)
-	if !ok {
+	if p.RoomID != "" {
+		// 房间聊天：必须在该房间内才能拉取
+		player := s.getPlayerByClientID(client.id)
+		if player == nil || player.RoomID != p.RoomID {
+			client.reply(env.ID, nil, "你不在这个房间里")
+			return
+		}
+	}
+	messages, hasMore, err := s.loadChatPage(p.RoomID, 0)
+	if err != nil {
+		client.reply(env.ID, nil, "聊天记录加载失败")
 		return
 	}
-	cleanSuggestionText := cleanText(p.Text, 500)
-	if cleanSuggestionText == "" {
-		client.reply(env.ID, nil, "请输入留言内容")
+	client.reply(env.ID, map[string]any{"roomId": p.RoomID, "messages": messages, "hasMore": hasMore}, "")
+}
+
+// onChatLoadOlder 瀑布流：返回 seq < beforeSeq 的更早一页 + hasMore。
+func (s *Server) onChatLoadOlder(client *Client, env wsEnvelope) {
+	var p struct {
+		RoomID    string `json:"roomId"`
+		BeforeSeq int64  `json:"beforeSeq"`
+	}
+	_ = decodeD(env, &p)
+	if p.RoomID != "" {
+		player := s.getPlayerByClientID(client.id)
+		if player == nil || player.RoomID != p.RoomID {
+			client.reply(env.ID, nil, "你不在这个房间里")
+			return
+		}
+	}
+	if p.BeforeSeq <= 0 {
+		client.reply(env.ID, nil, "游标无效")
 		return
 	}
-	pub := s.publicPlayer(player)
-	suggestion := types.Suggestion{
-		ID: randomID(), PlayerID: player.ID, Author: player.DisplayName,
-		AuthorPlayer: &pub, Text: cleanSuggestionText, At: nowMs(),
+	messages, hasMore, err := s.loadChatPage(p.RoomID, p.BeforeSeq)
+	if err != nil {
+		client.reply(env.ID, nil, "聊天记录加载失败")
+		return
 	}
-	s.appendSuggestion(suggestion)
-	s.emitToRoom(lobbySuggestionChannel, "suggestion:append", suggestion)
-	// 留言板是实际可用的"大厅聊天"体验（onChatSend 的空 roomId 分支前端从未触发过），
-	// 合并进 chat.csv 时统一用 channel=lobby，和房间聊天的 channel=room 对应，只留两种取值。
-	s.activityLog("chat", []string{
-		"time", "channel", "roomId", "playerId", "playerName", "text",
-	}, []string{
-		time.Now().Format(time.RFC3339), "lobby", "", player.ID, playerShortName(player), cleanSuggestionText,
-	})
-	client.reply(env.ID, map[string]any{"ok": true}, "")
+	client.reply(env.ID, map[string]any{"roomId": p.RoomID, "messages": messages, "hasMore": hasMore}, "")
+}
+
+func (s *Server) loadChatPage(roomID string, beforeSeq int64) ([]types.ChatMessage, bool, error) {
+	if s.chatDB == nil {
+		return []types.ChatMessage{}, false, nil
+	}
+	return s.chatDB.older(roomID, beforeSeq, chatPageSize)
 }
 
 func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
@@ -1237,11 +1284,14 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 	}
 	roomDeleted := false
 	changedPlayerRoomID := ""
-	if p.Action == "clearSuggestions" {
-		s.suggestions = nil
-	}
-	if p.Action == "clearLobbyChat" {
-		s.lobbyChat = nil
+	if p.Action == "clearSuggestions" || p.Action == "clearLobbyChat" {
+		if s.chatDB != nil {
+			if err := s.chatDB.clearLobby(); err != nil {
+				s.errorLog("chat_clear_failed", err.Error())
+			}
+		}
+		// 通知所有在大厅聊天频道的客户端清空本地视图
+		s.emitToRoom(lobbySuggestionChannel, "chat:cleared", map[string]any{"roomId": ""})
 	}
 	if p.Action == "broadcastAnnouncement" {
 		cleanMessage := cleanText(p.Message, 200)
@@ -1291,7 +1341,12 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 	}
 	if p.Action == "clearRoomChat" && p.RoomID != "" {
 		if room := s.rooms[p.RoomID]; room != nil {
-			room.Chat = []types.ChatMessage{}
+			if s.chatDB != nil {
+				if err := s.chatDB.clearRoom(p.RoomID); err != nil {
+					s.errorLog("chat_clear_failed", err.Error())
+				}
+			}
+			s.emitToRoom(p.RoomID, "chat:cleared", map[string]any{"roomId": p.RoomID})
 		}
 	}
 	if p.Action == "forceNext" && p.RoomID != "" {

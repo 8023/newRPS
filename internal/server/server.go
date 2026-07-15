@@ -138,6 +138,12 @@ func New() (*Server, error) {
 		logCh:                       make(chan activityLogEntry, 1024),
 		startedAt:                   nowMs(),
 	}
+	// 聊天持久化：失败不阻断启动，仅记录（内存降级为不落盘，功能仍可用）。
+	if store, err := openChatStore(dataDir); err != nil {
+		s.errorLog("chat_store_open_failed", err.Error())
+	} else {
+		s.chatDB = store
+	}
 	exportConfigText = config.ExportConfigText
 	return s, nil
 }
@@ -184,6 +190,7 @@ func (s *Server) Run() error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = httpServer.Shutdown(shutdownCtx)
+		_ = s.chatDB.Close()
 		return nil
 	case err := <-errCh:
 		if err == http.ErrServerClosed {

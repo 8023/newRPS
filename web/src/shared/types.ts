@@ -179,6 +179,10 @@ export type ChatMessage = {
   system?: boolean;
   transient?: boolean;
   expiresAt?: number;
+  // 被 @ 的玩家 public id 列表；me.id 命中时气泡高亮。
+  mentions?: string[];
+  // SQLite 自增序号，做瀑布流分页游标；系统消息无此字段。
+  seq?: number;
 };
 
 export type Suggestion = {

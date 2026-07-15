@@ -170,10 +170,8 @@ func (s *Server) roomSnapshot(room *RoomState, includeChat, includeHistory bool)
 		}
 		history = append(history, room.RoundHistory[:limit]...)
 	}
-	chat := []types.ChatMessage{}
-	if includeChat {
-		chat = append(chat, room.Chat...)
-	}
+	// 房间聊天已迁到 SQLite，走 chat:load / chat:new，不再随房间快照下发。
+	_ = includeChat
 	choices := s.hideOpponentChoices(room)
 	snap := types.RoomSnapshot{
 		ID:                room.ID,
@@ -196,7 +194,7 @@ func (s *Server) roomSnapshot(room *RoomState, includeChat, includeHistory bool)
 		SeatStats:         seatStats,
 		RoundHistory:      history,
 		RoundHistoryTotal: len(room.RoundHistory),
-		Chat:              chat,
+		Chat:              []types.ChatMessage{},
 	}
 	if room.Phase == types.PhaseResult || room.Phase == types.PhasePunishment {
 		if room.RevealedChoices != nil {

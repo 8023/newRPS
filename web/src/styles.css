@@ -2955,8 +2955,8 @@ main {
 }
 
 .chat-avatar {
-  width: 30px;
-  height: 30px;
+  min-width: 36px;
+  min-height: 36px;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -2966,6 +2966,38 @@ main {
   color: #fff;
   font-weight: 900;
   font-size: 13px;
+}
+
+/* 可点击头像（@ 人）：沿用头像外观，加交互态 */
+.chat-avatar-button {
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.08s ease, box-shadow 0.12s ease;
+}
+
+.chat-avatar-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--primary) 45%, transparent);
+}
+
+/* 上滑加载更早消息的提示 */
+.chat-more-hint {
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 2px 0 4px;
+}
+
+/* @ 到自己的消息气泡高亮 */
+.chat-bubble-row.mentioned .chat-bubble {
+  border-color: color-mix(in srgb, var(--primary) 70%, var(--border-strong));
+  background: color-mix(in srgb, var(--primary) 16%, var(--panel-solid));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 40%, transparent), 0 6px 14px color-mix(in srgb, var(--shadow) 70%, transparent);
+}
+
+.chat-bubble-row.mentioned .chat-bubble::before {
+  background: color-mix(in srgb, var(--primary) 16%, var(--panel-solid));
+  border-color: color-mix(in srgb, var(--primary) 70%, var(--border-strong));
 }
 
 .chat-meta,

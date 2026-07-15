@@ -7,10 +7,15 @@
 # 源码开发本机构建：
 #   npm install --prefix web && npm run build
 #   docker compose up -d
+#
+# 基础镜像用 trixie（Debian 13）而非 bookworm（Debian 12）：bin/server 现在依赖
+# mattn/go-sqlite3（CGO，动态链接构建机 glibc）。构建机常见的较新发行版
+# （如 Ubuntu 24.04，glibc 2.39）编译出的二进制在 bookworm（glibc 2.36）上可能因为
+# glibc 版本更低而无法运行；trixie（glibc 2.41）更新，兼容性更有保障。
 
 services:
   gamehouse:
-    image: debian:bookworm-slim
+    image: debian:trixie-slim
     container_name: doumiao-gamehouse
     restart: unless-stopped
     working_dir: /app

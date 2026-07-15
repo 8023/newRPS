@@ -35,7 +35,7 @@
 ├── work/                # uploads、session.secret（gitignore）
 ├── go.mod
 ├── package.json         # 根脚本（并发 dev / 一键 build）
-├── docker-compose.yml   # debian:bookworm-slim + 挂载产物
+├── docker-compose.yml   # debian:trixie-slim + 挂载产物
 ├── .env.example
 └── README.md
 ```
@@ -86,7 +86,7 @@ npm run dev:web        # Vite，代理 /api /ws /uploads → 9988
 
 ### 方式三：Docker Compose（推荐服务器部署）
 
-**只需 Release 部署包**（不必 clone 源码）。使用官方 **`debian:bookworm-slim`**，**无需 Dockerfile**。
+**只需 Release 部署包**（不必 clone 源码）。使用官方 **`debian:trixie-slim`**，**无需 Dockerfile**。
 
 ```bash
 # 下载并解压到任意目录（示例：2.1.24）

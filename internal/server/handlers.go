@@ -109,8 +109,10 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{15, 60_000, 45_000}, s.onPunishmentConfirm
 	case "chat:send":
 		return RateLimitOptions{20, 60_000, 30_000}, s.onChatSend
-	case "suggestion:add":
-		return RateLimitOptions{5, 60_000, 60_000}, s.onSuggestionAdd
+	case "chat:load":
+		return RateLimitOptions{30, 60_000, 10_000}, s.onChatLoad
+	case "chat:loadOlder":
+		return RateLimitOptions{40, 60_000, 10_000}, s.onChatLoadOlder
 	case "admin:action":
 		return RateLimitOptions{30, 60_000, 60_000}, s.onAdminAction
 	default:
@@ -309,15 +311,11 @@ func (s *Server) onLobbyUnsubscribe(client *Client, env wsEnvelope) {
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
+// onLobbySuggestionsSubscribe：仅加入大厅聊天实时频道（房间内的「大厅」tab 用），
+// 历史消息由前端另外调 chat:load 拉取。
 func (s *Server) onLobbySuggestionsSubscribe(client *Client, env wsEnvelope) {
 	client.joinRoom(lobbySuggestionChannel)
-	limit := 50
-	if len(s.suggestions) < limit {
-		limit = len(s.suggestions)
-	}
-	// 始终返回非 null 数组
-	list := emptySuggestions(s.suggestions[:limit])
-	client.reply(env.ID, map[string]any{"suggestions": list}, "")
+	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
 func (s *Server) onLobbySuggestionsUnsubscribe(client *Client, env wsEnvelope) {

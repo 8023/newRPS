@@ -1,4 +1,4 @@
-import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type UIEvent as ReactUIEvent, useEffect, useRef, useState } from "react";
 import { Coffee, Crown, DoorOpen, Download, ExternalLink, Eye, HeartHandshake, MessageCircle, Moon, Pencil, RefreshCcw, Save, Send, Settings, Shield, Sun, Swords, Upload, UserRound, Users } from "lucide-react";
 import type { AppConfig, BotDifficulty, ChatMessage, GenderFaction, LobbySnapshot, Move, PublicPlayer, PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant } from "../shared/types";
 import {
@@ -10,6 +10,7 @@ import { joinIdentityPayload } from "../lib/session";
 import { appendHistoryPage, normalizeRoomSnapshot, normalizeRoundHistoryItem } from "../lib/normalize";
 import { prepareProofImageForUpload, compressAdminImageForUpload } from "../lib/proofImage";
 import { isNearScrollBottom, scrollToBottomSoon, stickChatToBottom } from "../lib/uiHelpers";
+import { appendMentionText, loadChat, loadOlderChat, useChat } from "../lib/chatStore";
 import type { MeState } from "../lib/types";
 
 import { formatBytes, formatDuration } from "../lib/format";
@@ -154,18 +155,8 @@ export function safePlayerStats(player: PublicPlayer | null | undefined) {
 export function Lobby({ config, lobby, me, onError, onGoRoom }: { config: AppConfig; lobby: LobbySnapshot; me: PublicPlayer; onError: (message: string) => void; onGoRoom: (room?: RoomSnapshot) => void }) {
   const [showCreate, setShowCreate] = useState(false);
   const [passwords, setPasswords] = useState<Record<string, string>>({});
-  const [suggestion, setSuggestion] = useState("");
-  const suggestionListRef = useRef<HTMLDivElement | null>(null);
-  const suggestionStickToBottomRef = useRef(true);
-  const [suggestionStickToBottom, setSuggestionStickToBottom] = useState(true);
-  const visibleSuggestions = lobby.suggestions.slice(0, 50).reverse();
   const [now, setNow] = useState(Date.now());
   const renameTargets = lobby.players.filter((player) => isRenameTargetVisible(player, now));
-
-  useEffect(() => {
-    const list = suggestionListRef.current;
-    if (list && suggestionStickToBottomRef.current) scrollToBottomSoon(list);
-  }, [visibleSuggestions.length]);
 
   useEffect(() => {
     if (!lobby.players.some((player) => !player.connected && isRenameTarget(player) && player.disconnectedAt)) return;
@@ -201,17 +192,6 @@ export function Lobby({ config, lobby, me, onError, onGoRoom }: { config: AppCon
     }
   }
 
-  async function sendSuggestion() {
-    const text = suggestion.trim();
-    if (!text) return;
-    setSuggestion("");
-    try {
-      await ask("suggestion:add", { text });
-    } catch (error) {
-      setSuggestion(text);
-      onError(error instanceof Error ? error.message : "留言发送失败");
-    }
-  }
 
   return (
     <section className="dashboard">
@@ -251,46 +231,19 @@ export function Lobby({ config, lobby, me, onError, onGoRoom }: { config: AppCon
         <Leaderboard title="在线积分榜" players={lobby.rankedLeaderboard} />
         <div className="panel lobby-message-board">
           <h2><MessageCircle size={18} /> 留言板</h2>
-          <div className="chat-scroll-shell">
-            <div
-              className="messages lobby-suggestion-messages"
-              ref={suggestionListRef}
-              onScroll={(event) => {
-                const nextStick = isNearScrollBottom(event.currentTarget);
-                if (suggestionStickToBottomRef.current === nextStick) return;
-                suggestionStickToBottomRef.current = nextStick;
-                setSuggestionStickToBottom(nextStick);
-              }}
-            >
-              {visibleSuggestions.map((item) => <ChatBubble key={item.id} message={suggestionToMessage(item)} me={me} />)}
-              {lobby.suggestions.length === 0 && <p className="empty">还没有留言</p>}
-            </div>
-            {!suggestionStickToBottom && visibleSuggestions.length > 0 && (
-              <button type="button" className="chat-stick-button" onClick={() => stickChatToBottom(suggestionListRef.current, suggestionStickToBottomRef, setSuggestionStickToBottom)}>
-                ↓ 回到底部
-              </button>
-            )}
-          </div>
-          <div className="send-row">
-            <input value={suggestion} onChange={(event) => setSuggestion(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") sendSuggestion(); }} placeholder="写下建议、bug 或新惩罚..." />
-            <button onClick={sendSuggestion}>发送</button>
-          </div>
+          <ChatPanel
+            scope=""
+            me={me}
+            onError={onError}
+            placeholder="点击头像可 @ 人"
+            emptyText="还没有留言"
+            messagesClass="lobby-suggestion-messages"
+          />
         </div>
       </aside>
       {showCreate && <CreateRoom config={config} me={me} onCreated={onGoRoom} onCancel={() => setShowCreate(false)} onError={onError} />}
     </section>
   );
-}
-
-export function suggestionToMessage(item: LobbySnapshot["suggestions"][number]): ChatMessage {
-  return {
-    id: item.id,
-    playerId: item.playerId,
-    author: item.author,
-    authorPlayer: item.authorPlayer,
-    text: item.text,
-    at: item.at
-  };
 }
 
 export function CreateRoom({ config, me, onCreated, onCancel, onError }: { config: AppConfig; me: PublicPlayer; onCreated: (room?: RoomSnapshot) => void; onCancel: () => void; onError: (message: string) => void }) {
@@ -838,8 +791,7 @@ export function botStrategyText(strategy?: AppConfig["bots"]["difficulties"][num
   return "随机";
 }
 
-export function Room({ config, room, lobbySuggestions, me, onBack, onError }: { config: AppConfig; room: RoomSnapshot; lobbySuggestions: LobbySnapshot["suggestions"]; me: PublicPlayer; onBack: () => void; onError: (message: string) => void }) {
-  const [chat, setChat] = useState("");
+export function Room({ config, room, me, onBack, onError }: { config: AppConfig; room: RoomSnapshot; me: PublicPlayer; onBack: () => void; onError: (message: string) => void }) {
   const [chatTab, setChatTab] = useState<"room" | "lobby">("room");
   const [proofText, setProofText] = useState("");
   const [proofImage, setProofImage] = useState("");
@@ -850,10 +802,6 @@ export function Room({ config, room, lobbySuggestions, me, onBack, onError }: { 
   const [now, setNow] = useState(Date.now());
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [extraHistory, setExtraHistory] = useState<RoomSnapshot["roundHistory"]>([]);
-  const [roomLobbySuggestions, setRoomLobbySuggestions] = useState<LobbySnapshot["suggestions"]>(lobbySuggestions);
-  const chatListRef = useRef<HTMLDivElement | null>(null);
-  const chatStickToBottomRef = useRef(true);
-  const [chatStickToBottom, setChatStickToBottom] = useState(true);
   const seats = room.seats || { A: null, B: null };
   const choices = room.choices || {};
   const mySeat = seats.A?.id === me.id ? "A" : seats.B?.id === me.id ? "B" : null;
@@ -867,9 +815,6 @@ export function Room({ config, room, lobbySuggestions, me, onBack, onError }: { 
   const punishedNames = punishedPlayerNames(room);
   const punishedIds = room.punishedPlayerIds || [];
   const iAmPunished = punishedIds.includes(me.id);
-  const visibleChatMessages = (room.chat || []).filter((item) => !item.expiresAt || item.expiresAt > now).slice(-80);
-  const visibleLobbyMessages = roomLobbySuggestions.slice(0, 50).reverse().map(suggestionToMessage);
-  const displayedChatMessages = chatTab === "room" ? visibleChatMessages : visibleLobbyMessages;
   const visibleRoundHistory = [...room.roundHistory, ...extraHistory.filter((item) => !room.roundHistory.some((fresh) => fresh.id === item.id))];
   const leaveTitle = room.phase === "punishment"
     ? iAmPunished
@@ -895,38 +840,6 @@ export function Room({ config, room, lobbySuggestions, me, onBack, onError }: { 
   useEffect(() => {
     setExtraHistory([]);
   }, [room.id]);
-
-  useEffect(() => {
-    setRoomLobbySuggestions(lobbySuggestions);
-  }, [lobbySuggestions]);
-
-  useEffect(() => {
-    if (chatTab !== "lobby") {
-      ask("lobby:suggestions:unsubscribe", {}).catch(() => undefined);
-      return;
-    }
-    let cancelled = false;
-    ask<{ suggestions: LobbySnapshot["suggestions"] }>("lobby:suggestions:subscribe", {})
-      .then((result) => {
-        if (!cancelled) setRoomLobbySuggestions(result.suggestions || []);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-      ask("lobby:suggestions:unsubscribe", {}).catch(() => undefined);
-    };
-  }, [chatTab]);
-
-  useEffect(() => {
-    const list = chatListRef.current;
-    if (list && chatStickToBottomRef.current) scrollToBottomSoon(list);
-  }, [displayedChatMessages.length, chatTab]);
-
-  useEffect(() => {
-    chatStickToBottomRef.current = true;
-    setChatStickToBottom(true);
-    if (chatListRef.current) scrollToBottomSoon(chatListRef.current);
-  }, [chatTab]);
 
   async function act(event: string, payload: unknown = {}) {
     try {
@@ -1101,18 +1014,6 @@ export function Room({ config, room, lobbySuggestions, me, onBack, onError }: { 
       setTaskInputs((old) => ({ ...old, [playerId]: "" }));
     } catch (error) {
       onError(error instanceof Error ? error.message : "发布任务失败");
-    }
-  }
-
-  async function sendChat() {
-    const text = chat.trim();
-    if (!text) return;
-    setChat("");
-    try {
-      await ask("chat:send", { roomId: room.id, text });
-    } catch (error) {
-      setChat(text);
-      onError(error instanceof Error ? error.message : "聊天发送失败");
     }
   }
 
@@ -1327,32 +1228,29 @@ export function Room({ config, room, lobbySuggestions, me, onBack, onError }: { 
                 <button className={chatTab === "lobby" ? "active" : ""} onClick={() => setChatTab("lobby")}>大厅</button>
               </div>
             </div>
-            <div className="chat-scroll-shell">
-              <div
-                className="messages room-chat-messages"
-                ref={chatListRef}
-                onScroll={(event) => {
-                  const nextStick = isNearScrollBottom(event.currentTarget);
-                  if (chatStickToBottomRef.current === nextStick) return;
-                  chatStickToBottomRef.current = nextStick;
-                  setChatStickToBottom(nextStick);
-                }}
-              >
-                {displayedChatMessages.map((item) => <ChatBubble key={item.id} message={item} me={me} />)}
-                {displayedChatMessages.length === 0 && <p className="empty">{chatTab === "room" ? "还没有房间聊天" : "大厅还没有留言"}</p>}
-              </div>
-              {!chatStickToBottom && displayedChatMessages.length > 0 && (
-                <button type="button" className="chat-stick-button" onClick={() => stickChatToBottom(chatListRef.current, chatStickToBottomRef, setChatStickToBottom)}>
-                  ↓ 回到底部
-                </button>
-              )}
-            </div>
             {chatTab === "room" ? (
-              <div className="send-row">
-                <input value={chat} onChange={(event) => setChat(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") sendChat(); }} placeholder="发一句话..." />
-                <button onClick={sendChat}>发送</button>
-              </div>
-            ) : <p className="hint chat-readonly-hint">大厅聊天室在房间内只能查看，回到大厅后可以发送。</p>}
+              <ChatPanel
+                key={`room-${room.id}`}
+                scope={room.id}
+                me={me}
+                onError={onError}
+                placeholder="发一句话...（点头像 @ 人）"
+                emptyText="还没有房间聊天"
+                messagesClass="room-chat-messages"
+              />
+            ) : (
+              <ChatPanel
+                key="lobby-readonly"
+                scope=""
+                me={me}
+                onError={onError}
+                readOnly
+                readOnlyHint="大厅聊天室在房间内只能查看，回到大厅后可以发送。"
+                emptyText="大厅还没有留言"
+                subscribeLobbyChannel
+                messagesClass="room-chat-messages"
+              />
+            )}
           </div>
         </div>
         <div className="panel round-history">
@@ -1978,12 +1876,150 @@ export function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export function ChatBubble({ message, me }: { message: ChatMessage; me: PublicPlayer }) {
+// ChatPanel：房间聊天与大厅留言板共用。scope="" 为大厅，否则为 roomId。
+// 首屏/历史走 chatStore（chat:load/loadOlder，读 SQLite），增量由 chatStore 监听 chat:new。
+// 滚到顶部瀑布流加载更早 100 条并保持滚动位置；点头像 @人；@到自己的气泡高亮。
+export function ChatPanel({
+  scope, me, onError, readOnly = false, readOnlyHint, placeholder, emptyText, subscribeLobbyChannel = false, messagesClass
+}: {
+  scope: string;
+  me: PublicPlayer;
+  onError: (message: string) => void;
+  readOnly?: boolean;
+  readOnlyHint?: string;
+  placeholder?: string;
+  emptyText?: string;
+  subscribeLobbyChannel?: boolean;
+  messagesClass?: string;
+}) {
+  const { messages, hasMore, loading } = useChat(scope);
+  const [text, setText] = useState("");
+  const pendingMentionsRef = useRef<Array<{ playerId: string; name: string }>>([]);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const stickRef = useRef(true);
+  const [stick, setStick] = useState(true);
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    stickRef.current = true;
+    setStick(true);
+    void loadChat(scope);
+  }, [scope]);
+
+  // 房间内的「大厅」tab：加入大厅聊天频道以收实时增量，卸载时退出。
+  useEffect(() => {
+    if (!subscribeLobbyChannel) return;
+    ask("lobby:suggestions:subscribe", {}).catch(() => undefined);
+    return () => {
+      ask("lobby:suggestions:unsubscribe", {}).catch(() => undefined);
+    };
+  }, [subscribeLobbyChannel, scope]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const visible = messages.filter((m) => !m.expiresAt || m.expiresAt > now);
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (list && stickRef.current) scrollToBottomSoon(list);
+  }, [visible.length]);
+
+  async function handleScroll(event: ReactUIEvent<HTMLDivElement>) {
+    const el = event.currentTarget;
+    const nextStick = isNearScrollBottom(el);
+    if (stickRef.current !== nextStick) {
+      stickRef.current = nextStick;
+      setStick(nextStick);
+    }
+    // 滚到顶部附近且还有更早历史：瀑布流加载并保持视口位置。
+    if (el.scrollTop < 48 && hasMore && !loading) {
+      const prevHeight = el.scrollHeight;
+      const added = await loadOlderChat(scope);
+      if (added > 0) {
+        window.requestAnimationFrame(() => {
+          el.scrollTop = el.scrollHeight - prevHeight;
+        });
+      }
+    }
+  }
+
+  function insertMention(player?: PublicPlayer) {
+    if (!player || readOnly) return;
+    const name = mentionLabel(player);
+    if (!name) return;
+    setText((t) => appendMentionText(t, name));
+    pendingMentionsRef.current.push({ playerId: player.id, name });
+  }
+
+  async function send() {
+    const value = text.trim();
+    if (!value) return;
+    // 仅保留文本中仍存在 "@昵称" 的提及（用户可能删掉了某个 @）。
+    const mentions = Array.from(
+      new Set(pendingMentionsRef.current.filter((m) => value.includes("@" + m.name)).map((m) => m.playerId))
+    );
+    setText("");
+    pendingMentionsRef.current = [];
+    try {
+      await ask("chat:send", { roomId: scope, text: value, mentions });
+    } catch (error) {
+      setText(value);
+      onError(error instanceof Error ? error.message : "发送失败");
+    }
+  }
+
+  return (
+    <>
+      <div className="chat-scroll-shell">
+        <div className={`messages ${messagesClass || ""}`} ref={listRef} onScroll={handleScroll}>
+          {hasMore && <div className="chat-more-hint">{loading ? "加载中…" : "↑ 上滑加载更早消息"}</div>}
+          {visible.map((item) => (
+            <ChatBubble key={item.id} message={item} me={me} onMention={readOnly ? undefined : insertMention} />
+          ))}
+          {visible.length === 0 && <p className="empty">{emptyText || "还没有消息"}</p>}
+        </div>
+        {!stick && visible.length > 0 && (
+          <button type="button" className="chat-stick-button" onClick={() => stickChatToBottom(listRef.current, stickRef, setStick)}>
+            ↓ 回到底部
+          </button>
+        )}
+      </div>
+      {readOnly ? (
+        <p className="hint chat-readonly-hint">{readOnlyHint || "此处只能查看。"}</p>
+      ) : (
+        <div className="send-row">
+          <input
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") send(); }}
+            placeholder={placeholder || "发一句话..."}
+          />
+          <button onClick={send}>发送</button>
+        </div>
+      )}
+    </>
+  );
+}
+
+// mentionLabel：@ 与头像上使用的短昵称（失格者用惩罚名）。
+export function mentionLabel(player?: PublicPlayer): string {
+  if (!player) return "";
+  return player.nameWarPunished && player.nameWarPenaltyName ? player.nameWarPenaltyName : player.name;
+}
+
+export function ChatBubble({ message, me, onMention }: { message: ChatMessage; me: PublicPlayer; onMention?: (player?: PublicPlayer) => void }) {
   if (message.system) return <p className="chat-system">{message.text}</p>;
   const mine = message.playerId === me.id;
+  // 精确匹配：消息 @ 的 playerId 列表命中我时高亮气泡。
+  const mentionsMe = Array.isArray(message.mentions) && message.mentions.includes(me.id);
+  // 只能 @ 别人：点头像插入 @昵称（自己的气泡与只读场景不可点）。
+  const canMention = Boolean(onMention) && !mine;
   return (
-    <div className={`chat-bubble-row ${mine ? "mine" : ""}`}>
-      {!mine && <ChatAvatar player={message.authorPlayer} />}
+    <div className={`chat-bubble-row ${mine ? "mine" : ""} ${mentionsMe ? "mentioned" : ""}`}>
+      {!mine && <ChatAvatar player={message.authorPlayer} onMention={canMention && onMention ? () => onMention(message.authorPlayer) : undefined} />}
       <div className="chat-bubble">
         <div className="chat-meta">
           {message.authorPlayer ? <ChatName player={message.authorPlayer} /> : <b>{message.author}</b>}
@@ -1996,9 +2032,13 @@ export function ChatBubble({ message, me }: { message: ChatMessage; me: PublicPl
   );
 }
 
-export function ChatAvatar({ player }: { player?: PublicPlayer }) {
-  const label = player?.nameWarPunished && player.nameWarPenaltyName ? player.nameWarPenaltyName : player?.name;
-  return <span className="chat-avatar">{label?.slice(0, 1) || "?"}</span>;
+export function ChatAvatar({ player, onMention }: { player?: PublicPlayer; onMention?: () => void }) {
+  const label = mentionLabel(player) || player?.name;
+  const ch = label?.slice(0, 1) || "?";
+  if (onMention) {
+    return <button type="button" className="chat-avatar chat-avatar-button" title={`@ ${label}`} onClick={onMention}>{ch}</button>;
+  }
+  return <span className="chat-avatar">{ch}</span>;
 }
 
 export function ChatName({ player }: { player: PublicPlayer }) {

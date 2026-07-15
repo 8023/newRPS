@@ -93,18 +93,12 @@ func (s *Server) lobbySnapshot(includeConfig, includeSuggestions bool) types.Lob
 		rooms[room.ID] = info
 	}
 
-	suggestions := []types.Suggestion{}
-	if includeSuggestions {
-		limit := 50
-		if len(s.suggestions) < limit {
-			limit = len(s.suggestions)
-		}
-		suggestions = append(suggestions, s.suggestions[:limit]...)
-	}
+	// 大厅聊天（原留言板）已迁到 SQLite，走 chat:load / chat:new，不再随快照下发。
+	_ = includeSuggestions
 	snap := types.LobbySnapshot{
 		OnlineCount: online, Players: humanPlayers, Rooms: rooms,
 		NormalLeaderboard: []types.LobbyPlayer{}, RankedLeaderboard: []types.LobbyPlayer{},
-		Suggestions: suggestions, LobbyChat: []types.ChatMessage{}, ServerStats: s.serverStats,
+		Suggestions: []types.Suggestion{}, LobbyChat: []types.ChatMessage{}, ServerStats: s.serverStats,
 	}
 	if includeConfig {
 		cfg := sanitizePublicConfig(s.publicConfig())
@@ -260,18 +254,26 @@ func (s *Server) flushPlayerUpdates() {
 	s.emitVolatileAll("player:batch", list)
 }
 
-func (s *Server) appendRoomChat(room *RoomState, message types.ChatMessage) {
-	room.Chat = append(room.Chat, message)
-	if len(room.Chat) > maxRoomChatMessages {
-		room.Chat = room.Chat[len(room.Chat)-maxRoomChatMessages:]
+// chatLiveChannel 返回某条聊天实时推送的目标频道：房间聊天推给房间频道，
+// 大厅聊天推给 lobbySuggestionChannel（大厅视图与房间内「大厅」tab 都在此频道）。
+func chatLiveChannel(roomID string) string {
+	if roomID == "" {
+		return lobbySuggestionChannel
 	}
+	return roomID
 }
 
-func (s *Server) appendLobbyChat(message types.ChatMessage) {
-	s.lobbyChat = append(s.lobbyChat, message)
-	if len(s.lobbyChat) > maxLobbyMessages {
-		s.lobbyChat = s.lobbyChat[len(s.lobbyChat)-maxLobbyMessages:]
+// deliverChat 持久化（可选）+ 实时推送一条聊天。persist=false 用于系统提示等瞬时消息。
+// 走 chat:new（动态 RAW），携带 mentions/seq；房间/大厅由 message.RoomID 区分。
+func (s *Server) deliverChat(message types.ChatMessage, persist bool) {
+	if persist && s.chatDB != nil {
+		if seq, err := s.chatDB.append(message.RoomID, message); err != nil {
+			s.errorLog("chat_persist_failed", err.Error())
+		} else {
+			message.Seq = seq
+		}
 	}
+	s.emitToRoom(chatLiveChannel(message.RoomID), "chat:new", message)
 }
 
 func (s *Server) emitWireToRoom(room string, env *wire.Envelope) {
@@ -389,42 +391,22 @@ func (s *Server) sendFullChannel(c *Client, channel string) {
 	}
 }
 
-func (s *Server) emitLobbyChatAppend(message types.ChatMessage) {
-	s.emitToRoom(lobbyChannel, "chat:append", message)
-}
-
-func (s *Server) appendSuggestion(suggestion types.Suggestion) {
-	s.suggestions = append([]types.Suggestion{suggestion}, s.suggestions...)
-	if len(s.suggestions) > maxLobbyMessages {
-		s.suggestions = s.suggestions[:maxLobbyMessages]
-	}
-}
-
 func (s *Server) systemChat(text string, roomID string) {
-	message := types.ChatMessage{
+	if roomID != "" && s.rooms[roomID] == nil {
+		return
+	}
+	// 系统消息瞬时、不入库；仅实时推送到对应频道。
+	s.deliverChat(types.ChatMessage{
 		ID: randomID(), RoomID: roomID, PlayerID: "system", Author: "系统",
 		Text: text, At: nowMs(), System: true,
-	}
-	if roomID != "" {
-		room := s.rooms[roomID]
-		if room == nil {
-			return
-		}
-		s.appendRoomChat(room, message)
-		s.emitToRoom(roomID, "chat:append", message)
-	} else {
-		s.appendLobbyChat(message)
-		s.emitLobbyChatAppend(message)
-	}
+	}, false)
 }
 
 func (s *Server) roomNotice(room *RoomState, text string) {
 	exp := nowMs() + 5_000
-	message := types.ChatMessage{
+	// 瞬时系统提示：不入库，房间广播默认不带 chat，必须单独推送。
+	s.deliverChat(types.ChatMessage{
 		ID: randomID(), RoomID: room.ID, PlayerID: "system", Author: "系统",
 		Text: text, At: nowMs(), System: true, Transient: true, ExpiresAt: &exp,
-	}
-	s.appendRoomChat(room, message)
-	// 房间广播默认不带 chat，必须单独推送，否则系统提示要刷新才看得到。
-	s.emitToRoom(room.ID, "chat:append", message)
+	}, false)
 }

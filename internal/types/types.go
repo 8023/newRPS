@@ -186,6 +186,10 @@ type ChatMessage struct {
 	System      bool          `json:"system,omitempty"`
 	Transient   bool          `json:"transient,omitempty"`
 	ExpiresAt   *int64        `json:"expiresAt,omitempty"`
+	// Mentions：被 @ 的玩家 public id 列表；前端据此在 me.id 命中时高亮气泡。
+	Mentions    []string      `json:"mentions,omitempty"`
+	// Seq：SQLite 自增序号，仅出站聊天用作分页游标；系统消息为 0。
+	Seq         int64         `json:"seq,omitempty"`
 }
 
 type Suggestion struct {

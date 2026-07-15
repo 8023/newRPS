@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Crown, HeartHandshake, Moon, Sun, UserRound } from "lucide-react";
 import { socket } from "./main";
-import type { AppConfig, ChatMessage, LobbySnapshot, PublicPlayer, RoomSnapshot } from "./shared/types";
+import type { AppConfig, LobbySnapshot, PublicPlayer, RoomSnapshot } from "./shared/types";
 import { dailyAnnouncementKey, leaderboardRefreshMs, tokenKey } from "./lib/constants";
 import {
   bumpWsAuthRetryCount, connectSocketWithSession, getWsAuthRetryCount, hasCachedLogin,
@@ -12,7 +12,7 @@ import {
   lobbyOnlineCount, mergeRoundHistory, normalizeConfig, normalizeLobbySnapshot,
   normalizeRoomSnapshot, normalizeRoundHistoryItem, playerSyncKey, replacePlayerInLobby, replacePlayerInRoom
 } from "./lib/normalize";
-import { appendCappedUnique, prependCappedUnique } from "./lib/uiHelpers";
+import { refreshActiveChats } from "./lib/chatStore";
 import type { AnnouncementPayload, MeState } from "./lib/types";
 import {
   AdminPanel, GlobalLeaderboardPanel, Lobby, Login, PlayerBadge, ProfilePanel, Room, SponsorPanel,
@@ -182,19 +182,8 @@ export function App() {
     socket.on("config:update", (config: AppConfig) => {
       setConfig(normalizeConfig(config));
     });
-    socket.on("chat:append", (message: ChatMessage) => {
-      if (!message.roomId) {
-        setLobby((old) => old ? { ...old, lobbyChat: appendCappedUnique(old.lobbyChat || [], message, 100) } : old);
-        return;
-      }
-      setRoom((old) => {
-        if (!old || message.roomId !== old.id) return old;
-        return { ...old, chat: appendCappedUnique(old.chat || [], message, 200) };
-      });
-    });
-    socket.on("suggestion:append", (suggestion: LobbySnapshot["suggestions"][number]) => {
-      setLobby((old) => old ? { ...old, suggestions: prependCappedUnique(old.suggestions || [], suggestion, 100) } : old);
-    });
+    // 聊天（房间 + 大厅留言板）已迁到 chatStore：chat:new / chat:cleared 由其内部监听，
+    // 首屏与历史走 chat:load / chat:loadOlder，此处不再处理。
     socket.on("announcement:show", (payload: AnnouncementPayload) => {
       setAnnouncement(payload);
     });
@@ -205,6 +194,8 @@ export function App() {
       hadConnectedRef.current = true;
       // 首次连接不弹「已恢复」；断线重连后才提示。
       void restoreSession({ showRecoveredNotice: isReconnect });
+      // 重连后补拉已激活聊天频道的最近消息（chatStore 不自注册 connect，见其注释）。
+      refreshActiveChats();
     });
     socket.on("disconnect", () => {
       setConnectionState("disconnected");
@@ -253,8 +244,6 @@ export function App() {
       socket.off("player:kicked");
       socket.off("room:closed");
       socket.off("config:update");
-      socket.off("chat:append");
-      socket.off("suggestion:append");
       socket.off("announcement:show");
       socket.off("connect");
       socket.off("disconnect");
@@ -399,7 +388,7 @@ export function App() {
         if (next.room?.phase === "punishment") setNotice("已恢复到未完成的惩罚房间。");
       }} onError={setNotice} />}
       {view === "lobby" && me && lobby && <Lobby config={config} lobby={lobby} me={me.player} onError={setNotice} onGoRoom={(nextRoom) => { if (nextRoom) setRoom(nextRoom); setView("room"); }} />}
-      {view === "room" && me && room && <Room config={config} room={room} lobbySuggestions={lobby?.suggestions || []} me={me.player} onBack={() => setView("lobby")} onError={setNotice} />}
+      {view === "room" && me && room && <Room config={config} room={room} me={me.player} onBack={() => setView("lobby")} onError={setNotice} />}
       {view === "admin" && lobby && <AdminPanel config={config} lobby={lobby} onBack={() => { if (window.location.hash === "#admin") window.location.hash = ""; setView(me ? "lobby" : "login"); }} onError={setNotice} />}
       {view === "room" && !room && <section className="panel">你暂时不在房间里。</section>}
       {sponsorOpen && <SponsorPanel onClose={() => setSponsorOpen(false)} />}

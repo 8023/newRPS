@@ -10,9 +10,10 @@ import (
 
 const (
 	lobbyChannel           = "lobby"
+	// lobbySuggestionChannel 现为「大厅聊天」实时频道：大厅视图与房间内的「大厅」tab
+	// 都加入此频道以收 chat:new 增量推送（历史与首屏走 chat:load RPC，读 SQLite）。
 	lobbySuggestionChannel = "lobby:suggestions"
-	maxRoomChatMessages    = 200
-	maxLobbyMessages       = 100
+	chatPageSize           = 100
 	roomHistoryPageSize    = 20
 	giveawayBoardDuration  = 12 * time.Hour
 	broadcastMetricWindow  = 60 * time.Second
@@ -131,7 +132,6 @@ type RoomState struct {
 	SeatedScore         map[types.SeatKey]int
 	SeatStats           map[types.SeatKey]types.SeatStats
 	RoundHistory        []types.RoundHistoryItem
-	Chat                []types.ChatMessage
 	OwnerID             string
 	LockedSeatIDs       map[string]struct{}
 	ForgiveAdvantage    *forgiveAdvantage
@@ -202,8 +202,8 @@ type Server struct {
 
 	// deviceCreateAttempts：按 deviceKey 记录 10 分钟内新建玩家时间戳
 	deviceCreateAttempts map[string][]int64
-	suggestions          []types.Suggestion
-	lobbyChat            []types.ChatMessage
+	// chatDB：房间/大厅聊天的 SQLite 持久化存储（重启不丢）
+	chatDB               *chatStore
 	adminClientIDs       map[string]struct{}
 	sidToClientID        map[string]string
 	clientIDToSID        map[string]string
