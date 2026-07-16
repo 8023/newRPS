@@ -138,7 +138,7 @@ export function LiarsDicePanel({ room, me, onError }: { room: RoomSnapshot; me: 
         )}
       </div>
 
-      {isParticipant && myDice.length > 0 && room.phase !== "result" && (
+      {isParticipant && myDice.length > 0 && room.phase !== "result" && room.phase !== "punishment" && (
         <div className="liarsdice-my-hand panel">
           <h4>我的骰子</h4>
           <div className="liarsdice-dice-row">
@@ -180,7 +180,7 @@ export function LiarsDicePanel({ room, me, onError }: { room: RoomSnapshot; me: 
         </div>
       )}
 
-      {room.phase === "result" && ld.ended && ld.revealedHands && (
+      {(room.phase === "result" || room.phase === "punishment") && ld.ended && ld.revealedHands && (
         <div className="liarsdice-reveal panel">
           <h4>开牌结果</h4>
           <p>
@@ -199,7 +199,8 @@ export function LiarsDicePanel({ room, me, onError }: { room: RoomSnapshot; me: 
               </li>
             ))}
           </ul>
-          {isParticipant && (
+          {/* 惩罚未完成前后端拒绝 liarsdice:nextRound（要求 phase===result），惩罚阶段先隐藏按钮 */}
+          {isParticipant && room.phase === "result" && (
             <button className="primary liarsdice-next-round-btn" disabled={busy} onClick={() => act("liarsdice:nextRound")}>下一局</button>
           )}
         </div>

@@ -228,6 +228,46 @@ func TestResolveLiarsDiceChallenge_OnesWildDisabled(t *testing.T) {
 	}
 }
 
+// TestResolveLiarsDiceChallenge_PunishmentSkipsResultPhase：开启惩罚时，resolveLiarsDiceChallenge
+// 先把 room.Phase 设成 PhaseResult，紧接着 setupPunishmentForPlayers 会在同一次调用里把它覆盖成
+// PhasePunishment——client 广播里永远看不到 "result" 这个中间态。前端的开牌揭晓面板必须同时兼容
+// "result" 和 "punishment" 两种 phase（RPS 的 Settlement 组件就是这么处理的），否则开惩罚的房间
+// 结算时骰子揭晓面板会被跳过，直接看到惩罚阶段，见 LiarsDicePanel.tsx 的复现 bug。
+func TestResolveLiarsDiceChallenge_PunishmentSkipsResultPhase(t *testing.T) {
+	s := newLiarsDiceTestServer(t)
+	room := newLiarsDiceTestRoom("r1", 2, 8)
+	room.Settings.EnablePunishment = true
+	a, b := newLiarsDiceTestPlayer("a", "Alice"), newLiarsDiceTestPlayer("b", "Bob")
+	s.players[a.ID], s.players[b.ID] = a, b
+	room.LiarsDice.ParticipantIDs = []string{"a", "b"}
+	s.rooms[room.ID] = room
+
+	room.LiarsDiceHands = map[string][]int{
+		"a": {4, 4, 1, 2, 3},
+		"b": {6, 5, 2, 2, 6},
+	}
+	room.LiarsDice.DiceCounts = map[string]int{"a": 5, "b": 5}
+	room.Phase = types.PhaseChoosing
+	bid := types.LiarsDiceBid{PlayerID: "a", Count: 5, Face: 4, At: 1}
+	room.LiarsDice.CurrentBid = &bid
+	room.LiarsDice.CurrentTurn = "b"
+
+	s.resolveLiarsDiceChallenge(room, "b")
+
+	if room.Phase != types.PhasePunishment {
+		t.Fatalf("phase = %v, want punishment (loser must be punished)", room.Phase)
+	}
+	if !room.LiarsDice.Ended {
+		t.Fatalf("round should still be marked ended even though phase skipped straight to punishment")
+	}
+	if room.LiarsDice.RevealedHands == nil {
+		t.Fatalf("revealedHands must still be populated so the reveal panel can render during punishment phase")
+	}
+	if room.LiarsDice.WinnerID == "" || room.LiarsDice.LoserID == "" {
+		t.Fatalf("winner/loser must be set: winner=%q loser=%q", room.LiarsDice.WinnerID, room.LiarsDice.LoserID)
+	}
+}
+
 // TestLiarsDiceDisconnectForfeit：断线玩家判负，入席顺序上的"上家"判胜。
 func TestLiarsDiceDisconnectForfeit(t *testing.T) {
 	s := newLiarsDiceTestServer(t)
