@@ -1,6 +1,7 @@
 package server
 
 import (
+	"database/sql"
 	"sync"
 	"time"
 
@@ -9,7 +10,7 @@ import (
 )
 
 const (
-	lobbyChannel           = "lobby"
+	lobbyChannel = "lobby"
 	// lobbySuggestionChannel 现为「大厅聊天」实时频道：大厅视图与房间内的「大厅」tab
 	// 都加入此频道以收 chat:new 增量推送（历史与首屏走 chat:load RPC，读 SQLite）。
 	lobbySuggestionChannel = "lobby:suggestions"
@@ -27,6 +28,18 @@ type DisconnectForfeit struct {
 	LoserName      string
 	WinnerID       string
 	WinnerSeat     types.SeatKey
+	WinnerName     string
+	Stake          int
+	BaseStake      types.RankStake
+	RankMultiplier types.RankMultiplier
+}
+
+// LiarsDiceDisconnectForfeit：大话骰不进 Seats/SeatKey 体系，赢家由"入席顺序上家"
+// 决定，不是固定座位——所以不能复用 DisconnectForfeit（它的字段是 SeatKey 类型的）。
+type LiarsDiceDisconnectForfeit struct {
+	LoserID        string
+	LoserName      string
+	WinnerID       string
 	WinnerName     string
 	Stake          int
 	BaseStake      types.RankStake
@@ -56,7 +69,7 @@ type SessionPayload struct {
 type RateLimitOptions struct {
 	Limit      int
 	WindowMs   int64
-	CooldownMs  int64
+	CooldownMs int64
 }
 
 type rateBucket struct {
@@ -69,25 +82,92 @@ type rateLimitBucket struct {
 	Count   int
 }
 
+// maxPlayerSecrets 是一个身份最多允许"记住"的设备数；超出时挤掉最早添加的一条。
+const maxPlayerSecrets = 3
+
 type PlayerState struct {
 	types.PublicPlayer
-	SocketID         string
-	Token            string
-	IPAddress        string
-	Fingerprint      string // 浏览器指纹 visitorId
-	DeviceKey        string // sha256(ip||fingerprint)，防多开维度
-	RecentMoves      []RpsMove
-	PlayerID         string // long-term identity (not public)
+	SocketID    string
+	Token       string
+	IPAddress   string
+	Fingerprint string // 浏览器指纹 visitorId
+	DeviceKey   string // sha256(ip||fingerprint)，防多开维度
+	RecentMoves []RpsMove
+	PlayerID    string // long-term identity (not public)
+	// PlayerSecretHash：旧版单值哈希字段，仅用于迁移期兼容（见 migrateLegacySecret）。
+	// 迁移窗口结束后应整体删除，见 README「一次性迁移代码」章节。
 	PlayerSecretHash string
-	Persistent       bool
-	CurrentSID       string
-	CreatedAt        int64
-	LastSeenAt       int64
+	// PlayerSecrets：一台设备一条，明文存储（认领/迁移方案已确认不哈希）。
+	// 最多 maxPlayerSecrets 条，超出后挤掉最早的一条（见 addPlayerSecret）。
+	PlayerSecrets []string
+	// ClaimKey：认领密钥，明文、单值、一次性——用于把身份"分享"给另一台设备。
+	// 认领成功后立即轮换；也可以在个人资料页手动刷新作废旧值。
+	ClaimKey string
+	// ActiveSecret：当前这条活跃 socket 是用 PlayerSecrets 里哪一条验证通过的——
+	// 挤人时要避开它，不能把正在用的这条自己挤掉自己。
+	ActiveSecret string
+	// 推送偏好（Level 2 Web Push 用；私有字段，不进 PublicPlayer，其他玩家看不到）。
+	// nil 视为未开启——和其它 *bool 偏好字段（GiveawayEnabled 等）保持同一约定。
+	PushMentionEnabled *bool // 聊天 @ 我
+	PushTurnEnabled    *bool // 轮到我出招/落子
+	PushSeatEnabled    *bool // 我的房间参战席被坐满
+	Persistent         bool
+	CurrentSID         string
+	CreatedAt          int64
+	LastSeenAt         int64
 	// disconnect timers (invalidated via generation)
-	graceGen  int
-	timerGen  int
+	graceGen   int
+	timerGen   int
 	graceTimer *time.Timer
 	discTimer  *time.Timer
+}
+
+// addPlayerSecret 把一条新设备凭据加进列表；超过 maxPlayerSecrets 时挤掉最早的一条
+// （但绝不挤掉 ActiveSecret——不能让当前正连着的这条会话把自己顶下线），
+// 返回被挤掉的那条（""表示没有挤掉任何一条），供调用方决定要不要通知那台设备。
+func (p *PlayerState) addPlayerSecret(secret string) (evicted string) {
+	if secret == "" {
+		return ""
+	}
+	for _, s := range p.PlayerSecrets {
+		if s == secret {
+			return ""
+		}
+	}
+	p.PlayerSecrets = append(p.PlayerSecrets, secret)
+	if len(p.PlayerSecrets) > maxPlayerSecrets {
+		evictIdx := 0
+		if p.ActiveSecret != "" && p.PlayerSecrets[0] == p.ActiveSecret {
+			evictIdx = 1 // 最早那条恰好是当前活跃会话，改挤第二早的
+		}
+		evicted = p.PlayerSecrets[evictIdx]
+		p.PlayerSecrets = append(p.PlayerSecrets[:evictIdx], p.PlayerSecrets[evictIdx+1:]...)
+	}
+	return evicted
+}
+
+// hasPlayerSecret 判断某个明文 secret 是否在这个身份当前有效的设备凭据列表里。
+func (p *PlayerState) hasPlayerSecret(secret string) bool {
+	if secret == "" {
+		return false
+	}
+	for _, s := range p.PlayerSecrets {
+		if s == secret {
+			return true
+		}
+	}
+	return false
+}
+
+// removePlayerSecret 撤销某一条设备凭据（登出时用）。
+func (p *PlayerState) removePlayerSecret(secret string) {
+	out := p.PlayerSecrets[:0]
+	for _, s := range p.PlayerSecrets {
+		if s != secret {
+			out = append(out, s)
+		}
+	}
+	p.PlayerSecrets = out
 }
 
 type SeatOccupant interface {
@@ -112,31 +192,36 @@ func (b *BotSeat) GetID() string { return b.Bot.ID }
 func (b *BotSeat) IsBot() bool   { return true }
 
 type RoomState struct {
-	ID                  string
-	Code                string
-	UpdatedAt           int64
-	Settings            types.RoomSettings
-	Status              string
-	Phase               types.GamePhase
-	Seats               map[types.SeatKey]SeatOccupant
-	SpectatorIDs        []string
-	Ready               map[types.SeatKey]bool
-	Choices             map[types.SeatKey]types.Move
-	RevealedChoices     map[types.SeatKey]types.Move
-	Othello             *types.OthelloState
-	TicTacToe           *types.TicTacToeState
-	ResultText          string
-	PunishedPlayerIDs   []string
-	Proofs              []types.PunishmentProof
-	Score               map[types.SeatKey]int
-	SeatedScore         map[types.SeatKey]int
-	SeatStats           map[types.SeatKey]types.SeatStats
-	RoundHistory        []types.RoundHistoryItem
-	OwnerID             string
-	LockedSeatIDs       map[string]struct{}
-	ForgiveAdvantage    *forgiveAdvantage
-	DisconnectForfeits  map[string]DisconnectForfeit
-	CreatedAt           int64
+	ID              string
+	Code            string
+	UpdatedAt       int64
+	Settings        types.RoomSettings
+	Status          string
+	Phase           types.GamePhase
+	Seats           map[types.SeatKey]SeatOccupant
+	SpectatorIDs    []string
+	Ready           map[types.SeatKey]bool
+	Choices         map[types.SeatKey]types.Move
+	RevealedChoices map[types.SeatKey]types.Move
+	Othello         *types.OthelloState
+	TicTacToe       *types.TicTacToeState
+	LiarsDice       *types.LiarsDiceState
+	// LiarsDiceHands：私有骰子，playerId -> 点数列表；绝不进 roomSnapshot/广播，
+	// 只通过 emitToClient 单播给玩家自己（保密性来自"只发给这一个 socket"，不需要加密）。
+	LiarsDiceHands              map[string][]int
+	LiarsDiceDisconnectForfeits map[string]LiarsDiceDisconnectForfeit
+	ResultText                  string
+	PunishedPlayerIDs           []string
+	Proofs                      []types.PunishmentProof
+	Score                       map[types.SeatKey]int
+	SeatedScore                 map[types.SeatKey]int
+	SeatStats                   map[types.SeatKey]types.SeatStats
+	RoundHistory                []types.RoundHistoryItem
+	OwnerID                     string
+	LockedSeatIDs               map[string]struct{}
+	ForgiveAdvantage            *forgiveAdvantage
+	DisconnectForfeits          map[string]DisconnectForfeit
+	CreatedAt                   int64
 }
 
 type forgiveAdvantage struct {
@@ -157,29 +242,29 @@ type roomBroadcastPending struct {
 
 // Client is a connected WebSocket peer.
 type Client struct {
-	id            string
-	conn          *websocket.Conn
-	writeMu       sync.Mutex
+	id      string
+	conn    *websocket.Conn
+	writeMu sync.Mutex
 	// 每连接独立发送队列 + 写协程：广播/应答在持锁状态下只做非阻塞入队，
 	// 真正的网络写在 writeLoop 里完成，避免慢客户端在 s.mu 下卡住全局。
-	sendCh        chan []byte
-	done          chan struct{}
-	closeOnce     sync.Once
-	sid           string
-	token         string
-	sessionExp    int64
-	ipAddress     string
+	sendCh     chan []byte
+	done       chan struct{}
+	closeOnce  sync.Once
+	sid        string
+	token      string
+	sessionExp int64
+	ipAddress  string
 	// fingerprint 为浏览器 visitorId；deviceKey = sha256(ip||fp)，用于防多开
-	fingerprint   string
-	deviceKey      string
-	playerID      string
-	rooms         map[string]struct{}
-	closed        bool
+	fingerprint string
+	deviceKey   string
+	playerID    string
+	rooms       map[string]struct{}
+	closed      bool
 	// replaced：同 SID 被新连接顶替时置位，断线清理不再动玩家 Connected 状态
-	replaced      bool
-	userAgent     string
-	host          string
-	origin        string
+	replaced  bool
+	userAgent string
+	host      string
+	origin    string
 }
 
 // Server holds all game state.
@@ -196,17 +281,25 @@ type Server struct {
 	clients        map[string]*Client // client.id -> client
 	socketToClient map[string]*Client // same as clients by id
 
-	botTimers              map[string]*time.Timer
+	botTimers               map[string]*time.Timer
 	othelloSettlementTimers map[string]*time.Timer
 	ticTacToeGiveawayTimers map[string]*time.Timer
+	liarsDiceStartTimers    map[string]*time.Timer
 
 	// deviceCreateAttempts：按 deviceKey 记录 10 分钟内新建玩家时间戳
 	deviceCreateAttempts map[string][]int64
+	// db：应用共享 SQLite 连接（database.db），chatDB/eventDB 都是它的薄封装
+	db *sql.DB
 	// chatDB：房间/大厅聊天的 SQLite 持久化存储（重启不丢）
-	chatDB               *chatStore
-	adminClientIDs       map[string]struct{}
-	sidToClientID        map[string]string
-	clientIDToSID        map[string]string
+	chatDB *chatStore
+	// eventDB：房间生命周期 + 惩罚任务/证明事件的 SQLite 持久化存储（重启不丢）
+	eventDB *eventStore
+	// pushDB：Web Push 订阅存储；vapid：VAPID 密钥对（work/vapid.json 或环境变量）
+	pushDB         *pushStore
+	vapid          vapidKeys
+	adminClientIDs map[string]struct{}
+	sidToClientID  map[string]string
+	clientIDToSID  map[string]string
 	// clientIDsByDevice：deviceKey → 当前套接字集合（同指纹限连）
 	clientIDsByDevice map[string]map[string]struct{}
 	rateBuckets       map[string]*rateBucket
@@ -227,9 +320,9 @@ type Server struct {
 
 	serverStats types.ServerStats
 
-	isProduction       bool
-	sessionSecret      []byte
-	sessionTtlMs       int64
+	isProduction        bool
+	sessionSecret       []byte
+	sessionTtlMs        int64
 	maxSocketsPerDevice int
 
 	host string
@@ -242,9 +335,9 @@ type Server struct {
 	playersFile     string
 	distDir         string
 
-	persistMu        sync.Mutex
-	persistDirty     bool
-	persistScheduled bool
+	persistMu          sync.Mutex
+	persistDirty       bool
+	persistScheduled   bool
 	immediateScheduled bool
 	// 活动日志异步落盘队列（Run 启动消费者）
 	logCh chan activityLogEntry

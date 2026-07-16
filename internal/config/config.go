@@ -323,7 +323,7 @@ func normalizeConfig(input types.AppConfig) types.AppConfig {
 
 	games := make([]types.GameConfig, 0, len(input.Games))
 	for _, g := range input.Games {
-		if g.ID != "rps" && g.ID != "othello" && g.ID != "tictactoe" {
+		if g.ID != "rps" && g.ID != "othello" && g.ID != "tictactoe" && g.ID != "liarsdice" {
 			continue
 		}
 		g.Name = sliceRunes(g.Name, 18)

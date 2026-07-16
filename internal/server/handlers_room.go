@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/doumiao/newRPS/internal/types"
 )
@@ -20,7 +19,7 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	}
 	settings := p.Settings
 	gameID := settings.GameID
-	if gameID != types.GameOthello && gameID != types.GameTicTacToe {
+	if gameID != types.GameOthello && gameID != types.GameTicTacToe && gameID != types.GameLiarsDice {
 		gameID = types.GameRPS
 	}
 	settings.GameID = gameID
@@ -67,6 +66,16 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		default:
 			settings.TicTacToeBoardTheme = "paper"
 		}
+		settings.EnableBot = false
+	} else if settings.GameID == types.GameLiarsDice {
+		switch settings.Stake {
+		case 5, 10, 20:
+		default:
+			settings.Stake = 5
+		}
+		minP, maxP := liarsDiceRosterBounds(settings)
+		settings.LiarsDiceMinPlayers = minP
+		settings.LiarsDiceMaxPlayers = maxP
 		settings.EnableBot = false
 	} else {
 		switch settings.Stake {
@@ -134,6 +143,10 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	roomID := randomID()
 	status, phase := "waiting", types.PhaseReady
 	seats := map[types.SeatKey]SeatOccupant{types.SeatA: &HumanSeat{Player: s.publicPlayer(player)}, types.SeatB: nil}
+	isLiarsDice := settings.GameID == types.GameLiarsDice
+	if isLiarsDice {
+		seats = map[types.SeatKey]SeatOccupant{types.SeatA: nil, types.SeatB: nil}
+	}
 	if settings.EnableBot {
 		status, phase = "playing", types.PhaseChoosing
 		seats[types.SeatB] = s.makeBot(settings.BotDifficulty)
@@ -143,23 +156,36 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		Status: status, UpdatedAt: nowMs(), Phase: phase, Seats: seats,
 		SpectatorIDs: []string{}, Ready: map[types.SeatKey]bool{types.SeatA: false, types.SeatB: false},
 		Choices: map[types.SeatKey]types.Move{}, PunishedPlayerIDs: []string{}, Proofs: []types.PunishmentProof{},
-		Score: map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0},
-		SeatedScore: map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0},
-		SeatStats: map[types.SeatKey]types.SeatStats{types.SeatA: emptySeatStats(), types.SeatB: emptySeatStats()},
+		Score:        map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0},
+		SeatedScore:  map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0},
+		SeatStats:    map[types.SeatKey]types.SeatStats{types.SeatA: emptySeatStats(), types.SeatB: emptySeatStats()},
 		RoundHistory: []types.RoundHistoryItem{}, LockedSeatIDs: map[string]struct{}{},
 		DisconnectForfeits: map[string]DisconnectForfeit{}, CreatedAt: nowMs(),
+	}
+	if isLiarsDice {
+		minP, maxP := liarsDiceRosterBounds(settings)
+		room.LiarsDice = &types.LiarsDiceState{
+			ParticipantIDs: []string{}, ReadyPlayerIDs: []string{}, DiceCounts: map[string]int{},
+			BidHistory: []types.LiarsDiceBid{}, MinPlayers: minP, MaxPlayers: maxP,
+		}
+		room.LiarsDiceHands = map[string][]int{}
+		room.LiarsDiceDisconnectForfeits = map[string]LiarsDiceDisconnectForfeit{}
+		room.SpectatorIDs = []string{player.ID}
 	}
 	s.rooms[roomID] = room
 	player.RoomID = roomID
 	client.leaveRoom(lobbyChannel)
 	client.joinRoom(roomID)
-	s.activityLog("rooms", []string{
-		"time", "action", "roomId", "code", "roomName", "gameId", "playerId", "playerName", "ip",
-	}, []string{
-		time.Now().Format(time.RFC3339), "create", roomID, room.Code, settings.Name, string(settings.GameID),
-		player.ID, playerShortName(player), player.IPAddress,
-	})
-	s.roomNotice(room, playerShortName(player)+" 进入房间，坐在战斗席 A。")
+	if s.eventDB != nil {
+		if err := s.eventDB.insertRoom(roomID, room.Code, settings.Name, string(settings.GameID), player.ID, playerShortName(player), room.CreatedAt); err != nil {
+			s.errorLog("room_event_insert_failed", err.Error())
+		}
+	}
+	if isLiarsDice {
+		s.roomNotice(room, playerShortName(player)+" 创建了大话骰房间，当前为观战。")
+	} else {
+		s.roomNotice(room, playerShortName(player)+" 进入房间，坐在战斗席 A。")
+	}
 	client.reply(env.ID, map[string]any{"room": s.roomSnapshot(room, true, true)}, "")
 	s.broadcastRoom(roomID, true)
 }
@@ -191,23 +217,26 @@ func (s *Server) onRoomJoin(client *Client, env wsEnvelope) {
 	}
 	player.RoomID = room.ID
 	joinRole := "观战"
-	if s.canAutoSeatOnJoin(room, player) && room.Seats[types.SeatA] == nil {
+	if room.Settings.GameID == types.GameLiarsDice {
+		room.SpectatorIDs = append(room.SpectatorIDs, player.ID)
+	} else if s.canAutoSeatOnJoin(room, player) && room.Seats[types.SeatA] == nil {
 		room.Seats[types.SeatA] = &HumanSeat{Player: s.publicPlayer(player)}
 		joinRole = "战斗席 A"
+		s.notifySeatFilled(room, types.SeatA)
 	} else if s.canAutoSeatOnJoin(room, player) && room.Seats[types.SeatB] == nil {
 		room.Seats[types.SeatB] = &HumanSeat{Player: s.publicPlayer(player)}
 		joinRole = "战斗席 B"
+		s.notifySeatFilled(room, types.SeatB)
 	} else {
 		room.SpectatorIDs = append(room.SpectatorIDs, player.ID)
 	}
 	client.leaveRoom(lobbyChannel)
 	client.joinRoom(room.ID)
-	s.activityLog("rooms", []string{
-		"time", "action", "roomId", "code", "roomName", "gameId", "playerId", "playerName", "ip",
-	}, []string{
-		time.Now().Format(time.RFC3339), "join", room.ID, room.Code, room.Settings.Name, string(room.Settings.GameID),
-		player.ID, playerShortName(player), player.IPAddress,
-	})
+	if s.eventDB != nil {
+		if err := s.eventDB.insertRoomJoinEvent(nowMs(), room.ID, player.ID, playerShortName(player), joinRole, player.IPAddress); err != nil {
+			s.errorLog("room_event_insert_failed", err.Error())
+		}
+	}
 	s.roomNotice(room, fmt.Sprintf("%s 进入房间，位置：%s。", playerShortName(player), joinRole))
 	s.maybeStartChoosing(room)
 	client.reply(env.ID, map[string]any{"room": s.roomSnapshot(room, true, true)}, "")
@@ -279,6 +308,11 @@ func (s *Server) onRoomSit(client *Client, env wsEnvelope) {
 	if !ok {
 		return
 	}
+	// 大话骰不用 A/B 座位（用参战名单），拦掉座位 RPC 以免观战者往 Seats 里注入脏数据。
+	if room.Settings.GameID == types.GameLiarsDice {
+		client.reply(env.ID, nil, "大话骰请使用「加入参战席」")
+		return
+	}
 	if room.Phase == types.PhasePunishment {
 		client.reply(env.ID, nil, "惩罚完成前不能切换座位")
 		return
@@ -320,6 +354,7 @@ func (s *Server) onRoomSit(client *Client, env wsEnvelope) {
 	room.SeatedScore[p.Seat] = 0
 	room.SeatStats[p.Seat] = emptySeatStats()
 	s.roomNotice(room, fmt.Sprintf("%s 坐到战斗席 %s。", playerShortName(player), p.Seat))
+	s.notifySeatFilled(room, p.Seat)
 	if room.Settings.GameID == types.GameOthello && room.Seats[types.SeatA] != nil && room.Seats[types.SeatB] != nil && room.Phase != types.PhaseChoosing {
 		s.resetOthelloRoom(room)
 	} else if room.Settings.GameID == types.GameTicTacToe && room.Seats[types.SeatA] != nil && room.Seats[types.SeatB] != nil && room.Phase != types.PhaseChoosing {
@@ -349,6 +384,11 @@ func (s *Server) onRoomSpectate(client *Client, env wsEnvelope) {
 	s.handlePunishmentDeparture(room, player, LeaveSpectate)
 	if hasOld {
 		s.clearSeatForPlayer(room, oldSeat)
+	}
+	// 大话骰参战玩家去观战：从参战名单移除（否则名单里残留一个"其实在观战"的人）。
+	if room.Settings.GameID == types.GameLiarsDice {
+		s.leaveLiarsDiceRoster(room, player.ID)
+		s.scheduleLiarsDiceReadyStart(room)
 	}
 	if !containsString(room.SpectatorIDs, player.ID) {
 		room.SpectatorIDs = append(room.SpectatorIDs, player.ID)
@@ -409,6 +449,10 @@ func (s *Server) onRoomMove(client *Client, env wsEnvelope) {
 	if p.Move == types.MoveGiveaway {
 		player.GiveawayClicks = intPtr(ptrInt(player.GiveawayClicks) + 1)
 		s.addGiveawayValue(player, 2)
+	}
+	// 对手还没出拳：提醒 Ta 该出拳了；双方都出了就直接进结算，不用再提醒。
+	if room.Choices[oppositeSeat(seat)] == "" {
+		s.notifyOpponentTurn(room, oppositeSeat(seat))
 	}
 	s.maybeBotAct(room)
 	oldStatus := room.Status
@@ -609,9 +653,9 @@ func (s *Server) onOthelloRespondSurrender(client *Client, env wsEnvelope) {
 		return
 	}
 	ok2, errMsg := s.forceEndOthelloGame(room, types.RoundResult(winnerSeat), forceOthelloOpts{
-		Label: fmt.Sprintf("%s认输，%s胜利", loserName, winnerName),
-		HistoryNote: "认输",
-		Notice: fmt.Sprintf("%s 同意 %s 认输，本局结束。", winnerName, loserName),
+		Label:              fmt.Sprintf("%s认输，%s胜利", loserName, winnerName),
+		HistoryNote:        "认输",
+		Notice:             fmt.Sprintf("%s 同意 %s 认输，本局结束。", winnerName, loserName),
 		ForfeitRankedFloor: true,
 	})
 	if !ok2 {
@@ -652,9 +696,9 @@ func (s *Server) onOthelloEscape(client *Client, env wsEnvelope) {
 	loserName := playerShortName(player)
 	winnerName := occupantName(room.Seats[winnerSeat])
 	ok2, errMsg := s.forceEndOthelloGame(room, types.RoundResult(winnerSeat), forceOthelloOpts{
-		Label: fmt.Sprintf("%s逃跑，%s胜利", loserName, winnerName),
-		HistoryNote: "逃跑",
-		Notice: loserName + " 选择逃跑，本局立即判负。",
+		Label:              fmt.Sprintf("%s逃跑，%s胜利", loserName, winnerName),
+		HistoryNote:        "逃跑",
+		Notice:             loserName + " 选择逃跑，本局立即判负。",
 		ForfeitRankedFloor: true,
 		EscapePenaltyRatio: 0.5,
 		EscapePenaltyLabel: "逃跑",
@@ -893,7 +937,7 @@ func (s *Server) onPunishmentSubmit(client *Client, env wsEnvelope) {
 	}
 	// 人人对战且开启「需对手确认」时保持 pending，由胜方审批（系统任务与自定义任务一致）。
 	// 仅 Bot 对战 / 无人类对手 / 房间关闭确认 时系统自动通过。
-	approvedBySystem := s.opponentIsBot(room, player.ID) || s.humanOpponent(room, player.ID) == nil || !room.Settings.RequireOpponentConfirm
+	approvedBySystem := s.opponentIsBot(room, player.ID) || s.punishmentReviewer(room, player.ID) == nil || !room.Settings.RequireOpponentConfirm
 	submittedAt := nowMs()
 	filtered := room.Proofs[:0]
 	for _, pr := range room.Proofs {
@@ -930,13 +974,11 @@ func (s *Server) onPunishmentSubmit(client *Client, env wsEnvelope) {
 	if cleanImageURL != "" {
 		imageFile = filepath.Base(cleanImageURL)
 	}
-	s.activityLog("punishments", []string{
-		"time", "kind", "source", "roomId", "playerId", "playerName",
-		"targetId", "taskText", "status", "proofText", "imageFile",
-	}, []string{
-		time.Now().Format(time.RFC3339), "proof", "", room.ID, player.ID, playerShortName(player),
-		"", taskText, status, cleanProofText, imageFile,
-	})
+	if s.eventDB != nil {
+		if err := s.eventDB.insertPunishmentEvent(nowMs(), "proof", "", room.ID, player.ID, playerShortName(player), "", taskText, status, cleanProofText, imageFile); err != nil {
+			s.errorLog("punishment_event_insert_failed", err.Error())
+		}
+	}
 }
 
 func (s *Server) onPunishmentAssignTask(client *Client, env wsEnvelope) {
@@ -961,9 +1003,7 @@ func (s *Server) onPunishmentAssignTask(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "不能给自己发布任务")
 		return
 	}
-	reviewerSeat, ok1 := s.seatOf(room, player.ID)
-	targetSeat, ok2 := s.seatOf(room, p.PlayerID)
-	if !ok1 || !ok2 || reviewerSeat == targetSeat {
+	if !s.canReviewPlayer(room, player.ID, p.PlayerID) {
 		client.reply(env.ID, nil, "只能给对手发布任务")
 		return
 	}
@@ -1000,13 +1040,11 @@ func (s *Server) onPunishmentAssignTask(client *Client, env wsEnvelope) {
 	// 玩家临时任务：直接使用原文，不替换 {winner}/{loser}（占位符仅用于系统任务配置）
 	s.updatePunishmentTask(room, p.PlayerID, cleanTask, player)
 	s.broadcastRoomImmediate(room.ID, false)
-	s.activityLog("punishments", []string{
-		"time", "kind", "source", "roomId", "playerId", "playerName",
-		"targetId", "taskText", "status", "proofText", "imageFile",
-	}, []string{
-		time.Now().Format(time.RFC3339), "task", "player", room.ID, player.ID, playerShortName(player),
-		p.PlayerID, cleanTask, "", "", "",
-	})
+	if s.eventDB != nil {
+		if err := s.eventDB.insertPunishmentEvent(nowMs(), "task", "player", room.ID, player.ID, playerShortName(player), p.PlayerID, cleanTask, "", "", ""); err != nil {
+			s.errorLog("punishment_event_insert_failed", err.Error())
+		}
+	}
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
@@ -1021,17 +1059,11 @@ func (s *Server) onPunishmentReview(client *Client, env wsEnvelope) {
 	if !ok {
 		return
 	}
-	if _, ok := s.seatOf(room, player.ID); !ok {
-		client.reply(env.ID, nil, "只有对战玩家可以确认")
-		return
-	}
 	if player.ID == p.PlayerID {
 		client.reply(env.ID, nil, "不能审核自己的证明")
 		return
 	}
-	targetSeat, ok := s.seatOf(room, p.PlayerID)
-	reviewerSeat, _ := s.seatOf(room, player.ID)
-	if !ok || targetSeat == reviewerSeat {
+	if !s.canReviewPlayer(room, player.ID, p.PlayerID) {
 		client.reply(env.ID, nil, "只能审核对手的证明")
 		return
 	}
@@ -1097,17 +1129,11 @@ func (s *Server) onPunishmentConfirm(client *Client, env wsEnvelope) {
 	if !ok {
 		return
 	}
-	if _, ok := s.seatOf(room, player.ID); !ok {
-		client.reply(env.ID, nil, "只有对战玩家可以确认")
-		return
-	}
 	if player.ID == p.PlayerID {
 		client.reply(env.ID, nil, "不能审核自己的证明")
 		return
 	}
-	targetSeat, ok := s.seatOf(room, p.PlayerID)
-	reviewerSeat, _ := s.seatOf(room, player.ID)
-	if !ok || targetSeat == reviewerSeat {
+	if !s.canReviewPlayer(room, player.ID, p.PlayerID) {
 		client.reply(env.ID, nil, "只能审核对手的证明")
 		return
 	}
@@ -1140,7 +1166,7 @@ func (s *Server) onPunishmentConfirm(client *Client, env wsEnvelope) {
 
 func (s *Server) onChatSend(client *Client, env wsEnvelope) {
 	var p struct {
-		RoomID string `json:"roomId"`
+		RoomID   string   `json:"roomId"`
 		Text     string   `json:"text"`
 		Mentions []string `json:"mentions"`
 	}
@@ -1178,6 +1204,12 @@ func (s *Server) onChatSend(client *Client, env wsEnvelope) {
 	// 持久化 + 实时推送（房间/大厅由 RoomID 区分）。
 	s.deliverChat(message, true)
 	client.reply(env.ID, map[string]any{"ok": true}, "")
+	for _, mentionedID := range message.Mentions {
+		mentioned := s.players[mentionedID]
+		if mentioned != nil && shouldPush(mentioned, mentioned.PushMentionEnabled) {
+			s.sendPush(mentioned, "有人 @ 了你", fmt.Sprintf("%s：%s", player.DisplayName, cleanMessageText), "mention")
+		}
+	}
 }
 
 // normalizeMentions 去重并限制被 @ 玩家 id 数量上限，防止刷屏 / 过大 payload。
@@ -1265,15 +1297,15 @@ func (s *Server) loadChatPage(roomID string, beforeSeq int64) ([]types.ChatMessa
 
 func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 	var p struct {
-		Action          string             `json:"action"`
-		RoomID          string             `json:"roomId"`
-		PlayerID        string             `json:"playerId"`
-		Name            string             `json:"name"`
-		RankedPoints    *float64           `json:"rankedPoints"`
-		Title           string             `json:"title"`
-		Message         string             `json:"message"`
-		DurationSeconds *float64           `json:"durationSeconds"`
-		OthelloResult   types.RoundResult  `json:"othelloResult"`
+		Action          string            `json:"action"`
+		RoomID          string            `json:"roomId"`
+		PlayerID        string            `json:"playerId"`
+		Name            string            `json:"name"`
+		RankedPoints    *float64          `json:"rankedPoints"`
+		Title           string            `json:"title"`
+		Message         string            `json:"message"`
+		DurationSeconds *float64          `json:"durationSeconds"`
+		OthelloResult   types.RoundResult `json:"othelloResult"`
 	}
 	_ = decodeD(env, &p)
 	admin := s.getPlayerByClientID(client.id)
@@ -1336,6 +1368,11 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 			s.clearRoomBroadcastTimer(p.RoomID)
 			s.dropSyncChannel(channelRoom(p.RoomID))
 			delete(s.rooms, p.RoomID)
+			if s.eventDB != nil {
+				if err := s.eventDB.closeRoom(p.RoomID, nowMs(), "admin_close"); err != nil {
+					s.errorLog("room_event_close_failed", err.Error())
+				}
+			}
 			roomDeleted = true
 		}
 	}

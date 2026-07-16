@@ -35,10 +35,10 @@ const (
 type RoundResult string
 
 const (
-	ResultA           RoundResult = "A"
-	ResultB           RoundResult = "B"
-	ResultDraw        RoundResult = "draw"
-	ResultDoubleLoss  RoundResult = "doubleLoss"
+	ResultA          RoundResult = "A"
+	ResultB          RoundResult = "B"
+	ResultDraw       RoundResult = "draw"
+	ResultDoubleLoss RoundResult = "doubleLoss"
 )
 
 type GamePhase string
@@ -64,6 +64,7 @@ const (
 	GameRPS       GameID = "rps"
 	GameOthello   GameID = "othello"
 	GameTicTacToe GameID = "tictactoe"
+	GameLiarsDice GameID = "liarsdice"
 )
 
 type RankStake int
@@ -83,20 +84,20 @@ type RoomInfoTagStyle struct {
 }
 
 type PunishmentTaskConfig struct {
-	ID                 string            `json:"id"`
-	Name               string            `json:"name"`
-	Variants           map[string]string `json:"variants"`
-	BackgroundImages   []string          `json:"backgroundImages,omitempty"`
-	BackgroundOpacity  float64           `json:"backgroundOpacity,omitempty"`
+	ID                string            `json:"id"`
+	Name              string            `json:"name"`
+	Variants          map[string]string `json:"variants"`
+	BackgroundImages  []string          `json:"backgroundImages,omitempty"`
+	BackgroundOpacity float64           `json:"backgroundOpacity,omitempty"`
 }
 
 type PublicStats struct {
-	Wins          int    `json:"wins"`
-	Losses        int    `json:"losses"`
-	Draws         int    `json:"draws"`
-	Punishments   int    `json:"punishments"`
-	RankedPoints  int    `json:"rankedPoints"`
-	Title         string `json:"title"`
+	Wins           int    `json:"wins"`
+	Losses         int    `json:"losses"`
+	Draws          int    `json:"draws"`
+	Punishments    int    `json:"punishments"`
+	RankedPoints   int    `json:"rankedPoints"`
+	Title          string `json:"title"`
 	TitleSegmentID string `json:"titleSegmentId,omitempty"`
 }
 
@@ -110,58 +111,58 @@ type OthelloStats struct {
 }
 
 type PublicPlayer struct {
-	ID                            string       `json:"id"`
-	Name                          string       `json:"name"`
-	GenderID                      string       `json:"genderId"`
-	GenderLabel                   string       `json:"genderLabel"`
-	FactionID                     string       `json:"factionId"`
-	FactionLabel                  string       `json:"factionLabel"`
-	FactionColors                 GenderColors `json:"factionColors"`
-	DisplayName                   string       `json:"displayName"`
-	Connected                     bool         `json:"connected"`
-	DisconnectedAt                *int64       `json:"disconnectedAt,omitempty"`
-	DisconnectExpiresAt           *int64       `json:"disconnectExpiresAt,omitempty"`
-	ProfileUpdatedAt              *int64       `json:"profileUpdatedAt,omitempty"`
-	NameWarEnabled                *bool        `json:"nameWarEnabled,omitempty"`
-	NameWarToggledAt              *int64       `json:"nameWarToggledAt,omitempty"`
-	NameWarOriginalName           string       `json:"nameWarOriginalName,omitempty"`
-	NameWarPenaltyName            string       `json:"nameWarPenaltyName,omitempty"`
-	NameWarPunished               *bool        `json:"nameWarPunished,omitempty"`
-	NameWarAllowRename            *bool        `json:"nameWarAllowRename,omitempty"`
-	NameWarRenameProtectedUntil   *int64       `json:"nameWarRenameProtectedUntil,omitempty"`
-	NameWarRenamedBy              string       `json:"nameWarRenamedBy,omitempty"`
-	NameWarRenamedByName          string       `json:"nameWarRenamedByName,omitempty"`
-	NameWarRenameWindowStartedAt  *int64       `json:"nameWarRenameWindowStartedAt,omitempty"`
-	NameWarRenameCount            *int         `json:"nameWarRenameCount,omitempty"`
-	GiveawayEnabled               *bool        `json:"giveawayEnabled,omitempty"`
-	GiveawayValue                 *float64     `json:"giveawayValue,omitempty"`
-	GiveawayClicks                *int         `json:"giveawayClicks,omitempty"`
-	GiveawayBoardText             string       `json:"giveawayBoardText,omitempty"`
-	GiveawayBoardSubmittedAt      *int64       `json:"giveawayBoardSubmittedAt,omitempty"`
-	GiveawayBoardExpiresAt        *int64       `json:"giveawayBoardExpiresAt,omitempty"`
-	GiveawayBoardLikes            *int         `json:"giveawayBoardLikes,omitempty"`
-	GiveawayBoardDislikes         *int         `json:"giveawayBoardDislikes,omitempty"`
-	GiveawayBoardLikesThisHour    *int         `json:"giveawayBoardLikesThisHour,omitempty"`
-	GiveawayBoardLikeWindowStartedAt *int64    `json:"giveawayBoardLikeWindowStartedAt,omitempty"`
-	GiveawayVoteWindowStartedAt   *int64       `json:"giveawayVoteWindowStartedAt,omitempty"`
-	GiveawayVoteCount             *int         `json:"giveawayVoteCount,omitempty"`
-	GiveawayVoteLikesThisHour     *int         `json:"giveawayVoteLikesThisHour,omitempty"`
-	GiveawayVoteDislikesThisHour  *int         `json:"giveawayVoteDislikesThisHour,omitempty"`
-	RankMultiplierUnlocked        *bool        `json:"rankMultiplierUnlocked,omitempty"`
-	ExtremeModeEnabled            *bool        `json:"extremeModeEnabled,omitempty"`
-	ExtremeModeToggledAt          *int64       `json:"extremeModeToggledAt,omitempty"`
-	ExtremeModeCooldownUntil       *int64       `json:"extremeModeCooldownUntil,omitempty"`
-	ExtremeWinStreak              *int         `json:"extremeWinStreak,omitempty"`
-	ExtremeLastDecayHour          *int64       `json:"extremeLastDecayHour,omitempty"`
-	ExtremeForceClosed            *bool        `json:"extremeForceClosed,omitempty"`
-	ExtremeForceClosedAt          *int64       `json:"extremeForceClosedAt,omitempty"`
-	ExtremeRenameProtectedUntil   *int64       `json:"extremeRenameProtectedUntil,omitempty"`
-	ExtremeRenamedBy              string       `json:"extremeRenamedBy,omitempty"`
-	ExtremeRenamedByName          string       `json:"extremeRenamedByName,omitempty"`
-	RoomID                        string       `json:"roomId,omitempty"`
-	IsAdmin                       *bool        `json:"isAdmin,omitempty"`
-	Stats                         PublicStats  `json:"stats"`
-	OthelloStats                  OthelloStats `json:"othelloStats"`
+	ID                               string       `json:"id"`
+	Name                             string       `json:"name"`
+	GenderID                         string       `json:"genderId"`
+	GenderLabel                      string       `json:"genderLabel"`
+	FactionID                        string       `json:"factionId"`
+	FactionLabel                     string       `json:"factionLabel"`
+	FactionColors                    GenderColors `json:"factionColors"`
+	DisplayName                      string       `json:"displayName"`
+	Connected                        bool         `json:"connected"`
+	DisconnectedAt                   *int64       `json:"disconnectedAt,omitempty"`
+	DisconnectExpiresAt              *int64       `json:"disconnectExpiresAt,omitempty"`
+	ProfileUpdatedAt                 *int64       `json:"profileUpdatedAt,omitempty"`
+	NameWarEnabled                   *bool        `json:"nameWarEnabled,omitempty"`
+	NameWarToggledAt                 *int64       `json:"nameWarToggledAt,omitempty"`
+	NameWarOriginalName              string       `json:"nameWarOriginalName,omitempty"`
+	NameWarPenaltyName               string       `json:"nameWarPenaltyName,omitempty"`
+	NameWarPunished                  *bool        `json:"nameWarPunished,omitempty"`
+	NameWarAllowRename               *bool        `json:"nameWarAllowRename,omitempty"`
+	NameWarRenameProtectedUntil      *int64       `json:"nameWarRenameProtectedUntil,omitempty"`
+	NameWarRenamedBy                 string       `json:"nameWarRenamedBy,omitempty"`
+	NameWarRenamedByName             string       `json:"nameWarRenamedByName,omitempty"`
+	NameWarRenameWindowStartedAt     *int64       `json:"nameWarRenameWindowStartedAt,omitempty"`
+	NameWarRenameCount               *int         `json:"nameWarRenameCount,omitempty"`
+	GiveawayEnabled                  *bool        `json:"giveawayEnabled,omitempty"`
+	GiveawayValue                    *float64     `json:"giveawayValue,omitempty"`
+	GiveawayClicks                   *int         `json:"giveawayClicks,omitempty"`
+	GiveawayBoardText                string       `json:"giveawayBoardText,omitempty"`
+	GiveawayBoardSubmittedAt         *int64       `json:"giveawayBoardSubmittedAt,omitempty"`
+	GiveawayBoardExpiresAt           *int64       `json:"giveawayBoardExpiresAt,omitempty"`
+	GiveawayBoardLikes               *int         `json:"giveawayBoardLikes,omitempty"`
+	GiveawayBoardDislikes            *int         `json:"giveawayBoardDislikes,omitempty"`
+	GiveawayBoardLikesThisHour       *int         `json:"giveawayBoardLikesThisHour,omitempty"`
+	GiveawayBoardLikeWindowStartedAt *int64       `json:"giveawayBoardLikeWindowStartedAt,omitempty"`
+	GiveawayVoteWindowStartedAt      *int64       `json:"giveawayVoteWindowStartedAt,omitempty"`
+	GiveawayVoteCount                *int         `json:"giveawayVoteCount,omitempty"`
+	GiveawayVoteLikesThisHour        *int         `json:"giveawayVoteLikesThisHour,omitempty"`
+	GiveawayVoteDislikesThisHour     *int         `json:"giveawayVoteDislikesThisHour,omitempty"`
+	RankMultiplierUnlocked           *bool        `json:"rankMultiplierUnlocked,omitempty"`
+	ExtremeModeEnabled               *bool        `json:"extremeModeEnabled,omitempty"`
+	ExtremeModeToggledAt             *int64       `json:"extremeModeToggledAt,omitempty"`
+	ExtremeModeCooldownUntil         *int64       `json:"extremeModeCooldownUntil,omitempty"`
+	ExtremeWinStreak                 *int         `json:"extremeWinStreak,omitempty"`
+	ExtremeLastDecayHour             *int64       `json:"extremeLastDecayHour,omitempty"`
+	ExtremeForceClosed               *bool        `json:"extremeForceClosed,omitempty"`
+	ExtremeForceClosedAt             *int64       `json:"extremeForceClosedAt,omitempty"`
+	ExtremeRenameProtectedUntil      *int64       `json:"extremeRenameProtectedUntil,omitempty"`
+	ExtremeRenamedBy                 string       `json:"extremeRenamedBy,omitempty"`
+	ExtremeRenamedByName             string       `json:"extremeRenamedByName,omitempty"`
+	RoomID                           string       `json:"roomId,omitempty"`
+	IsAdmin                          *bool        `json:"isAdmin,omitempty"`
+	Stats                            PublicStats  `json:"stats"`
+	OthelloStats                     OthelloStats `json:"othelloStats"`
 }
 
 type BotPlayer struct {
@@ -175,21 +176,21 @@ type BotPlayer struct {
 // Encoded as json.RawMessage / any in snapshots.
 
 type ChatMessage struct {
-	ID          string        `json:"id"`
-	RoomID      string        `json:"roomId,omitempty"`
-	PlayerID    string        `json:"playerId"`
-	Author      string        `json:"author"`
+	ID           string        `json:"id"`
+	RoomID       string        `json:"roomId,omitempty"`
+	PlayerID     string        `json:"playerId"`
+	Author       string        `json:"author"`
 	AuthorPlayer *PublicPlayer `json:"authorPlayer,omitempty"`
-	AuthorRole  string        `json:"authorRole,omitempty"`
-	Text        string        `json:"text"`
-	At          int64         `json:"at"`
-	System      bool          `json:"system,omitempty"`
-	Transient   bool          `json:"transient,omitempty"`
-	ExpiresAt   *int64        `json:"expiresAt,omitempty"`
+	AuthorRole   string        `json:"authorRole,omitempty"`
+	Text         string        `json:"text"`
+	At           int64         `json:"at"`
+	System       bool          `json:"system,omitempty"`
+	Transient    bool          `json:"transient,omitempty"`
+	ExpiresAt    *int64        `json:"expiresAt,omitempty"`
 	// Mentions：被 @ 的玩家 public id 列表；前端据此在 me.id 命中时高亮气泡。
-	Mentions    []string      `json:"mentions,omitempty"`
+	Mentions []string `json:"mentions,omitempty"`
 	// Seq：SQLite 自增序号，仅出站聊天用作分页游标；系统消息为 0。
-	Seq         int64         `json:"seq,omitempty"`
+	Seq int64 `json:"seq,omitempty"`
 }
 
 type Suggestion struct {
@@ -202,14 +203,14 @@ type Suggestion struct {
 }
 
 type RoomSettings struct {
-	Name                   string         `json:"name"`
-	Password               string         `json:"password,omitempty"`
-	GameID                 GameID         `json:"gameId"`
-	EnableBot              bool           `json:"enableBot"`
-	BotDifficulty          BotDifficulty  `json:"botDifficulty"`
-	EnablePunishment       bool           `json:"enablePunishment"`
-	PunishmentSource       string         `json:"punishmentSource,omitempty"`
-	PunishmentID           string         `json:"punishmentId,omitempty"`
+	Name             string        `json:"name"`
+	Password         string        `json:"password,omitempty"`
+	GameID           GameID        `json:"gameId"`
+	EnableBot        bool          `json:"enableBot"`
+	BotDifficulty    BotDifficulty `json:"botDifficulty"`
+	EnablePunishment bool          `json:"enablePunishment"`
+	PunishmentSource string        `json:"punishmentSource,omitempty"`
+	PunishmentID     string        `json:"punishmentId,omitempty"`
 	// 数组字段不用 omitempty：空切片会变成 null 或字段缺失，前端 .map/.includes 会挂
 	PunishmentIDs          []string       `json:"punishmentIds"`
 	RoomBackgroundImage    string         `json:"roomBackgroundImage,omitempty"`
@@ -225,20 +226,22 @@ type RoomSettings struct {
 	EnableExtremeRanked    bool           `json:"enableExtremeRanked,omitempty"`
 	OthelloBoardTheme      string         `json:"othelloBoardTheme,omitempty"`
 	TicTacToeBoardTheme    string         `json:"tictactoeBoardTheme,omitempty"`
+	LiarsDiceMinPlayers    int            `json:"liarsDiceMinPlayers,omitempty"`
+	LiarsDiceMaxPlayers    int            `json:"liarsDiceMaxPlayers,omitempty"`
 }
 
 type PunishmentProof struct {
-	PlayerID     string  `json:"playerId"`
-	Text         string  `json:"text"`
-	ImageURL     string  `json:"imageUrl,omitempty"`
-	TaskText     string  `json:"taskText,omitempty"`
-	Status       string  `json:"status,omitempty"`
-	ConfirmedBy  string  `json:"confirmedBy,omitempty"`
-	ReviewedBy   string  `json:"reviewedBy,omitempty"`
-	ReviewedAt   *int64  `json:"reviewedAt,omitempty"`
-	RejectReason string  `json:"rejectReason,omitempty"`
-	RedoTaskText string  `json:"redoTaskText,omitempty"`
-	SubmittedAt  int64   `json:"submittedAt"`
+	PlayerID     string `json:"playerId"`
+	Text         string `json:"text"`
+	ImageURL     string `json:"imageUrl,omitempty"`
+	TaskText     string `json:"taskText,omitempty"`
+	Status       string `json:"status,omitempty"`
+	ConfirmedBy  string `json:"confirmedBy,omitempty"`
+	ReviewedBy   string `json:"reviewedBy,omitempty"`
+	ReviewedAt   *int64 `json:"reviewedAt,omitempty"`
+	RejectReason string `json:"rejectReason,omitempty"`
+	RedoTaskText string `json:"redoTaskText,omitempty"`
+	SubmittedAt  int64  `json:"submittedAt"`
 }
 
 type SeatStats struct {
@@ -279,6 +282,16 @@ type RoundHistoryItem struct {
 	PunishmentTasks       []PunishmentTask `json:"punishmentTasks"`
 	PunishedNames         []string         `json:"punishedNames"`
 	Proofs                []HistoryProof   `json:"proofs"`
+	LiarsDiceWinnerID     string           `json:"liarsDiceWinnerId,omitempty"`
+	LiarsDiceLoserID      string           `json:"liarsDiceLoserId,omitempty"`
+	LiarsDiceBidCount     int              `json:"liarsDiceBidCount,omitempty"`
+	LiarsDiceBidFace      int              `json:"liarsDiceBidFace,omitempty"`
+	LiarsDiceActualCount  int              `json:"liarsDiceActualCount,omitempty"`
+	// LiarsDiceHands/LiarsDiceNames：结算后全员开牌，playerId -> 骰子/展示名。
+	// pbconv.historyToProto 里手动映射成 pair 列表，不走通用 JSONCamelToProto。
+	LiarsDiceHands     map[string][]int  `json:"liarsDiceHands,omitempty"`
+	LiarsDiceHandOrder []string          `json:"liarsDiceHandOrder,omitempty"`
+	LiarsDiceNames     map[string]string `json:"liarsDiceNames,omitempty"`
 }
 
 type OthelloScore struct {
@@ -287,15 +300,15 @@ type OthelloScore struct {
 }
 
 type PunishmentTask struct {
-	PlayerID           string  `json:"playerId"`
-	PlayerName         string  `json:"playerName"`
-	FactionID          string  `json:"factionId"`
-	FactionLabel       string  `json:"factionLabel"`
-	TaskText           string  `json:"taskText"`
-	BackgroundImage    string  `json:"backgroundImage,omitempty"`
-	BackgroundOpacity  *float64 `json:"backgroundOpacity,omitempty"`
-	AssignedBy         string  `json:"assignedBy,omitempty"`
-	AssignedByName     string  `json:"assignedByName,omitempty"`
+	PlayerID          string   `json:"playerId"`
+	PlayerName        string   `json:"playerName"`
+	FactionID         string   `json:"factionId"`
+	FactionLabel      string   `json:"factionLabel"`
+	TaskText          string   `json:"taskText"`
+	BackgroundImage   string   `json:"backgroundImage,omitempty"`
+	BackgroundOpacity *float64 `json:"backgroundOpacity,omitempty"`
+	AssignedBy        string   `json:"assignedBy,omitempty"`
+	AssignedByName    string   `json:"assignedByName,omitempty"`
 }
 
 type HistoryProof struct {
@@ -339,19 +352,19 @@ type OthelloSurrenderRequest struct {
 }
 
 type OthelloState struct {
-	Board             [][]*OthelloCell         `json:"board"`
-	Turn              SeatKey                  `json:"turn"`
-	BlackSeat         SeatKey                  `json:"blackSeat"`
-	LegalMoves        []Pos                    `json:"legalMoves"`
-	PassCount         int                      `json:"passCount"`
-	BlackCount        int                      `json:"blackCount"`
-	WhiteCount        int                      `json:"whiteCount"`
-	RankedDelta       map[SeatKey]int          `json:"rankedDelta"`
-	SettlementEvents  []string                 `json:"settlementEvents"`
+	Board             [][]*OthelloCell          `json:"board"`
+	Turn              SeatKey                   `json:"turn"`
+	BlackSeat         SeatKey                   `json:"blackSeat"`
+	LegalMoves        []Pos                     `json:"legalMoves"`
+	PassCount         int                       `json:"passCount"`
+	BlackCount        int                       `json:"blackCount"`
+	WhiteCount        int                       `json:"whiteCount"`
+	RankedDelta       map[SeatKey]int           `json:"rankedDelta"`
+	SettlementEvents  []string                  `json:"settlementEvents"`
 	PendingSettlement *OthelloPendingSettlement `json:"pendingSettlement,omitempty"`
-	SurrenderRequest  *OthelloSurrenderRequest `json:"surrenderRequest,omitempty"`
-	Ended             bool                     `json:"ended,omitempty"`
-	Winner            RoundResult              `json:"winner,omitempty"`
+	SurrenderRequest  *OthelloSurrenderRequest  `json:"surrenderRequest,omitempty"`
+	Ended             bool                      `json:"ended,omitempty"`
+	Winner            RoundResult               `json:"winner,omitempty"`
 }
 
 type TicTacToeCell string
@@ -369,40 +382,66 @@ type TicTacToeGiveawayPrompt struct {
 }
 
 type TicTacToeState struct {
-	Board         [][]*TicTacToeCell       `json:"board"`
-	Turn          SeatKey                  `json:"turn"`
-	XSeat         SeatKey                  `json:"xSeat"`
-	MoveCount     int                      `json:"moveCount"`
+	Board          [][]*TicTacToeCell       `json:"board"`
+	Turn           SeatKey                  `json:"turn"`
+	XSeat          SeatKey                  `json:"xSeat"`
+	MoveCount      int                      `json:"moveCount"`
 	GiveawayPrompt *TicTacToeGiveawayPrompt `json:"giveawayPrompt,omitempty"`
-	WinningLine   []Pos                    `json:"winningLine"`
-	RankedDelta   map[SeatKey]int          `json:"rankedDelta"`
-	Ended         bool                     `json:"ended,omitempty"`
-	Winner        RoundResult              `json:"winner,omitempty"`
+	WinningLine    []Pos                    `json:"winningLine"`
+	RankedDelta    map[SeatKey]int          `json:"rankedDelta"`
+	Ended          bool                     `json:"ended,omitempty"`
+	Winner         RoundResult              `json:"winner,omitempty"`
+}
+
+type LiarsDiceBid struct {
+	PlayerID string `json:"playerId"`
+	Count    int    `json:"count"`
+	Face     int    `json:"face"`
+	At       int64  `json:"at"`
+}
+
+type LiarsDiceState struct {
+	ParticipantIDs   []string         `json:"participantIds"`
+	ReadyPlayerIDs   []string         `json:"readyPlayerIds"`
+	DiceCounts       map[string]int   `json:"diceCounts"`
+	CurrentTurn      string           `json:"currentTurn,omitempty"`
+	CurrentBid       *LiarsDiceBid    `json:"currentBid,omitempty"`
+	BidHistory       []LiarsDiceBid   `json:"bidHistory"`
+	OnesWildDisabled bool             `json:"onesWildDisabled,omitempty"`
+	RoundNumber      int              `json:"roundNumber"`
+	Ended            bool             `json:"ended,omitempty"`
+	WinnerID         string           `json:"winnerId,omitempty"`
+	LoserID          string           `json:"loserId,omitempty"`
+	RevealedHands    map[string][]int `json:"revealedHands,omitempty"`
+	ActualCount      int              `json:"actualCount,omitempty"`
+	MinPlayers       int              `json:"minPlayers,omitempty"`
+	MaxPlayers       int              `json:"maxPlayers,omitempty"`
 }
 
 type RoomSnapshot struct {
-	ID                 string                     `json:"id"`
-	Code               string                     `json:"code"`
-	UpdatedAt          int64                      `json:"updatedAt"`
-	Settings           RoomSettings               `json:"settings"`
-	Status             string                     `json:"status"`
-	Phase              GamePhase                  `json:"phase"`
-	Seats              map[SeatKey]any            `json:"seats"`
-	Spectators         []PublicPlayer             `json:"spectators"`
-	Ready              map[SeatKey]bool           `json:"ready"`
-	Choices            map[SeatKey]any            `json:"choices"`
-	RevealedChoices    map[SeatKey]Move           `json:"revealedChoices,omitempty"`
-	Othello            *OthelloState              `json:"othello,omitempty"`
-	TicTacToe          *TicTacToeState            `json:"tictactoe,omitempty"`
-	ResultText         string                     `json:"resultText,omitempty"`
-	PunishedPlayerIDs  []string                   `json:"punishedPlayerIds"`
-	Proofs             []PunishmentProof          `json:"proofs"`
-	Score              map[SeatKey]int            `json:"score"`
-	SeatedScore        map[SeatKey]int            `json:"seatedScore"`
-	SeatStats          map[SeatKey]SeatStats      `json:"seatStats"`
-	RoundHistory       []RoundHistoryItem         `json:"roundHistory"`
-	RoundHistoryTotal  int                        `json:"roundHistoryTotal"`
-	Chat               []ChatMessage              `json:"chat"`
+	ID                string                `json:"id"`
+	Code              string                `json:"code"`
+	UpdatedAt         int64                 `json:"updatedAt"`
+	Settings          RoomSettings          `json:"settings"`
+	Status            string                `json:"status"`
+	Phase             GamePhase             `json:"phase"`
+	Seats             map[SeatKey]any       `json:"seats"`
+	Spectators        []PublicPlayer        `json:"spectators"`
+	Ready             map[SeatKey]bool      `json:"ready"`
+	Choices           map[SeatKey]any       `json:"choices"`
+	RevealedChoices   map[SeatKey]Move      `json:"revealedChoices,omitempty"`
+	Othello           *OthelloState         `json:"othello,omitempty"`
+	TicTacToe         *TicTacToeState       `json:"tictactoe,omitempty"`
+	LiarsDice         *LiarsDiceState       `json:"liarsDice,omitempty"`
+	ResultText        string                `json:"resultText,omitempty"`
+	PunishedPlayerIDs []string              `json:"punishedPlayerIds"`
+	Proofs            []PunishmentProof     `json:"proofs"`
+	Score             map[SeatKey]int       `json:"score"`
+	SeatedScore       map[SeatKey]int       `json:"seatedScore"`
+	SeatStats         map[SeatKey]SeatStats `json:"seatStats"`
+	RoundHistory      []RoundHistoryItem    `json:"roundHistory"`
+	RoundHistoryTotal int                   `json:"roundHistoryTotal"`
+	Chat              []ChatMessage         `json:"chat"`
 }
 
 type ServerStats struct {
@@ -420,29 +459,29 @@ type ServerStats struct {
 }
 
 type LobbyRoomInfo struct {
-	ID                     string         `json:"id"`
-	GameID                 GameID         `json:"gameId"`
-	Code                   string         `json:"code"`
-	Name                   string         `json:"name"`
-	HasPassword            bool           `json:"hasPassword"`
-	Players                int            `json:"players"`
-	Spectators             int            `json:"spectators"`
+	ID                     string          `json:"id"`
+	GameID                 GameID          `json:"gameId"`
+	Code                   string          `json:"code"`
+	Name                   string          `json:"name"`
+	HasPassword            bool            `json:"hasPassword"`
+	Players                int             `json:"players"`
+	Spectators             int             `json:"spectators"`
 	Versus                 map[SeatKey]any `json:"versus"`
-	Status                 string         `json:"status"`
-	RoomBackgroundImage    string         `json:"roomBackgroundImage,omitempty"`
-	EnableBot              bool           `json:"enableBot"`
-	BotDifficulty          BotDifficulty  `json:"botDifficulty"`
-	EnablePunishment       bool           `json:"enablePunishment"`
-	PunishmentIDs          []string       `json:"punishmentIds"`
-	PunishmentID           string         `json:"punishmentId,omitempty"`
-	TieDoublePunish        bool           `json:"tieDoublePunish"`
-	RequireOpponentConfirm bool           `json:"requireOpponentConfirm"`
-	EnableRanked           bool           `json:"enableRanked"`
-	Stake                  RankStake      `json:"stake"`
-	EnableRankMultiplier   bool           `json:"enableRankMultiplier,omitempty"`
-	RankMultiplier         RankMultiplier `json:"rankMultiplier,omitempty"`
-	EnableExtremeRanked    bool           `json:"enableExtremeRanked,omitempty"`
-	Tags                   []string       `json:"tags"`
+	Status                 string          `json:"status"`
+	RoomBackgroundImage    string          `json:"roomBackgroundImage,omitempty"`
+	EnableBot              bool            `json:"enableBot"`
+	BotDifficulty          BotDifficulty   `json:"botDifficulty"`
+	EnablePunishment       bool            `json:"enablePunishment"`
+	PunishmentIDs          []string        `json:"punishmentIds"`
+	PunishmentID           string          `json:"punishmentId,omitempty"`
+	TieDoublePunish        bool            `json:"tieDoublePunish"`
+	RequireOpponentConfirm bool            `json:"requireOpponentConfirm"`
+	EnableRanked           bool            `json:"enableRanked"`
+	Stake                  RankStake       `json:"stake"`
+	EnableRankMultiplier   bool            `json:"enableRankMultiplier,omitempty"`
+	RankMultiplier         RankMultiplier  `json:"rankMultiplier,omitempty"`
+	EnableExtremeRanked    bool            `json:"enableExtremeRanked,omitempty"`
+	Tags                   []string        `json:"tags"`
 }
 
 type LobbySnapshot struct {
@@ -504,22 +543,22 @@ type DailyAnnouncement struct {
 }
 
 type ExtremeModeConfig struct {
-	Label                string             `json:"label"`
-	Emoji                string             `json:"emoji"`
-	CooldownHours         int                `json:"cooldownHours"`
-	PositiveLossRates    map[string]float64 `json:"positiveLossRates"`
-	NegativeWinRates     map[string]float64 `json:"negativeWinRates"`
-	HourlyDecay          map[string]float64 `json:"hourlyDecay"`
-	WinStreakThreshold   int                `json:"winStreakThreshold"`
-	WinStreakCrashChance float64            `json:"winStreakCrashChance"`
-	CrashTargetPoints    int                `json:"crashTargetPoints"`
-	ForceCloseWarning    string             `json:"forceCloseWarning,omitempty"`
-	ForceRenameMinPoints int                `json:"forceRenameMinPoints,omitempty"`
-	ForceRenameProtectHours int             `json:"forceRenameProtectHours,omitempty"`
+	Label                   string             `json:"label"`
+	Emoji                   string             `json:"emoji"`
+	CooldownHours           int                `json:"cooldownHours"`
+	PositiveLossRates       map[string]float64 `json:"positiveLossRates"`
+	NegativeWinRates        map[string]float64 `json:"negativeWinRates"`
+	HourlyDecay             map[string]float64 `json:"hourlyDecay"`
+	WinStreakThreshold      int                `json:"winStreakThreshold"`
+	WinStreakCrashChance    float64            `json:"winStreakCrashChance"`
+	CrashTargetPoints       int                `json:"crashTargetPoints"`
+	ForceCloseWarning       string             `json:"forceCloseWarning,omitempty"`
+	ForceRenameMinPoints    int                `json:"forceRenameMinPoints,omitempty"`
+	ForceRenameProtectHours int                `json:"forceRenameProtectHours,omitempty"`
 }
 
 type AppConfig struct {
-	Site                         struct {
+	Site struct {
 		Name          string `json:"name"`
 		Description   string `json:"description"`
 		AdminPassword string `json:"adminPassword"`
@@ -533,7 +572,7 @@ type AppConfig struct {
 	RoomTags                     []string                    `json:"roomTags"`
 	RoomInfoTags                 map[string]RoomInfoTagStyle `json:"roomInfoTags"`
 	AccessControl                struct {
-		MaxOnlinePerIP    int `json:"maxOnlinePerIp"`
+		MaxOnlinePerIP     int `json:"maxOnlinePerIp"`
 		MaxCreatesPer10Min int `json:"maxCreatesPer10Min"`
 	} `json:"accessControl"`
 	NameWar struct {
@@ -555,6 +594,6 @@ type AppConfig struct {
 		Names        []string              `json:"names"`
 		Difficulties []BotDifficultyConfig `json:"difficulties"`
 	} `json:"bots"`
-	Games    []GameConfig       `json:"games"`
-	Messages map[string]string  `json:"messages"`
+	Games    []GameConfig      `json:"games"`
+	Messages map[string]string `json:"messages"`
 }

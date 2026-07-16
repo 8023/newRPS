@@ -83,7 +83,7 @@ func TestPunishmentTaskForPlayerPlaceholders(t *testing.T) {
 		},
 	}
 	// B 败（ResultA 表示 A 胜）
-	res := s.punishmentTaskForPlayer(room, loser, types.ResultA, punishment)
+	res := s.punishmentTaskForPlayer(room, loser, "Alice", punishment)
 	if res == nil || res.TaskText != "Bob 需要拥抱 Alice" {
 		t.Fatalf("task=%#v", res)
 	}

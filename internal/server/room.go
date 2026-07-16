@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	defaultRoomName         = "新的锤子剪刀布房间"
-	defaultOthelloRoomName  = "新的黑白棋房间"
+	defaultRoomName          = "新的锤子剪刀布房间"
+	defaultOthelloRoomName   = "新的黑白棋房间"
 	defaultTicTacToeRoomName = "新的井字棋房间"
 )
 
@@ -69,6 +69,9 @@ func isHumanOccupant(occupant SeatOccupant) bool {
 }
 
 func (s *Server) shouldCloseRoom(room *RoomState) bool {
+	if room.Settings.GameID == types.GameLiarsDice {
+		return len(room.SpectatorIDs) == 0 && (room.LiarsDice == nil || len(room.LiarsDice.ParticipantIDs) == 0)
+	}
 	return !isHumanOccupant(room.Seats[types.SeatA]) &&
 		!isHumanOccupant(room.Seats[types.SeatB]) &&
 		len(room.SpectatorIDs) == 0
@@ -84,9 +87,15 @@ func (s *Server) cleanupRoomIfEmpty(room *RoomState) bool {
 	}
 	s.clearOthelloSettlementTimer(room.ID)
 	s.clearTicTacToeGiveawayTimer(room.ID)
+	s.clearLiarsDiceStartTimer(room.ID)
 	s.clearRoomBroadcastTimer(room.ID)
 	s.dropSyncChannel(channelRoom(room.ID))
 	delete(s.rooms, room.ID)
+	if s.eventDB != nil {
+		if err := s.eventDB.closeRoom(room.ID, nowMs(), "empty_cleanup"); err != nil {
+			s.errorLog("room_event_close_failed", err.Error())
+		}
+	}
 	// 房间从大厅列表移除属于结构性变化，立即全量推大厅，避免他人列表残留幽灵房间。
 	s.forceBroadcastLobby()
 	return true
@@ -186,6 +195,7 @@ func (s *Server) roomSnapshot(room *RoomState, includeChat, includeHistory bool)
 		Choices:           choices,
 		Othello:           room.Othello,
 		TicTacToe:         room.TicTacToe,
+		LiarsDice:         room.LiarsDice,
 		ResultText:        room.ResultText,
 		PunishedPlayerIDs: room.PunishedPlayerIDs,
 		Proofs:            room.Proofs,
@@ -471,6 +481,11 @@ func (s *Server) canLeaveRoom(player *PlayerState, reason LeaveReason) LeaveResu
 			return LeaveResult{OK: false, Error: "井字棋对局进行中不能离开战斗席，请等待对局结束"}
 		}
 	}
+	if room.Settings.GameID == types.GameLiarsDice && room.Phase == types.PhaseChoosing {
+		if room.LiarsDice != nil && containsString(room.LiarsDice.ParticipantIDs, player.ID) && isProtected {
+			return LeaveResult{OK: false, Error: "大话骰对局进行中不能离开参战席，请等待对局结束"}
+		}
+	}
 	if room.Phase != types.PhasePunishment {
 		return LeaveResult{OK: true}
 	}
@@ -536,8 +551,18 @@ func (s *Server) leaveRoom(player *PlayerState, reason LeaveReason) LeaveResult 
 			s.applyDisconnectForfeit(room, player)
 		}
 	}
+	if reason == LeaveAdminKick && room.Settings.GameID == types.GameLiarsDice && room.Phase == types.PhaseChoosing {
+		if room.LiarsDice != nil && containsString(room.LiarsDice.ParticipantIDs, player.ID) {
+			s.createDisconnectForfeit(room, player)
+			s.applyDisconnectForfeit(room, player)
+		}
+	}
 	if seat, ok := s.seatOf(room, player.ID); ok {
 		s.clearSeatForPlayer(room, seat)
+	}
+	if room.Settings.GameID == types.GameLiarsDice {
+		s.leaveLiarsDiceRoster(room, player.ID)
+		s.scheduleLiarsDiceReadyStart(room)
 	}
 	if c := s.clients[player.SocketID]; c != nil {
 		s.clientLeaveRoom(c, room.ID)
@@ -565,10 +590,17 @@ func (s *Server) clearDisconnectForfeit(player *PlayerState) {
 	room := s.rooms[player.RoomID]
 	if room != nil {
 		delete(room.DisconnectForfeits, player.ID)
+		// 大话骰断线判负走独立的 map，重连时同样要撤销，否则残留的旧判负条目
+		// 可能在后续某次强制结算里被错误套用（见 game_liarsdice.go）。
+		delete(room.LiarsDiceDisconnectForfeits, player.ID)
 	}
 }
 
 func (s *Server) createDisconnectForfeit(room *RoomState, player *PlayerState) {
+	if room.Settings.GameID == types.GameLiarsDice {
+		s.createLiarsDiceDisconnectForfeit(room, player)
+		return
+	}
 	if room.Phase != types.PhaseChoosing {
 		return
 	}

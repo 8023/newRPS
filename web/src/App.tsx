@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Crown, HeartHandshake, Moon, Sun, UserRound } from "lucide-react";
 import { socket } from "./main";
-import type { AppConfig, LobbySnapshot, PublicPlayer, RoomSnapshot } from "./shared/types";
+import type { AppConfig, ChatMessage, LobbySnapshot, PublicPlayer, RoomSnapshot } from "./shared/types";
 import { dailyAnnouncementKey, leaderboardRefreshMs, tokenKey } from "./lib/constants";
 import {
   bumpWsAuthRetryCount, connectSocketWithSession, getWsAuthRetryCount, hasCachedLogin,
@@ -13,11 +13,43 @@ import {
   normalizeRoomSnapshot, normalizeRoundHistoryItem, playerSyncKey, replacePlayerInLobby, replacePlayerInRoom
 } from "./lib/normalize";
 import { refreshActiveChats } from "./lib/chatStore";
+import { fetchPushPreferences, notifyMentionIfHidden, notifySeatIfHidden, notifyTurnIfHidden, setPushMeId } from "./lib/pushNotify";
 import type { AnnouncementPayload, MeState } from "./lib/types";
 import {
   AdminPanel, GlobalLeaderboardPanel, Lobby, Login, PlayerBadge, ProfilePanel, Room, SponsorPanel,
   connectionStateText, phaseText
 } from "./ui/AppViews";
+
+// Level 1（页面在前台开着但被切到后台/最小化）：对比新旧房间快照，检测"对手座位刚被
+// 坐满"和"轮到我了"这两类事件，命中就交给 notify* 决定要不要弹 Notification（它们内部
+// 会检查 document.hidden 和用户的推送偏好开关，这里只管"事件本身有没有发生"）。
+// 只在 old 和 new 是同一个房间时才比较，避免切房间那一刻误判成"状态变化"。
+function checkRoomLevel1Notifications(old: RoomSnapshot | null, next: RoomSnapshot, me: MeState | null) {
+  const meId = me?.player.id;
+  if (!meId || !old || old.id !== next.id) return;
+  const mySeat = next.seats.A && "id" in next.seats.A && next.seats.A.id === meId ? "A"
+    : next.seats.B && "id" in next.seats.B && next.seats.B.id === meId ? "B" : null;
+  if (!mySeat) return;
+  const otherSeat = mySeat === "A" ? "B" : "A";
+
+  // 对面座位刚从空/无人变成有真人坐下。
+  const otherOccOld = old.seats[otherSeat];
+  const otherOccNext = next.seats[otherSeat];
+  const wasEmpty = !otherOccOld;
+  const nowHuman = Boolean(otherOccNext) && !("isBot" in otherOccNext!);
+  if (wasEmpty && nowHuman) notifySeatIfHidden();
+
+  // 轮到我了：RPS 靠 choices（对方刚锁定、我还没锁定）；黑白棋/井字棋靠 turn 字段切到我。
+  if (next.settings.gameId === "rps") {
+    const otherJustChose = !old.choices?.[otherSeat] && Boolean(next.choices?.[otherSeat]);
+    const iHaventChosen = !next.choices?.[mySeat];
+    if (otherJustChose && iHaventChosen) notifyTurnIfHidden();
+  } else if (next.settings.gameId === "othello" && next.othello) {
+    if (old.othello?.turn !== mySeat && next.othello.turn === mySeat) notifyTurnIfHidden();
+  } else if (next.settings.gameId === "tictactoe" && next.tictactoe) {
+    if (old.tictactoe?.turn !== mySeat && next.tictactoe.turn === mySeat) notifyTurnIfHidden();
+  }
+}
 
 export function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -35,11 +67,23 @@ export function App() {
   const [announcement, setAnnouncement] = useState<AnnouncementPayload | null>(null);
   const [dailyAnnouncementOpen, setDailyAnnouncementOpen] = useState(false);
   const [connectionState, setConnectionState] = useState<"connected" | "connecting" | "disconnected">(() => socket.connected ? "connected" : "connecting");
+  const [restoreKickPending, setRestoreKickPending] = useState<Record<string, unknown> | null>(null);
+  const [restoreKickBusy, setRestoreKickBusy] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(() => (localStorage.getItem("rps-online-theme") === "dark" ? "dark" : "light"));
   const restoreInFlightRef = useRef(false);
   const hadConnectedRef = useRef(socket.connected);
   const latestLobbyPlayersRef = useRef<PublicPlayer[]>([]);
   const leaderboardSnapshotAtRef = useRef(0);
+  // meRef/roomRef：socket 事件回调注册一次（[] deps）就不会再拿到最新的闭包，读 ref 才是当前值。
+  const meRef = useRef<MeState | null>(null);
+  const roomRef = useRef<RoomSnapshot | null>(null);
+
+  useEffect(() => {
+    meRef.current = me;
+  }, [me]);
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
 
   useEffect(() => {
     connectSocketWithSession().catch(() => {
@@ -62,10 +106,17 @@ export function App() {
     if (!socket.connected) return;
 
     restoreInFlightRef.current = true;
+    const payload = { name: cachedName, genderId: cachedGender, token, ...(await joinIdentityPayload()) };
     try {
-      const next = await ask<MeState>("player:join", { name: cachedName, genderId: cachedGender, token, ...(await joinIdentityPayload()) });
+      const next = await ask<MeState & { alreadyOnline?: true }>("player:join", payload);
+      if (next.alreadyOnline) {
+        setRestoreKickPending(payload);
+        setRestoringSession(false);
+        return;
+      }
       if (next.token) localStorage.setItem(tokenKey, next.token);
       setMe(next);
+      initPushForPlayer(next.player.id);
       if (next.room) setRoom(normalizeRoomSnapshot(next.room));
       else setRoom(null);
       if (!isAdminRoute()) {
@@ -89,6 +140,30 @@ export function App() {
     }
   }
 
+  async function confirmRestoreKick() {
+    if (!restoreKickPending) return;
+    setRestoreKickBusy(true);
+    try {
+      const next = await ask<MeState>("player:join", { ...restoreKickPending, forceKick: true });
+      if (next.token) localStorage.setItem(tokenKey, next.token);
+      setMe(next);
+      initPushForPlayer(next.player.id);
+      if (next.room) setRoom(normalizeRoomSnapshot(next.room));
+      else setRoom(null);
+      if (!isAdminRoute()) setView(next.room ? "room" : "lobby");
+      setRestoreKickPending(null);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "登录失败");
+    } finally {
+      setRestoreKickBusy(false);
+    }
+  }
+
+  function initPushForPlayer(playerId: string) {
+    setPushMeId(playerId);
+    fetchPushPreferences().catch(() => undefined);
+  }
+
   function refreshLeaderboardSnapshot(players: PublicPlayer[], now = Date.now()) {
     latestLobbyPlayersRef.current = players;
     leaderboardSnapshotAtRef.current = now;
@@ -96,6 +171,11 @@ export function App() {
   }
 
   useEffect(() => {
+    function handleChatNewForMention(msg: ChatMessage) {
+      const meId = meRef.current?.player.id;
+      if (!meId || !msg || !Array.isArray(msg.mentions) || !msg.mentions.includes(meId)) return;
+      notifyMentionIfHidden(msg.author, msg.text);
+    }
     socket.on("lobby:update", (nextLobby: LobbySnapshot) => {
       if (nextLobby.config) setConfig(normalizeConfig(nextLobby.config));
       const normalized = normalizeLobbySnapshot(nextLobby);
@@ -107,6 +187,7 @@ export function App() {
       setLobby((old) => normalizeLobbySnapshot(nextLobby, old));
     });
     socket.on("room:update", (nextRoom: RoomSnapshot) => {
+      checkRoomLevel1Notifications(roomRef.current, normalizeRoomSnapshot(nextRoom), meRef.current);
       setRoom((old) => {
         const normalized = normalizeRoomSnapshot(nextRoom);
         // updatedAt 缺失/非数字时不要丢弃更新（protobuf 漏字段会导致永远用旧房态）
@@ -126,6 +207,11 @@ export function App() {
       });
       if (!isAdminRoute()) setView("room");
     });
+    // Level 1 @提及提醒：只做检测/弹通知，不参与消息列表渲染（那是 chatStore 自己的事）。
+    // 注意：chatStore.ts 在模块加载时也注册了一个独立的 "chat:new" 监听（渲染消息列表用），
+    // socket.off(event) 不带 handler 参数会清空该事件的整个监听集合——必须传具体函数引用，
+    // 否则下面 cleanup 里的 socket.off("chat:new") 会把 chatStore 的监听也一起干掉。
+    socket.on("chat:new", handleChatNewForMention);
     socket.on("room:historyAppend", (payload: { roomId?: string; item?: RoomSnapshot["roundHistory"][number]; total?: number }) => {
       const roomId = payload?.roomId;
       const item = payload?.item;
@@ -172,6 +258,15 @@ export function App() {
       setRoom(null);
       setView("login");
       setNotice("你已被管理员移出。");
+    });
+    // 同一账号在另一台设备完成了「顶替登录」确认：本设备的登录状态到此结束，但本地
+    // playerId/playerSecret 仍然保留（这台设备依然是受信任设备之一，不是登出）。
+    socket.on("session:kicked", ({ message }: { message?: string }) => {
+      localStorage.removeItem(tokenKey);
+      setMe(null);
+      setRoom(null);
+      setView("login");
+      setNotice(message || "你的账号已在其他设备登录，此会话已结束，请刷新页面重新登录。");
     });
     socket.on("room:closed", ({ message }: { message?: string }) => {
       setRoom(null);
@@ -239,9 +334,11 @@ export function App() {
       socket.off("lobby:update");
       socket.off("room:update");
       socket.off("room:historyAppend");
+      socket.off("chat:new", handleChatNewForMention);
       socket.off("player:update");
       socket.off("player:batch");
       socket.off("player:kicked");
+      socket.off("session:kicked");
       socket.off("room:closed");
       socket.off("config:update");
       socket.off("announcement:show");
@@ -378,10 +475,21 @@ export function App() {
           </section>
         </div>
       )}
-      {view === "login" && restoringSession && <section className="panel">正在恢复登录状态...</section>}
-      {view === "login" && !restoringSession && <Login config={config} onDone={(next) => {
+      {view === "login" && restoringSession && !restoreKickPending && <section className="panel">正在恢复登录状态...</section>}
+      {view === "login" && restoreKickPending && (
+        <section className="login-card kick-confirm-card">
+          <h2>该账号已在其他设备登录</h2>
+          <p className="hint">继续会把另一台设备顶下线（那边会收到提示）。确定要继续吗？</p>
+          <div className="kick-confirm-actions">
+            <button disabled={restoreKickBusy} onClick={() => { setRestoreKickPending(null); setView("login"); }}>取消</button>
+            <button className="primary" disabled={restoreKickBusy} onClick={confirmRestoreKick}>{restoreKickBusy ? "登录中…" : "确定顶替登录"}</button>
+          </div>
+        </section>
+      )}
+      {view === "login" && !restoringSession && !restoreKickPending && <Login config={config} onDone={(next) => {
         if (next.token) localStorage.setItem(tokenKey, next.token);
         setMe(next);
+        initPushForPlayer(next.player.id);
         setRestoringSession(false);
         if (next.room) setRoom(normalizeRoomSnapshot(next.room));
         setView(isAdminRoute() ? "admin" : next.room ? "room" : "lobby");
@@ -392,7 +500,16 @@ export function App() {
       {view === "admin" && lobby && <AdminPanel config={config} lobby={lobby} onBack={() => { if (window.location.hash === "#admin") window.location.hash = ""; setView(me ? "lobby" : "login"); }} onError={setNotice} />}
       {view === "room" && !room && <section className="panel">你暂时不在房间里。</section>}
       {sponsorOpen && <SponsorPanel onClose={() => setSponsorOpen(false)} />}
-      {profileOpen && me && <ProfilePanel config={config} me={me.player} onClose={() => setProfileOpen(false)} onUpdated={(player) => { setMe({ ...me, player }); localStorage.setItem("rps-online-name", player.name); localStorage.setItem("rps-online-gender", player.genderId); }} onError={setNotice} />}
+      {profileOpen && me && (
+        <ProfilePanel
+          config={config}
+          me={me.player}
+          onClose={() => setProfileOpen(false)}
+          onUpdated={(player) => { setMe({ ...me, player }); localStorage.setItem("rps-online-name", player.name); localStorage.setItem("rps-online-gender", player.genderId); }}
+          onError={setNotice}
+          onLoggedOut={() => { window.location.reload(); }}
+        />
+      )}
       {leaderboardOpen && <GlobalLeaderboardPanel players={leaderboardSource} onClose={() => setLeaderboardOpen(false)} />}
     </main>
   );

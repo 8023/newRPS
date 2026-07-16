@@ -3,15 +3,13 @@ package server
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
-	"path/filepath"
 	"sync"
 
 	"github.com/doumiao/newRPS/internal/types"
-	_ "github.com/mattn/go-sqlite3"
 )
 
-// chatStore 是聊天记录的持久化存储（SQLite，CGO 驱动 mattn/go-sqlite3）。两张表：
+// chatStore 是聊天记录的持久化存储（SQLite，CGO 驱动 mattn/go-sqlite3，连接由
+// openDatabase 统一打开并与房间/惩罚事件表共用，见 database.go）。两张表：
 //   - lobby_messages：大厅（留言板）聊天，全局一份。
 //   - room_messages ：房间聊天，按 room_id 区分。
 //
@@ -19,8 +17,8 @@ import (
 // seq 为自增主键，作为稳定排序与分页游标（比毫秒时间戳更可靠，不会因同毫秒并列而漏读）。
 //
 // ⚠️ mattn/go-sqlite3 需要 CGO：CGO_ENABLED=0 编译出的二进制仍能启动，但驱动是一个
-// stub——openChatStore 会失败（已记录到 error.csv 的 chat_store_open_failed），聊天
-// 从此完全不落盘且没有任何显式报错，非常隐蔽。发布构建（npm run build:server）已固定
+// stub——openDatabase 会失败（已记录到 error.csv 的 database_open_failed），聊天/
+// 房间/惩罚事件从此完全不落盘且没有任何显式报错，非常隐蔽。发布构建（npm run build:server）已固定
 // 加 CGO_ENABLED=1，本地/CI 交叉编译或换构建机时也必须保证该环境装有可用的 C 工具链
 // （gcc + libc 头文件），否则请改回 modernc.org/sqlite（纯 Go，无此限制）。
 //
@@ -65,23 +63,23 @@ CREATE TABLE IF NOT EXISTS room_messages (
 CREATE INDEX IF NOT EXISTS idx_room_seq ON room_messages(room_id, seq);
 `
 
+func newChatStore(db *sql.DB) *chatStore {
+	return &chatStore{db: db}
+}
+
+// openChatStore 单独打开 dataDir 下的共享数据库并返回聊天存储视图。生产环境走
+// server.go 里的 openDatabase + newChatStore（一次打开，聊天/房间/惩罚事件共用同一个
+// *sql.DB）；这个函数只在测试里用来独立开关一份数据库。
 func openChatStore(dataDir string) (*chatStore, error) {
-	path := filepath.Join(dataDir, "chat.db")
-	// WAL + busy_timeout：并发读写更稳；单连接即可（写已串行化）。
-	dsn := path + "?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=1"
-	db, err := sql.Open("sqlite3", dsn)
+	db, err := openDatabase(dataDir)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := db.Exec(chatSchema); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("chat schema: %w", err)
-	}
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-	return &chatStore{db: db}, nil
+	return newChatStore(db), nil
 }
 
+// Close 关闭底层数据库连接。仅供 openChatStore 独立打开的场景（如测试）配对使用；
+// 生产环境的共享连接由 server.go 在关停时统一关闭。
 func (c *chatStore) Close() error {
 	if c == nil || c.db == nil {
 		return nil

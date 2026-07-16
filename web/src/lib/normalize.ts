@@ -294,6 +294,20 @@ export function normalizeTicTacToe(state: RoomSnapshot["tictactoe"]): RoomSnapsh
   };
 }
 
+export function normalizeLiarsDice(state: RoomSnapshot["liarsDice"]): RoomSnapshot["liarsDice"] {
+  if (!state) return state;
+  return {
+    ...state,
+    participantIds: state.participantIds || [],
+    readyPlayerIds: state.readyPlayerIds || [],
+    diceCounts: state.diceCounts || {},
+    bidHistory: state.bidHistory || [],
+    roundNumber: Number(state.roundNumber) || 0,
+    actualCount: Number(state.actualCount) || 0,
+    currentBid: state.currentBid || null
+  };
+}
+
 export function normalizeRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
   const seats = room.seats || { A: null, B: null };
   return {
@@ -318,7 +332,8 @@ export function normalizeRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
     },
     seats: { A: seats.A ?? null, B: seats.B ?? null },
     othello: normalizeOthello(room.othello),
-    tictactoe: normalizeTicTacToe(room.tictactoe)
+    tictactoe: normalizeTicTacToe(room.tictactoe),
+    liarsDice: normalizeLiarsDice(room.liarsDice)
   };
 }
 

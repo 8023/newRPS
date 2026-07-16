@@ -9,9 +9,13 @@ import (
 )
 
 type persistedPlayer struct {
-	ID                           string      `json:"id"`
-	PlayerID                     string      `json:"playerId"`
-	PlayerSecretHash             string      `json:"playerSecretHash"`
+	ID       string `json:"id"`
+	PlayerID string `json:"playerId"`
+	// PlayerSecretHash：旧版单值哈希字段，仅用于迁移期兼容读取，新写入不再产生。
+	// 一个月后（见 README）应整体删除，届时这个字段与相关兼容分支一起清理。
+	PlayerSecretHash             string      `json:"playerSecretHash,omitempty"`
+	PlayerSecrets                []string    `json:"playerSecrets,omitempty"`
+	ClaimKey                     string      `json:"claimKey,omitempty"`
 	Name                         string      `json:"name"`
 	GenderID                     string      `json:"genderId"`
 	NameWarEnabled               *bool       `json:"nameWarEnabled,omitempty"`
@@ -34,6 +38,9 @@ type persistedPlayer struct {
 	ExtremeModeCooldownUntil      *int64      `json:"extremeModeCooldownUntil,omitempty"`
 	ExtremeWinStreak             *int        `json:"extremeWinStreak,omitempty"`
 	ExtremeLastDecayHour         *int64      `json:"extremeLastDecayHour,omitempty"`
+	PushMentionEnabled           *bool       `json:"pushMentionEnabled,omitempty"`
+	PushTurnEnabled              *bool       `json:"pushTurnEnabled,omitempty"`
+	PushSeatEnabled              *bool       `json:"pushSeatEnabled,omitempty"`
 	Stats                        types.PublicStats  `json:"stats"`
 	OthelloStats                 types.OthelloStats `json:"othelloStats"`
 	CreatedAt                    int64       `json:"createdAt,omitempty"`
@@ -43,11 +50,12 @@ type persistedPlayer struct {
 func (s *Server) serializePlayers() []persistedPlayer {
 	var out []persistedPlayer
 	for _, p := range s.players {
-		if !p.Persistent || p.PlayerID == "" || p.PlayerSecretHash == "" {
+		if !p.Persistent || p.PlayerID == "" || (len(p.PlayerSecrets) == 0 && p.PlayerSecretHash == "") {
 			continue
 		}
 		out = append(out, persistedPlayer{
 			ID: p.ID, PlayerID: p.PlayerID, PlayerSecretHash: p.PlayerSecretHash,
+			PlayerSecrets: p.PlayerSecrets, ClaimKey: p.ClaimKey,
 			Name: p.Name, GenderID: p.GenderID,
 			NameWarEnabled: p.NameWarEnabled, NameWarAllowRename: p.NameWarAllowRename,
 			NameWarToggledAt: p.NameWarToggledAt, NameWarOriginalName: p.NameWarOriginalName,
@@ -61,6 +69,7 @@ func (s *Server) serializePlayers() []persistedPlayer {
 			ExtremeModeEnabled: p.ExtremeModeEnabled, ExtremeModeToggledAt: p.ExtremeModeToggledAt,
 			ExtremeModeCooldownUntil: p.ExtremeModeCooldownUntil, ExtremeWinStreak: p.ExtremeWinStreak,
 			ExtremeLastDecayHour: p.ExtremeLastDecayHour,
+			PushMentionEnabled: p.PushMentionEnabled, PushTurnEnabled: p.PushTurnEnabled, PushSeatEnabled: p.PushSeatEnabled,
 			Stats: p.Stats, OthelloStats: p.OthelloStats,
 			CreatedAt: p.CreatedAt, LastSeenAt: p.LastSeenAt,
 		})
@@ -80,7 +89,7 @@ func (s *Server) loadPlayersFromDisk() {
 	}
 	now := nowMs()
 	for _, item := range list {
-		if item.ID == "" || item.PlayerID == "" || item.PlayerSecretHash == "" {
+		if item.ID == "" || item.PlayerID == "" || (len(item.PlayerSecrets) == 0 && item.PlayerSecretHash == "") {
 			continue
 		}
 		if s.players[item.ID] != nil || s.playerIdToID[item.PlayerID] != "" {
@@ -150,12 +159,20 @@ func (s *Server) loadPlayersFromDisk() {
 				},
 				OthelloStats: othello,
 			},
-			Token:            randomID(),
-			Persistent:       true,
-			PlayerID:         item.PlayerID,
-			PlayerSecretHash: item.PlayerSecretHash,
-			CreatedAt:        createdAt,
-			LastSeenAt:       lastSeenAt,
+			Token:              randomID(),
+			Persistent:         true,
+			PlayerID:           item.PlayerID,
+			PlayerSecretHash:   item.PlayerSecretHash,
+			PlayerSecrets:      item.PlayerSecrets,
+			ClaimKey:           item.ClaimKey,
+			PushMentionEnabled: item.PushMentionEnabled,
+			PushTurnEnabled:    item.PushTurnEnabled,
+			PushSeatEnabled:    item.PushSeatEnabled,
+			CreatedAt:          createdAt,
+			LastSeenAt:         lastSeenAt,
+		}
+		if player.ClaimKey == "" {
+			player.ClaimKey = randomID()
 		}
 		player.DisplayName = formatDisplayName(player)
 		s.players[player.ID] = player

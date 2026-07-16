@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/doumiao/newRPS/internal/types"
 )
@@ -83,7 +82,7 @@ func (s *Server) buildPunishmentTasks(room *RoomState, punishedPlayers []*Player
 		if room.Settings.PunishmentSource == "player" {
 			assigner = s.taskAssigner(room, player.ID)
 		} else {
-			systemTask = s.punishmentTaskForPlayer(room, player, result, punishment)
+			systemTask = s.punishmentTaskForPlayer(room, player, s.winnerNameForResult(room, result), punishment)
 		}
 		task := types.PunishmentTask{
 			PlayerID:     player.ID,
@@ -98,13 +97,11 @@ func (s *Server) buildPunishmentTasks(room *RoomState, punishedPlayers []*Player
 			if systemTask.BackgroundOpacity != nil {
 				task.BackgroundOpacity = systemTask.BackgroundOpacity
 			}
-			s.activityLog("punishments", []string{
-				"time", "kind", "source", "roomId", "playerId", "playerName",
-				"targetId", "taskText", "status", "proofText", "imageFile",
-			}, []string{
-				time.Now().Format(time.RFC3339), "task", "system", room.ID, "", "",
-				player.ID, task.TaskText, "", "", "",
-			})
+			if s.eventDB != nil {
+				if err := s.eventDB.insertPunishmentEvent(nowMs(), "task", "system", room.ID, "", "", player.ID, task.TaskText, "", "", ""); err != nil {
+					s.errorLog("punishment_event_insert_failed", err.Error())
+				}
+			}
 		}
 		if assigner != nil {
 			task.AssignedBy = assigner.ID
@@ -116,11 +113,16 @@ func (s *Server) buildPunishmentTasks(room *RoomState, punishedPlayers []*Player
 }
 
 func (s *Server) taskAssigner(room *RoomState, punishedPlayerID string) *PlayerState {
-	punishedSeat, ok := s.seatOf(room, punishedPlayerID)
-	if !ok {
-		return nil
+	return s.punishmentReviewer(room, punishedPlayerID)
+}
+
+// punishmentReviewer 返回有权给 punishedID 发布任务 / 审核其证明的玩家：
+// 座位制游戏是对手座位上的真人；大话骰不进 Seats 体系，是本局赢家。
+func (s *Server) punishmentReviewer(room *RoomState, punishedID string) *PlayerState {
+	if room.Settings.GameID == types.GameLiarsDice {
+		return s.liarsDicePunishmentReviewer(room, punishedID)
 	}
-	return s.humanPlayerFromSeat(room, oppositeSeat(punishedSeat))
+	return s.humanOpponent(room, punishedID)
 }
 
 type punishmentTaskResult struct {
@@ -129,7 +131,7 @@ type punishmentTaskResult struct {
 	BackgroundOpacity *float64
 }
 
-func (s *Server) punishmentTaskForPlayer(room *RoomState, player *PlayerState, result types.RoundResult, punishment *types.PunishmentConfig) *punishmentTaskResult {
+func (s *Server) punishmentTaskForPlayer(room *RoomState, player *PlayerState, winnerName string, punishment *types.PunishmentConfig) *punishmentTaskResult {
 	if punishment == nil {
 		op := 0.22
 		return &punishmentTaskResult{TaskText: "请完成本局惩罚。", BackgroundOpacity: &op}
@@ -150,7 +152,7 @@ func (s *Server) punishmentTaskForPlayer(room *RoomState, player *PlayerState, r
 	if taskText == "" {
 		taskText = cleanTaskText(punishment.Description, player.FactionLabel)
 	}
-	taskText = applyPunishmentPlaceholders(taskText, playerShortName(player), s.winnerNameForResult(room, result))
+	taskText = applyPunishmentPlaceholders(taskText, playerShortName(player), winnerName)
 	op := 0.22
 	if task != nil {
 		op = task.BackgroundOpacity
@@ -174,8 +176,9 @@ func cleanTaskText(taskText, factionLabel string) string {
 }
 
 // applyPunishmentPlaceholders 替换系统/自定义任务文案中的占位符：
-//   {loser}  → 败者昵称（本条任务对应的受罚玩家）
-//   {winner} → 胜者昵称（本局唯一胜者座位；平局双罚/双败时为空字符串）
+//
+//	{loser}  → 败者昵称（本条任务对应的受罚玩家）
+//	{winner} → 胜者昵称（本局唯一胜者座位；平局双罚/双败时为空字符串）
 func applyPunishmentPlaceholders(taskText, loserName, winnerName string) string {
 	if taskText == "" {
 		return taskText
@@ -326,7 +329,13 @@ func (s *Server) setupPunishmentOrNext(room *RoomState, result types.RoundResult
 	for _, p := range s.punishmentPlayersForResult(room, result) {
 		humanIDs = append(humanIDs, p.ID)
 	}
-	if len(humanIDs) == 0 {
+	s.setupPunishmentForPlayers(room, humanIDs)
+}
+
+// setupPunishmentForPlayers：进入惩罚阶段的公共尾段（不依赖 Seat/RoundResult，
+// 直接吃 playerID 列表）——大话骰（不进 Seats 体系）和其它三个游戏共用这一段。
+func (s *Server) setupPunishmentForPlayers(room *RoomState, humanIDs []string) {
+	if !room.Settings.EnablePunishment || len(humanIDs) == 0 {
 		return
 	}
 	room.Phase = types.PhasePunishment
@@ -334,9 +343,6 @@ func (s *Server) setupPunishmentOrNext(room *RoomState, result types.RoundResult
 	room.PunishedPlayerIDs = humanIDs
 	room.LockedSeatIDs = map[string]struct{}{}
 	for _, playerID := range humanIDs {
-		if room.LockedSeatIDs == nil {
-			room.LockedSeatIDs = map[string]struct{}{}
-		}
 		room.LockedSeatIDs[playerID] = struct{}{}
 		if player := s.players[playerID]; player != nil {
 			player.Stats.Punishments++
@@ -404,6 +410,13 @@ func proofNeedsReview(proof types.PunishmentProof) bool {
 }
 
 func (s *Server) canReviewPlayer(room *RoomState, reviewerID, targetID string) bool {
+	if reviewerID == "" || reviewerID == targetID {
+		return false
+	}
+	if room.Settings.GameID == types.GameLiarsDice {
+		reviewer := s.liarsDicePunishmentReviewer(room, targetID)
+		return reviewer != nil && reviewer.ID == reviewerID
+	}
 	rs, ok1 := s.seatOf(room, reviewerID)
 	ts, ok2 := s.seatOf(room, targetID)
 	return ok1 && ok2 && rs != ts

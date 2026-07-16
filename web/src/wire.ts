@@ -449,11 +449,21 @@ function materializeRoom(room: any): any {
     r.tictactoe.rankedDelta = pairsToMap(r.tictactoe.rankedDelta, 0);
     r.tictactoe.moveCount = numOr(r.tictactoe.moveCount, 0);
   }
-  // 历史里的井字连线同样可能丢 0 坐标
+  if (r.liarsDice) {
+    r.liarsDice = materializeLiarsDice(r.liarsDice);
+  }
+  // 历史里的井字连线/大话骰开牌数据同样可能丢 0 / 需要 pair 展开
   if (Array.isArray(r.roundHistory)) {
     r.roundHistory = r.roundHistory.map((item: any) => ({
       ...item,
-      tictactoeLine: normalizePosList(item.tictactoeLine)
+      tictactoeLine: normalizePosList(item.tictactoeLine),
+      liarsDiceBidCount: numOr(item.liarsDiceBidCount, 0),
+      liarsDiceBidFace: numOr(item.liarsDiceBidFace, 0),
+      liarsDiceActualCount: numOr(item.liarsDiceActualCount, 0),
+      liarsDiceHands: pairsToGenericMap(item.liarsDiceHands, (v: any) =>
+        Array.isArray(v?.values) ? v.values.map((x: any) => numOr(x, 0)) : []
+      ),
+      liarsDiceNames: pairsToGenericMap(item.liarsDiceNames)
     }));
   }
   r.spectators = r.spectators || [];
@@ -552,6 +562,49 @@ function pairsToMap(arr: any, fill: any): any {
     } else {
       out[item.key] = cloneFill();
     }
+  }
+  return out;
+}
+
+/** key 为任意 id（大话骰参战玩家）而非固定 A/B 时用这个，不预置任何 key。 */
+function pairsToGenericMap(arr: any, valueMapper?: (v: any) => any): any {
+  const out: any = {};
+  if (!Array.isArray(arr)) return out;
+  for (const item of arr) {
+    if (item?.key == null) continue;
+    out[item.key] = valueMapper ? valueMapper(item.value) : item.value ?? "";
+  }
+  return out;
+}
+
+function materializeLiarsDice(ld: any): any {
+  if (!ld || typeof ld !== "object") return ld;
+  const out: any = { ...ld };
+  out.participantIds = out.participantIds || [];
+  out.readyPlayerIds = out.readyPlayerIds || [];
+  out.bidHistory = (out.bidHistory || []).map((b: any) => ({
+    playerId: b?.playerId || "",
+    count: numOr(b?.count, 0),
+    face: numOr(b?.face, 0),
+    at: numOr(b?.at, 0)
+  }));
+  out.diceCounts = pairsToGenericMap(out.diceCounts, (v: any) => numOr(v, 0));
+  out.revealedHands = pairsToGenericMap(out.revealedHands, (v: any) =>
+    Array.isArray(v?.values) ? v.values.map((x: any) => numOr(x, 0)) : []
+  );
+  out.roundNumber = numOr(out.roundNumber, 0);
+  out.actualCount = numOr(out.actualCount, 0);
+  out.minPlayers = numOr(out.minPlayers, 0);
+  out.maxPlayers = numOr(out.maxPlayers, 0);
+  if (out.currentBid) {
+    out.currentBid = {
+      playerId: out.currentBid.playerId || "",
+      count: numOr(out.currentBid.count, 0),
+      face: numOr(out.currentBid.face, 0),
+      at: numOr(out.currentBid.at, 0)
+    };
+  } else {
+    out.currentBid = null;
   }
   return out;
 }

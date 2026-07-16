@@ -236,6 +236,34 @@ docker compose up -d
 
 后台「保存」会写回对应 JSON；服务启动时会把 `config/*.json` 权限收紧为 `0600`（仅运行用户可读写，防同机其他用户读取其中的管理员口令），`bin/server` 设为可执行。
 
+## 多端身份认领
+
+没有传统用户名密码：每台浏览器首次访问时在本地生成一对 `playerId` + `playerSecret`（长随机串），存 `localStorage`，此后 `player:join` 每次都带上这对凭据重连。战绩/积分只跟 `playerId` 走。
+
+- **认领新设备**：个人资料页展示一个一次性「认领密钥」（`ClaimKey`，与长期 `playerSecret` 是两个不同的值），复制到另一台设备的输入框提交（`identity:claim`），服务端校验通过后给新设备签发一份全新的 `playerSecret` 并**立即轮换掉这把密钥**（用过即作废）；旧设备完全不受影响。
+- **多端同时"记住"，但同一时刻只有一端在线**：一个身份最多同时记住 3 台设备的凭据（`PlayerSecrets`，超出后挤掉最早一条，绝不挤当前活跃会话），但服务端仍是单 socket 模型——已有设备在线时，新设备登录会先收到 `alreadyOnline` 提示确认是否顶替，确认后走 `forceKick`，被顶替端会收到 `session:kicked` 事件（同设备刷新重连不受影响，不会误触发确认）。
+- **登出**：`identity:logout` 撤销当前设备的那条 `playerSecret`，前端随后清空本地 `localStorage`。
+
+⚠️ **一次性迁移代码，请在合并后一个月内删除**：早期版本身份凭据只存 `hashSecret(secret)`（`internal/server/util.go` 的 `hashSecret`），字段是 `PlayerState.PlayerSecretHash` / `persistedPlayer.PlayerSecretHash`。现在改为明文存储的 `PlayerSecrets` 列表（认领密钥本身就要求服务端能把密钥"读出来"展示给用户，哈希做不到这点；而"服务器数据泄露"这个威胁模型下，明文认领密钥本来就足以接管账号，给另一个字段单独加密没有实际收益，详见迁移决策讨论）。`internal/server/identity.go` 的 `verifyPlayerSecret` 里有一段兼容分支：老账号第一次带着老 secret 重连时，校验通过后会自动把明文迁移进 `PlayerSecrets`，不需要用户做任何操作。
+
+一个月后（正常活跃账号届时都已完成自动迁移）应整体删除：
+- `internal/server/identity.go` 的 `verifyPlayerSecret` 里 `PlayerSecretHash` 兜底分支
+- `PlayerState.PlayerSecretHash` / `persistedPlayer.PlayerSecretHash` 字段
+- `internal/server/util.go` 的 `hashSecret` 函数
+
+**代价**：这一个月内始终没有上线过的账号，届时会无法再用老设备的身份登录（因为兜底校验代码被删掉、且它们的明文 secret 从未被自动迁移过）——这是时间窗口本身带来的必然结果，不是 bug。
+
+## 大话骰（Liar's Dice）
+
+第四种游戏类型，与 RPS/黑白棋/井字棋同级，但刻意不复用它们共用的 `Seats`/`SeatKey`（固定两人）模型——大话骰是 2-8 人，独立走 `RoomState.LiarsDice`（公开状态，进房间快照）+ `RoomState.LiarsDiceHands`（私有骰子，只通过 `emitToClient` 单播给玩家自己，从不广播，也不加密——保密性来自"这份字节压根不会出现在其他玩家的连接上"）。核心逻辑集中在 `internal/server/game_liarsdice.go`。
+
+- **入席**：进房间默认观战，对局未开始前可自由 `liarsdice:joinRoster` / `liarsdice:leaveRoster`；房间设置里 `liarsDiceMinPlayers`（2~上限，默认 3）/`liarsDiceMaxPlayers`（默认 3，上限 8）。
+- **开局**：参战名单全员 `liarsdice:ready` 且名单 5 秒无变动 → 每人现摇 5 颗骰子，随机选首个叫点者（按入席顺序循环叫点）。
+- **叫点规则**：每回合只能"叫"（`liarsdice:bid`，颗数更多，或颗数不变但点数更大）或"开"（`liarsdice:challenge`，质疑上家），没有"过"。第一个叫点数至少是"在场人数 + 1"。1 是万能点，但只要本局有人喊过 1，之后 1 不再算万能，仅算实际点数。
+- **结算**：开牌揭晓全体参战玩家骰子（不只叫点者和质疑者），按叫点面值（含万能 1，若未禁用）计数；成立则叫点者胜、质疑者负，反之相反；其余参战玩家本局"平"，不计分不受罚。下一局重新摇骰，不延续骰子数量、不淘汰。
+- **断线判负**：断线判负的规则是"上家"（入席顺序里的前一位，固定关系，与谁最后叫过点无关）胜——`createLiarsDiceDisconnectForfeit`/`applyLiarsDiceDisconnectForfeit`，与其它三个游戏的 `DisconnectForfeit` 走独立的 `LiarsDiceDisconnectForfeit`（字段是 playerID 而非 SeatKey）。
+- **惩罚**：`punishment.go` 的 `setupPunishmentForPlayers` 从原来 Seat/RoundResult 耦合的 `setupPunishmentOrNext` 里抽出通用尾段（按 playerID 列表工作），大话骰和其它三个游戏共用这一段；`buildLiarsDicePunishmentTasks` 单独实现（赢家直接作为"玩家发布任务"模式下的任务发布人，不走 Seat 反查）。
+
 ## 构建与测试
 
 ```bash
@@ -248,6 +276,12 @@ npm run test           # go test + 前端 build
 ```
 
 ## 最近更新记录
+
+### v2.1.26（2026-07-16）
+
+- **多端身份认领**：个人资料页新增一次性「认领密钥」，可在另一台设备粘贴认领当前身份；一个身份最多同时"记住" 3 台设备（挤掉最早一条，不挤当前活跃会话）；服务端仍是单 socket 模型，新设备登录会先确认是否顶替旧设备在线会话，被顶替端收到提示。新增登出按钮（清空本地凭据）。详见「多端身份认领」章节。⚠️ 旧版哈希凭据自动迁移为明文列表，一个月后将删除迁移兼容代码。
+- **推送通知**：个人资料页可分别开启「聊天 @ 我」「轮到我出招/落子」「我的房间来人了」三类提醒。页面在前台/后台切换时优先走浏览器原生 `Notification`（Level 1）；玩家完全断线（关闭标签页/浏览器）时改由 Service Worker + Web Push 推送（Level 2），自建 VAPID 密钥，不依赖第三方推送服务。**需要 HTTPS（或 `localhost`）才能授权通知权限**，纯 HTTP 内网访问会一直提示无权限，属浏览器安全限制。
+- **新增大话骰（Liar's Dice）**：与锤子剪刀布/黑白棋/井字棋同级的第四种玩法，支持 2-8 人（房间设置可调最少/最多参战人数）。进房默认观战，对局开始前可自由加入/离开参战席；全员准备且名单 5 秒无变动后自动开局，每人摇 5 颗私有骰子（只推送给玩家本人）；按入席顺序轮流叫点或开牌，1 为万能点（一旦被喊出则本局失效）；断线判负规则为"上家"（入席顺序前一位）胜。支持排位积分与惩罚（含"玩家发布任务"模式）。详见「大话骰」章节。
 
 ### v2.1.25（2026-07-15）
 

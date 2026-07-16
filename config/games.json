@@ -13,5 +13,10 @@
     "id": "tictactoe",
     "name": "井字棋",
     "description": "3x3 棋盘轮流落子，先连成一线者胜。"
+  },
+  {
+    "id": "liarsdice",
+    "name": "大话骰",
+    "description": "2-8 人各摇 5 颗骰子，按入席顺序轮流叫点或开牌，输家受罚。"
   }
 ]

@@ -251,6 +251,10 @@ func (s *Server) prepareNextChoice(room *RoomState) {
 		s.resetTicTacToeRoom(room)
 		return
 	}
+	if room.Settings.GameID == types.GameLiarsDice {
+		s.prepareNextLiarsDiceRound(room)
+		return
+	}
 	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
 		room.Phase = types.PhaseReady
 		room.Status = "waiting"
@@ -495,6 +499,9 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 }
 
 func (s *Server) applyDisconnectForfeit(room *RoomState, player *PlayerState) bool {
+	if room.Settings.GameID == types.GameLiarsDice {
+		return s.applyLiarsDiceDisconnectForfeit(room, player)
+	}
 	forfeit, ok := room.DisconnectForfeits[player.ID]
 	if !ok {
 		return false
@@ -560,7 +567,7 @@ func (s *Server) applyDisconnectForfeit(room *RoomState, player *PlayerState) bo
 		MoveA: moveA, MoveB: moveB, Result: types.RoundResult(forfeit.WinnerSeat),
 		ResultLabel: forfeit.WinnerName + "胜利", ResultText: room.ResultText,
 		Ranked: true, Stake: &baseStake, RankMultiplier: &rm, EffectiveStake: &es,
-		ExtremeRanked: room.Settings.EnableExtremeRanked,
+		ExtremeRanked:   room.Settings.EnableExtremeRanked,
 		PunishmentTasks: []types.PunishmentTask{}, PunishedNames: []string{}, Proofs: []types.HistoryProof{},
 	})
 	s.roomNotice(room, room.ResultText)

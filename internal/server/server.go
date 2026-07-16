@@ -101,48 +101,59 @@ func New() (*Server, error) {
 	}
 
 	s := &Server{
-		cfg:                         cfg,
-		players:                     map[string]*PlayerState{},
-		tokenToPlayer:               map[string]string{},
-		playerIdToID:                map[string]string{},
-		sidToPlayerID:               map[string]string{},
-		rooms:                       map[string]*RoomState{},
-		clients:                     map[string]*Client{},
-		socketToClient:              map[string]*Client{},
-		botTimers:                   map[string]*time.Timer{},
-		othelloSettlementTimers:     map[string]*time.Timer{},
-		ticTacToeGiveawayTimers:     map[string]*time.Timer{},
-		deviceCreateAttempts:         map[string][]int64{},
-		adminClientIDs:              map[string]struct{}{},
-		sidToClientID:               map[string]string{},
-		clientIDToSID:               map[string]string{},
-		clientIDsByDevice:           map[string]map[string]struct{}{},
-		rateBuckets:                 map[string]*rateBucket{},
-		rateLimitBuckets:            map[string]*rateLimitBucket{},
-		roomBroadcastTimers:         map[string]*roomBroadcastPending{},
-		lobbyBroadcastDelay:         lobbyDelay,
-		roomBroadcastDelay:          roomDelay,
-		serverStats:                 types.ServerStats{StartedAt: nowMs()},
-		isProduction:                os.Getenv("NODE_ENV") == "production" || os.Getenv("GO_ENV") == "production",
-		sessionSecret:               secret,
-		sessionTtlMs:                ttl,
-		maxSocketsPerDevice:         maxSockets,
-		host:                        host,
-		port:                        port,
-		uploadsDir:                  uploadsDir,
-		proofUploadsDir:             proofDir,
-		adminUploadsDir:             adminDir,
-		dataDir:                     dataDir,
-		playersFile:                 filepath.Join(dataDir, "players.json"),
-		distDir:                     distDir,
-		logCh:                       make(chan activityLogEntry, 1024),
-		startedAt:                   nowMs(),
+		cfg:                     cfg,
+		players:                 map[string]*PlayerState{},
+		tokenToPlayer:           map[string]string{},
+		playerIdToID:            map[string]string{},
+		sidToPlayerID:           map[string]string{},
+		rooms:                   map[string]*RoomState{},
+		clients:                 map[string]*Client{},
+		socketToClient:          map[string]*Client{},
+		botTimers:               map[string]*time.Timer{},
+		othelloSettlementTimers: map[string]*time.Timer{},
+		ticTacToeGiveawayTimers: map[string]*time.Timer{},
+		liarsDiceStartTimers:    map[string]*time.Timer{},
+		deviceCreateAttempts:    map[string][]int64{},
+		adminClientIDs:          map[string]struct{}{},
+		sidToClientID:           map[string]string{},
+		clientIDToSID:           map[string]string{},
+		clientIDsByDevice:       map[string]map[string]struct{}{},
+		rateBuckets:             map[string]*rateBucket{},
+		rateLimitBuckets:        map[string]*rateLimitBucket{},
+		roomBroadcastTimers:     map[string]*roomBroadcastPending{},
+		lobbyBroadcastDelay:     lobbyDelay,
+		roomBroadcastDelay:      roomDelay,
+		serverStats:             types.ServerStats{StartedAt: nowMs()},
+		isProduction:            os.Getenv("NODE_ENV") == "production" || os.Getenv("GO_ENV") == "production",
+		sessionSecret:           secret,
+		sessionTtlMs:            ttl,
+		maxSocketsPerDevice:     maxSockets,
+		host:                    host,
+		port:                    port,
+		uploadsDir:              uploadsDir,
+		proofUploadsDir:         proofDir,
+		adminUploadsDir:         adminDir,
+		dataDir:                 dataDir,
+		playersFile:             filepath.Join(dataDir, "players.json"),
+		distDir:                 distDir,
+		logCh:                   make(chan activityLogEntry, 1024),
+		startedAt:               nowMs(),
 	}
-	// 聊天持久化：失败不阻断启动，仅记录（内存降级为不落盘，功能仍可用）。
-	if store, err := openChatStore(dataDir); err != nil {
-		s.errorLog("chat_store_open_failed", err.Error())
+	// SQLite 持久化（聊天/房间事件/惩罚事件共用一个连接）：失败不阻断启动，仅记录
+	// （内存降级为不落盘，功能仍可用）。
+	if db, err := openDatabase(dataDir); err != nil {
+		s.errorLog("database_open_failed", err.Error())
 	} else {
-		s.chatDB = store
+		s.db = db
+		s.chatDB = newChatStore(db)
+		s.eventDB = newEventStore(db)
+		s.pushDB = newPushStore(db)
+	}
+	// VAPID 密钥：失败不阻断启动，Web Push 功能会静默不可用（sendPush 会因 vapid.PublicKey=="" 直接跳过）。
+	if keys, err := loadOrGenerateVAPIDKeys(root); err != nil {
+		s.errorLog("vapid_keys_failed", err.Error())
+	} else {
+		s.vapid = keys
 	}
 	exportConfigText = config.ExportConfigText
 	return s, nil
@@ -190,7 +201,9 @@ func (s *Server) Run() error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = httpServer.Shutdown(shutdownCtx)
-		_ = s.chatDB.Close()
+		if s.db != nil {
+			_ = s.db.Close()
+		}
 		return nil
 	case err := <-errCh:
 		if err == http.ErrServerClosed {

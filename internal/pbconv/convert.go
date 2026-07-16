@@ -162,15 +162,15 @@ func ProtoToCamelMap(msg proto.Message) (any, error) {
 func LobbyToProto(snap types.LobbySnapshot) (*wire.LobbySnapshot, error) {
 	// 先展成 JSON 友好中间结构
 	type midLobby struct {
-		Config            *types.AppConfig          `json:"config,omitempty"`
-		OnlineCount       int                       `json:"onlineCount"`
-		Players           []types.LobbyPlayer       `json:"players"`
-		Rooms             []types.LobbyRoomInfo     `json:"rooms"`
-		NormalLeaderboard []types.LobbyPlayer       `json:"normalLeaderboard"`
-		RankedLeaderboard []types.LobbyPlayer       `json:"rankedLeaderboard"`
-		Suggestions       []types.Suggestion        `json:"suggestions"`
-		LobbyChat         []types.ChatMessage       `json:"lobbyChat"`
-		ServerStats       types.ServerStats         `json:"serverStats"`
+		Config            *types.AppConfig      `json:"config,omitempty"`
+		OnlineCount       int                   `json:"onlineCount"`
+		Players           []types.LobbyPlayer   `json:"players"`
+		Rooms             []types.LobbyRoomInfo `json:"rooms"`
+		NormalLeaderboard []types.LobbyPlayer   `json:"normalLeaderboard"`
+		RankedLeaderboard []types.LobbyPlayer   `json:"rankedLeaderboard"`
+		Suggestions       []types.Suggestion    `json:"suggestions"`
+		LobbyChat         []types.ChatMessage   `json:"lobbyChat"`
+		ServerStats       types.ServerStats     `json:"serverStats"`
 	}
 	// 但 proto LobbySnapshot 用 entries；手写填充更可靠
 	out := &wire.LobbySnapshot{
@@ -695,6 +695,49 @@ func RoomToProto(snap types.RoomSnapshot) (*wire.RoomSnapshot, error) {
 		}
 		m.Tictactoe = t
 	}
+	if snap.LiarsDice != nil {
+		l, err := liarsDiceToProto(snap.LiarsDice)
+		if err != nil {
+			return nil, err
+		}
+		m.LiarsDice = l
+	}
+	return m, nil
+}
+
+func int32List(vals []int) *wire.Int32List {
+	out := &wire.Int32List{Values: make([]int32, len(vals))}
+	for i, v := range vals {
+		out.Values[i] = int32(v)
+	}
+	return out
+}
+
+func liarsDiceToProto(s *types.LiarsDiceState) (*wire.LiarsDiceState, error) {
+	m := &wire.LiarsDiceState{
+		ParticipantIds: s.ParticipantIDs, ReadyPlayerIds: s.ReadyPlayerIDs,
+		CurrentTurn: s.CurrentTurn, OnesWildDisabled: s.OnesWildDisabled,
+		RoundNumber: int32(s.RoundNumber), Ended: s.Ended,
+		WinnerId: s.WinnerID, LoserId: s.LoserID, ActualCount: int32(s.ActualCount),
+		MinPlayers: int32(s.MinPlayers), MaxPlayers: int32(s.MaxPlayers),
+	}
+	for k, v := range s.DiceCounts {
+		m.DiceCounts = append(m.DiceCounts, &wire.IntPair{Key: k, Value: int32(v)})
+	}
+	if s.CurrentBid != nil {
+		m.CurrentBid = &wire.LiarsDiceBid{
+			PlayerId: s.CurrentBid.PlayerID, Count: int32(s.CurrentBid.Count),
+			Face: int32(s.CurrentBid.Face), At: s.CurrentBid.At,
+		}
+	}
+	for _, b := range s.BidHistory {
+		m.BidHistory = append(m.BidHistory, &wire.LiarsDiceBid{
+			PlayerId: b.PlayerID, Count: int32(b.Count), Face: int32(b.Face), At: b.At,
+		})
+	}
+	for k, v := range s.RevealedHands {
+		m.RevealedHands = append(m.RevealedHands, &wire.LiarsDiceHandsPair{Key: k, Value: int32List(v)})
+	}
 	return m, nil
 }
 
@@ -748,8 +791,13 @@ func seatOccupantToProto(occ any) (*wire.SeatOccupant, error) {
 }
 
 func historyToProto(h types.RoundHistoryItem) (*wire.RoundHistoryItem, error) {
+	// LiarsDiceHands/LiarsDiceNames 是 map，通用 JSON 转换会因为消息里对应字段是
+	// repeated pair（非 map）类型不匹配而报错——先置空再走通用转换，随后手动填充。
+	forJSON := h
+	forJSON.LiarsDiceHands = nil
+	forJSON.LiarsDiceNames = nil
 	m := &wire.RoundHistoryItem{}
-	if err := JSONCamelToProto(h, m); err != nil {
+	if err := JSONCamelToProto(forJSON, m); err != nil {
 		return nil, err
 	}
 	m.MoveA = string(h.MoveA)
@@ -767,6 +815,12 @@ func historyToProto(h types.RoundHistoryItem) (*wire.RoundHistoryItem, error) {
 	if h.EffectiveStake != nil {
 		m.EffectiveStake = int32(*h.EffectiveStake)
 		m.HasEffectiveStake = true
+	}
+	for k, v := range h.LiarsDiceHands {
+		m.LiarsDiceHands = append(m.LiarsDiceHands, &wire.LiarsDiceHandsPair{Key: k, Value: int32List(v)})
+	}
+	for k, v := range h.LiarsDiceNames {
+		m.LiarsDiceNames = append(m.LiarsDiceNames, &wire.StringPair{Key: k, Value: v})
 	}
 	return m, nil
 }
@@ -846,8 +900,8 @@ func tictactoeToProto(s *types.TicTacToeState) (*wire.TicTacToeState, error) {
 func ConfigToProto(cfg types.AppConfig) (*wire.AppConfig, error) {
 	// maps → pairs intermediate
 	type cfgMid struct {
-		Site              types.AppConfig `json:"-"`
-		Raw               json.RawMessage
+		Site types.AppConfig `json:"-"`
+		Raw  json.RawMessage
 	}
 	// simpler: marshal whole config then fix maps via restructure
 	b, err := json.Marshal(cfg)
@@ -1014,15 +1068,15 @@ var businessHasKeys = map[string]struct{}{
 // boolPresenceCompanions：presence 配对中 companion 为 bool。
 // EmitUnpopulated:false 会丢掉 false，只剩 hasX=true —— 必须还原 false（如 allowProofImage）。
 var boolPresenceCompanions = map[string]struct{}{
-	"nameWarEnabled":          {},
-	"nameWarPunished":         {},
-	"nameWarAllowRename":      {},
-	"giveawayEnabled":         {},
-	"rankMultiplierUnlocked":  {},
-	"extremeModeEnabled":      {},
-	"extremeForceClosed":      {},
-	"isAdmin":                 {},
-	"allowProofImage":         {},
+	"nameWarEnabled":         {},
+	"nameWarPunished":        {},
+	"nameWarAllowRename":     {},
+	"giveawayEnabled":        {},
+	"rankMultiplierUnlocked": {},
+	"extremeModeEnabled":     {},
+	"extremeForceClosed":     {},
+	"isAdmin":                {},
+	"allowProofImage":        {},
 }
 
 // resolvePresenceFlags 对齐前端 wire.stripHasFlags：
@@ -1191,6 +1245,21 @@ func RoomProtoToFront(pb *wire.RoomSnapshot) (map[string]any, error) {
 		t["rankedDelta"] = pairsToIntMap(t["rankedDelta"])
 		m["tictactoe"] = t
 	}
+	if l, ok := m["liarsDice"].(map[string]any); ok {
+		l["diceCounts"] = pairsToGenericIntMap(l["diceCounts"])
+		l["revealedHands"] = pairsToIntListMap(l["revealedHands"])
+		m["liarsDice"] = l
+	}
+	if hist, ok := m["roundHistory"].([]any); ok {
+		for _, item := range hist {
+			im, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			im["liarsDiceHands"] = pairsToIntListMap(im["liarsDiceHands"])
+			im["liarsDiceNames"] = pairsToStringMap(im["liarsDiceNames"])
+		}
+	}
 	// 与前端 stripHasFlags 对齐（allowProofImage:false / presence zero 等）
 	resolved, _ := resolvePresenceFlags(m).(map[string]any)
 	if resolved != nil {
@@ -1276,6 +1345,44 @@ func pairsToIntMap(v any) map[string]any {
 			out[k] = val
 		} else {
 			out[k] = float64(0)
+		}
+	}
+	return out
+}
+
+// pairsToGenericIntMap：不像 pairsToIntMap 那样预置 A/B——大话骰的 key 是任意 playerId。
+func pairsToGenericIntMap(v any) map[string]any {
+	out := map[string]any{}
+	arr, _ := v.([]any)
+	for _, item := range arr {
+		im, _ := item.(map[string]any)
+		if im == nil {
+			continue
+		}
+		k, _ := im["key"].(string)
+		if val, ok := im["value"]; ok && val != nil {
+			out[k] = val
+		} else {
+			out[k] = float64(0)
+		}
+	}
+	return out
+}
+
+func pairsToIntListMap(v any) map[string]any {
+	out := map[string]any{}
+	arr, _ := v.([]any)
+	for _, item := range arr {
+		im, _ := item.(map[string]any)
+		if im == nil {
+			continue
+		}
+		k, _ := im["key"].(string)
+		val, _ := im["value"].(map[string]any)
+		if vals, ok := val["values"].([]any); ok {
+			out[k] = vals
+		} else {
+			out[k] = []any{}
 		}
 	}
 	return out

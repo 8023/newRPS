@@ -1,6 +1,7 @@
 import { getBrowserFingerprint } from "../fingerprint";
 import { playerIdKey, playerSecretKey, tokenKey } from "./constants";
 import { socket } from "../ws";
+import { ask } from "./rpc";
 
 export function randomUuid() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
@@ -105,4 +106,53 @@ export async function connectSocketWithSession(options: { forceNewToken?: boolea
 export async function joinIdentityPayload() {
   const fingerprint = await getBrowserFingerprint();
   return { ...ensurePlayerIdentity(), fingerprint };
+}
+
+/** 认领密钥（展示/分享用）编码成一个字符串：playerId 和 claimKey 都是 URL-safe 字符集，用 "." 拼接不会冲突。 */
+export function encodeClaimCode(playerId: string, claimKey: string) {
+  return `${playerId}.${claimKey}`;
+}
+
+export function decodeClaimCode(code: string): { playerId: string; claimKey: string } | null {
+  const trimmed = code.trim();
+  const idx = trimmed.lastIndexOf(".");
+  if (idx <= 0 || idx === trimmed.length - 1) return null;
+  return { playerId: trimmed.slice(0, idx), claimKey: trimmed.slice(idx + 1) };
+}
+
+export async function fetchClaimKey(): Promise<{ playerId: string; claimKey: string }> {
+  return ask("identity:showClaimKey", {});
+}
+
+export async function refreshClaimKey(): Promise<{ playerId: string; claimKey: string }> {
+  return ask("identity:refreshClaimKey", {});
+}
+
+/**
+ * 用另一台设备的认领码认领身份：成功后覆写本地 playerId/playerSecret，调用方需要接着
+ * 重新 player:join——务必用返回的 name/genderId（认领回来的账号真实值），不要用输入框里
+ * 随手打的名字，否则会把认领回来的账号名字覆盖掉。
+ */
+export async function claimIdentity(code: string): Promise<{ playerId: string; playerSecret: string; name: string; genderId: string }> {
+  const parsed = decodeClaimCode(code);
+  if (!parsed) throw new Error("认领码格式不对");
+  const result = await ask<{ playerId: string; playerSecret: string; name: string; genderId: string }>("identity:claim", parsed);
+  localStorage.setItem(playerIdKey, result.playerId);
+  localStorage.setItem(playerSecretKey, result.playerSecret);
+  return result;
+}
+
+/** 登出：撤销当前设备在服务端的凭据，再清空本地身份/会话缓存。调用方负责后续跳转登录页。 */
+export async function logout() {
+  const playerSecret = localStorage.getItem(playerSecretKey);
+  try {
+    if (playerSecret) await ask("identity:logout", { playerSecret });
+  } catch {
+    // 撤销失败也要继续清本地——用户明确要登出，不能因为一次网络错误就卡住。
+  }
+  localStorage.removeItem(playerIdKey);
+  localStorage.removeItem(playerSecretKey);
+  localStorage.removeItem(tokenKey);
+  localStorage.removeItem("rps-online-name");
+  localStorage.removeItem("rps-online-gender");
 }

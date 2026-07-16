@@ -2545,10 +2545,15 @@ main {
   overflow: hidden;
 }
 
+.round-history .chat-scroll-shell {
+  height: 100%;
+}
+
 .round-history-list {
   display: grid;
   align-content: start;
   gap: 8px;
+  height: 100%;
   min-height: 0;
   overflow: auto;
   padding-right: 3px;
@@ -3759,6 +3764,69 @@ main {
   color: color-mix(in srgb, #d33d6a 82%, var(--page-text));
 }
 
+.link-button {
+  background: none;
+  border: none;
+  color: var(--primary);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 4px 0;
+  font-size: 13px;
+  justify-self: start;
+}
+
+.kick-confirm-card {
+  display: grid;
+  gap: 12px;
+}
+
+.kick-confirm-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.claim-key-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.claim-key-code {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px dashed color-mix(in srgb, var(--primary) 55%, var(--border));
+  background: color-mix(in srgb, var(--panel-solid) 88%, var(--primary));
+  font-size: 13px;
+  word-break: break-all;
+  user-select: all;
+}
+
+.claim-key-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.account-devices-card {
+  gap: 10px;
+}
+
+.logout-confirm-backdrop {
+  z-index: 60;
+}
+
+.logout-confirm-card {
+  max-width: 420px;
+  margin: 12vh auto;
+  padding: 20px;
+  display: grid;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 28px var(--shadow);
+}
+
 .profile-name-field small,
 .profile-gender-field>span,
 .profile-gender-field>small {
@@ -4902,4 +4970,108 @@ main {
   .versus {
     min-height: auto;
   }
+}
+/* ── 大话骰 ── */
+.liarsdice-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.liarsdice-roster-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.liarsdice-roster-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.08));
+}
+.liarsdice-roster-list li.current-turn {
+  outline: 2px solid var(--accent, #6366f1);
+}
+.liarsdice-roster-list li em {
+  font-style: normal;
+  opacity: 0.7;
+  font-size: 0.85em;
+}
+.liarsdice-turn-flag {
+  color: var(--accent, #6366f1);
+  font-weight: 600;
+}
+.liarsdice-roster-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.liarsdice-roster-settings {
+  display: flex;
+  gap: 16px;
+  margin: 8px 0;
+}
+.liarsdice-roster-settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9em;
+}
+.liarsdice-dice-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.liarsdice-die {
+  font-size: 2em;
+  line-height: 1;
+}
+.liarsdice-die.small {
+  font-size: 1.3em;
+}
+.liarsdice-bid-controls {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.liarsdice-bid-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9em;
+}
+.liarsdice-bid-controls input,
+.liarsdice-bid-controls select {
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+.liarsdice-reveal-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.liarsdice-reveal-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.08));
+}
+.liarsdice-reveal-list li.winner {
+  outline: 2px solid #22c55e;
+}
+.liarsdice-reveal-list li.loser {
+  outline: 2px solid #ef4444;
 }

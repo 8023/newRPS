@@ -275,6 +275,8 @@ message RoomSettings {
   bool enable_extreme_ranked = 21;
   string othello_board_theme = 22;
   string tictactoe_board_theme = 23;
+  int32 liars_dice_min_players = 24;
+  int32 liars_dice_max_players = 25;
 }
 
 message PunishmentProof {
@@ -361,6 +363,48 @@ message RoundHistoryItem {
   repeated PunishmentTask punishment_tasks = 26;
   repeated string punished_names = 27;
   repeated HistoryProof proofs = 28;
+  string liars_dice_winner_id = 29;
+  string liars_dice_loser_id = 30;
+  int32 liars_dice_bid_count = 31;
+  int32 liars_dice_bid_face = 32;
+  int32 liars_dice_actual_count = 33;
+  repeated LiarsDiceHandsPair liars_dice_hands = 34;
+  repeated string liars_dice_hand_order = 35;
+  repeated StringPair liars_dice_names = 36;
+}
+
+message Int32List {
+  repeated int32 values = 1;
+}
+
+message LiarsDiceHandsPair {
+  string key = 1;
+  Int32List value = 2;
+}
+
+message LiarsDiceBid {
+  string player_id = 1;
+  int32 count = 2;
+  int32 face = 3;
+  int64 at = 4;
+}
+
+message LiarsDiceState {
+  repeated string participant_ids = 1;
+  repeated string ready_player_ids = 2;
+  repeated IntPair dice_counts = 3;
+  string current_turn = 4;
+  LiarsDiceBid current_bid = 5;
+  repeated LiarsDiceBid bid_history = 6;
+  bool ones_wild_disabled = 7;
+  int32 round_number = 8;
+  bool ended = 9;
+  string winner_id = 10;
+  string loser_id = 11;
+  repeated LiarsDiceHandsPair revealed_hands = 12;
+  int32 actual_count = 13;
+  int32 min_players = 14;
+  int32 max_players = 15;
 }
 
 message OthelloPendingSettlement {
@@ -461,6 +505,7 @@ message RoomSnapshot {
   repeated StringPair revealed_choices = 11;
   OthelloState othello = 12;
   TicTacToeState tictactoe = 13;
+  LiarsDiceState liars_dice = 23;
   string result_text = 14;
   repeated string punished_player_ids = 15;
   repeated PunishmentProof proofs = 16;

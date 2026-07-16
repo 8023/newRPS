@@ -91,8 +91,6 @@ func emptyPos(s []types.Pos) []types.Pos {
 	return s
 }
 
-
-
 func seatBoolMap(m map[types.SeatKey]bool) map[types.SeatKey]bool {
 	if m == nil {
 		return map[types.SeatKey]bool{types.SeatA: false, types.SeatB: false}
@@ -142,6 +140,15 @@ func sanitizeRoundHistoryItem(item types.RoundHistoryItem) types.RoundHistoryIte
 	item.PunishedNames = emptyStrings(item.PunishedNames)
 	item.Proofs = emptyHistoryProofs(item.Proofs)
 	item.TicTacToeLine = emptyPos(item.TicTacToeLine)
+	if item.LiarsDiceHands == nil {
+		item.LiarsDiceHands = map[string][]int{}
+	}
+	if item.LiarsDiceHandOrder == nil {
+		item.LiarsDiceHandOrder = []string{}
+	}
+	if item.LiarsDiceNames == nil {
+		item.LiarsDiceNames = map[string]string{}
+	}
 	return item
 }
 
@@ -183,6 +190,26 @@ func sanitizeTicTacToe(state *types.TicTacToeState) *types.TicTacToeState {
 	return &out
 }
 
+func sanitizeLiarsDice(state *types.LiarsDiceState) *types.LiarsDiceState {
+	if state == nil {
+		return nil
+	}
+	out := *state
+	if out.ParticipantIDs == nil {
+		out.ParticipantIDs = []string{}
+	}
+	if out.ReadyPlayerIDs == nil {
+		out.ReadyPlayerIDs = []string{}
+	}
+	if out.DiceCounts == nil {
+		out.DiceCounts = map[string]int{}
+	}
+	if out.BidHistory == nil {
+		out.BidHistory = []types.LiarsDiceBid{}
+	}
+	return &out
+}
+
 func sanitizeRoomSnapshot(snap types.RoomSnapshot) types.RoomSnapshot {
 	snap.Settings = sanitizeRoomSettings(snap.Settings)
 	snap.Spectators = emptyPlayers(snap.Spectators)
@@ -211,6 +238,7 @@ func sanitizeRoomSnapshot(snap types.RoomSnapshot) types.RoomSnapshot {
 	snap.Chat = emptyChat(snap.Chat)
 	snap.Othello = sanitizeOthello(snap.Othello)
 	snap.TicTacToe = sanitizeTicTacToe(snap.TicTacToe)
+	snap.LiarsDice = sanitizeLiarsDice(snap.LiarsDice)
 	return snap
 }
 

@@ -507,6 +507,7 @@ func (s *Server) advanceOthelloTurn(room *RoomState, nextTurn types.SeatKey, pas
 		room.Othello.BlackCount = bc
 		room.Othello.WhiteCount = wc
 		room.ResultText = ""
+		s.notifyOpponentTurn(room, nextTurn)
 		return
 	}
 	if passCount+1 >= 2 {
@@ -528,6 +529,7 @@ func (s *Server) advanceOthelloTurn(room *RoomState, nextTurn types.SeatKey, pas
 	room.Othello.PassCount = passCount + 1
 	room.Othello.BlackCount = bc
 	room.Othello.WhiteCount = wc
+	s.notifyOpponentTurn(room, fallbackTurn)
 }
 
 func (s *Server) applyOthelloMove(room *RoomState, seat types.SeatKey, row, col int) (bool, string) {

@@ -99,6 +99,18 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{20, 10_000, 15_000}, s.onTicTacToeGiveawayChoice
 	case "tictactoe:restart":
 		return RateLimitOptions{8, 60_000, 30_000}, s.onTicTacToeRestart
+	case "liarsdice:joinRoster":
+		return RateLimitOptions{12, 60_000, 15_000}, s.onLiarsDiceJoinRoster
+	case "liarsdice:leaveRoster":
+		return RateLimitOptions{12, 60_000, 15_000}, s.onLiarsDiceLeaveRoster
+	case "liarsdice:ready":
+		return RateLimitOptions{12, 60_000, 30_000}, s.onLiarsDiceReady
+	case "liarsdice:bid":
+		return RateLimitOptions{30, 10_000, 15_000}, s.onLiarsDiceBid
+	case "liarsdice:challenge":
+		return RateLimitOptions{20, 10_000, 15_000}, s.onLiarsDiceChallenge
+	case "liarsdice:nextRound":
+		return RateLimitOptions{12, 60_000, 15_000}, s.onLiarsDiceNextRound
 	case "punishment:submit":
 		return RateLimitOptions{8, 60_000, 60_000}, s.onPunishmentSubmit
 	case "punishment:assignTask":
@@ -115,6 +127,22 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{40, 60_000, 10_000}, s.onChatLoadOlder
 	case "admin:action":
 		return RateLimitOptions{30, 60_000, 60_000}, s.onAdminAction
+	case "identity:showClaimKey":
+		return RateLimitOptions{10, 60_000, 15_000}, s.onIdentityShowClaimKey
+	case "identity:refreshClaimKey":
+		return RateLimitOptions{5, 60_000, 15_000}, s.onIdentityRefreshClaimKey
+	case "identity:claim":
+		return RateLimitOptions{5, 60_000, 60_000}, s.onIdentityClaim
+	case "identity:logout":
+		return RateLimitOptions{5, 60_000, 15_000}, s.onIdentityLogout
+	case "push:subscribe":
+		return RateLimitOptions{10, 60_000, 15_000}, s.onPushSubscribe
+	case "push:unsubscribe":
+		return RateLimitOptions{10, 60_000, 15_000}, s.onPushUnsubscribe
+	case "push:getPreferences":
+		return RateLimitOptions{10, 60_000, 15_000}, s.onPushGetPreferences
+	case "push:updatePreferences":
+		return RateLimitOptions{10, 60_000, 15_000}, s.onPushUpdatePreferences
 	default:
 		return RateLimitOptions{}, nil
 	}
@@ -127,6 +155,7 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 		PlayerID     string `json:"playerId"`
 		PlayerSecret string `json:"playerSecret"`
 		Fingerprint  string `json:"fingerprint"`
+		ForceKick    bool   `json:"forceKick"`
 	}
 	_ = decodeD(env, &p)
 	cleanName := cleanText(p.Name, 12)
@@ -167,7 +196,7 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 		player = s.players[sid]
 	}
 	if player != nil && player.Persistent {
-		if p.PlayerSecret == "" || player.PlayerSecretHash != hashSecret(p.PlayerSecret) {
+		if !s.verifyPlayerSecret(player, p.PlayerSecret) {
 			s.securityLog("player_identity_invalid", map[string]any{"sid": sid, "ip": ipAddress, "device": device, "userAgent": client.userAgent})
 			client.reply(env.ID, nil, "玩家身份校验失败")
 			return
@@ -193,11 +222,24 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 	previousRoomID := player.RoomID
 	if previousSocketID != "" && previousSocketID != client.id {
 		if prev := s.clients[previousSocketID]; prev != nil {
+			sameDevice := isSameDevice(player.DeviceKey, device)
+			if needsKickConfirm(sameDevice, p.ForceKick) {
+				client.reply(env.ID, map[string]any{"alreadyOnline": true}, "")
+				return
+			}
+			if !sameDevice {
+				s.emitToClient(previousSocketID, "session:kicked", map[string]any{
+					"message": "你的账号已在其他设备登录，此会话已结束。请刷新页面重新登录。",
+				})
+			}
 			prev.leaveRoom(player.ID)
 			if previousRoomID != "" {
 				prev.leaveRoom(previousRoomID)
 			}
 		}
+	}
+	if player.Persistent && p.PlayerSecret != "" {
+		player.ActiveSecret = p.PlayerSecret
 	}
 	player.SocketID = client.id
 	player.IPAddress = ipAddress
@@ -273,8 +315,20 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 		s.broadcastLobby()
 	}
 	if player.RoomID != "" {
-		if room := s.rooms[player.RoomID]; room != nil && room.Phase == types.PhasePunishment && hadDisconnectHold {
-			s.roomNotice(room, playerShortName(player)+" 已重新连接，恢复到未完成的惩罚房间。")
+		if room := s.rooms[player.RoomID]; room != nil {
+			if room.Phase == types.PhasePunishment && hadDisconnectHold {
+				s.roomNotice(room, playerShortName(player)+" 已重新连接，恢复到未完成的惩罚房间。")
+			}
+			// 大话骰私有骰子只在开局时单播一次；重连玩家的房间快照里没有自己的手牌，
+			// 需要在对局进行中补发一次，否则重连后看不到自己的骰子。
+			if room.Settings.GameID == types.GameLiarsDice && room.Phase == types.PhaseChoosing {
+				if dice := room.LiarsDiceHands[player.ID]; len(dice) > 0 {
+					s.emitToClient(player.SocketID, "liarsdice:hand", map[string]any{
+						"roomId": room.ID,
+						"dice":   dice,
+					})
+				}
+			}
 		}
 		s.broadcastRoom(player.RoomID, false)
 	}
@@ -325,12 +379,12 @@ func (s *Server) onLobbySuggestionsUnsubscribe(client *Client, env wsEnvelope) {
 
 func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 	var p struct {
-		Name              string `json:"name"`
-		GenderID          string `json:"genderId"`
-		NameWarEnabled    *bool  `json:"nameWarEnabled"`
-		NameWarAllowRename *bool `json:"nameWarAllowRename"`
-		GiveawayEnabled   *bool  `json:"giveawayEnabled"`
-		ExtremeModeEnabled *bool `json:"extremeModeEnabled"`
+		Name               string `json:"name"`
+		GenderID           string `json:"genderId"`
+		NameWarEnabled     *bool  `json:"nameWarEnabled"`
+		NameWarAllowRename *bool  `json:"nameWarAllowRename"`
+		GiveawayEnabled    *bool  `json:"giveawayEnabled"`
+		ExtremeModeEnabled *bool  `json:"extremeModeEnabled"`
 	}
 	_ = decodeD(env, &p)
 	player, ok := s.requirePlayer(client, env)

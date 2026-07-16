@@ -6,37 +6,169 @@ import {
   othelloBoardThemes, sponsorLinks, tictactoeBoardThemes, tokenKey
 } from "../lib/constants";
 import { ask } from "../lib/rpc";
-import { joinIdentityPayload } from "../lib/session";
+import { claimIdentity, encodeClaimCode, fetchClaimKey, joinIdentityPayload, logout, refreshClaimKey } from "../lib/session";
 import { appendHistoryPage, normalizeRoomSnapshot, normalizeRoundHistoryItem } from "../lib/normalize";
 import { prepareProofImageForUpload, compressAdminImageForUpload } from "../lib/proofImage";
 import { isNearScrollBottom, scrollToBottomSoon, stickChatToBottom } from "../lib/uiHelpers";
 import { appendMentionText, loadChat, loadOlderChat, useChat } from "../lib/chatStore";
+import {
+  disablePushSubscription, ensurePushSubscription, fetchPushPreferences,
+  requestNotificationPermission, updatePushPreferences, type PushPreferences
+} from "../lib/pushNotify";
 import type { MeState } from "../lib/types";
+import { LiarsDicePanel } from "./LiarsDicePanel";
 
 import { formatBytes, formatDuration } from "../lib/format";
 export function Login({ config, onDone, onError }: { config: AppConfig; onDone: (me: MeState) => void; onError: (message: string) => void }) {
   const [name, setName] = useState("");
   const [genderId, setGenderId] = useState(firstGenderId(config));
+  const [mode, setMode] = useState<"new" | "restore">("new");
+  const [restoreCode, setRestoreCode] = useState("");
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const [pendingJoinPayload, setPendingJoinPayload] = useState<Record<string, unknown> | null>(null);
+
+  async function doJoin(payload: Record<string, unknown>) {
+    const result = await ask<MeState & { alreadyOnline?: true }>("player:join", payload);
+    if (result.alreadyOnline) {
+      setPendingJoinPayload(payload);
+      return;
+    }
+    localStorage.setItem(tokenKey, result.token);
+    if (typeof payload.name === "string") localStorage.setItem("rps-online-name", payload.name);
+    if (typeof payload.genderId === "string") localStorage.setItem("rps-online-gender", payload.genderId);
+    onDone(result);
+  }
 
   async function submit() {
     try {
-      const result = await ask<MeState>("player:join", { name, genderId, token: localStorage.getItem(tokenKey), ...(await joinIdentityPayload()) });
-      localStorage.setItem(tokenKey, result.token);
-      localStorage.setItem("rps-online-name", name);
-      localStorage.setItem("rps-online-gender", genderId);
-      onDone(result);
+      await doJoin({ name, genderId, token: localStorage.getItem(tokenKey), ...(await joinIdentityPayload()) });
     } catch (error) {
       onError(error instanceof Error ? error.message : "进入失败");
     }
   }
 
+  async function submitRestore() {
+    if (!restoreCode.trim()) {
+      onError("请输入认领密钥");
+      return;
+    }
+    setRestoreBusy(true);
+    try {
+      const claimed = await claimIdentity(restoreCode);
+      await doJoin({
+        name: claimed.name, genderId: claimed.genderId,
+        token: localStorage.getItem(tokenKey), ...(await joinIdentityPayload())
+      });
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "认领失败");
+    } finally {
+      setRestoreBusy(false);
+    }
+  }
+
+  async function confirmKick() {
+    if (!pendingJoinPayload) return;
+    try {
+      await doJoin({ ...pendingJoinPayload, forceKick: true });
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "进入失败");
+    } finally {
+      setPendingJoinPayload(null);
+    }
+  }
+
+  if (pendingJoinPayload) {
+    return (
+      <section className="login-card kick-confirm-card">
+        <h2>该账号已在其他设备登录</h2>
+        <p className="hint">继续登录会把另一台设备顶下线（那边会收到提示）。确定要继续吗？</p>
+        <div className="kick-confirm-actions">
+          <button onClick={() => setPendingJoinPayload(null)}>取消</button>
+          <button className="primary" onClick={confirmKick}>确定顶替登录</button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="login-card">
       <h2>进入游戏</h2>
-      <input value={name} onChange={(event) => setName(event.target.value)} maxLength={12} placeholder="你的名字，允许重复" />
-      <GenderPicker config={config} value={genderId} onChange={setGenderId} />
-      <button className="primary" onClick={submit}>进入大厅</button>
+      {mode === "new" ? (
+        <>
+          <input value={name} onChange={(event) => setName(event.target.value)} maxLength={12} placeholder="你的名字，允许重复" />
+          <GenderPicker config={config} value={genderId} onChange={setGenderId} />
+          <button className="primary" onClick={submit}>进入大厅</button>
+          <button className="link-button" onClick={() => setMode("restore")}>已有账号？用认领密钥恢复</button>
+        </>
+      ) : (
+        <>
+          <p className="hint">在另一台设备的「个人设置」里获取认领密钥，粘贴到这里即可恢复该账号。</p>
+          <input value={restoreCode} onChange={(event) => setRestoreCode(event.target.value)} placeholder="粘贴认领密钥" />
+          <button className="primary" disabled={restoreBusy} onClick={submitRestore}>{restoreBusy ? "恢复中…" : "恢复账号"}</button>
+          <button className="link-button" onClick={() => setMode("new")}>返回新建账号</button>
+        </>
+      )}
     </section>
+  );
+}
+
+/** 认领密钥展示区：个人资料页 / 登出确认弹窗共用。 */
+export function ClaimKeyPanel({ onError }: { onError: (message: string) => void }) {
+  const [code, setCode] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const result = await fetchClaimKey();
+      setCode(encodeClaimCode(result.playerId, result.claimKey));
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "获取认领密钥失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function refresh() {
+    setLoading(true);
+    try {
+      const result = await refreshClaimKey();
+      setCode(encodeClaimCode(result.playerId, result.claimKey));
+      setCopied(false);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "刷新认领密钥失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function copy() {
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      onError("复制失败，请手动选中密钥");
+    }
+  }
+
+  return (
+    <div className="claim-key-panel">
+      <p className="hint">认领密钥用于在另一台设备登录同一个账号，粘贴一次就会失效，请勿分享给他人。</p>
+      {code ? (
+        <>
+          <code className="claim-key-code">{code}</code>
+          <div className="claim-key-actions">
+            <button type="button" onClick={copy}>{copied ? "已复制" : "复制"}</button>
+            <button type="button" disabled={loading} onClick={refresh}>刷新（旧密钥立即作废）</button>
+          </div>
+        </>
+      ) : (
+        <button type="button" disabled={loading} onClick={load}>{loading ? "获取中…" : "显示认领密钥"}</button>
+      )}
+    </div>
   );
 }
 
@@ -211,7 +343,7 @@ export function Lobby({ config, lobby, me, onError, onGoRoom }: { config: AppCon
                 <h3>{room.name} <ExtremeRankedBadge enabled={room.enableExtremeRanked} /> <RankMultiplierBadge multiplier={room.rankMultiplier} /></h3>
                 {room.tags?.length ? <RoomTagList tags={room.tags} /> : null}
                 <RoomVersusLine room={room} />
-                <p>{room.status} · {room.players}/2 战斗席 · {room.spectators} 观战</p>
+                <p>{room.status} · {room.gameId === "liarsdice" ? `${room.players} 人参战` : `${room.players}/2 战斗席`} · {room.spectators} 观战</p>
                 <RoomInfoTagList tags={lobbyRoomInfoTags(config, room)} />
               </div>
               <div className="join-box">
@@ -268,7 +400,9 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
     rankMultiplier: 1,
     enableExtremeRanked: false,
     othelloBoardTheme: "classic",
-    tictactoeBoardTheme: "paper"
+    tictactoeBoardTheme: "paper",
+    liarsDiceMinPlayers: 3,
+    liarsDiceMaxPlayers: 3
   });
   const [customRoomName, setCustomRoomName] = useState(false);
 
@@ -308,6 +442,20 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
       if (next.gameId === "tictactoe" || merged.gameId === "tictactoe") {
         merged.tictactoeBoardTheme = merged.tictactoeBoardTheme || "paper";
         merged.enableBot = false;
+      }
+      if (next.gameId === "liarsdice" || merged.gameId === "liarsdice") {
+        merged.liarsDiceMinPlayers = merged.liarsDiceMinPlayers || 3;
+        merged.liarsDiceMaxPlayers = merged.liarsDiceMaxPlayers || 3;
+        merged.enableBot = false;
+      }
+      if ("liarsDiceMaxPlayers" in next) {
+        const maxP = Math.min(8, Math.max(2, next.liarsDiceMaxPlayers || 3));
+        merged.liarsDiceMaxPlayers = maxP;
+        if ((merged.liarsDiceMinPlayers || 3) > maxP) merged.liarsDiceMinPlayers = maxP;
+      }
+      if ("liarsDiceMinPlayers" in next) {
+        const maxP = merged.liarsDiceMaxPlayers || 3;
+        merged.liarsDiceMinPlayers = Math.min(maxP, Math.max(2, next.liarsDiceMinPlayers || 3));
       }
       if (next.punishmentSource === "player") {
         merged.enablePunishment = true;
@@ -353,6 +501,9 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
           merged.rankMultiplier = 1;
         }
       } else if (merged.gameId === "tictactoe") {
+        if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) merged.stake = 5;
+        merged.enableBot = false;
+      } else if (merged.gameId === "liarsdice") {
         if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) merged.stake = 5;
         merged.enableBot = false;
       } else if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) {
@@ -440,6 +591,33 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
               </div>
               {settings.gameId === "othello" && <p className="hint">黑白棋支持真人 1v1、观战、聊天、排位和惩罚；Bot 不开放，排位房会支持白给/上贡结算。</p>}
               {settings.gameId === "tictactoe" && <p className="hint">井字棋支持真人 1v1、观战、聊天、排位和惩罚；双方准备后随机 X/O 先手，Bot 暂不开放。</p>}
+              {settings.gameId === "liarsdice" && <p className="hint">大话骰支持 2-8 人参战，进房默认观战，可自由加入/离开参战席；全员准备且名单 5 秒无变动后自动开局，Bot 暂不开放。</p>}
+              {settings.gameId === "liarsdice" && (
+                <div className="liarsdice-roster-settings">
+                  <label>
+                    最少参战人数
+                    <select
+                      value={settings.liarsDiceMinPlayers ?? 3}
+                      onChange={(event) => patch({ liarsDiceMinPlayers: Number(event.target.value) })}
+                    >
+                      {Array.from({ length: (settings.liarsDiceMaxPlayers ?? 3) - 1 }, (_, i) => i + 2).map((n) => (
+                        <option key={n} value={n}>{n} 人</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    最多参战人数
+                    <select
+                      value={settings.liarsDiceMaxPlayers ?? 3}
+                      onChange={(event) => patch({ liarsDiceMaxPlayers: Number(event.target.value) })}
+                    >
+                      {Array.from({ length: 7 }, (_, i) => i + 2).map((n) => (
+                        <option key={n} value={n}>{n} 人</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
               {settings.gameId === "othello" && (
                 <div className="othello-theme-grid">
                   {othelloBoardThemes.map((theme) => (
@@ -521,7 +699,7 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
             </div>
             <div className="create-section">
               <h3>对手</h3>
-              <Toggle label="开启 Bot" value={settings.enableBot} disabled={settings.gameId === "othello" || settings.gameId === "tictactoe" || (settings.enablePunishment && settings.punishmentSource === "player") || settings.enableRanked} onChange={(value) => patch({ enableBot: value })} />
+              <Toggle label="开启 Bot" value={settings.enableBot} disabled={settings.gameId === "othello" || settings.gameId === "tictactoe" || settings.gameId === "liarsdice" || (settings.enablePunishment && settings.punishmentSource === "player") || settings.enableRanked} onChange={(value) => patch({ enableBot: value })} />
               {settings.gameId === "othello" && <p className="hint">黑白棋暂不支持 Bot。</p>}
               {settings.gameId === "tictactoe" && <p className="hint">井字棋暂不支持 Bot。</p>}
               {settings.enablePunishment && settings.punishmentSource === "player" && <p className="hint">玩家发布任务模式需要真人对战，不能开启 Bot。</p>}
@@ -721,6 +899,7 @@ export function RankMultiplierBadge({ multiplier }: { multiplier?: number }) {
 export function gameIcon(gameId: RoomSettings["gameId"]) {
   if (gameId === "othello") return "⚫⚪";
   if (gameId === "tictactoe") return "❌⭕";
+  if (gameId === "liarsdice") return "🎲";
   return "✊✌️🖐️";
 }
 
@@ -742,6 +921,15 @@ export function RoomTagList({ tags }: { tags: string[] }) {
 }
 
 export function RoomVersusLine({ room }: { room: LobbySnapshot["rooms"][number] }) {
+  // 大话骰是 N 人动态名单，没有 A/B 对阵；用骰子行取代 VS 行。
+  if (room.gameId === "liarsdice") {
+    return (
+      <div className="room-versus-line liarsdice-line" title={`大话骰 · ${room.players} 人参战`}>
+        <span aria-hidden="true">🎲</span>
+        <b>{room.players > 0 ? `${room.players} 人参战` : "等待玩家加入"}</b>
+      </div>
+    );
+  }
   const left = room.versus.A;
   const right = room.versus.B;
   const leftName = left ? "player" in left ? left.player.displayName : left.name : "等待玩家";
@@ -802,6 +990,11 @@ export function Room({ config, room, me, onBack, onError }: { config: AppConfig;
   const [now, setNow] = useState(Date.now());
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [extraHistory, setExtraHistory] = useState<RoomSnapshot["roundHistory"]>([]);
+  const [historyStick, setHistoryStick] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const historyListRef = useRef<HTMLDivElement | null>(null);
+  const historyStickRef = useRef(true);
+  const historyLoadingRef = useRef(false);
   const seats = room.seats || { A: null, B: null };
   const choices = room.choices || {};
   const mySeat = seats.A?.id === me.id ? "A" : seats.B?.id === me.id ? "B" : null;
@@ -816,6 +1009,9 @@ export function Room({ config, room, me, onBack, onError }: { config: AppConfig;
   const punishedIds = room.punishedPlayerIds || [];
   const iAmPunished = punishedIds.includes(me.id);
   const visibleRoundHistory = [...room.roundHistory, ...extraHistory.filter((item) => !room.roundHistory.some((fresh) => fresh.id === item.id))];
+  // visibleRoundHistory 是服务端语义的新→旧；展示上与聊天记录保持一致（旧的在上，新的在下），所以渲染时整体反转。
+  const orderedRoundHistory = [...visibleRoundHistory].reverse();
+  const hasMoreHistory = visibleRoundHistory.length < room.roundHistoryTotal;
   const leaveTitle = room.phase === "punishment"
     ? iAmPunished
       ? "惩罚完成前不能离开房间"
@@ -1030,16 +1226,51 @@ export function Room({ config, room, me, onBack, onError }: { config: AppConfig;
     }
   }
 
-  async function loadMoreHistory() {
+  // 瀑布流：每次向服务端补 5 条更早的对局记录（room:history 按 offset/limit 分页，offset 越大越旧）。
+  async function loadMoreHistory(): Promise<number> {
+    if (historyLoadingRef.current || !hasMoreHistory) return 0;
+    historyLoadingRef.current = true;
+    setHistoryLoading(true);
     try {
       const result = await ask<{ items: RoomSnapshot["roundHistory"]; total: number }>("room:history", {
         roomId: room.id,
         offset: visibleRoundHistory.length,
-        limit: 50
+        limit: 5
       });
-      setExtraHistory((old) => appendHistoryPage(old, (result.items || []).map(normalizeRoundHistoryItem), room.roundHistory || []));
+      const items = (result.items || []).map(normalizeRoundHistoryItem);
+      setExtraHistory((old) => appendHistoryPage(old, items, room.roundHistory || []));
+      return items.length;
     } catch (error) {
       onError(error instanceof Error ? error.message : "加载对局记录失败");
+      return 0;
+    } finally {
+      historyLoadingRef.current = false;
+      setHistoryLoading(false);
+    }
+  }
+
+  // 新记录到达时若已在底部则自动跟到最新；用户上滑查看历史时不会被打断。
+  useEffect(() => {
+    const list = historyListRef.current;
+    if (list && historyStickRef.current) scrollToBottomSoon(list);
+  }, [visibleRoundHistory.length]);
+
+  // 滚到顶部附近（展示上是「更旧的记录」）时瀑布流加载更早 5 条，并保持视口位置不跳动。
+  async function handleHistoryScroll(event: ReactUIEvent<HTMLDivElement>) {
+    const el = event.currentTarget;
+    const nextStick = isNearScrollBottom(el);
+    if (historyStickRef.current !== nextStick) {
+      historyStickRef.current = nextStick;
+      setHistoryStick(nextStick);
+    }
+    if (el.scrollTop < 48 && hasMoreHistory && !historyLoadingRef.current) {
+      const prevHeight = el.scrollHeight;
+      const added = await loadMoreHistory();
+      if (added > 0) {
+        window.requestAnimationFrame(() => {
+          el.scrollTop = el.scrollHeight - prevHeight;
+        });
+      }
     }
   }
 
@@ -1056,21 +1287,25 @@ export function Room({ config, room, me, onBack, onError }: { config: AppConfig;
         </div>
         <button className="soft-button" title={leaveTitle} onClick={leaveCurrentRoom}><DoorOpen size={16} /> 离开</button>
       </div>
-      <div className="battle-panel">
-        <SeatView seat="A" room={room} me={me} now={now} onSit={() => act("room:sit", { seat: "A" })} />
-        <div className="versus">
-          <span className="versus-label">⚔️ 对战比分</span>
-          <strong className="score-number">{room.score.A} : {room.score.B}</strong>
-          {room.settings.gameId === "othello" ? <OthelloScore room={room} /> : room.settings.gameId === "tictactoe" ? <TicTacToeScore room={room} /> : <Settlement room={room} />}
+      {room.settings.gameId !== "liarsdice" && (
+        <div className="battle-panel">
+          <SeatView seat="A" room={room} me={me} now={now} onSit={() => act("room:sit", { seat: "A" })} />
+          <div className="versus">
+            <span className="versus-label">⚔️ 对战比分</span>
+            <strong className="score-number">{room.score.A} : {room.score.B}</strong>
+            {room.settings.gameId === "othello" ? <OthelloScore room={room} /> : room.settings.gameId === "tictactoe" ? <TicTacToeScore room={room} /> : <Settlement room={room} />}
+          </div>
+          <SeatView seat="B" room={room} me={me} now={now} onSit={() => act("room:sit", { seat: "B" })} />
         </div>
-        <SeatView seat="B" room={room} me={me} now={now} onSit={() => act("room:sit", { seat: "B" })} />
-      </div>
+      )}
       <div className="room-content-grid">
         <div className="actions-panel panel">
           {room.settings.gameId === "othello" ? (
             <OthelloPanel room={room} me={me} now={now} onMove={playOthello} onSettle={settleOthelloMove} onRestart={restartOthello} onReady={readyOthello} onRequestSurrender={requestOthelloSurrender} onRespondSurrender={respondOthelloSurrender} onEscape={escapeOthello} />
           ) : room.settings.gameId === "tictactoe" ? (
             <TicTacToePanel room={room} me={me} now={now} onMove={playTicTacToe} onReady={readyTicTacToe} onRestart={restartTicTacToe} onGiveawayChoice={chooseTicTacToeGiveaway} />
+          ) : room.settings.gameId === "liarsdice" ? (
+            <LiarsDicePanel room={room} me={me} onError={onError} />
           ) : mySeat && (
             <div className="move-panel">
               <div>
@@ -1104,7 +1339,7 @@ export function Room({ config, room, me, onBack, onError }: { config: AppConfig;
                   const canAssignTask = Boolean(room.settings.punishmentSource === "player" && task && canAssignPunishmentTask(room, me.id, playerId, task.assignedBy) && !taskAssigned);
                   // 无 status 或 rejected 可提交；pending/approved 不可重复交
                   const canSubmit = isMine && taskAssigned && (!proof || !proof.status || proof.status === "rejected");
-                  const canReview = Boolean(mySeat && !isMine && proof && proof.status !== "approved" && proof.status !== "rejected");
+                  const canReview = Boolean(canReviewPunishmentProof(room, me.id, playerId) && proof && proof.status !== "approved" && proof.status !== "rejected");
                   const taskCardStyle = task?.backgroundImage ? {
                     "--task-bg": `url(${task.backgroundImage})`,
                     "--task-bg-opacity": String(task.backgroundOpacity ?? 0.22)
@@ -1258,10 +1493,17 @@ export function Room({ config, room, me, onBack, onError }: { config: AppConfig;
             📜 对局记录
             <span>{visibleRoundHistory.length} / {room.roundHistoryTotal}</span>
           </h3>
-          <div className="round-history-list">
-            {visibleRoundHistory.map((item) => <RoundHistoryCard key={item.id} item={item} onOpenImage={setPreviewImage} />)}
-            {visibleRoundHistory.length < room.roundHistoryTotal && <button className="soft-button" onClick={loadMoreHistory}>加载更多记录</button>}
-            {visibleRoundHistory.length === 0 && <p className="empty">还没有对局记录</p>}
+          <div className="chat-scroll-shell">
+            <div className="round-history-list" ref={historyListRef} onScroll={handleHistoryScroll}>
+              {hasMoreHistory && <div className="chat-more-hint">{historyLoading ? "加载中…" : "↑ 上滑加载更早记录"}</div>}
+              {orderedRoundHistory.map((item) => <RoundHistoryCard key={item.id} item={item} onOpenImage={setPreviewImage} />)}
+              {visibleRoundHistory.length === 0 && <p className="empty">还没有对局记录</p>}
+            </div>
+            {!historyStick && visibleRoundHistory.length > 0 && (
+              <button type="button" className="chat-stick-button" onClick={() => stickChatToBottom(historyListRef.current, historyStickRef, setHistoryStick)}>
+                ↓ 回到底部
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1269,7 +1511,7 @@ export function Room({ config, room, me, onBack, onError }: { config: AppConfig;
         <div className="modal-backdrop image-preview-backdrop" onClick={() => setPreviewImage(null)}>
           <div className="image-preview-modal" onClick={(event) => event.stopPropagation()}>
             <button className="icon-button image-preview-close" onClick={() => setPreviewImage(null)}>×</button>
-            <img src={previewImage} alt="惩罚证明大图" />
+            <img src={previewImage} alt="惩罚证明大图" loading="lazy" />
           </div>
         </div>
       )}
@@ -1651,6 +1893,7 @@ export function RoundHistoryCard({ item, onOpenImage }: { item: RoomSnapshot["ro
         <div className="history-tags">
           {safe.gameId === "othello" && <em>⚫⚪ 黑白棋</em>}
           {safe.gameId === "tictactoe" && <em>❌⭕ 井字棋</em>}
+          {safe.gameId === "liarsdice" && <em>🎲 大话骰</em>}
           {safe.ranked && <em>🏆 {safe.gameId === "othello" ? `${safe.stake}分/子${safe.rankMultiplier && safe.rankMultiplier > 1 ? ` ×${safe.rankMultiplier}` : ""}` : `${safe.stake}分${safe.rankMultiplier && safe.rankMultiplier > 1 ? ` ×${safe.rankMultiplier}` : ""}`}</em>}
           {safe.extremeRanked && <em>⚡ 极限</em>}
           {safe.punishedNames.length > 0 && <em>🎲 惩罚</em>}
@@ -1749,8 +1992,25 @@ export function historyProofStatusLabel(proof: { status?: string; confirmedBy?: 
   return proof.status || "已提交";
 }
 
+// canReviewPunishmentProof 与后端 canReviewPlayer 对齐：座位制=不同座位的对手；
+// 大话骰=本局赢家审核本局输家（以最近一条对局记录为准）。
+export function canReviewPunishmentProof(room: RoomSnapshot, reviewerId: string, targetId: string) {
+  if (!reviewerId || reviewerId === targetId) return false;
+  if (room.settings.gameId === "liarsdice") {
+    const latest = room.roundHistory[0];
+    return Boolean(latest && latest.liarsDiceWinnerId === reviewerId && latest.liarsDiceLoserId === targetId);
+  }
+  const reviewerSeat = room.seats.A?.id === reviewerId ? "A" : room.seats.B?.id === reviewerId ? "B" : null;
+  const targetSeat = room.seats.A?.id === targetId ? "A" : room.seats.B?.id === targetId ? "B" : null;
+  return Boolean(reviewerSeat && targetSeat && reviewerSeat !== targetSeat);
+}
+
 export function canAssignPunishmentTask(room: RoomSnapshot, currentPlayerId: string, punishedPlayerId: string, assignedBy?: string) {
   if (assignedBy) return assignedBy === currentPlayerId;
+  if (room.settings.gameId === "liarsdice") {
+    const winnerId = room.roundHistory[0]?.liarsDiceWinnerId;
+    return Boolean(winnerId && winnerId === currentPlayerId && winnerId !== punishedPlayerId);
+  }
   const punishedSeat = room.seats.A?.id === punishedPlayerId ? "A" : room.seats.B?.id === punishedPlayerId ? "B" : null;
   if (!punishedSeat) return false;
   const opponent = punishedSeat === "A" ? room.seats.B : room.seats.A;
@@ -1822,7 +2082,7 @@ export function ProofImage({ src, alt, className }: { src: string; alt: string; 
           ref={imgRef}
           src={src}
           alt={alt}
-          loading="eager"
+          loading="lazy"
           decoding="async"
           className={loaded ? "is-loaded" : ""}
           onLoad={() => setLoaded(true)}
@@ -2703,7 +2963,7 @@ export function formatGiveawayValue(value: number) {
 
 
 
-export function ProfilePanel({ config, me, onClose, onUpdated, onError }: { config: AppConfig; me: PublicPlayer; onClose: () => void; onUpdated: (player: PublicPlayer) => void; onError: (message: string) => void }) {
+export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLoggedOut }: { config: AppConfig; me: PublicPlayer; onClose: () => void; onUpdated: (player: PublicPlayer) => void; onError: (message: string) => void; onLoggedOut: () => void }) {
   const [name, setName] = useState(me.name);
   const [genderId, setGenderId] = useState(me.genderId);
   const [nameWarEnabled, setNameWarEnabled] = useState(Boolean(me.nameWarEnabled));
@@ -2730,12 +2990,50 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError }: { conf
   const extremeCooldownHours = Math.ceil(extremeCooldownMs / 3_600_000);
   const extremeCannotEnable = Boolean(!me.extremeModeEnabled && extremeModeEnabled && (stats.rankedPoints < 0 || extremeCooldownMs > 0));
   const extremeCannotClose = Boolean(me.extremeModeEnabled && !extremeModeEnabled && stats.rankedPoints <= 0);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [logoutClaimCode, setLogoutClaimCode] = useState<string | null>(null);
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const [pushPrefs, setPushPrefs] = useState<PushPreferences>({ mentionEnabled: false, turnEnabled: false, seatEnabled: false });
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
+    () => (typeof Notification === "undefined" ? "denied" : Notification.permission)
+  );
+  const [pushBusy, setPushBusy] = useState(false);
 
   useEffect(() => {
     if (!cooldownMs && !nameWarCooldownMs && !extremeCooldownMs) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [cooldownMs, nameWarCooldownMs, extremeCooldownMs]);
+
+  useEffect(() => {
+    fetchPushPreferences().then(setPushPrefs).catch(() => undefined);
+  }, []);
+
+  async function enableNotifications() {
+    setPushBusy(true);
+    try {
+      const permission = await requestNotificationPermission();
+      setNotificationPermission(permission);
+      if (permission === "granted") {
+        await ensurePushSubscription();
+      } else {
+        onError("需要允许通知权限才能开启推送");
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function togglePushPref(key: keyof PushPreferences, value: boolean) {
+    const next = { ...pushPrefs, [key]: value };
+    setPushPrefs(next);
+    try {
+      await updatePushPreferences({ [key]: value });
+    } catch (error) {
+      setPushPrefs(pushPrefs); // 回滚
+      onError(error instanceof Error ? error.message : "保存推送偏好失败");
+    }
+  }
 
   useEffect(() => {
     if (!nameWarEnabled) setNameWarAllowRename(false);
@@ -2776,6 +3074,32 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError }: { conf
       onError("个人资料已更新");
     } catch (error) {
       onError(error instanceof Error ? error.message : "保存失败");
+    }
+  }
+
+  async function openLogoutConfirm() {
+    setLogoutConfirmOpen(true);
+    setLogoutBusy(true);
+    try {
+      const result = await refreshClaimKey();
+      setLogoutClaimCode(encodeClaimCode(result.playerId, result.claimKey));
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "生成认领密钥失败");
+      setLogoutConfirmOpen(false);
+    } finally {
+      setLogoutBusy(false);
+    }
+  }
+
+  async function confirmLogout() {
+    setLogoutBusy(true);
+    try {
+      await logout();
+      onLoggedOut();
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "登出失败");
+    } finally {
+      setLogoutBusy(false);
     }
   }
 
@@ -2877,12 +3201,68 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError }: { conf
               <button type="button" className="danger-button" onClick={forceCloseExtremeMode}>强行关闭极限模式</button>
             )}
           </div>
+          <div className="name-war-card push-settings-card">
+            <div className="admin-card-title">
+              <strong>🔔 推送通知</strong>
+              <small>
+                {notificationPermission === "granted" ? "已允许" : notificationPermission === "denied" ? "已拒绝" : "未设置"}
+              </small>
+            </div>
+            {notificationPermission !== "granted" && (
+              <>
+                <p className="hint">开启后，你离线时（关闭页面/手机后台被系统冻结）也能收到系统通知；页面还开着时会优先在页面内提醒，不会重复弹。</p>
+                <button type="button" disabled={pushBusy} onClick={enableNotifications}>
+                  {pushBusy ? "请求中…" : "开启推送通知"}
+                </button>
+                {notificationPermission === "denied" && <p className="hint danger-hint">浏览器已拒绝通知权限，需要在浏览器设置里手动允许后再试。</p>}
+              </>
+            )}
+            {notificationPermission === "granted" && (
+              <>
+                <Toggle label="有人 @ 我" value={pushPrefs.mentionEnabled} onChange={(v) => togglePushPref("mentionEnabled", v)} />
+                <Toggle label="轮到我出招/落子" value={pushPrefs.turnEnabled} onChange={(v) => togglePushPref("turnEnabled", v)} />
+                <Toggle label="我的房间参战席被坐满" value={pushPrefs.seatEnabled} onChange={(v) => togglePushPref("seatEnabled", v)} />
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={async () => { await disablePushSubscription(); onError("已停止这台设备的推送订阅"); }}
+                >
+                  停止这台设备的推送
+                </button>
+              </>
+            )}
+          </div>
+          <div className="name-war-card account-devices-card">
+            <div className="admin-card-title">
+              <strong>账号与设备</strong>
+              <small>最多同时记住 3 台设备</small>
+            </div>
+            <ClaimKeyPanel onError={onError} />
+            <button type="button" className="danger-button" onClick={openLogoutConfirm}>登出（清空本设备登录状态）</button>
+          </div>
           <div className="profile-action-row">
             <button className="primary" disabled={(nameChanged && (cooldownMs > 0 || nameLockedByWar)) || ((nameWarChanged || nameWarAllowRenameChanged) && nameWarCooldownMs > 0) || giveawayCannotClose || extremeCannotEnable || extremeCannotClose} onClick={saveProfile}><Save size={16} /> 保存个人资料</button>
             <button onClick={onClose}>关闭个人设置</button>
           </div>
         </div>
       </section>
+      {logoutConfirmOpen && (
+        <div className="modal-backdrop logout-confirm-backdrop" onClick={() => !logoutBusy && setLogoutConfirmOpen(false)}>
+          <section className="logout-confirm-card" onClick={(event) => event.stopPropagation()}>
+            <h3>确认登出？</h3>
+            <p className="hint danger-hint">
+              登出后将无法再次登录当前账号，除非使用下面这把认领密钥在需要的设备上恢复。请务必先保存到私密位置（不要发给任何人）。
+            </p>
+            {logoutClaimCode ? <code className="claim-key-code">{logoutClaimCode}</code> : <p className="hint">正在生成密钥…</p>}
+            <div className="kick-confirm-actions">
+              <button disabled={logoutBusy} onClick={() => setLogoutConfirmOpen(false)}>取消</button>
+              <button className="danger-button" disabled={logoutBusy || !logoutClaimCode} onClick={confirmLogout}>
+                {logoutBusy ? "处理中…" : "我已保存密钥，确认登出"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

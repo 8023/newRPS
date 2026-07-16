@@ -70,9 +70,19 @@ func (s *Server) lobbySnapshot(includeConfig, includeSuggestions bool) types.Lob
 		if room.Seats[types.SeatB] != nil {
 			playersCount++
 		}
+		spectatorCount := len(room.SpectatorIDs)
+		// 大话骰不进 Seats 体系：参战人数看 ParticipantIDs；参战玩家仍存在 SpectatorIDs 里
+		// （为了让快照能按 id 查到完整资料），大厅观战计数要把他们扣掉，避免重复计入。
+		if room.Settings.GameID == types.GameLiarsDice && room.LiarsDice != nil {
+			playersCount = len(room.LiarsDice.ParticipantIDs)
+			spectatorCount = len(room.SpectatorIDs) - playersCount
+			if spectatorCount < 0 {
+				spectatorCount = 0
+			}
+		}
 		info := types.LobbyRoomInfo{
 			ID: room.ID, GameID: room.Settings.GameID, Code: room.Code, Name: room.Settings.Name,
-			HasPassword: room.Settings.Password != "", Players: playersCount, Spectators: len(room.SpectatorIDs),
+			HasPassword: room.Settings.Password != "", Players: playersCount, Spectators: spectatorCount,
 			Versus: map[types.SeatKey]any{
 				types.SeatA: s.lobbySeatSummary(room.Seats[types.SeatA]),
 				types.SeatB: s.lobbySeatSummary(room.Seats[types.SeatB]),

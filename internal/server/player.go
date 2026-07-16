@@ -371,7 +371,8 @@ func (s *Server) createPlayer(name, genderID, token string, identityPlayerID, id
 		player.Token = randomID()
 	}
 	if persistent {
-		player.PlayerSecretHash = hashSecret(identitySecret)
+		player.PlayerSecrets = []string{identitySecret}
+		player.ClaimKey = randomID()
 	}
 	if session != nil {
 		player.CurrentSID = session.SID

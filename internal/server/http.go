@@ -398,9 +398,20 @@ func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, full)
 }
 
+// handlePushVapidKey：VAPID 公钥是公开信息（Web Push 协议本来就要求浏览器端拿到它去订阅），
+// 不需要鉴权，纯 GET。
+func (s *Server) handlePushVapidKey(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"publicKey": s.vapid.PublicKey})
+}
+
 func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/session", s.handleSession)
+	mux.HandleFunc("/api/push/vapid-key", s.handlePushVapidKey)
 	mux.Handle("/api/proof-image", s.httpRateLimit("proof-image", 60_000, 20)(http.HandlerFunc(s.handleProofImage)))
 	mux.Handle("/api/admin-image", s.httpRateLimit("admin-image", 60_000, 12)(http.HandlerFunc(s.handleAdminImage)))
 	mux.Handle("/api/config/export", s.httpRateLimit("config-export", 60_000, 12)(http.HandlerFunc(s.handleConfigExport)))

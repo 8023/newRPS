@@ -369,6 +369,7 @@ func (s *Server) applyTicTacToeMove(room *RoomState, seat types.SeatKey, row, co
 			room.ResultText = ""
 		}
 		s.prepareTicTacToeGiveawayPrompt(room)
+		s.notifyOpponentTurn(room, room.TicTacToe.Turn)
 	}
 	return true, ""
 }

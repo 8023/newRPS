@@ -13,7 +13,7 @@ export type Move = "rock" | "scissors" | "paper" | "giveaway" | "forfeit" | "noM
 export type RoundResult = "A" | "B" | "draw" | "doubleLoss";
 export type GamePhase = "waiting" | "ready" | "choosing" | "result" | "punishment";
 export type SeatKey = "A" | "B";
-export type GameId = "rps" | "othello" | "tictactoe";
+export type GameId = "rps" | "othello" | "tictactoe" | "liarsdice";
 export type RankStake = 1 | 2 | 5 | 10 | 20;
 export type OthelloCell = "black" | "white" | null;
 export type TicTacToeCell = "X" | "O" | null;
@@ -217,6 +217,33 @@ export type RoomSettings = {
   enableExtremeRanked?: boolean;
   othelloBoardTheme?: "classic" | "pastel" | "midnight" | "wood" | "neon";
   tictactoeBoardTheme?: "paper" | "mint" | "midnight" | "candy" | "arcade";
+  liarsDiceMinPlayers?: number;
+  liarsDiceMaxPlayers?: number;
+};
+
+export type LiarsDiceBid = {
+  playerId: string;
+  count: number;
+  face: number;
+  at: number;
+};
+
+export type LiarsDiceState = {
+  participantIds: string[];
+  readyPlayerIds: string[];
+  diceCounts: Record<string, number>;
+  currentTurn?: string;
+  currentBid?: LiarsDiceBid | null;
+  bidHistory: LiarsDiceBid[];
+  onesWildDisabled?: boolean;
+  roundNumber: number;
+  ended?: boolean;
+  winnerId?: string;
+  loserId?: string;
+  revealedHands?: Record<string, number[]>;
+  actualCount?: number;
+  minPlayers?: number;
+  maxPlayers?: number;
 };
 
 export type PunishmentProof = {
@@ -256,6 +283,14 @@ export type RoundHistoryItem = {
   othelloBlackSeat?: SeatKey;
   tictactoeXSeat?: SeatKey;
   tictactoeLine?: Array<{ row: number; col: number }>;
+  liarsDiceWinnerId?: string;
+  liarsDiceLoserId?: string;
+  liarsDiceBidCount?: number;
+  liarsDiceBidFace?: number;
+  liarsDiceActualCount?: number;
+  liarsDiceHands?: Record<string, number[]>;
+  liarsDiceHandOrder?: string[];
+  liarsDiceNames?: Record<string, string>;
   ranked: boolean;
   stake?: RankStake;
   rankMultiplier?: RankMultiplier;
@@ -304,6 +339,7 @@ export type RoomSnapshot = {
   revealedChoices?: Partial<Record<SeatKey, Move>>;
   othello?: OthelloState;
   tictactoe?: TicTacToeState;
+  liarsDice?: LiarsDiceState;
   resultText?: string;
   punishedPlayerIds: string[];
   proofs: PunishmentProof[];
