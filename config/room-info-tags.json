@@ -11,6 +11,12 @@
     "borderColor": "#ffbf75",
     "label": "极限排位"
   },
+  "gameLiarsDice": {
+    "textColor": "#7a4a1e",
+    "backgroundColor": "#fdecd2",
+    "borderColor": "#f0b872",
+    "label": "大话骰"
+  },
   "gameOthello": {
     "textColor": "#163c32",
     "backgroundColor": "#dff7ec",
@@ -46,6 +52,12 @@
     "backgroundColor": "#fff3c4",
     "borderColor": "#ffd875",
     "label": "出拳中"
+  },
+  "phaseChoosingLiarsDice": {
+    "textColor": "#6b4b00",
+    "backgroundColor": "#fff3c4",
+    "borderColor": "#ffd875",
+    "label": "叫点中"
   },
   "phasePunishment": {
     "textColor": "#8a3158",

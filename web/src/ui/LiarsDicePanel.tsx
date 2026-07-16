@@ -38,12 +38,34 @@ export function LiarsDicePanel({ room, me, onError }: { room: RoomSnapshot; me: 
     if (ld.roundNumber === 0) setMyDice([]);
   }, [ld?.roundNumber, ld?.participantIds, me.id, room.phase]);
 
+  // 每次叫点变化（含轮到自己）时，默认选中"最小的可叫点数"：
+  // 上家点数不为 6 则颗数不变、点数+1；点数为 6 则颗数+1、点数回到 1。
+  useEffect(() => {
+    if (!ld) return;
+    if (ld.currentBid) {
+      if (ld.currentBid.face < 6) {
+        setBidCount(ld.currentBid.count);
+        setBidFace(ld.currentBid.face + 1);
+      } else {
+        setBidCount(ld.currentBid.count + 1);
+        setBidFace(1);
+      }
+    } else {
+      setBidCount(ld.participantIds.length + 1);
+      setBidFace(1);
+    }
+  }, [ld?.currentBid?.count, ld?.currentBid?.face, ld?.participantIds.length]);
+
   if (!ld) return null;
 
   const isParticipant = ld.participantIds.includes(me.id);
   const isReady = ld.readyPlayerIds.includes(me.id);
   const isMyTurn = room.phase === "choosing" && ld.currentTurn === me.id;
-  const minCount = ld.currentBid ? ld.currentBid.count : ld.participantIds.length + 1;
+  // 上家点数已是 6 时，同颗数已无有效点数可叫，颗数下限直接顶到 +1。
+  const minCount = ld.currentBid
+    ? ld.currentBid.face >= 6 ? ld.currentBid.count + 1 : ld.currentBid.count
+    : ld.participantIds.length + 1;
+  const maxCount = ld.participantIds.length * 5;
   const minFace = ld.currentBid && ld.currentBid.count === bidCount ? ld.currentBid.face + 1 : 1;
 
   async function act(event: string, payload: unknown = {}) {
@@ -56,6 +78,12 @@ export function LiarsDicePanel({ room, me, onError }: { room: RoomSnapshot; me: 
     } finally {
       setBusy(false);
     }
+  }
+
+  function onBidCountChange(nextCount: number) {
+    setBidCount(nextCount);
+    const nextMinFace = ld?.currentBid && ld.currentBid.count === nextCount ? ld.currentBid.face + 1 : 1;
+    setBidFace(nextMinFace);
   }
 
   function submitBid() {
@@ -121,26 +149,30 @@ export function LiarsDicePanel({ room, me, onError }: { room: RoomSnapshot; me: 
 
       {room.phase === "choosing" && (
         <div className="liarsdice-bid-panel panel">
-          <h4>{ld.currentBid ? `当前叫点：${ld.currentBid.count} 个 ${diceFace(ld.currentBid.face)}（${playerName(room, ld.currentBid.playerId)}）` : "还没有人叫点"}</h4>
+          <h4>{ld.currentBid ? `当前叫点：${ld.currentBid.count} 个 ${ld.currentBid.face}（${playerName(room, ld.currentBid.playerId)}）` : "还没有人叫点"}</h4>
           {ld.onesWildDisabled && <p className="hint">本局已有人叫过 1，此后 1 不再视为万能点。</p>}
           {isMyTurn ? (
             <div className="liarsdice-bid-controls">
               <label>
                 颗数
-                <input type="number" min={minCount} value={bidCount} onChange={(event) => setBidCount(Math.max(minCount, Number(event.target.value) || minCount))} />
+                <select value={bidCount} onChange={(event) => onBidCountChange(Number(event.target.value))}>
+                  {Array.from({ length: Math.max(0, maxCount - minCount + 1) }, (_, i) => minCount + i).map((count) => (
+                    <option key={count} value={count}>{count}</option>
+                  ))}
+                </select>
               </label>
               <label>
                 点数
                 <select value={bidFace} onChange={(event) => setBidFace(Number(event.target.value))}>
                   {[1, 2, 3, 4, 5, 6].map((face) => (
                     <option key={face} value={face} disabled={bidCount === (ld.currentBid?.count ?? 0) && face < minFace}>
-                      {diceFace(face)} {face}
+                      {face}
                     </option>
                   ))}
                 </select>
               </label>
               <button className="primary" disabled={busy} onClick={submitBid}>叫点</button>
-              {ld.currentBid && <button disabled={busy} onClick={() => act("liarsdice:challenge")}>开牌（质疑上家）</button>}
+              {ld.currentBid && <button disabled={busy} onClick={() => act("liarsdice:challenge")}>开牌</button>}
             </div>
           ) : (
             <p className="hint">{room.phase === "choosing" ? `等待 ${playerName(room, ld.currentTurn || "")} 叫点或开牌...` : ""}</p>
@@ -152,7 +184,7 @@ export function LiarsDicePanel({ room, me, onError }: { room: RoomSnapshot; me: 
         <div className="liarsdice-reveal panel">
           <h4>开牌结果</h4>
           <p>
-            叫点 {ld.currentBid?.count} 个 {diceFace(ld.currentBid?.face || 0)}，实际 {ld.actualCount} 个
+            叫点 {ld.currentBid?.count} 个 {ld.currentBid?.face || 0}，实际 {ld.actualCount} 个
             {ld.onesWildDisabled ? "（1 不算万能点）" : "（1 可算万能点）"}
           </p>
           <ul className="liarsdice-reveal-list">
@@ -168,7 +200,7 @@ export function LiarsDicePanel({ room, me, onError }: { room: RoomSnapshot; me: 
             ))}
           </ul>
           {isParticipant && (
-            <button className="primary" disabled={busy} onClick={() => act("liarsdice:nextRound")}>下一局</button>
+            <button className="primary liarsdice-next-round-btn" disabled={busy} onClick={() => act("liarsdice:nextRound")}>下一局</button>
           )}
         </div>
       )}

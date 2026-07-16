@@ -5,6 +5,7 @@ export const dailyAnnouncementKey = "rps-online-daily-announcement";
 export const defaultRoomName = "新的锤子剪刀布房间";
 export const defaultOthelloRoomName = "新的黑白棋房间";
 export const defaultTicTacToeRoomName = "新的井字棋房间";
+export const defaultLiarsDiceRoomName = "新的大话骰房间";
 export const maxOriginalImageBytes = 10 * 1024 * 1024;
 export const maxProofUploadBytes = 2 * 1024 * 1024;
 export const maxProofPixels = 4_000_000;

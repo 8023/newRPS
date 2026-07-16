@@ -4971,12 +4971,14 @@ main {
     min-height: auto;
   }
 }
+
 /* ── 大话骰 ── */
 .liarsdice-panel {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
+
 .liarsdice-roster-list {
   list-style: none;
   margin: 8px 0 0;
@@ -4985,6 +4987,7 @@ main {
   flex-direction: column;
   gap: 6px;
 }
+
 .liarsdice-roster-list li {
   display: flex;
   align-items: center;
@@ -4993,18 +4996,22 @@ main {
   border-radius: 10px;
   background: var(--surface-2, rgba(127, 127, 127, 0.08));
 }
+
 .liarsdice-roster-list li.current-turn {
   outline: 2px solid var(--accent, #6366f1);
 }
+
 .liarsdice-roster-list li em {
   font-style: normal;
   opacity: 0.7;
   font-size: 0.85em;
 }
+
 .liarsdice-turn-flag {
   color: var(--accent, #6366f1);
   font-weight: 600;
 }
+
 .liarsdice-roster-actions {
   display: flex;
   gap: 8px;
@@ -5012,29 +5019,36 @@ main {
   flex-wrap: wrap;
   align-items: center;
 }
+
 .liarsdice-roster-settings {
   display: flex;
   gap: 16px;
   margin: 8px 0;
 }
+
 .liarsdice-roster-settings label {
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 0.9em;
 }
+
 .liarsdice-dice-row {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
 }
+
 .liarsdice-die {
-  font-size: 2em;
+  font-size: 5em;
   line-height: 1;
 }
+
 .liarsdice-die.small {
-  font-size: 1.3em;
+  font-size: 3em;
+  padding: 0px 4px;
 }
+
 .liarsdice-bid-controls {
   display: flex;
   gap: 10px;
@@ -5042,17 +5056,20 @@ main {
   flex-wrap: wrap;
   margin-top: 8px;
 }
+
 .liarsdice-bid-controls label {
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 0.9em;
 }
+
 .liarsdice-bid-controls input,
 .liarsdice-bid-controls select {
   padding: 6px 8px;
   border-radius: 8px;
 }
+
 .liarsdice-reveal-list {
   list-style: none;
   margin: 8px 0 0;
@@ -5061,6 +5078,7 @@ main {
   flex-direction: column;
   gap: 8px;
 }
+
 .liarsdice-reveal-list li {
   display: flex;
   align-items: center;
@@ -5069,9 +5087,16 @@ main {
   border-radius: 10px;
   background: var(--surface-2, rgba(127, 127, 127, 0.08));
 }
+
 .liarsdice-reveal-list li.winner {
-  outline: 2px solid #22c55e;
+  outline: 2px solid var(--primary);
 }
+
 .liarsdice-reveal-list li.loser {
-  outline: 2px solid #ef4444;
+  outline: 2px solid var(--pink-border);
+}
+
+.liarsdice-next-round-btn {
+  display: block;
+  margin-top: 14px;
 }

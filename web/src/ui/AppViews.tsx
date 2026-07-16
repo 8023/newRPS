@@ -2,7 +2,7 @@ import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type Muta
 import { Coffee, Crown, DoorOpen, Download, ExternalLink, Eye, HeartHandshake, MessageCircle, Moon, Pencil, RefreshCcw, Save, Send, Settings, Shield, Sun, Swords, Upload, UserRound, Users } from "lucide-react";
 import type { AppConfig, BotDifficulty, ChatMessage, GenderFaction, LobbySnapshot, Move, PublicPlayer, PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant } from "../shared/types";
 import {
-  defaultOthelloRoomName, defaultRoomName, defaultTicTacToeRoomName,
+  defaultLiarsDiceRoomName, defaultOthelloRoomName, defaultRoomName, defaultTicTacToeRoomName,
   othelloBoardThemes, sponsorLinks, tictactoeBoardThemes, tokenKey
 } from "../lib/constants";
 import { ask } from "../lib/rpc";
@@ -433,7 +433,10 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
     setSettings((old) => {
       const merged = { ...old, ...next };
       if (!customRoomName && next.gameId) {
-        merged.name = next.gameId === "othello" ? defaultOthelloRoomName : next.gameId === "tictactoe" ? defaultTicTacToeRoomName : defaultRoomName;
+        merged.name = next.gameId === "othello" ? defaultOthelloRoomName
+          : next.gameId === "tictactoe" ? defaultTicTacToeRoomName
+          : next.gameId === "liarsdice" ? defaultLiarsDiceRoomName
+          : defaultRoomName;
       }
       if (next.gameId === "othello" || merged.gameId === "othello") {
         merged.othelloBoardTheme = merged.othelloBoardTheme || "classic";
@@ -1979,6 +1982,10 @@ export function historySeatLabel(item: RoomSnapshot["roundHistory"][number], sea
   if (item.gameId === "tictactoe") {
     return item.tictactoeXSeat === seat ? "❌ X" : "⭕ O";
   }
+  if (item.gameId === "liarsdice") {
+    // 大话骰对局记录里 playerA 固定是本局赢家、playerB 固定是输家（见后端 game_liarsdice.go）。
+    return seat === "A" ? "🏆 胜" : "💤 负";
+  }
   return choiceText(seat === "A" ? item.moveA : item.moveB);
 }
 
@@ -2427,7 +2434,11 @@ export function rankedInfoExtra(stake: number, multiplier = 1, gameId: RoomSetti
 }
 
 export function roomInfoTags(config: AppConfig, room: RoomSnapshot) {
-  const phaseKey = room.phase === "ready" ? "phaseReady" : room.phase === "choosing" ? "phaseChoosing" : room.phase === "result" ? "phaseResult" : room.phase === "punishment" ? "phasePunishment" : "phaseReady";
+  const phaseKey = room.phase === "ready" ? "phaseReady"
+    : room.phase === "choosing" ? (room.settings.gameId === "liarsdice" ? "phaseChoosingLiarsDice" : "phaseChoosing")
+    : room.phase === "result" ? "phaseResult"
+    : room.phase === "punishment" ? "phasePunishment"
+    : "phaseReady";
   const multiplier = rankMultiplierForSettings(room.settings);
   const tags: RoomInfoTagView[] = [
     gameInfoTag(config, room.settings.gameId),
@@ -2469,7 +2480,9 @@ export function gameInfoTag(config: AppConfig, gameId: RoomSettings["gameId"]) {
     ? roomInfoTag(config, "gameOthello", "", "⚫⚪ ")
     : gameId === "tictactoe"
       ? roomInfoTag(config, "gameTicTacToe", "", "❌⭕ ")
-      : roomInfoTag(config, "gameRps");
+      : gameId === "liarsdice"
+        ? roomInfoTag(config, "gameLiarsDice", "", "🎲 ")
+        : roomInfoTag(config, "gameRps");
 }
 
 export function punishmentSelectionText(config: AppConfig, settings: Pick<RoomSettings, "punishmentId" | "punishmentIds">) {
@@ -2499,9 +2512,9 @@ export function roomInfoTagStyle(style: RoomInfoTagStyle): CSSProperties {
   } as CSSProperties;
 }
 
-export function phaseText(phase: RoomSnapshot["phase"]) {
+export function phaseText(phase: RoomSnapshot["phase"], gameId?: RoomSettings["gameId"]) {
   if (phase === "ready") return "🪑 等待坐满";
-  if (phase === "choosing") return "🤜 出拳中";
+  if (phase === "choosing") return gameId === "liarsdice" ? "🎲 叫点中" : "🤜 出拳中";
   if (phase === "result") return "✨ 结果展示";
   if (phase === "punishment") return "🎲 惩罚阶段";
   return "⏳ 等待中";
@@ -3274,8 +3287,10 @@ export const roomInfoTagOrder = [
   { key: "gameRps", label: "锤子剪刀布" },
   { key: "gameOthello", label: "黑白棋" },
   { key: "gameTicTacToe", label: "井字棋" },
+  { key: "gameLiarsDice", label: "大话骰" },
   { key: "phaseReady", label: "等待坐满" },
   { key: "phaseChoosing", label: "出拳中" },
+  { key: "phaseChoosingLiarsDice", label: "叫点中" },
   { key: "phaseResult", label: "结算中" },
   { key: "phasePunishment", label: "惩罚阶段" },
   { key: "normal", label: "普通局" },

@@ -29,7 +29,15 @@ function checkRoomLevel1Notifications(old: RoomSnapshot | null, next: RoomSnapsh
   if (!meId || !old || old.id !== next.id) return;
   const mySeat = next.seats.A && "id" in next.seats.A && next.seats.A.id === meId ? "A"
     : next.seats.B && "id" in next.seats.B && next.seats.B.id === meId ? "B" : null;
-  if (!mySeat) return;
+
+  // 大话骰不用 A/B 座位（参战名单在 liarsDice.participantIds 里），轮到我叫点/开牌靠
+  // currentTurn（playerId，不是座位）切到我；没有"对面座位坐满"这个概念，不发那类通知。
+  if (!mySeat) {
+    if (next.settings.gameId === "liarsdice" && next.liarsDice) {
+      if (old.liarsDice?.currentTurn !== meId && next.liarsDice.currentTurn === meId) notifyTurnIfHidden();
+    }
+    return;
+  }
   const otherSeat = mySeat === "A" ? "B" : "A";
 
   // 对面座位刚从空/无人变成有真人坐下。
@@ -430,7 +438,7 @@ export function App() {
       <header className="topbar">
         <div>
           <h1>{config.site.name}</h1>
-          <span className="top-summary">{view === "room" && room ? `⚔️ ${phaseText(room.phase)}` : lobby ? `当前连接 ${lobbyOnlineCount(lobby)} 人` : "正在连接"}</span>
+          <span className="top-summary">{view === "room" && room ? `⚔️ ${phaseText(room.phase, room.settings.gameId)}` : lobby ? `当前连接 ${lobbyOnlineCount(lobby)} 人` : "正在连接"}</span>
           <span className={`connection-pill ${connectionState}`}>{connectionStateText(connectionState)}</span>
         </div>
         <div className="top-actions">
