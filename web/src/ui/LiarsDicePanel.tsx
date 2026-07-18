@@ -3,7 +3,7 @@ import { Dices } from "lucide-react";
 import type { PublicPlayer, RoomSnapshot } from "../shared/types";
 import { ask } from "../lib/rpc";
 import { socket } from "../ws";
-import { displayPlayerName, PlayerBadge, roomPlayerById } from "./AppViews";
+import { displayPlayerName, PlayerAvatar, PlayerBadge, roomPlayerById } from "./AppViews";
 
 const FACE_LABELS = ["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
 
@@ -112,7 +112,12 @@ export function LiarsDicePanel({ room, me, onError }: { room: RoomSnapshot; me: 
             const ready = ld.readyPlayerIds.includes(id);
             return (
               <li key={id} className={isTurn ? "current-turn" : ""}>
-                {player ? <PlayerBadge player={player} compact /> : <span>{id}</span>}
+                {player ? (
+                  <span className="seat-occupant-row">
+                    <PlayerAvatar player={player} size={24} />
+                    <PlayerBadge player={player} compact />
+                  </span>
+                ) : <span>{id}</span>}
                 {room.phase === "ready" && <em>{ready ? "已准备" : "未准备"}</em>}
                 {isTurn && <em className="liarsdice-turn-flag">叫点中</em>}
                 {typeof ld.diceCounts?.[id] === "number" && <small>🎲 {ld.diceCounts[id]}</small>}
@@ -201,7 +206,7 @@ export function LiarsDicePanel({ room, me, onError }: { room: RoomSnapshot; me: 
           </ul>
           {/* 惩罚未完成前后端拒绝 liarsdice:nextRound（要求 phase===result），惩罚阶段先隐藏按钮 */}
           {isParticipant && room.phase === "result" && (
-            <button className="primary liarsdice-next-round-btn" disabled={busy} onClick={() => act("liarsdice:nextRound")}>下一局</button>
+            <button className="primary liarsdice-next-round-btn" disabled={busy} onClick={() => act("liarsdice:nextRound")}>再来一局</button>
           )}
         </div>
       )}

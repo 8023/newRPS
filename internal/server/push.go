@@ -186,11 +186,16 @@ func (s *Server) sendPush(player *PlayerState, title, body, tag string) {
 				Keys:     webpush.Keys{P256dh: sub.P256dh, Auth: sub.Auth},
 			}, opts)
 			if err != nil {
+				s.errorLog("push_send_failed", err.Error())
 				return
 			}
 			defer resp.Body.Close()
 			if resp.StatusCode == 404 || resp.StatusCode == 410 {
 				_ = s.pushDB.removeSubscription(sub.Endpoint)
+			} else if resp.StatusCode >= 300 {
+				s.securityLog("push_send_rejected", map[string]any{
+					"playerId": player.ID, "status": resp.StatusCode, "tag": tag,
+				})
 			}
 		}(sub)
 	}

@@ -104,57 +104,6 @@ func othelloCounts(board [][]*types.OthelloCell) (blackCount, whiteCount int) {
 	return
 }
 
-func (s *Server) addOthelloCaptureStats(player, opponent *PlayerState, captured int) {
-	if captured <= 0 {
-		return
-	}
-	if player != nil {
-		player.OthelloStats.Captured += captured
-	}
-	if opponent != nil {
-		opponent.OthelloStats.Lost += captured
-	}
-}
-
-func (s *Server) addOthelloOutcomeStats(playerA, playerB *PlayerState, result types.RoundResult) {
-	if playerA != nil {
-		playerA.OthelloStats.Games++
-	}
-	if playerB != nil {
-		playerB.OthelloStats.Games++
-	}
-	if result == types.ResultDraw {
-		if playerA != nil {
-			playerA.OthelloStats.Draws++
-		}
-		if playerB != nil {
-			playerB.OthelloStats.Draws++
-		}
-		return
-	}
-	if result == types.ResultDoubleLoss {
-		if playerA != nil {
-			playerA.OthelloStats.Losses++
-		}
-		if playerB != nil {
-			playerB.OthelloStats.Losses++
-		}
-		return
-	}
-	var winner, loser *PlayerState
-	if result == types.ResultA {
-		winner, loser = playerA, playerB
-	} else {
-		winner, loser = playerB, playerA
-	}
-	if winner != nil {
-		winner.OthelloStats.Wins++
-	}
-	if loser != nil {
-		loser.OthelloStats.Losses++
-	}
-}
-
 func othelloRankedText(state *types.OthelloState) string {
 	if state == nil || state.RankedDelta == nil {
 		return ""
@@ -564,7 +513,6 @@ func (s *Server) applyOthelloMove(room *RoomState, seat types.SeatKey, row, col 
 	opponentSeat := oppositeSeat(seat)
 	player := s.humanPlayerFromSeat(room, seat)
 	opponent := s.humanPlayerFromSeat(room, opponentSeat)
-	s.addOthelloCaptureStats(player, opponent, len(flips))
 	liveStake := len(flips) * int(room.Settings.Stake) * int(rankMultiplierFor(room.Settings))
 	useGiveawaySettlement := room.Settings.EnableRanked && player != nil && ptrBool(player.GiveawayEnabled) && s.isHumanVsHumanRoom(room)
 	nextTurn := othelloSeatForColor(room.Othello, oppositeOthelloColor(color))
@@ -684,7 +632,6 @@ func (s *Server) finishOthelloGame(room *RoomState) {
 		room.ResultText += "（实时结算：" + othelloRankedText(room.Othello) + "）"
 	}
 	playerA, playerB := s.applySeatOutcome(room, result)
-	s.addOthelloOutcomeStats(playerA, playerB, result)
 	room.ResultText += othelloSettlementSummary(room.Othello)
 	s.refreshHumans(playerA, playerB)
 	resultLabel := "黑白棋平局"
@@ -767,39 +714,8 @@ func (s *Server) forceEndOthelloGame(room *RoomState, result types.RoundResult, 
 		}
 		escapePenaltyText = s.applyOthelloEscapeRankedPenalty(room, types.SeatKey(result), oppositeSeat(types.SeatKey(result)), opts.EscapePenaltyRatio, escapeLabel)
 	}
-	if result == types.ResultDraw {
-		if playerA != nil {
-			playerA.Stats.Draws++
-		}
-		if playerB != nil {
-			playerB.Stats.Draws++
-		}
-		ssA := room.SeatStats[types.SeatA]
-		ssA.Draws++
-		room.SeatStats[types.SeatA] = ssA
-		ssB := room.SeatStats[types.SeatB]
-		ssB.Draws++
-		room.SeatStats[types.SeatB] = ssB
-	} else if result == types.ResultA || result == types.ResultB {
-		loserSeat := oppositeSeat(types.SeatKey(result))
-		winner := s.humanPlayerFromSeat(room, types.SeatKey(result))
-		loser := s.humanPlayerFromSeat(room, loserSeat)
-		if winner != nil {
-			winner.Stats.Wins++
-		}
-		if loser != nil {
-			loser.Stats.Losses++
-		}
-		room.Score[types.SeatKey(result)]++
-		room.SeatedScore[types.SeatKey(result)]++
-		ssW := room.SeatStats[types.SeatKey(result)]
-		ssW.Wins++
-		room.SeatStats[types.SeatKey(result)] = ssW
-		ssL := room.SeatStats[loserSeat]
-		ssL.Losses++
-		room.SeatStats[loserSeat] = ssL
-	}
-	s.addOthelloOutcomeStats(playerA, playerB, result)
+	// 与 applySeatOutcome 一致：按游戏记分项并同步总榜
+	s.applySeatOutcome(room, result)
 	rankedText := ""
 	if room.Settings.EnableRanked {
 		rankedText = "；实时结算：" + othelloRankedText(room.Othello) + rankedFloorText + escapePenaltyText
@@ -872,12 +788,8 @@ func (s *Server) applyOthelloDisconnectForfeit(room *RoomState, forfeit Disconne
 	if room.Othello != nil {
 		blackCount, whiteCount = othelloCounts(room.Othello.Board)
 	}
-	if winner != nil {
-		winner.Stats.Wins++
-	}
-	if loser != nil {
-		loser.Stats.Losses++
-	}
+	recordGameOutcome(winner, types.GameOthello, "win")
+	recordGameOutcome(loser, types.GameOthello, "loss")
 	rankedFloorText := s.applyOthelloForfeitRankedFloor(room, forfeit.WinnerSeat, forfeit.LoserSeat)
 	fullForfeitText := s.applyOthelloEscapeRankedPenalty(room, forfeit.WinnerSeat, forfeit.LoserSeat, 1, "断线全输")
 	rankedDelta := map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}
@@ -891,13 +803,6 @@ func (s *Server) applyOthelloDisconnectForfeit(room *RoomState, forfeit Disconne
 	}
 	punishment := s.currentPunishment(room)
 	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, types.RoundResult(forfeit.WinnerSeat), punishment)
-	var pA, pB *PlayerState
-	if forfeit.WinnerSeat == types.SeatA {
-		pA, pB = winner, loser
-	} else {
-		pA, pB = loser, winner
-	}
-	s.addOthelloOutcomeStats(pA, pB, types.RoundResult(forfeit.WinnerSeat))
 	resetExtremeWinStreak(loser)
 	streakText := ""
 	if room.Settings.EnableRanked {

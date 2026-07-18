@@ -13,6 +13,7 @@ const (
 	defaultRoomName          = "新的锤子剪刀布房间"
 	defaultOthelloRoomName   = "新的黑白棋房间"
 	defaultTicTacToeRoomName = "新的井字棋房间"
+	defaultGomokuRoomName    = "新的五子棋房间"
 )
 
 func (s *Server) roomCode() string {
@@ -87,6 +88,7 @@ func (s *Server) cleanupRoomIfEmpty(room *RoomState) bool {
 	}
 	s.clearOthelloSettlementTimer(room.ID)
 	s.clearTicTacToeGiveawayTimer(room.ID)
+	s.clearGomokuUndoTimer(room.ID)
 	s.clearLiarsDiceStartTimer(room.ID)
 	s.clearRoomBroadcastTimer(room.ID)
 	s.dropSyncChannel(channelRoom(room.ID))
@@ -196,6 +198,7 @@ func (s *Server) roomSnapshot(room *RoomState, includeChat, includeHistory bool)
 		Othello:           room.Othello,
 		TicTacToe:         room.TicTacToe,
 		LiarsDice:         room.LiarsDice,
+		Gomoku:            room.Gomoku,
 		ResultText:        room.ResultText,
 		PunishedPlayerIDs: room.PunishedPlayerIDs,
 		Proofs:            room.Proofs,
@@ -214,6 +217,10 @@ func (s *Server) roomSnapshot(room *RoomState, includeChat, includeHistory bool)
 			}
 			snap.RevealedChoices = rc
 		}
+	}
+	if room.ForgiveAdvantage != nil {
+		snap.ForgiveAdvantageTargetID = room.ForgiveAdvantage.TargetID
+		snap.ForgiveAdvantageBeneficiaryID = room.ForgiveAdvantage.BeneficiaryID
 	}
 	return sanitizeRoomSnapshot(snap)
 }
@@ -406,6 +413,9 @@ func (s *Server) generatedRoomName(settings types.RoomSettings) string {
 	if settings.GameID == types.GameTicTacToe && !settings.EnablePunishment {
 		return s.uniqueRoomName(defaultTicTacToeRoomName)
 	}
+	if settings.GameID == types.GameGomoku && !settings.EnablePunishment {
+		return s.uniqueRoomName(defaultGomokuRoomName)
+	}
 	pool := s.roomNamePoolForSettings(settings)
 	if pool == nil {
 		if strings.TrimSpace(settings.Name) != "" {
@@ -433,7 +443,7 @@ func (s *Server) normalizeRoomName(settings types.RoomSettings) string {
 	if len(runes) > 24 {
 		cleanName = string(runes[:24])
 	}
-	if cleanName == "" || cleanName == defaultRoomName || cleanName == defaultOthelloRoomName || cleanName == defaultTicTacToeRoomName {
+	if cleanName == "" || cleanName == defaultRoomName || cleanName == defaultOthelloRoomName || cleanName == defaultTicTacToeRoomName || cleanName == defaultGomokuRoomName {
 		return s.generatedRoomName(settings)
 	}
 	return cleanName
@@ -481,6 +491,11 @@ func (s *Server) canLeaveRoom(player *PlayerState, reason LeaveReason) LeaveResu
 			return LeaveResult{OK: false, Error: "井字棋对局进行中不能离开战斗席，请等待对局结束"}
 		}
 	}
+	if room.Settings.GameID == types.GameGomoku && room.Phase == types.PhaseChoosing {
+		if _, ok := s.seatOf(room, player.ID); ok && isProtected {
+			return LeaveResult{OK: false, Error: "五子棋对局进行中不能离开战斗席，请等待对局结束"}
+		}
+	}
 	if room.Settings.GameID == types.GameLiarsDice && room.Phase == types.PhaseChoosing {
 		if room.LiarsDice != nil && containsString(room.LiarsDice.ParticipantIDs, player.ID) && isProtected {
 			return LeaveResult{OK: false, Error: "大话骰对局进行中不能离开参战席，请等待对局结束"}
@@ -519,6 +534,9 @@ func (s *Server) clearSeatForPlayer(room *RoomState, seat types.SeatKey) {
 	if room.Settings.GameID == types.GameTicTacToe && room.Phase != types.PhaseResult && room.Phase != types.PhaseChoosing {
 		s.resetTicTacToeRoom(room)
 	}
+	if room.Settings.GameID == types.GameGomoku && room.Phase != types.PhaseResult && room.Phase != types.PhaseChoosing {
+		s.resetGomokuRoom(room)
+	}
 }
 
 func (s *Server) leaveRoom(player *PlayerState, reason LeaveReason) LeaveResult {
@@ -544,7 +562,7 @@ func (s *Server) leaveRoom(player *PlayerState, reason LeaveReason) LeaveResult 
 	if reason == LeaveAdminKick {
 		s.roomNotice(room, playerShortName(player)+" 被管理员移出房间。")
 	}
-	if reason == LeaveAdminKick && (room.Settings.GameID == types.GameOthello || room.Settings.GameID == types.GameTicTacToe) &&
+	if reason == LeaveAdminKick && (room.Settings.GameID == types.GameOthello || room.Settings.GameID == types.GameTicTacToe || room.Settings.GameID == types.GameGomoku) &&
 		room.Phase == types.PhaseChoosing {
 		if _, ok := s.seatOf(room, player.ID); ok {
 			s.createDisconnectForfeit(room, player)
@@ -611,6 +629,9 @@ func (s *Server) createDisconnectForfeit(room *RoomState, player *PlayerState) {
 		return
 	}
 	if room.Settings.GameID == types.GameTicTacToe && room.TicTacToe == nil {
+		return
+	}
+	if room.Settings.GameID == types.GameGomoku && room.Gomoku == nil {
 		return
 	}
 	loserSeat, ok := s.seatOf(room, player.ID)

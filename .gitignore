@@ -19,6 +19,8 @@ config/*.json.bak
 
 # tooling / OS
 .omo/
+.claude/
+CLAUDE.md
 .DS_Store
 *.log
 vendor/

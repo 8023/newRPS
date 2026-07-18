@@ -1,15 +1,20 @@
 export const tokenKey = "rps-online-token";
 export const playerIdKey = "rps-player-id";
 export const playerSecretKey = "rps-player-secret";
-export const dailyAnnouncementKey = "rps-online-daily-announcement";
+export const securityDisclaimerKey = "rps-online-security-disclaimer";
 export const defaultRoomName = "新的锤子剪刀布房间";
 export const defaultOthelloRoomName = "新的黑白棋房间";
 export const defaultTicTacToeRoomName = "新的井字棋房间";
 export const defaultLiarsDiceRoomName = "新的大话骰房间";
+export const defaultGomokuRoomName = "新的五子棋房间";
 export const maxOriginalImageBytes = 10 * 1024 * 1024;
 export const maxProofUploadBytes = 2 * 1024 * 1024;
 export const maxProofPixels = 4_000_000;
 export const maxAspectRatio = 21 / 9;
+export const maxAvatarOriginalBytes = 3 * 1024 * 1024;
+export const maxAvatarUploadBytes = 20 * 1024;
+export const maxAvatarSquareDiffPx = 20;
+export const avatarSquareSize = 200;
 export const leaderboardRefreshMs = 10 * 60 * 1000;
 export const othelloBoardThemes = [
   { id: "classic", name: "经典绿", description: "传统棋盘，最清楚耐看。", board: "#2f8a64", cell: "#38a474", line: "rgba(18, 72, 52, 0.55)", hover: "#45b883", border: "#2f7a5c", blackDisc: "radial-gradient(circle at 32% 28%, #5f6670, #10151a 64%)", whiteDisc: "radial-gradient(circle at 32% 28%, #ffffff, #d8e1e8 70%)", blackRing: "#e3eef5", whiteRing: "#2b4f40" },
@@ -27,6 +32,9 @@ export const tictactoeBoardThemes = [
   { id: "arcade", name: "街机紫", description: "更亮一点，有游戏感。", board: "#24133e", cell: "#351a5b", line: "#7a42c8", hover: "#43206f", border: "#f49dff", x: "#6ff7ff", o: "#ff78d2", win: "#64427f" }
 ] as const;
 export type TicTacToeBoardThemeId = typeof tictactoeBoardThemes[number]["id"];
+/** 五子棋与黑白棋共用同一套棋盘/棋子配色主题 */
+export const gomokuBoardThemes = othelloBoardThemes;
+export type GomokuBoardThemeId = typeof gomokuBoardThemes[number]["id"];
 export const sponsorLinks = [
   { id: "x", label: "X", title: "关注 X 账号", description: "看更新、吐槽和临时公告。", href: "https://x.com/home", icon: "𝕏", tone: "#111827" },
   { id: "telegram", label: "TG", title: "加入 TG 群", description: "一起聊天、反馈 bug、催新玩法。", href: "https://t.me/+X1Jr4GPxgIwzOWY1", icon: "✈", tone: "#229ed9" },

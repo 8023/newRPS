@@ -197,6 +197,8 @@ func (s *Server) saveVerifiedImage(buf []byte, contentType, bucket string) (stri
 	targetDir := s.proofUploadsDir
 	if bucket == "admin" {
 		targetDir = s.adminUploadsDir
+	} else if bucket == "avatars" {
+		targetDir = s.avatarUploadsDir
 	}
 	path := filepath.Join(targetDir, filename)
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
@@ -277,6 +279,108 @@ func (s *Server) handleProofImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"imageUrl": url})
+}
+
+// handleAvatarImage：前端已固定压成正方形 WebP，服务端只需校验后缀/体积/真实格式。
+// 传 clear=1 时清空头像，恢复默认首字头像。
+func (s *Server) handleAvatarImage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 20*1024+1024)
+	ct := r.Header.Get("Content-Type")
+	if strings.HasPrefix(ct, "multipart/form-data") {
+		if err := r.ParseMultipartForm(20 * 1024); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片过大或格式错误，仅支持 webp 且不超过 20KB"})
+			return
+		}
+	} else if err := r.ParseForm(); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "请求格式错误"})
+		return
+	}
+	token := r.FormValue("token")
+	clearAvatar := r.FormValue("clear") == "1"
+	s.mu.Lock()
+	session := s.verifySessionToken(token)
+	var player *PlayerState
+	if session != nil {
+		if pid := s.tokenToPlayer[token]; pid != "" {
+			player = s.players[pid]
+		}
+		if player != nil && s.sidToPlayerID[session.SID] != player.ID {
+			player = nil
+		}
+	}
+	if session == nil || player == nil {
+		s.securityLog("upload_denied", map[string]any{"sid": "", "ip": clientIP(r), "event": "avatar-image", "userAgent": r.UserAgent()})
+		s.mu.Unlock()
+		writeJSON(w, http.StatusForbidden, map[string]string{"message": "Invalid session"})
+		return
+	}
+	if !player.Connected {
+		s.mu.Unlock()
+		writeJSON(w, http.StatusForbidden, map[string]string{"message": "请先登录后再上传头像"})
+		return
+	}
+	if clearAvatar {
+		player.AvatarURL = ""
+		s.refreshPlayerSnapshots(player)
+		s.broadcastPlayerUpdate(player)
+		shouldPersist := player.Persistent
+		pub := s.publicPlayer(player)
+		s.mu.Unlock()
+		if shouldPersist {
+			s.requestPersist("important")
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"avatarUrl": "", "player": pub})
+		return
+	}
+	s.mu.Unlock()
+
+	file, header, err := r.FormFile("image")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片格式不支持或图片为空"})
+		return
+	}
+	defer file.Close()
+	filename := strings.ToLower(header.Filename)
+	if !strings.HasSuffix(filename, ".webp") {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "仅支持 webp 格式，请使用前端压缩后的图片"})
+		return
+	}
+	buf, err := io.ReadAll(file)
+	if err != nil || len(buf) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片格式不支持或图片为空"})
+		return
+	}
+	if len(buf) > 20*1024 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "头像图片不能超过 20KB，请压缩后再上传"})
+		return
+	}
+	mime, _, ok := imageKind(buf)
+	if !ok || mime != "image/webp" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片内容不是有效的 webp，请重新选择图片"})
+		return
+	}
+	url, err := s.saveVerifiedImage(buf, "image/webp", "avatars")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片真实格式不正确，请上传 webp"})
+		return
+	}
+
+	s.mu.Lock()
+	player.AvatarURL = url
+	s.refreshPlayerSnapshots(player)
+	s.broadcastPlayerUpdate(player)
+	shouldPersist := player.Persistent
+	pub := s.publicPlayer(player)
+	s.mu.Unlock()
+	if shouldPersist {
+		// 头像变更立即落盘，避免刷新/重启后丢失
+		s.requestPersist("important")
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"avatarUrl": url, "player": pub})
 }
 
 func (s *Server) handleAdminImage(w http.ResponseWriter, r *http.Request) {
@@ -413,6 +517,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/session", s.handleSession)
 	mux.HandleFunc("/api/push/vapid-key", s.handlePushVapidKey)
 	mux.Handle("/api/proof-image", s.httpRateLimit("proof-image", 60_000, 20)(http.HandlerFunc(s.handleProofImage)))
+	mux.Handle("/api/avatar-image", s.httpRateLimit("avatar-image", 60_000, 12)(http.HandlerFunc(s.handleAvatarImage)))
 	mux.Handle("/api/admin-image", s.httpRateLimit("admin-image", 60_000, 12)(http.HandlerFunc(s.handleAdminImage)))
 	mux.Handle("/api/config/export", s.httpRateLimit("config-export", 60_000, 12)(http.HandlerFunc(s.handleConfigExport)))
 	mux.HandleFunc("/ws", s.handleWS)

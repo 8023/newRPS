@@ -160,18 +160,18 @@ export function rawBodyToPlain(rawBody: any): any {
   if (rawBody.suggestion) return materializeSuggestion(rawBody.suggestion);
   if (rawBody.player) return materializePlayer(rawBody.player);
   if (rawBody.me) {
-    const me = stripHasFlags(rawBody.me);
+    const me = { ...rawBody.me };
     if (me.room) me.room = materializeRoom(me.room);
     if (me.player) me.player = materializePlayer(me.player);
     return me;
   }
-  if (rawBody.announcement) return stripHasFlags(rawBody.announcement);
-  if (rawBody.roomClosed) return stripHasFlags(rawBody.roomClosed);
-  if (rawBody.historyPage) return stripHasFlags(rawBody.historyPage);
+  if (rawBody.announcement) return { ...rawBody.announcement };
+  if (rawBody.roomClosed) return { ...rawBody.roomClosed };
+  if (rawBody.historyPage) return { ...rawBody.historyPage, item: fillRoundHistoryItemDefaults(rawBody.historyPage.item) };
   if (rawBody.ok) return { ok: !!rawBody.ok.ok };
   if (rawBody.playerResult) return { player: materializePlayer(rawBody.playerResult.player) };
   if (rawBody.suggestions) {
-    const s = stripHasFlags(rawBody.suggestions);
+    const s = { ...rawBody.suggestions };
     if (Array.isArray(s?.items)) s.items = s.items.map(materializeSuggestion);
     else if (Array.isArray(s)) return s.map(materializeSuggestion);
     return s;
@@ -236,6 +236,28 @@ export function normalizeStateTree(doc: any): any {
     out.tictactoe.winningLine = normalizePosList(out.tictactoe.winningLine);
     out.tictactoe.moveCount = numOr(out.tictactoe.moveCount, 0);
   }
+  if (out.gomoku && typeof out.gomoku === "object") {
+    out.gomoku.board = padBoardMatrix(boardRows(out.gomoku.board), 15);
+    out.gomoku.moves = normalizePosList(out.gomoku.moves);
+    out.gomoku.winningLine = normalizePosList(out.gomoku.winningLine);
+    out.gomoku.moveCount = numOr(out.gomoku.moveCount, 0);
+  }
+  // protobufjs defaults:false 会丢掉数值零值；这些字段会在广播窗口清空时回落到 0，
+  // 若不补齐，管理面板会在 DELTA 把 key 整个删掉后显示 undefined/NaN。
+  if (out.serverStats && typeof out.serverStats === "object") {
+    const s = out.serverStats;
+    s.startedAt = numOr(s.startedAt, 0);
+    s.roomBroadcasts = numOr(s.roomBroadcasts, 0);
+    s.lobbyBroadcasts = numOr(s.lobbyBroadcasts, 0);
+    s.disconnects = numOr(s.disconnects, 0);
+    s.reconnects = numOr(s.reconnects, 0);
+    s.lastRoomSnapshotBytes = numOr(s.lastRoomSnapshotBytes, 0);
+    s.lastLobbySnapshotBytes = numOr(s.lastLobbySnapshotBytes, 0);
+    s.recentRoomBroadcasts = numOr(s.recentRoomBroadcasts, 0);
+    s.recentLobbyBroadcasts = numOr(s.recentLobbyBroadcasts, 0);
+    s.averageRoomSnapshotBytes = numOr(s.averageRoomSnapshotBytes, 0);
+    s.averageLobbySnapshotBytes = numOr(s.averageLobbySnapshotBytes, 0);
+  }
   for (const k of ["spectators", "proofs", "roundHistory", "chat", "punishedPlayerIds", "players", "rooms", "suggestions", "lobbyChat"]) {
     if (k in out && out[k] == null) out[k] = [];
   }
@@ -243,6 +265,7 @@ export function normalizeStateTree(doc: any): any {
     out.roundHistory = out.roundHistory.map((item: any) => ({
       ...item,
       tictactoeLine: normalizePosList(item?.tictactoeLine),
+      gomokuLine: normalizePosList(item?.gomokuLine),
       punishmentTasks: item?.punishmentTasks || [],
       punishedNames: item?.punishedNames || [],
       proofs: item?.proofs || []
@@ -252,68 +275,42 @@ export function normalizeStateTree(doc: any): any {
 }
 
 /**
- * 业务字段：名字像 presence（hasX），本身就是数据，无 companion。
- * 目前仅大厅房间 hasPassword。
+ * 玩家（PublicPlayer/LobbyPlayer）里对应 Go *T 指针字段的名字。
+ * 这些字段在 Go domain 里允许真正的"从未设置"（nil），但前端从不区分
+ * "从未设置" 和 "设置为 false/0"（全部只做真值判断），所以这里统一按
+ * 该字段的零值补齐即可，见 fillPlayerDefaults。
  */
-const BUSINESS_HAS_KEYS = new Set(["hasPassword"]);
+const PLAYER_BOOL_FIELDS = [
+  "nameWarEnabled", "nameWarPunished", "nameWarAllowRename",
+  "giveawayEnabled", "rankMultiplierUnlocked", "extremeModeEnabled",
+  "extremeForceClosed", "isAdmin"
+];
+const PLAYER_NUM_FIELDS = [
+  "disconnectedAt", "disconnectExpiresAt", "profileUpdatedAt",
+  "nameWarToggledAt", "nameWarRenameProtectedUntil", "nameWarRenameWindowStartedAt", "nameWarRenameCount",
+  "giveawayValue", "giveawayClicks", "giveawayBoardSubmittedAt", "giveawayBoardExpiresAt",
+  "giveawayBoardLikes", "giveawayBoardDislikes", "giveawayBoardLikesThisHour", "giveawayBoardLikeWindowStartedAt",
+  "giveawayVoteWindowStartedAt", "giveawayVoteCount", "giveawayVoteLikesThisHour", "giveawayVoteDislikesThisHour",
+  "extremeModeToggledAt", "extremeModeCooldownUntil", "extremeWinStreak", "extremeLastDecayHour",
+  "extremeForceClosedAt", "extremeRenameProtectedUntil"
+];
 
-/**
- * presence 配对中 companion 为 boolean 的字段。
- * defaults:false 会丢掉 false，只剩 hasX=true —— 必须还原为 false（如 allowProofImage）。
- * 其余 companion 按 number 0 还原（时间戳 / 计数 / 倍率等）。
- */
-const BOOL_PRESENCE_COMPANIONS = new Set([
-  "nameWarEnabled",
-  "nameWarPunished",
-  "nameWarAllowRename",
-  "giveawayEnabled",
-  "rankMultiplierUnlocked",
-  "extremeModeEnabled",
-  "extremeForceClosed",
-  "isAdmin",
-  "allowProofImage"
-]);
+function fillRoomSettingsDefaults(settings: any): any {
+  if (!settings || typeof settings !== "object") return settings;
+  // allowProofImage 对应 Go *bool，但 handlers_room.go 建房时已把 nil 归一化成具体的
+  // true/false，线上房间永远不会是"未设置"——false 是它的零值，缺省按 false 补齐即可
+  // 无损还原（true 是非零值，永远不会被 protojson 丢掉）。
+  return { ...settings, allowProofImage: settings.allowProofImage ?? false };
+}
 
-/**
- * 去掉 protobuf 可选字段的 presence 标记（hasDisconnectedAt 等），并还原
- * toObject(defaults:false) / proto3 省略的 zero 值。
- *
- * 规则：
- * - hasPassword 等业务 has*：原样保留
- * - hasX + companion 已存在：丢弃 hasX
- * - hasX===true 且 companion 缺失：写入 false（bool）或 0（number），再丢弃 hasX
- * - hasX===false 且无 companion：字段未设置，丢弃 hasX
- */
-function stripHasFlags(obj: any): any {
-  if (obj == null || typeof obj !== "object") return obj;
-  if (Array.isArray(obj)) return obj.map(stripHasFlags);
+function fillReviewedAtDefault(proof: any): any {
+  if (!proof || typeof proof !== "object") return proof;
+  return { ...proof, reviewedAt: numOr(proof.reviewedAt, 0) };
+}
 
-  const skip = new Set<string>();
-  const restore: Record<string, boolean | number> = {};
-
-  for (const [k, v] of Object.entries(obj)) {
-    if (typeof v !== "boolean" || !/^has[A-Z]/.test(k)) continue;
-    if (BUSINESS_HAS_KEYS.has(k)) continue;
-
-    const rest = k.slice(3);
-    const companion = rest.charAt(0).toLowerCase() + rest.slice(1);
-    skip.add(k);
-
-    if (companion in obj) continue;
-    if (v === true) {
-      restore[companion] = BOOL_PRESENCE_COMPANIONS.has(companion) ? false : 0;
-    }
-  }
-
-  const out: any = {};
-  for (const [k, v] of Object.entries(restore)) {
-    out[k] = v;
-  }
-  for (const [k, v] of Object.entries(obj)) {
-    if (skip.has(k)) continue;
-    out[k] = stripHasFlags(v);
-  }
-  return out;
+function fillBackgroundOpacityDefault(task: any): any {
+  if (!task || typeof task !== "object") return task;
+  return { ...task, backgroundOpacity: numOr(task.backgroundOpacity, 0) };
 }
 
 export function stateDocToPlain(fullState: any): any {
@@ -327,10 +324,12 @@ export function stateDocToPlain(fullState: any): any {
 /** protobufjs defaults:false 会丢掉 int/bool 零值；玩家战绩必须补齐，否则出现 undefined/NaN 文案 */
 function materializePlayer(player: any): any {
   if (!player || typeof player !== "object") return player;
-  if (player.isBot) return stripHasFlags(player);
-  const p = stripHasFlags(player);
+  if (player.isBot) return player;
+  const p = { ...player };
+  for (const k of PLAYER_BOOL_FIELDS) if (p[k] === undefined) p[k] = false;
+  for (const k of PLAYER_NUM_FIELDS) if (p[k] === undefined) p[k] = 0;
   p.stats = materializePublicStats(p.stats);
-  p.othelloStats = materializeOthelloStats(p.othelloStats);
+  p.gameStats = materializeGameStats(p.gameStats);
   return p;
 }
 
@@ -350,15 +349,19 @@ function materializePublicStats(stats: any): any {
   };
 }
 
-function materializeOthelloStats(stats: any): any {
+function materializeGameWLD(stats: any): any {
+  const s = stats && typeof stats === "object" ? stats : {};
+  return { wins: numOr(s.wins, 0), losses: numOr(s.losses, 0), draws: numOr(s.draws, 0) };
+}
+
+function materializeGameStats(stats: any): any {
   const s = stats && typeof stats === "object" ? stats : {};
   return {
-    wins: numOr(s.wins, 0),
-    losses: numOr(s.losses, 0),
-    draws: numOr(s.draws, 0),
-    games: numOr(s.games, 0),
-    captured: numOr(s.captured, 0),
-    lost: numOr(s.lost, 0)
+    rps: materializeGameWLD(s.rps),
+    othello: materializeGameWLD(s.othello),
+    tictactoe: materializeGameWLD(s.tictactoe),
+    gomoku: materializeGameWLD(s.gomoku),
+    liarsdice: materializeGameWLD(s.liarsdice)
   };
 }
 
@@ -373,20 +376,22 @@ function materializeSeatStats(stats: any): any {
 }
 
 function materializeChat(chat: any): any {
-  const c = stripHasFlags(chat);
-  if (c?.authorPlayer) c.authorPlayer = materializePlayer(c.authorPlayer);
+  if (!chat) return chat;
+  const c = { ...chat, expiresAt: numOr(chat.expiresAt, 0) };
+  if (c.authorPlayer) c.authorPlayer = materializePlayer(c.authorPlayer);
   return c;
 }
 
 function materializeSuggestion(item: any): any {
-  const s = stripHasFlags(item);
-  if (s?.authorPlayer) s.authorPlayer = materializePlayer(s.authorPlayer);
+  if (!item) return item;
+  const s = { ...item };
+  if (s.authorPlayer) s.authorPlayer = materializePlayer(s.authorPlayer);
   return s;
 }
 
 function materializeLobby(lobby: any): any {
   if (!lobby) return null;
-  const L = stripHasFlags(lobby);
+  const L = { ...lobby };
   const players = (L.players || []).map((e: any) => materializePlayer(e.player || e)).filter(Boolean);
   const rooms = (L.rooms || []).map((e: any) => materializeLobbyRoom(e.room || e)).filter(Boolean);
   if (L.config) L.config = materializeConfig(L.config);
@@ -402,15 +407,18 @@ function materializeLobby(lobby: any): any {
   };
 }
 
+/** protobufjs defaults:false 会丢掉 players/spectators=0，导致大话骰空房显示"undefined 人参战" */
 function materializeLobbyRoom(room: any): any {
   if (!room) return null;
-  const r = stripHasFlags(room);
+  const r = { ...room };
+  r.players = numOr(r.players, 0);
+  r.spectators = numOr(r.spectators, 0);
   const versus: any = { A: null, B: null };
   for (const item of r.versus || []) {
     const key = item.key;
     const val = item.value || {};
     if (val.player) versus[key] = { player: materializePlayer(val.player) };
-    else if (val.bot) versus[key] = stripHasFlags(val.bot);
+    else if (val.bot) versus[key] = val.bot;
   }
   r.versus = versus;
   return r;
@@ -418,7 +426,8 @@ function materializeLobbyRoom(room: any): any {
 
 function materializeRoom(room: any): any {
   if (!room) return null;
-  const r = stripHasFlags(room);
+  const r = { ...room };
+  r.settings = fillRoomSettingsDefaults(r.settings);
   r.seats = pairsToOccupantMap(r.seats);
   r.ready = pairsToMap(r.ready, false);
   r.choices = pairsToMap(r.choices, undefined);
@@ -452,31 +461,51 @@ function materializeRoom(room: any): any {
   if (r.liarsDice) {
     r.liarsDice = materializeLiarsDice(r.liarsDice);
   }
+  if (r.gomoku) {
+    r.gomoku.board = padBoardMatrix(boardRows(r.gomoku.board), 15);
+    r.gomoku.moves = normalizePosList(r.gomoku.moves);
+    r.gomoku.winningLine = normalizePosList(r.gomoku.winningLine);
+    r.gomoku.rankedDelta = pairsToMap(r.gomoku.rankedDelta, 0);
+    r.gomoku.undoCount = pairsToMap(r.gomoku.undoCount, 0);
+    r.gomoku.moveCount = numOr(r.gomoku.moveCount, 0);
+  }
   // 历史里的井字连线/大话骰开牌数据同样可能丢 0 / 需要 pair 展开
   if (Array.isArray(r.roundHistory)) {
-    r.roundHistory = r.roundHistory.map((item: any) => ({
-      ...item,
-      tictactoeLine: normalizePosList(item.tictactoeLine),
-      liarsDiceBidCount: numOr(item.liarsDiceBidCount, 0),
-      liarsDiceBidFace: numOr(item.liarsDiceBidFace, 0),
-      liarsDiceActualCount: numOr(item.liarsDiceActualCount, 0),
-      liarsDiceHands: pairsToGenericMap(item.liarsDiceHands, (v: any) =>
-        Array.isArray(v?.values) ? v.values.map((x: any) => numOr(x, 0)) : []
-      ),
-      liarsDiceNames: pairsToGenericMap(item.liarsDiceNames)
-    }));
+    r.roundHistory = r.roundHistory.map(fillRoundHistoryItemDefaults);
   }
-  r.spectators = r.spectators || [];
-  r.proofs = r.proofs || [];
+  r.spectators = (r.spectators || []).map(materializePlayer);
+  r.proofs = (r.proofs || []).map(fillReviewedAtDefault);
   r.roundHistory = r.roundHistory || [];
-  r.chat = r.chat || [];
+  r.chat = (r.chat || []).map(materializeChat);
   r.punishedPlayerIds = r.punishedPlayerIds || [];
   return r;
 }
 
+/** RoundHistoryItem 里 stake/rankMultiplier/effectiveStake 对应 Go *int 指针，缺省即"未评级"，统一按 0 补齐 */
+function fillRoundHistoryItemDefaults(item: any): any {
+  if (!item || typeof item !== "object") return item;
+  return {
+    ...item,
+    stake: numOr(item.stake, 0),
+    rankMultiplier: numOr(item.rankMultiplier, 0),
+    effectiveStake: numOr(item.effectiveStake, 0),
+    tictactoeLine: normalizePosList(item.tictactoeLine),
+    gomokuLine: normalizePosList(item.gomokuLine),
+    liarsDiceBidCount: numOr(item.liarsDiceBidCount, 0),
+    liarsDiceBidFace: numOr(item.liarsDiceBidFace, 0),
+    liarsDiceActualCount: numOr(item.liarsDiceActualCount, 0),
+    liarsDiceHands: pairsToGenericMap(item.liarsDiceHands, (v: any) =>
+      Array.isArray(v?.values) ? v.values.map((x: any) => numOr(x, 0)) : []
+    ),
+    liarsDiceNames: pairsToGenericMap(item.liarsDiceNames),
+    proofs: Array.isArray(item.proofs) ? item.proofs.map(fillReviewedAtDefault) : item.proofs,
+    punishmentTasks: Array.isArray(item.punishmentTasks) ? item.punishmentTasks.map(fillBackgroundOpacityDefault) : item.punishmentTasks
+  };
+}
+
 function materializeConfig(cfg: any): any {
   if (!cfg) return null;
-  const c = stripHasFlags(cfg);
+  const c = { ...cfg };
   // protobufjs 把 max_creates_per_10_min 编成 maxCreatesPer_10Min，
   // 与业务/Go JSON 的 maxCreatesPer10Min 不一致 → 后台显示 undefined、保存后被推送覆盖回空。
   if (c.accessControl && typeof c.accessControl === "object") {
@@ -507,7 +536,9 @@ function materializeConfig(cfg: any): any {
       if (Array.isArray(c.extremeMode[field])) {
         const obj: any = {};
         for (const item of c.extremeMode[field]) {
-          if (item?.key != null) obj[item.key] = item.value;
+          // value 合法取值含 0（如某难度掉分率为 0%），defaults:false 会把它丢成 undefined，
+          // 补回 0 否则后台数字框显示空白（跟 Go 侧 fixConfigMaps 保持一致）。
+          if (item?.key != null) obj[item.key] = item.value ?? 0;
         }
         c.extremeMode[field] = obj;
       }
@@ -621,7 +652,7 @@ function pairsToOccupantMap(arr: any): any {
       continue;
     }
     if (val.player) out[key] = materializePlayer(val.player);
-    else if (val.bot) out[key] = stripHasFlags(val.bot);
+    else if (val.bot) out[key] = val.bot;
     else out[key] = null;
   }
   return out;

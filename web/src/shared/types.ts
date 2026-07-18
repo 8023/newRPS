@@ -13,7 +13,7 @@ export type Move = "rock" | "scissors" | "paper" | "giveaway" | "forfeit" | "noM
 export type RoundResult = "A" | "B" | "draw" | "doubleLoss";
 export type GamePhase = "waiting" | "ready" | "choosing" | "result" | "punishment";
 export type SeatKey = "A" | "B";
-export type GameId = "rps" | "othello" | "tictactoe" | "liarsdice";
+export type GameId = "rps" | "othello" | "tictactoe" | "liarsdice" | "gomoku";
 export type RankStake = 1 | 2 | 5 | 10 | 20;
 export type OthelloCell = "black" | "white" | null;
 export type TicTacToeCell = "X" | "O" | null;
@@ -62,6 +62,30 @@ export type OthelloState = {
   ended?: boolean;
   winner?: RoundResult;
 };
+export type GomokuCell = "black" | "white" | null;
+export type GomokuState = {
+  board: GomokuCell[][];
+  turn: SeatKey;
+  blackSeat: SeatKey;
+  moveCount: number;
+  moves: Array<{ row: number; col: number }>;
+  winningLine?: Array<{ row: number; col: number }>;
+  rankedDelta?: Record<SeatKey, number>;
+  undoCount?: Record<SeatKey, number>;
+  undoRequest?: {
+    fromSeat: SeatKey;
+    toSeat: SeatKey;
+    createdAt: number;
+    expiresAt: number;
+  };
+  resignRequest?: {
+    fromSeat: SeatKey;
+    toSeat: SeatKey;
+    createdAt: number;
+  };
+  ended?: boolean;
+  winner?: RoundResult;
+};
 export type RankMultiplier = 1 | 2 | 5 | 10;
 export type BotDifficulty = "easy" | "normal" | "chaos";
 export type BotStrategy = "random" | "counter" | "chaos" | "throw" | "win";
@@ -94,13 +118,18 @@ export type PublicStats = {
   titleSegmentId?: string;
 };
 
-export type OthelloStats = {
+export type GameWLD = {
   wins: number;
   losses: number;
   draws: number;
-  games: number;
-  captured: number;
-  lost: number;
+};
+
+export type GameStats = {
+  rps: GameWLD;
+  othello: GameWLD;
+  tictactoe: GameWLD;
+  gomoku: GameWLD;
+  liarsdice: GameWLD;
 };
 
 export type PublicPlayer = {
@@ -112,6 +141,7 @@ export type PublicPlayer = {
   factionLabel: string;
   factionColors: GenderColors;
   displayName: string;
+  avatarUrl?: string;
   connected: boolean;
   disconnectedAt?: number;
   disconnectExpiresAt?: number;
@@ -155,7 +185,7 @@ export type PublicPlayer = {
   roomId?: string;
   isAdmin?: boolean;
   stats: PublicStats;
-  othelloStats: OthelloStats;
+  gameStats: GameStats;
 };
 
 export type BotPlayer = {
@@ -217,6 +247,7 @@ export type RoomSettings = {
   enableExtremeRanked?: boolean;
   othelloBoardTheme?: "classic" | "pastel" | "midnight" | "wood" | "neon";
   tictactoeBoardTheme?: "paper" | "mint" | "midnight" | "candy" | "arcade";
+  gomokuBoardTheme?: "classic" | "pastel" | "midnight" | "wood" | "neon";
   liarsDiceMinPlayers?: number;
   liarsDiceMaxPlayers?: number;
 };
@@ -283,6 +314,8 @@ export type RoundHistoryItem = {
   othelloBlackSeat?: SeatKey;
   tictactoeXSeat?: SeatKey;
   tictactoeLine?: Array<{ row: number; col: number }>;
+  gomokuBlackSeat?: SeatKey;
+  gomokuLine?: Array<{ row: number; col: number }>;
   liarsDiceWinnerId?: string;
   liarsDiceLoserId?: string;
   liarsDiceBidCount?: number;
@@ -340,6 +373,7 @@ export type RoomSnapshot = {
   othello?: OthelloState;
   tictactoe?: TicTacToeState;
   liarsDice?: LiarsDiceState;
+  gomoku?: GomokuState;
   resultText?: string;
   punishedPlayerIds: string[];
   proofs: PunishmentProof[];
@@ -349,6 +383,8 @@ export type RoomSnapshot = {
   roundHistory: RoundHistoryItem[];
   roundHistoryTotal: number;
   chat: ChatMessage[];
+  forgiveAdvantageTargetId?: string;
+  forgiveAdvantageBeneficiaryId?: string;
 };
 
 export type ServerStats = {
@@ -410,12 +446,13 @@ export type AppConfig = {
     description: string;
     adminPassword: string;
   };
-  dailyAnnouncement: {
-    enabled: boolean;
+  announcementBoard: {
+    enabled?: boolean;
     title: string;
     content: string;
-    buttonText: string;
-    version: string;
+  };
+  securityDisclaimer: {
+    enabled?: boolean;
   };
   genders: GenderOption[];
   genderFactions: GenderFaction[];

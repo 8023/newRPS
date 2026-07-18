@@ -99,6 +99,20 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{20, 10_000, 15_000}, s.onTicTacToeGiveawayChoice
 	case "tictactoe:restart":
 		return RateLimitOptions{8, 60_000, 30_000}, s.onTicTacToeRestart
+	case "gomoku:ready":
+		return RateLimitOptions{12, 60_000, 30_000}, s.onGomokuReady
+	case "gomoku:move":
+		return RateLimitOptions{30, 10_000, 15_000}, s.onGomokuMove
+	case "gomoku:undoRequest":
+		return RateLimitOptions{6, 60_000, 15_000}, s.onGomokuUndoRequest
+	case "gomoku:undoRespond":
+		return RateLimitOptions{8, 60_000, 5_000}, s.onGomokuUndoRespond
+	case "gomoku:resignRequest":
+		return RateLimitOptions{5, 60_000, 8_000}, s.onGomokuResignRequest
+	case "gomoku:resignRespond":
+		return RateLimitOptions{8, 60_000, 5_000}, s.onGomokuResignRespond
+	case "gomoku:restart":
+		return RateLimitOptions{8, 60_000, 30_000}, s.onGomokuRestart
 	case "liarsdice:joinRoster":
 		return RateLimitOptions{12, 60_000, 15_000}, s.onLiarsDiceJoinRoster
 	case "liarsdice:leaveRoster":

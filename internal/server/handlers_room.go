@@ -19,7 +19,7 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	}
 	settings := p.Settings
 	gameID := settings.GameID
-	if gameID != types.GameOthello && gameID != types.GameTicTacToe && gameID != types.GameLiarsDice {
+	if gameID != types.GameOthello && gameID != types.GameTicTacToe && gameID != types.GameLiarsDice && gameID != types.GameGomoku {
 		gameID = types.GameRPS
 	}
 	settings.GameID = gameID
@@ -76,6 +76,18 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		minP, maxP := liarsDiceRosterBounds(settings)
 		settings.LiarsDiceMinPlayers = minP
 		settings.LiarsDiceMaxPlayers = maxP
+		settings.EnableBot = false
+	} else if settings.GameID == types.GameGomoku {
+		switch settings.Stake {
+		case 5, 10, 20:
+		default:
+			settings.Stake = 5
+		}
+		switch settings.GomokuBoardTheme {
+		case "classic", "pastel", "midnight", "wood", "neon":
+		default:
+			settings.GomokuBoardTheme = "wood"
+		}
 		settings.EnableBot = false
 	} else {
 		switch settings.Stake {
@@ -332,6 +344,10 @@ func (s *Server) onRoomSit(client *Client, env wsEnvelope) {
 	}
 	if hasOld && room.Settings.GameID == types.GameTicTacToe && room.Phase == types.PhaseChoosing {
 		client.reply(env.ID, nil, "井字棋对局进行中不能换座")
+		return
+	}
+	if hasOld && room.Settings.GameID == types.GameGomoku && room.Phase == types.PhaseChoosing {
+		client.reply(env.ID, nil, "五子棋对局进行中不能换座")
 		return
 	}
 	if hasOld && room.Phase == types.PhaseChoosing && (room.Choices[types.SeatA] != "" || room.Choices[types.SeatB] != "") {
@@ -887,6 +903,198 @@ func (s *Server) onTicTacToeRestart(client *Client, env wsEnvelope) {
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
+func (s *Server) onGomokuReady(client *Client, env wsEnvelope) {
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameGomoku {
+		client.reply(env.ID, nil, "当前房间不是五子棋")
+		return
+	}
+	seat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以准备")
+		return
+	}
+	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
+		client.reply(env.ID, nil, "需要双方都坐下才能准备")
+		return
+	}
+	if room.Phase != types.PhaseReady {
+		client.reply(env.ID, nil, "当前不能准备")
+		return
+	}
+	room.Ready[seat] = true
+	s.roomNotice(room, playerShortName(player)+" 已准备五子棋。")
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	s.scheduleGomokuReadyStart(room)
+	s.broadcastRoom(room.ID, true)
+}
+
+func (s *Server) onGomokuMove(client *Client, env wsEnvelope) {
+	var p struct {
+		Row int `json:"row"`
+		Col int `json:"col"`
+	}
+	_ = decodeD(env, &p)
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameGomoku {
+		client.reply(env.ID, nil, "当前房间不是五子棋")
+		return
+	}
+	seat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以落子")
+		return
+	}
+	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
+		client.reply(env.ID, nil, "需要双方都坐下才能开始")
+		return
+	}
+	ok2, errMsg := s.applyGomokuMove(room, seat, p.Row, p.Col)
+	if !ok2 {
+		client.reply(env.ID, nil, errMsg)
+		return
+	}
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	s.broadcastRoom(room.ID, true)
+}
+
+func (s *Server) onGomokuUndoRequest(client *Client, env wsEnvelope) {
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameGomoku {
+		client.reply(env.ID, nil, "当前房间不是五子棋")
+		return
+	}
+	seat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以申请悔棋")
+		return
+	}
+	ok2, errMsg := s.requestGomokuUndo(room, seat)
+	if !ok2 {
+		client.reply(env.ID, nil, errMsg)
+		return
+	}
+	s.roomNotice(room, playerShortName(player)+" 申请悔棋，等待对方确认。")
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	s.broadcastRoom(room.ID, true)
+}
+
+func (s *Server) onGomokuUndoRespond(client *Client, env wsEnvelope) {
+	var p struct {
+		Accept *bool `json:"accept"`
+	}
+	_ = decodeD(env, &p)
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameGomoku {
+		client.reply(env.ID, nil, "当前房间不是五子棋")
+		return
+	}
+	seat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以处理悔棋请求")
+		return
+	}
+	accept := p.Accept != nil && *p.Accept
+	ok2, errMsg := s.respondGomokuUndo(room, seat, accept)
+	if !ok2 {
+		client.reply(env.ID, nil, errMsg)
+		return
+	}
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	s.broadcastRoom(room.ID, true)
+}
+
+func (s *Server) onGomokuResignRequest(client *Client, env wsEnvelope) {
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameGomoku {
+		client.reply(env.ID, nil, "当前房间不是五子棋")
+		return
+	}
+	seat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以申请认输")
+		return
+	}
+	ok2, errMsg := s.requestGomokuResign(room, seat)
+	if !ok2 {
+		client.reply(env.ID, nil, errMsg)
+		return
+	}
+	s.roomNotice(room, playerShortName(player)+" 申请认输，等待对方确认。")
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	s.broadcastRoom(room.ID, true)
+}
+
+func (s *Server) onGomokuResignRespond(client *Client, env wsEnvelope) {
+	var p struct {
+		Accept *bool `json:"accept"`
+	}
+	_ = decodeD(env, &p)
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameGomoku {
+		client.reply(env.ID, nil, "当前房间不是五子棋")
+		return
+	}
+	seat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以处理认输请求")
+		return
+	}
+	accept := p.Accept != nil && *p.Accept
+	ok2, errMsg := s.respondGomokuResign(room, seat, accept)
+	if !ok2 {
+		client.reply(env.ID, nil, errMsg)
+		return
+	}
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	s.broadcastRoom(room.ID, true)
+}
+
+func (s *Server) onGomokuRestart(client *Client, env wsEnvelope) {
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameGomoku {
+		client.reply(env.ID, nil, "当前房间不是五子棋")
+		return
+	}
+	if _, ok := s.seatOf(room, player.ID); !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以重新开始")
+		return
+	}
+	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
+		client.reply(env.ID, nil, "需要双方都坐下才能重新开始")
+		return
+	}
+	if room.Phase == types.PhasePunishment {
+		client.reply(env.ID, nil, "惩罚完成前不能重新开始")
+		return
+	}
+	s.resetGomokuRoom(room)
+	s.roomNotice(room, playerShortName(player)+" 发起五子棋再来一局，请双方准备。")
+	s.broadcastRoom(room.ID, true)
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+}
+
 func (s *Server) onPunishmentSubmit(client *Client, env wsEnvelope) {
 	var p struct {
 		Text     string `json:"text"`
@@ -917,14 +1125,10 @@ func (s *Server) onPunishmentSubmit(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "本房间已关闭图片证明")
 		return
 	}
-	var taskText string
-	if len(room.RoundHistory) > 0 {
-		for _, t := range room.RoundHistory[0].PunishmentTasks {
-			if t.PlayerID == player.ID {
-				taskText = t.TaskText
-				break
-			}
-		}
+	var taskText, taskEventID string
+	if task := latestPunishmentTask(room, player.ID); task != nil {
+		taskText = task.TaskText
+		taskEventID = task.EventID
 	}
 	for _, pr := range room.Proofs {
 		if pr.PlayerID == player.ID && pr.RedoTaskText != "" {
@@ -974,9 +1178,9 @@ func (s *Server) onPunishmentSubmit(client *Client, env wsEnvelope) {
 	if cleanImageURL != "" {
 		imageFile = filepath.Base(cleanImageURL)
 	}
-	if s.eventDB != nil {
-		if err := s.eventDB.insertPunishmentEvent(nowMs(), "proof", "", room.ID, player.ID, playerShortName(player), "", taskText, status, cleanProofText, imageFile); err != nil {
-			s.errorLog("punishment_event_insert_failed", err.Error())
+	if s.eventDB != nil && taskEventID != "" {
+		if err := s.eventDB.updatePunishmentProof(taskEventID, submittedAt, cleanProofText, imageFile, status); err != nil {
+			s.errorLog("punishment_event_update_failed", err.Error())
 		}
 	}
 }
@@ -1041,8 +1245,11 @@ func (s *Server) onPunishmentAssignTask(client *Client, env wsEnvelope) {
 	s.updatePunishmentTask(room, p.PlayerID, cleanTask, player)
 	s.broadcastRoomImmediate(room.ID, false)
 	if s.eventDB != nil {
-		if err := s.eventDB.insertPunishmentEvent(nowMs(), "task", "player", room.ID, player.ID, playerShortName(player), p.PlayerID, cleanTask, "", "", ""); err != nil {
-			s.errorLog("punishment_event_insert_failed", err.Error())
+		if updated := latestPunishmentTask(room, p.PlayerID); updated != nil {
+			updated.EventID = randomID()
+			if err := s.eventDB.insertPunishmentTask(updated.EventID, nowMs(), "player", room.ID, player.ID, playerShortName(player), p.PlayerID, updated.PlayerName, cleanTask); err != nil {
+				s.errorLog("punishment_event_insert_failed", err.Error())
+			}
 		}
 	}
 	client.reply(env.ID, map[string]any{"ok": true}, "")
@@ -1091,7 +1298,28 @@ func (s *Server) onPunishmentReview(client *Client, env wsEnvelope) {
 		proof.RejectReason = "需要重做"
 		proof.RedoTaskText = cleanTask
 		proof.ConfirmedBy = ""
+		oldEventID := ""
+		if oldTask := latestPunishmentTask(room, p.PlayerID); oldTask != nil {
+			oldEventID = oldTask.EventID
+		}
 		s.updatePunishmentTask(room, p.PlayerID, cleanTask, nil)
+		if s.eventDB != nil && oldEventID != "" {
+			newTask := latestPunishmentTask(room, p.PlayerID)
+			newID := randomID()
+			if newTask != nil {
+				newTask.EventID = newID
+			}
+			if err := s.eventDB.markPunishmentRedo(oldEventID, newID); err != nil {
+				s.errorLog("punishment_event_update_failed", err.Error())
+			}
+			targetName := ""
+			if newTask != nil {
+				targetName = newTask.PlayerName
+			}
+			if err := s.eventDB.insertPunishmentTask(newID, reviewedAt, "player", room.ID, player.ID, playerShortName(player), p.PlayerID, targetName, cleanTask); err != nil {
+				s.errorLog("punishment_event_insert_failed", err.Error())
+			}
+		}
 		s.updateProofInLatestHistory(room, p.PlayerID, types.HistoryProof{
 			Status: "rejected", ReviewedBy: player.ID, ReviewedAt: &reviewedAt,
 			RejectReason: "需要重做", RedoTaskText: cleanTask,
@@ -1109,6 +1337,13 @@ func (s *Server) onPunishmentReview(client *Client, env wsEnvelope) {
 	proof.ReviewedBy = player.ID
 	proof.ReviewedAt = &reviewedAt
 	proof.RejectReason = reviewMessage
+	if s.eventDB != nil {
+		if task := latestPunishmentTask(room, p.PlayerID); task != nil && task.EventID != "" {
+			if err := s.eventDB.updatePunishmentStatus(task.EventID, "approved"); err != nil {
+				s.errorLog("punishment_event_update_failed", err.Error())
+			}
+		}
+	}
 	s.updateProofInLatestHistory(room, p.PlayerID, types.HistoryProof{
 		Status: "approved", ReviewedBy: player.ID, ReviewedAt: &reviewedAt, RejectReason: reviewMessage,
 	})
@@ -1153,6 +1388,13 @@ func (s *Server) onPunishmentConfirm(client *Client, env wsEnvelope) {
 	proof.ConfirmedBy = player.ID
 	proof.ReviewedBy = player.ID
 	proof.ReviewedAt = &reviewedAt
+	if s.eventDB != nil {
+		if task := latestPunishmentTask(room, p.PlayerID); task != nil && task.EventID != "" {
+			if err := s.eventDB.updatePunishmentStatus(task.EventID, "approved"); err != nil {
+				s.errorLog("punishment_event_update_failed", err.Error())
+			}
+		}
+	}
 	s.updateProofInLatestHistory(room, p.PlayerID, types.HistoryProof{
 		Status: "approved", ReviewedBy: player.ID, ReviewedAt: &reviewedAt,
 	})
@@ -1438,7 +1680,7 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 			}
 			if pl.Persistent {
 				// 持久玩家只下线、保留存档；serializePlayers 只写内存现存玩家，
-				// 直接 delete 会把该玩家积分/战绩从 players.json 里永久抹掉。
+				// 直接 delete 会把该玩家积分/战绩从 SQLite 里永久抹掉。
 				now := nowMs()
 				pl.Connected = false
 				pl.SocketID = ""

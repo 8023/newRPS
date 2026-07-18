@@ -3427,42 +3427,39 @@ export const game = $root.game = (() => {
         return LobbyStats;
     })();
 
-    game.OthelloStats = (function() {
+    game.GameWLD = (function() {
 
         /**
-         * Properties of an OthelloStats.
-         * @typedef {Object} game.OthelloStats.$Properties
-         * @property {number|null} [wins] OthelloStats wins
-         * @property {number|null} [losses] OthelloStats losses
-         * @property {number|null} [draws] OthelloStats draws
-         * @property {number|null} [games] OthelloStats games
-         * @property {number|null} [captured] OthelloStats captured
-         * @property {number|null} [lost] OthelloStats lost
+         * Properties of a GameWLD.
+         * @typedef {Object} game.GameWLD.$Properties
+         * @property {number|null} [wins] GameWLD wins
+         * @property {number|null} [losses] GameWLD losses
+         * @property {number|null} [draws] GameWLD draws
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
-         * Properties of an OthelloStats.
+         * Properties of a GameWLD.
          * @memberof game
-         * @interface IOthelloStats
-         * @augments game.OthelloStats.$Properties
-         * @deprecated Use game.OthelloStats.$Properties instead.
+         * @interface IGameWLD
+         * @augments game.GameWLD.$Properties
+         * @deprecated Use game.GameWLD.$Properties instead.
          */
 
         /**
-         * Shape of an OthelloStats.
-         * @typedef {game.OthelloStats.$Properties} game.OthelloStats.$Shape
+         * Shape of a GameWLD.
+         * @typedef {game.GameWLD.$Properties} game.GameWLD.$Shape
          */
 
         /**
-         * Constructs a new OthelloStats.
+         * Constructs a new GameWLD.
          * @memberof game
-         * @classdesc Represents an OthelloStats.
+         * @classdesc Represents a GameWLD.
          * @constructor
-         * @param {game.OthelloStats.$Properties=} [properties] Properties to set
+         * @param {game.GameWLD.$Properties=} [properties] Properties to set
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
-        const OthelloStats = function (properties) {
+        const GameWLD = function (properties) {
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -3470,79 +3467,55 @@ export const game = $root.game = (() => {
         };
 
         /**
-         * OthelloStats wins.
+         * GameWLD wins.
          * @member {number} wins
-         * @memberof game.OthelloStats
+         * @memberof game.GameWLD
          * @instance
          */
-        OthelloStats.prototype.wins = 0;
+        GameWLD.prototype.wins = 0;
 
         /**
-         * OthelloStats losses.
+         * GameWLD losses.
          * @member {number} losses
-         * @memberof game.OthelloStats
+         * @memberof game.GameWLD
          * @instance
          */
-        OthelloStats.prototype.losses = 0;
+        GameWLD.prototype.losses = 0;
 
         /**
-         * OthelloStats draws.
+         * GameWLD draws.
          * @member {number} draws
-         * @memberof game.OthelloStats
+         * @memberof game.GameWLD
          * @instance
          */
-        OthelloStats.prototype.draws = 0;
+        GameWLD.prototype.draws = 0;
 
         /**
-         * OthelloStats games.
-         * @member {number} games
-         * @memberof game.OthelloStats
-         * @instance
-         */
-        OthelloStats.prototype.games = 0;
-
-        /**
-         * OthelloStats captured.
-         * @member {number} captured
-         * @memberof game.OthelloStats
-         * @instance
-         */
-        OthelloStats.prototype.captured = 0;
-
-        /**
-         * OthelloStats lost.
-         * @member {number} lost
-         * @memberof game.OthelloStats
-         * @instance
-         */
-        OthelloStats.prototype.lost = 0;
-
-        /**
-         * Creates a new OthelloStats instance using the specified properties.
+         * Creates a new GameWLD instance using the specified properties.
          * @function create
-         * @memberof game.OthelloStats
+         * @memberof game.GameWLD
          * @static
-         * @param {game.OthelloStats.$Properties=} [properties] Properties to set
-         * @returns {game.OthelloStats} OthelloStats instance
+         * @param {game.GameWLD.$Properties=} [properties] Properties to set
+         * @returns {game.GameWLD} GameWLD instance
          * @type {{
-         *   (properties: game.OthelloStats.$Shape): game.OthelloStats & game.OthelloStats.$Shape;
-         *   (properties?: game.OthelloStats.$Properties): game.OthelloStats;
+         *   (properties: game.GameWLD.$Shape): game.GameWLD & game.GameWLD.$Shape;
+         *   (properties?: game.GameWLD.$Properties): game.GameWLD;
          * }}
          */
-        OthelloStats.create = function(properties) {
-            return new OthelloStats(properties);
+        GameWLD.create = function(properties) {
+            return new GameWLD(properties);
         };
 
         /**
-         * Encodes the specified OthelloStats message. Does not implicitly {@link game.OthelloStats.verify|verify} messages.
+         * Encodes the specified GameWLD message. Does not implicitly {@link game.GameWLD.verify|verify} messages.
          * @function encode
-         * @memberof game.OthelloStats
+         * @memberof game.GameWLD
          * @static
-         * @param {game.OthelloStats.$Properties} message OthelloStats message or plain object to encode
+         * @param {game.GameWLD.$Properties} message GameWLD message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        OthelloStats.encode = function (message, writer, _depth) {
+        GameWLD.encode = function (message, writer, _depth) {
             if (!writer)
                 writer = $Writer.create();
             if (_depth === $undefined)
@@ -3555,12 +3528,6 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 2, wireType 0 =*/16).int32(message.losses);
             if (message.draws != null && $Object.hasOwnProperty.call(message, "draws") && message.draws !== 0)
                 writer.uint32(/* id 3, wireType 0 =*/24).int32(message.draws);
-            if (message.games != null && $Object.hasOwnProperty.call(message, "games") && message.games !== 0)
-                writer.uint32(/* id 4, wireType 0 =*/32).int32(message.games);
-            if (message.captured != null && $Object.hasOwnProperty.call(message, "captured") && message.captured !== 0)
-                writer.uint32(/* id 5, wireType 0 =*/40).int32(message.captured);
-            if (message.lost != null && $Object.hasOwnProperty.call(message, "lost") && message.lost !== 0)
-                writer.uint32(/* id 6, wireType 0 =*/48).int32(message.lost);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -3568,37 +3535,37 @@ export const game = $root.game = (() => {
         };
 
         /**
-         * Encodes the specified OthelloStats message, length delimited. Does not implicitly {@link game.OthelloStats.verify|verify} messages.
+         * Encodes the specified GameWLD message, length delimited. Does not implicitly {@link game.GameWLD.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof game.OthelloStats
+         * @memberof game.GameWLD
          * @static
-         * @param {game.OthelloStats.$Properties} message OthelloStats message or plain object to encode
+         * @param {game.GameWLD.$Properties} message GameWLD message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        OthelloStats.encodeDelimited = function(message, writer) {
+        GameWLD.encodeDelimited = function(message, writer) {
             return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
-         * Decodes an OthelloStats message from the specified reader or buffer.
+         * Decodes a GameWLD message from the specified reader or buffer.
          * @function decode
-         * @memberof game.OthelloStats
+         * @memberof game.GameWLD
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {game.OthelloStats & game.OthelloStats.$Shape} OthelloStats
+         * @returns {game.GameWLD & game.GameWLD.$Shape} GameWLD
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        OthelloStats.decode = function (reader, length, _end, _depth, _target) {
+        GameWLD.decode = function (reader, length, _end, _depth, _target) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             if (_depth === $undefined)
                 _depth = 0;
             if (_depth > $Reader.recursionLimit)
                 throw $Error("max depth exceeded");
-            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.OthelloStats(), value;
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.GameWLD(), value;
             while (reader.pos < end) {
                 let start = reader.pos;
                 let tag = reader.tag();
@@ -3635,33 +3602,6 @@ export const game = $root.game = (() => {
                             delete message.draws;
                         continue;
                     }
-                case 4: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.int32())
-                            message.games = value;
-                        else
-                            delete message.games;
-                        continue;
-                    }
-                case 5: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.int32())
-                            message.captured = value;
-                        else
-                            delete message.captured;
-                        continue;
-                    }
-                case 6: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.int32())
-                            message.lost = value;
-                        else
-                            delete message.lost;
-                        continue;
-                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -3675,30 +3615,30 @@ export const game = $root.game = (() => {
         };
 
         /**
-         * Decodes an OthelloStats message from the specified reader or buffer, length delimited.
+         * Decodes a GameWLD message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof game.OthelloStats
+         * @memberof game.GameWLD
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {game.OthelloStats & game.OthelloStats.$Shape} OthelloStats
+         * @returns {game.GameWLD & game.GameWLD.$Shape} GameWLD
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        OthelloStats.decodeDelimited = function(reader) {
+        GameWLD.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies an OthelloStats message.
+         * Verifies a GameWLD message.
          * @function verify
-         * @memberof game.OthelloStats
+         * @memberof game.GameWLD
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        OthelloStats.verify = function (message, _depth) {
+        GameWLD.verify = function (message, _depth) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
             if (_depth === $undefined)
@@ -3714,36 +3654,27 @@ export const game = $root.game = (() => {
             if (message.draws != null && $Object.hasOwnProperty.call(message, "draws"))
                 if (!$util.isInteger(message.draws))
                     return "draws: integer expected";
-            if (message.games != null && $Object.hasOwnProperty.call(message, "games"))
-                if (!$util.isInteger(message.games))
-                    return "games: integer expected";
-            if (message.captured != null && $Object.hasOwnProperty.call(message, "captured"))
-                if (!$util.isInteger(message.captured))
-                    return "captured: integer expected";
-            if (message.lost != null && $Object.hasOwnProperty.call(message, "lost"))
-                if (!$util.isInteger(message.lost))
-                    return "lost: integer expected";
             return null;
         };
 
         /**
-         * Creates an OthelloStats message from a plain object. Also converts values to their respective internal types.
+         * Creates a GameWLD message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof game.OthelloStats
+         * @memberof game.GameWLD
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {game.OthelloStats} OthelloStats
+         * @returns {game.GameWLD} GameWLD
          */
-        OthelloStats.fromObject = function (object, _depth) {
-            if (object instanceof $root.game.OthelloStats)
+        GameWLD.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.GameWLD)
                 return object;
             if (!$util.isObject(object))
-                throw $TypeError(".game.OthelloStats: object expected");
+                throw $TypeError(".game.GameWLD: object expected");
             if (_depth === $undefined)
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            let message = new $root.game.OthelloStats();
+            let message = new $root.game.GameWLD();
             if (object.wins != null)
                 if ($Number(object.wins) !== 0)
                     message.wins = object.wins | 0;
@@ -3753,28 +3684,19 @@ export const game = $root.game = (() => {
             if (object.draws != null)
                 if ($Number(object.draws) !== 0)
                     message.draws = object.draws | 0;
-            if (object.games != null)
-                if ($Number(object.games) !== 0)
-                    message.games = object.games | 0;
-            if (object.captured != null)
-                if ($Number(object.captured) !== 0)
-                    message.captured = object.captured | 0;
-            if (object.lost != null)
-                if ($Number(object.lost) !== 0)
-                    message.lost = object.lost | 0;
             return message;
         };
 
         /**
-         * Creates a plain object from an OthelloStats message. Also converts values to other types if specified.
+         * Creates a plain object from a GameWLD message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof game.OthelloStats
+         * @memberof game.GameWLD
          * @static
-         * @param {game.OthelloStats} message OthelloStats
+         * @param {game.GameWLD} message GameWLD
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        OthelloStats.toObject = function (message, options, _depth) {
+        GameWLD.toObject = function (message, options, _depth) {
             if (!options)
                 options = {};
             if (_depth === $undefined)
@@ -3786,9 +3708,6 @@ export const game = $root.game = (() => {
                 object.wins = 0;
                 object.losses = 0;
                 object.draws = 0;
-                object.games = 0;
-                object.captured = 0;
-                object.lost = 0;
             }
             if (message.wins != null && $Object.hasOwnProperty.call(message, "wins"))
                 object.wins = message.wins;
@@ -3796,41 +3715,417 @@ export const game = $root.game = (() => {
                 object.losses = message.losses;
             if (message.draws != null && $Object.hasOwnProperty.call(message, "draws"))
                 object.draws = message.draws;
-            if (message.games != null && $Object.hasOwnProperty.call(message, "games"))
-                object.games = message.games;
-            if (message.captured != null && $Object.hasOwnProperty.call(message, "captured"))
-                object.captured = message.captured;
-            if (message.lost != null && $Object.hasOwnProperty.call(message, "lost"))
-                object.lost = message.lost;
             return object;
         };
 
         /**
-         * Converts this OthelloStats to JSON.
+         * Converts this GameWLD to JSON.
          * @function toJSON
-         * @memberof game.OthelloStats
+         * @memberof game.GameWLD
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        OthelloStats.prototype.toJSON = function() {
-            return OthelloStats.toObject(this, $protobuf.util.toJSONOptions);
+        GameWLD.prototype.toJSON = function() {
+            return GameWLD.toObject(this, $protobuf.util.toJSONOptions);
         };
 
         /**
-         * Gets the type url for OthelloStats
+         * Gets the type url for GameWLD
          * @function getTypeUrl
-         * @memberof game.OthelloStats
+         * @memberof game.GameWLD
          * @static
          * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
          * @returns {string} The type url
          */
-        OthelloStats.getTypeUrl = function(prefix) {
+        GameWLD.getTypeUrl = function(prefix) {
             if (prefix === $undefined)
                 prefix = "type.googleapis.com";
-            return prefix + "/game.OthelloStats";
+            return prefix + "/game.GameWLD";
         };
 
-        return OthelloStats;
+        return GameWLD;
+    })();
+
+    game.GameStats = (function() {
+
+        /**
+         * Properties of a GameStats.
+         * @typedef {Object} game.GameStats.$Properties
+         * @property {game.GameWLD.$Properties|null} [rps] GameStats rps
+         * @property {game.GameWLD.$Properties|null} [othello] GameStats othello
+         * @property {game.GameWLD.$Properties|null} [tictactoe] GameStats tictactoe
+         * @property {game.GameWLD.$Properties|null} [gomoku] GameStats gomoku
+         * @property {game.GameWLD.$Properties|null} [liarsdice] GameStats liarsdice
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a GameStats.
+         * @memberof game
+         * @interface IGameStats
+         * @augments game.GameStats.$Properties
+         * @deprecated Use game.GameStats.$Properties instead.
+         */
+
+        /**
+         * Shape of a GameStats.
+         * @typedef {game.GameStats.$Properties} game.GameStats.$Shape
+         */
+
+        /**
+         * Constructs a new GameStats.
+         * @memberof game
+         * @classdesc Represents a GameStats.
+         * @constructor
+         * @param {game.GameStats.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const GameStats = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * GameStats rps.
+         * @member {game.GameWLD.$Properties|null|undefined} rps
+         * @memberof game.GameStats
+         * @instance
+         */
+        GameStats.prototype.rps = null;
+
+        /**
+         * GameStats othello.
+         * @member {game.GameWLD.$Properties|null|undefined} othello
+         * @memberof game.GameStats
+         * @instance
+         */
+        GameStats.prototype.othello = null;
+
+        /**
+         * GameStats tictactoe.
+         * @member {game.GameWLD.$Properties|null|undefined} tictactoe
+         * @memberof game.GameStats
+         * @instance
+         */
+        GameStats.prototype.tictactoe = null;
+
+        /**
+         * GameStats gomoku.
+         * @member {game.GameWLD.$Properties|null|undefined} gomoku
+         * @memberof game.GameStats
+         * @instance
+         */
+        GameStats.prototype.gomoku = null;
+
+        /**
+         * GameStats liarsdice.
+         * @member {game.GameWLD.$Properties|null|undefined} liarsdice
+         * @memberof game.GameStats
+         * @instance
+         */
+        GameStats.prototype.liarsdice = null;
+
+        /**
+         * Creates a new GameStats instance using the specified properties.
+         * @function create
+         * @memberof game.GameStats
+         * @static
+         * @param {game.GameStats.$Properties=} [properties] Properties to set
+         * @returns {game.GameStats} GameStats instance
+         * @type {{
+         *   (properties: game.GameStats.$Shape): game.GameStats & game.GameStats.$Shape;
+         *   (properties?: game.GameStats.$Properties): game.GameStats;
+         * }}
+         */
+        GameStats.create = function(properties) {
+            return new GameStats(properties);
+        };
+
+        /**
+         * Encodes the specified GameStats message. Does not implicitly {@link game.GameStats.verify|verify} messages.
+         * @function encode
+         * @memberof game.GameStats
+         * @static
+         * @param {game.GameStats.$Properties} message GameStats message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GameStats.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.rps != null && $Object.hasOwnProperty.call(message, "rps"))
+                $root.game.GameWLD.encode(message.rps, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
+            if (message.othello != null && $Object.hasOwnProperty.call(message, "othello"))
+                $root.game.GameWLD.encode(message.othello, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
+            if (message.tictactoe != null && $Object.hasOwnProperty.call(message, "tictactoe"))
+                $root.game.GameWLD.encode(message.tictactoe, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
+            if (message.gomoku != null && $Object.hasOwnProperty.call(message, "gomoku"))
+                $root.game.GameWLD.encode(message.gomoku, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
+            if (message.liarsdice != null && $Object.hasOwnProperty.call(message, "liarsdice"))
+                $root.game.GameWLD.encode(message.liarsdice, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GameStats message, length delimited. Does not implicitly {@link game.GameStats.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.GameStats
+         * @static
+         * @param {game.GameStats.$Properties} message GameStats message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GameStats.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a GameStats message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.GameStats
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.GameStats & game.GameStats.$Shape} GameStats
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GameStats.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.GameStats(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        message.rps = $root.game.GameWLD.decode(reader, reader.uint32(), $undefined, _depth + 1, message.rps);
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        message.othello = $root.game.GameWLD.decode(reader, reader.uint32(), $undefined, _depth + 1, message.othello);
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        message.tictactoe = $root.game.GameWLD.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tictactoe);
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        message.gomoku = $root.game.GameWLD.decode(reader, reader.uint32(), $undefined, _depth + 1, message.gomoku);
+                        continue;
+                    }
+                case 5: {
+                        if (wireType !== 2)
+                            break;
+                        message.liarsdice = $root.game.GameWLD.decode(reader, reader.uint32(), $undefined, _depth + 1, message.liarsdice);
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a GameStats message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.GameStats
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.GameStats & game.GameStats.$Shape} GameStats
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GameStats.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GameStats message.
+         * @function verify
+         * @memberof game.GameStats
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GameStats.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.rps != null && $Object.hasOwnProperty.call(message, "rps")) {
+                let error = $root.game.GameWLD.verify(message.rps, _depth + 1);
+                if (error)
+                    return "rps." + error;
+            }
+            if (message.othello != null && $Object.hasOwnProperty.call(message, "othello")) {
+                let error = $root.game.GameWLD.verify(message.othello, _depth + 1);
+                if (error)
+                    return "othello." + error;
+            }
+            if (message.tictactoe != null && $Object.hasOwnProperty.call(message, "tictactoe")) {
+                let error = $root.game.GameWLD.verify(message.tictactoe, _depth + 1);
+                if (error)
+                    return "tictactoe." + error;
+            }
+            if (message.gomoku != null && $Object.hasOwnProperty.call(message, "gomoku")) {
+                let error = $root.game.GameWLD.verify(message.gomoku, _depth + 1);
+                if (error)
+                    return "gomoku." + error;
+            }
+            if (message.liarsdice != null && $Object.hasOwnProperty.call(message, "liarsdice")) {
+                let error = $root.game.GameWLD.verify(message.liarsdice, _depth + 1);
+                if (error)
+                    return "liarsdice." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GameStats message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.GameStats
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.GameStats} GameStats
+         */
+        GameStats.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.GameStats)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.GameStats: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.GameStats();
+            if (object.rps != null) {
+                if (!$util.isObject(object.rps))
+                    throw $TypeError(".game.GameStats.rps: object expected");
+                message.rps = $root.game.GameWLD.fromObject(object.rps, _depth + 1);
+            }
+            if (object.othello != null) {
+                if (!$util.isObject(object.othello))
+                    throw $TypeError(".game.GameStats.othello: object expected");
+                message.othello = $root.game.GameWLD.fromObject(object.othello, _depth + 1);
+            }
+            if (object.tictactoe != null) {
+                if (!$util.isObject(object.tictactoe))
+                    throw $TypeError(".game.GameStats.tictactoe: object expected");
+                message.tictactoe = $root.game.GameWLD.fromObject(object.tictactoe, _depth + 1);
+            }
+            if (object.gomoku != null) {
+                if (!$util.isObject(object.gomoku))
+                    throw $TypeError(".game.GameStats.gomoku: object expected");
+                message.gomoku = $root.game.GameWLD.fromObject(object.gomoku, _depth + 1);
+            }
+            if (object.liarsdice != null) {
+                if (!$util.isObject(object.liarsdice))
+                    throw $TypeError(".game.GameStats.liarsdice: object expected");
+                message.liarsdice = $root.game.GameWLD.fromObject(object.liarsdice, _depth + 1);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GameStats message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.GameStats
+         * @static
+         * @param {game.GameStats} message GameStats
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GameStats.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.rps = null;
+                object.othello = null;
+                object.tictactoe = null;
+                object.gomoku = null;
+                object.liarsdice = null;
+            }
+            if (message.rps != null && $Object.hasOwnProperty.call(message, "rps"))
+                object.rps = $root.game.GameWLD.toObject(message.rps, options, _depth + 1);
+            if (message.othello != null && $Object.hasOwnProperty.call(message, "othello"))
+                object.othello = $root.game.GameWLD.toObject(message.othello, options, _depth + 1);
+            if (message.tictactoe != null && $Object.hasOwnProperty.call(message, "tictactoe"))
+                object.tictactoe = $root.game.GameWLD.toObject(message.tictactoe, options, _depth + 1);
+            if (message.gomoku != null && $Object.hasOwnProperty.call(message, "gomoku"))
+                object.gomoku = $root.game.GameWLD.toObject(message.gomoku, options, _depth + 1);
+            if (message.liarsdice != null && $Object.hasOwnProperty.call(message, "liarsdice"))
+                object.liarsdice = $root.game.GameWLD.toObject(message.liarsdice, options, _depth + 1);
+            return object;
+        };
+
+        /**
+         * Converts this GameStats to JSON.
+         * @function toJSON
+         * @memberof game.GameStats
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GameStats.prototype.toJSON = function() {
+            return GameStats.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for GameStats
+         * @function getTypeUrl
+         * @memberof game.GameStats
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        GameStats.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.GameStats";
+        };
+
+        return GameStats;
     })();
 
     game.PublicPlayer = (function() {
@@ -3843,86 +4138,54 @@ export const game = $root.game = (() => {
          * @property {string|null} [genderId] PublicPlayer genderId
          * @property {string|null} [genderLabel] PublicPlayer genderLabel
          * @property {string|null} [factionId] PublicPlayer factionId
+         * @property {string|null} [avatarUrl] PublicPlayer avatarUrl
          * @property {string|null} [factionLabel] PublicPlayer factionLabel
          * @property {game.GenderColors.$Properties|null} [factionColors] PublicPlayer factionColors
          * @property {string|null} [displayName] PublicPlayer displayName
          * @property {boolean|null} [connected] PublicPlayer connected
          * @property {number|Long|null} [disconnectedAt] PublicPlayer disconnectedAt
-         * @property {boolean|null} [hasDisconnectedAt] PublicPlayer hasDisconnectedAt
          * @property {number|Long|null} [disconnectExpiresAt] PublicPlayer disconnectExpiresAt
-         * @property {boolean|null} [hasDisconnectExpiresAt] PublicPlayer hasDisconnectExpiresAt
          * @property {number|Long|null} [profileUpdatedAt] PublicPlayer profileUpdatedAt
-         * @property {boolean|null} [hasProfileUpdatedAt] PublicPlayer hasProfileUpdatedAt
          * @property {boolean|null} [nameWarEnabled] PublicPlayer nameWarEnabled
-         * @property {boolean|null} [hasNameWarEnabled] PublicPlayer hasNameWarEnabled
          * @property {number|Long|null} [nameWarToggledAt] PublicPlayer nameWarToggledAt
-         * @property {boolean|null} [hasNameWarToggledAt] PublicPlayer hasNameWarToggledAt
          * @property {string|null} [nameWarOriginalName] PublicPlayer nameWarOriginalName
          * @property {string|null} [nameWarPenaltyName] PublicPlayer nameWarPenaltyName
          * @property {boolean|null} [nameWarPunished] PublicPlayer nameWarPunished
-         * @property {boolean|null} [hasNameWarPunished] PublicPlayer hasNameWarPunished
          * @property {boolean|null} [nameWarAllowRename] PublicPlayer nameWarAllowRename
-         * @property {boolean|null} [hasNameWarAllowRename] PublicPlayer hasNameWarAllowRename
          * @property {number|Long|null} [nameWarRenameProtectedUntil] PublicPlayer nameWarRenameProtectedUntil
-         * @property {boolean|null} [hasNameWarRenameProtectedUntil] PublicPlayer hasNameWarRenameProtectedUntil
          * @property {string|null} [nameWarRenamedBy] PublicPlayer nameWarRenamedBy
          * @property {string|null} [nameWarRenamedByName] PublicPlayer nameWarRenamedByName
          * @property {number|Long|null} [nameWarRenameWindowStartedAt] PublicPlayer nameWarRenameWindowStartedAt
-         * @property {boolean|null} [hasNameWarRenameWindowStartedAt] PublicPlayer hasNameWarRenameWindowStartedAt
          * @property {number|null} [nameWarRenameCount] PublicPlayer nameWarRenameCount
-         * @property {boolean|null} [hasNameWarRenameCount] PublicPlayer hasNameWarRenameCount
          * @property {boolean|null} [giveawayEnabled] PublicPlayer giveawayEnabled
-         * @property {boolean|null} [hasGiveawayEnabled] PublicPlayer hasGiveawayEnabled
          * @property {number|null} [giveawayValue] PublicPlayer giveawayValue
-         * @property {boolean|null} [hasGiveawayValue] PublicPlayer hasGiveawayValue
          * @property {number|null} [giveawayClicks] PublicPlayer giveawayClicks
-         * @property {boolean|null} [hasGiveawayClicks] PublicPlayer hasGiveawayClicks
          * @property {string|null} [giveawayBoardText] PublicPlayer giveawayBoardText
          * @property {number|Long|null} [giveawayBoardSubmittedAt] PublicPlayer giveawayBoardSubmittedAt
-         * @property {boolean|null} [hasGiveawayBoardSubmittedAt] PublicPlayer hasGiveawayBoardSubmittedAt
          * @property {number|Long|null} [giveawayBoardExpiresAt] PublicPlayer giveawayBoardExpiresAt
-         * @property {boolean|null} [hasGiveawayBoardExpiresAt] PublicPlayer hasGiveawayBoardExpiresAt
          * @property {number|null} [giveawayBoardLikes] PublicPlayer giveawayBoardLikes
-         * @property {boolean|null} [hasGiveawayBoardLikes] PublicPlayer hasGiveawayBoardLikes
          * @property {number|null} [giveawayBoardDislikes] PublicPlayer giveawayBoardDislikes
-         * @property {boolean|null} [hasGiveawayBoardDislikes] PublicPlayer hasGiveawayBoardDislikes
          * @property {number|null} [giveawayBoardLikesThisHour] PublicPlayer giveawayBoardLikesThisHour
-         * @property {boolean|null} [hasGiveawayBoardLikesThisHour] PublicPlayer hasGiveawayBoardLikesThisHour
          * @property {number|Long|null} [giveawayBoardLikeWindowStartedAt] PublicPlayer giveawayBoardLikeWindowStartedAt
-         * @property {boolean|null} [hasGiveawayBoardLikeWindowStartedAt] PublicPlayer hasGiveawayBoardLikeWindowStartedAt
          * @property {number|Long|null} [giveawayVoteWindowStartedAt] PublicPlayer giveawayVoteWindowStartedAt
-         * @property {boolean|null} [hasGiveawayVoteWindowStartedAt] PublicPlayer hasGiveawayVoteWindowStartedAt
          * @property {number|null} [giveawayVoteCount] PublicPlayer giveawayVoteCount
-         * @property {boolean|null} [hasGiveawayVoteCount] PublicPlayer hasGiveawayVoteCount
          * @property {number|null} [giveawayVoteLikesThisHour] PublicPlayer giveawayVoteLikesThisHour
-         * @property {boolean|null} [hasGiveawayVoteLikesThisHour] PublicPlayer hasGiveawayVoteLikesThisHour
          * @property {number|null} [giveawayVoteDislikesThisHour] PublicPlayer giveawayVoteDislikesThisHour
-         * @property {boolean|null} [hasGiveawayVoteDislikesThisHour] PublicPlayer hasGiveawayVoteDislikesThisHour
          * @property {boolean|null} [rankMultiplierUnlocked] PublicPlayer rankMultiplierUnlocked
-         * @property {boolean|null} [hasRankMultiplierUnlocked] PublicPlayer hasRankMultiplierUnlocked
          * @property {boolean|null} [extremeModeEnabled] PublicPlayer extremeModeEnabled
-         * @property {boolean|null} [hasExtremeModeEnabled] PublicPlayer hasExtremeModeEnabled
          * @property {number|Long|null} [extremeModeToggledAt] PublicPlayer extremeModeToggledAt
-         * @property {boolean|null} [hasExtremeModeToggledAt] PublicPlayer hasExtremeModeToggledAt
          * @property {number|Long|null} [extremeModeCooldownUntil] PublicPlayer extremeModeCooldownUntil
-         * @property {boolean|null} [hasExtremeModeCooldownUntil] PublicPlayer hasExtremeModeCooldownUntil
          * @property {number|null} [extremeWinStreak] PublicPlayer extremeWinStreak
-         * @property {boolean|null} [hasExtremeWinStreak] PublicPlayer hasExtremeWinStreak
          * @property {number|Long|null} [extremeLastDecayHour] PublicPlayer extremeLastDecayHour
-         * @property {boolean|null} [hasExtremeLastDecayHour] PublicPlayer hasExtremeLastDecayHour
          * @property {boolean|null} [extremeForceClosed] PublicPlayer extremeForceClosed
-         * @property {boolean|null} [hasExtremeForceClosed] PublicPlayer hasExtremeForceClosed
          * @property {number|Long|null} [extremeForceClosedAt] PublicPlayer extremeForceClosedAt
-         * @property {boolean|null} [hasExtremeForceClosedAt] PublicPlayer hasExtremeForceClosedAt
          * @property {number|Long|null} [extremeRenameProtectedUntil] PublicPlayer extremeRenameProtectedUntil
-         * @property {boolean|null} [hasExtremeRenameProtectedUntil] PublicPlayer hasExtremeRenameProtectedUntil
          * @property {string|null} [extremeRenamedBy] PublicPlayer extremeRenamedBy
          * @property {string|null} [extremeRenamedByName] PublicPlayer extremeRenamedByName
          * @property {string|null} [roomId] PublicPlayer roomId
          * @property {boolean|null} [isAdmin] PublicPlayer isAdmin
-         * @property {boolean|null} [hasIsAdmin] PublicPlayer hasIsAdmin
          * @property {game.PublicStats.$Properties|null} [stats] PublicPlayer stats
-         * @property {game.OthelloStats.$Properties|null} [othelloStats] PublicPlayer othelloStats
+         * @property {game.GameStats.$Properties|null} [gameStats] PublicPlayer gameStats
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -3995,6 +4258,14 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.factionId = "";
 
         /**
+         * PublicPlayer avatarUrl.
+         * @member {string} avatarUrl
+         * @memberof game.PublicPlayer
+         * @instance
+         */
+        PublicPlayer.prototype.avatarUrl = "";
+
+        /**
          * PublicPlayer factionLabel.
          * @member {string} factionLabel
          * @memberof game.PublicPlayer
@@ -4035,28 +4306,12 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.disconnectedAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
-         * PublicPlayer hasDisconnectedAt.
-         * @member {boolean} hasDisconnectedAt
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasDisconnectedAt = false;
-
-        /**
          * PublicPlayer disconnectExpiresAt.
          * @member {number|Long} disconnectExpiresAt
          * @memberof game.PublicPlayer
          * @instance
          */
         PublicPlayer.prototype.disconnectExpiresAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
-
-        /**
-         * PublicPlayer hasDisconnectExpiresAt.
-         * @member {boolean} hasDisconnectExpiresAt
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasDisconnectExpiresAt = false;
 
         /**
          * PublicPlayer profileUpdatedAt.
@@ -4067,14 +4322,6 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.profileUpdatedAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
-         * PublicPlayer hasProfileUpdatedAt.
-         * @member {boolean} hasProfileUpdatedAt
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasProfileUpdatedAt = false;
-
-        /**
          * PublicPlayer nameWarEnabled.
          * @member {boolean} nameWarEnabled
          * @memberof game.PublicPlayer
@@ -4083,28 +4330,12 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.nameWarEnabled = false;
 
         /**
-         * PublicPlayer hasNameWarEnabled.
-         * @member {boolean} hasNameWarEnabled
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasNameWarEnabled = false;
-
-        /**
          * PublicPlayer nameWarToggledAt.
          * @member {number|Long} nameWarToggledAt
          * @memberof game.PublicPlayer
          * @instance
          */
         PublicPlayer.prototype.nameWarToggledAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
-
-        /**
-         * PublicPlayer hasNameWarToggledAt.
-         * @member {boolean} hasNameWarToggledAt
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasNameWarToggledAt = false;
 
         /**
          * PublicPlayer nameWarOriginalName.
@@ -4131,14 +4362,6 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.nameWarPunished = false;
 
         /**
-         * PublicPlayer hasNameWarPunished.
-         * @member {boolean} hasNameWarPunished
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasNameWarPunished = false;
-
-        /**
          * PublicPlayer nameWarAllowRename.
          * @member {boolean} nameWarAllowRename
          * @memberof game.PublicPlayer
@@ -4147,28 +4370,12 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.nameWarAllowRename = false;
 
         /**
-         * PublicPlayer hasNameWarAllowRename.
-         * @member {boolean} hasNameWarAllowRename
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasNameWarAllowRename = false;
-
-        /**
          * PublicPlayer nameWarRenameProtectedUntil.
          * @member {number|Long} nameWarRenameProtectedUntil
          * @memberof game.PublicPlayer
          * @instance
          */
         PublicPlayer.prototype.nameWarRenameProtectedUntil = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
-
-        /**
-         * PublicPlayer hasNameWarRenameProtectedUntil.
-         * @member {boolean} hasNameWarRenameProtectedUntil
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasNameWarRenameProtectedUntil = false;
 
         /**
          * PublicPlayer nameWarRenamedBy.
@@ -4195,28 +4402,12 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.nameWarRenameWindowStartedAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
-         * PublicPlayer hasNameWarRenameWindowStartedAt.
-         * @member {boolean} hasNameWarRenameWindowStartedAt
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasNameWarRenameWindowStartedAt = false;
-
-        /**
          * PublicPlayer nameWarRenameCount.
          * @member {number} nameWarRenameCount
          * @memberof game.PublicPlayer
          * @instance
          */
         PublicPlayer.prototype.nameWarRenameCount = 0;
-
-        /**
-         * PublicPlayer hasNameWarRenameCount.
-         * @member {boolean} hasNameWarRenameCount
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasNameWarRenameCount = false;
 
         /**
          * PublicPlayer giveawayEnabled.
@@ -4227,14 +4418,6 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.giveawayEnabled = false;
 
         /**
-         * PublicPlayer hasGiveawayEnabled.
-         * @member {boolean} hasGiveawayEnabled
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasGiveawayEnabled = false;
-
-        /**
          * PublicPlayer giveawayValue.
          * @member {number} giveawayValue
          * @memberof game.PublicPlayer
@@ -4243,28 +4426,12 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.giveawayValue = 0;
 
         /**
-         * PublicPlayer hasGiveawayValue.
-         * @member {boolean} hasGiveawayValue
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasGiveawayValue = false;
-
-        /**
          * PublicPlayer giveawayClicks.
          * @member {number} giveawayClicks
          * @memberof game.PublicPlayer
          * @instance
          */
         PublicPlayer.prototype.giveawayClicks = 0;
-
-        /**
-         * PublicPlayer hasGiveawayClicks.
-         * @member {boolean} hasGiveawayClicks
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasGiveawayClicks = false;
 
         /**
          * PublicPlayer giveawayBoardText.
@@ -4283,28 +4450,12 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.giveawayBoardSubmittedAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
-         * PublicPlayer hasGiveawayBoardSubmittedAt.
-         * @member {boolean} hasGiveawayBoardSubmittedAt
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasGiveawayBoardSubmittedAt = false;
-
-        /**
          * PublicPlayer giveawayBoardExpiresAt.
          * @member {number|Long} giveawayBoardExpiresAt
          * @memberof game.PublicPlayer
          * @instance
          */
         PublicPlayer.prototype.giveawayBoardExpiresAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
-
-        /**
-         * PublicPlayer hasGiveawayBoardExpiresAt.
-         * @member {boolean} hasGiveawayBoardExpiresAt
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasGiveawayBoardExpiresAt = false;
 
         /**
          * PublicPlayer giveawayBoardLikes.
@@ -4315,28 +4466,12 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.giveawayBoardLikes = 0;
 
         /**
-         * PublicPlayer hasGiveawayBoardLikes.
-         * @member {boolean} hasGiveawayBoardLikes
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasGiveawayBoardLikes = false;
-
-        /**
          * PublicPlayer giveawayBoardDislikes.
          * @member {number} giveawayBoardDislikes
          * @memberof game.PublicPlayer
          * @instance
          */
         PublicPlayer.prototype.giveawayBoardDislikes = 0;
-
-        /**
-         * PublicPlayer hasGiveawayBoardDislikes.
-         * @member {boolean} hasGiveawayBoardDislikes
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasGiveawayBoardDislikes = false;
 
         /**
          * PublicPlayer giveawayBoardLikesThisHour.
@@ -4347,28 +4482,12 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.giveawayBoardLikesThisHour = 0;
 
         /**
-         * PublicPlayer hasGiveawayBoardLikesThisHour.
-         * @member {boolean} hasGiveawayBoardLikesThisHour
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasGiveawayBoardLikesThisHour = false;
-
-        /**
          * PublicPlayer giveawayBoardLikeWindowStartedAt.
          * @member {number|Long} giveawayBoardLikeWindowStartedAt
          * @memberof game.PublicPlayer
          * @instance
          */
         PublicPlayer.prototype.giveawayBoardLikeWindowStartedAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
-
-        /**
-         * PublicPlayer hasGiveawayBoardLikeWindowStartedAt.
-         * @member {boolean} hasGiveawayBoardLikeWindowStartedAt
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasGiveawayBoardLikeWindowStartedAt = false;
 
         /**
          * PublicPlayer giveawayVoteWindowStartedAt.
@@ -4379,28 +4498,12 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.giveawayVoteWindowStartedAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
-         * PublicPlayer hasGiveawayVoteWindowStartedAt.
-         * @member {boolean} hasGiveawayVoteWindowStartedAt
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasGiveawayVoteWindowStartedAt = false;
-
-        /**
          * PublicPlayer giveawayVoteCount.
          * @member {number} giveawayVoteCount
          * @memberof game.PublicPlayer
          * @instance
          */
         PublicPlayer.prototype.giveawayVoteCount = 0;
-
-        /**
-         * PublicPlayer hasGiveawayVoteCount.
-         * @member {boolean} hasGiveawayVoteCount
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasGiveawayVoteCount = false;
 
         /**
          * PublicPlayer giveawayVoteLikesThisHour.
@@ -4411,28 +4514,12 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.giveawayVoteLikesThisHour = 0;
 
         /**
-         * PublicPlayer hasGiveawayVoteLikesThisHour.
-         * @member {boolean} hasGiveawayVoteLikesThisHour
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasGiveawayVoteLikesThisHour = false;
-
-        /**
          * PublicPlayer giveawayVoteDislikesThisHour.
          * @member {number} giveawayVoteDislikesThisHour
          * @memberof game.PublicPlayer
          * @instance
          */
         PublicPlayer.prototype.giveawayVoteDislikesThisHour = 0;
-
-        /**
-         * PublicPlayer hasGiveawayVoteDislikesThisHour.
-         * @member {boolean} hasGiveawayVoteDislikesThisHour
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasGiveawayVoteDislikesThisHour = false;
 
         /**
          * PublicPlayer rankMultiplierUnlocked.
@@ -4443,28 +4530,12 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.rankMultiplierUnlocked = false;
 
         /**
-         * PublicPlayer hasRankMultiplierUnlocked.
-         * @member {boolean} hasRankMultiplierUnlocked
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasRankMultiplierUnlocked = false;
-
-        /**
          * PublicPlayer extremeModeEnabled.
          * @member {boolean} extremeModeEnabled
          * @memberof game.PublicPlayer
          * @instance
          */
         PublicPlayer.prototype.extremeModeEnabled = false;
-
-        /**
-         * PublicPlayer hasExtremeModeEnabled.
-         * @member {boolean} hasExtremeModeEnabled
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasExtremeModeEnabled = false;
 
         /**
          * PublicPlayer extremeModeToggledAt.
@@ -4475,28 +4546,12 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.extremeModeToggledAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
-         * PublicPlayer hasExtremeModeToggledAt.
-         * @member {boolean} hasExtremeModeToggledAt
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasExtremeModeToggledAt = false;
-
-        /**
          * PublicPlayer extremeModeCooldownUntil.
          * @member {number|Long} extremeModeCooldownUntil
          * @memberof game.PublicPlayer
          * @instance
          */
         PublicPlayer.prototype.extremeModeCooldownUntil = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
-
-        /**
-         * PublicPlayer hasExtremeModeCooldownUntil.
-         * @member {boolean} hasExtremeModeCooldownUntil
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasExtremeModeCooldownUntil = false;
 
         /**
          * PublicPlayer extremeWinStreak.
@@ -4507,28 +4562,12 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.extremeWinStreak = 0;
 
         /**
-         * PublicPlayer hasExtremeWinStreak.
-         * @member {boolean} hasExtremeWinStreak
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasExtremeWinStreak = false;
-
-        /**
          * PublicPlayer extremeLastDecayHour.
          * @member {number|Long} extremeLastDecayHour
          * @memberof game.PublicPlayer
          * @instance
          */
         PublicPlayer.prototype.extremeLastDecayHour = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
-
-        /**
-         * PublicPlayer hasExtremeLastDecayHour.
-         * @member {boolean} hasExtremeLastDecayHour
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasExtremeLastDecayHour = false;
 
         /**
          * PublicPlayer extremeForceClosed.
@@ -4539,14 +4578,6 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.extremeForceClosed = false;
 
         /**
-         * PublicPlayer hasExtremeForceClosed.
-         * @member {boolean} hasExtremeForceClosed
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasExtremeForceClosed = false;
-
-        /**
          * PublicPlayer extremeForceClosedAt.
          * @member {number|Long} extremeForceClosedAt
          * @memberof game.PublicPlayer
@@ -4555,28 +4586,12 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.extremeForceClosedAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
-         * PublicPlayer hasExtremeForceClosedAt.
-         * @member {boolean} hasExtremeForceClosedAt
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasExtremeForceClosedAt = false;
-
-        /**
          * PublicPlayer extremeRenameProtectedUntil.
          * @member {number|Long} extremeRenameProtectedUntil
          * @memberof game.PublicPlayer
          * @instance
          */
         PublicPlayer.prototype.extremeRenameProtectedUntil = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
-
-        /**
-         * PublicPlayer hasExtremeRenameProtectedUntil.
-         * @member {boolean} hasExtremeRenameProtectedUntil
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasExtremeRenameProtectedUntil = false;
 
         /**
          * PublicPlayer extremeRenamedBy.
@@ -4611,14 +4626,6 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.isAdmin = false;
 
         /**
-         * PublicPlayer hasIsAdmin.
-         * @member {boolean} hasIsAdmin
-         * @memberof game.PublicPlayer
-         * @instance
-         */
-        PublicPlayer.prototype.hasIsAdmin = false;
-
-        /**
          * PublicPlayer stats.
          * @member {game.PublicStats.$Properties|null|undefined} stats
          * @memberof game.PublicPlayer
@@ -4627,12 +4634,12 @@ export const game = $root.game = (() => {
         PublicPlayer.prototype.stats = null;
 
         /**
-         * PublicPlayer othelloStats.
-         * @member {game.OthelloStats.$Properties|null|undefined} othelloStats
+         * PublicPlayer gameStats.
+         * @member {game.GameStats.$Properties|null|undefined} gameStats
          * @memberof game.PublicPlayer
          * @instance
          */
-        PublicPlayer.prototype.othelloStats = null;
+        PublicPlayer.prototype.gameStats = null;
 
         /**
          * Creates a new PublicPlayer instance using the specified properties.
@@ -4686,142 +4693,78 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 9, wireType 0 =*/72).bool(message.connected);
             if (message.disconnectedAt != null && $Object.hasOwnProperty.call(message, "disconnectedAt") && (typeof message.disconnectedAt === "object" ? message.disconnectedAt.low || message.disconnectedAt.high : message.disconnectedAt !== 0))
                 writer.uint32(/* id 10, wireType 0 =*/80).int64(message.disconnectedAt);
-            if (message.hasDisconnectedAt != null && $Object.hasOwnProperty.call(message, "hasDisconnectedAt") && message.hasDisconnectedAt !== false)
-                writer.uint32(/* id 11, wireType 0 =*/88).bool(message.hasDisconnectedAt);
             if (message.disconnectExpiresAt != null && $Object.hasOwnProperty.call(message, "disconnectExpiresAt") && (typeof message.disconnectExpiresAt === "object" ? message.disconnectExpiresAt.low || message.disconnectExpiresAt.high : message.disconnectExpiresAt !== 0))
                 writer.uint32(/* id 12, wireType 0 =*/96).int64(message.disconnectExpiresAt);
-            if (message.hasDisconnectExpiresAt != null && $Object.hasOwnProperty.call(message, "hasDisconnectExpiresAt") && message.hasDisconnectExpiresAt !== false)
-                writer.uint32(/* id 13, wireType 0 =*/104).bool(message.hasDisconnectExpiresAt);
             if (message.profileUpdatedAt != null && $Object.hasOwnProperty.call(message, "profileUpdatedAt") && (typeof message.profileUpdatedAt === "object" ? message.profileUpdatedAt.low || message.profileUpdatedAt.high : message.profileUpdatedAt !== 0))
                 writer.uint32(/* id 14, wireType 0 =*/112).int64(message.profileUpdatedAt);
-            if (message.hasProfileUpdatedAt != null && $Object.hasOwnProperty.call(message, "hasProfileUpdatedAt") && message.hasProfileUpdatedAt !== false)
-                writer.uint32(/* id 15, wireType 0 =*/120).bool(message.hasProfileUpdatedAt);
             if (message.nameWarEnabled != null && $Object.hasOwnProperty.call(message, "nameWarEnabled") && message.nameWarEnabled !== false)
                 writer.uint32(/* id 16, wireType 0 =*/128).bool(message.nameWarEnabled);
-            if (message.hasNameWarEnabled != null && $Object.hasOwnProperty.call(message, "hasNameWarEnabled") && message.hasNameWarEnabled !== false)
-                writer.uint32(/* id 17, wireType 0 =*/136).bool(message.hasNameWarEnabled);
             if (message.nameWarToggledAt != null && $Object.hasOwnProperty.call(message, "nameWarToggledAt") && (typeof message.nameWarToggledAt === "object" ? message.nameWarToggledAt.low || message.nameWarToggledAt.high : message.nameWarToggledAt !== 0))
                 writer.uint32(/* id 18, wireType 0 =*/144).int64(message.nameWarToggledAt);
-            if (message.hasNameWarToggledAt != null && $Object.hasOwnProperty.call(message, "hasNameWarToggledAt") && message.hasNameWarToggledAt !== false)
-                writer.uint32(/* id 19, wireType 0 =*/152).bool(message.hasNameWarToggledAt);
             if (message.nameWarOriginalName != null && $Object.hasOwnProperty.call(message, "nameWarOriginalName") && message.nameWarOriginalName !== "")
                 writer.uint32(/* id 20, wireType 2 =*/162).string(message.nameWarOriginalName);
             if (message.nameWarPenaltyName != null && $Object.hasOwnProperty.call(message, "nameWarPenaltyName") && message.nameWarPenaltyName !== "")
                 writer.uint32(/* id 21, wireType 2 =*/170).string(message.nameWarPenaltyName);
             if (message.nameWarPunished != null && $Object.hasOwnProperty.call(message, "nameWarPunished") && message.nameWarPunished !== false)
                 writer.uint32(/* id 22, wireType 0 =*/176).bool(message.nameWarPunished);
-            if (message.hasNameWarPunished != null && $Object.hasOwnProperty.call(message, "hasNameWarPunished") && message.hasNameWarPunished !== false)
-                writer.uint32(/* id 23, wireType 0 =*/184).bool(message.hasNameWarPunished);
             if (message.nameWarAllowRename != null && $Object.hasOwnProperty.call(message, "nameWarAllowRename") && message.nameWarAllowRename !== false)
                 writer.uint32(/* id 24, wireType 0 =*/192).bool(message.nameWarAllowRename);
-            if (message.hasNameWarAllowRename != null && $Object.hasOwnProperty.call(message, "hasNameWarAllowRename") && message.hasNameWarAllowRename !== false)
-                writer.uint32(/* id 25, wireType 0 =*/200).bool(message.hasNameWarAllowRename);
             if (message.nameWarRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "nameWarRenameProtectedUntil") && (typeof message.nameWarRenameProtectedUntil === "object" ? message.nameWarRenameProtectedUntil.low || message.nameWarRenameProtectedUntil.high : message.nameWarRenameProtectedUntil !== 0))
                 writer.uint32(/* id 26, wireType 0 =*/208).int64(message.nameWarRenameProtectedUntil);
-            if (message.hasNameWarRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "hasNameWarRenameProtectedUntil") && message.hasNameWarRenameProtectedUntil !== false)
-                writer.uint32(/* id 27, wireType 0 =*/216).bool(message.hasNameWarRenameProtectedUntil);
             if (message.nameWarRenamedBy != null && $Object.hasOwnProperty.call(message, "nameWarRenamedBy") && message.nameWarRenamedBy !== "")
                 writer.uint32(/* id 28, wireType 2 =*/226).string(message.nameWarRenamedBy);
             if (message.nameWarRenamedByName != null && $Object.hasOwnProperty.call(message, "nameWarRenamedByName") && message.nameWarRenamedByName !== "")
                 writer.uint32(/* id 29, wireType 2 =*/234).string(message.nameWarRenamedByName);
             if (message.nameWarRenameWindowStartedAt != null && $Object.hasOwnProperty.call(message, "nameWarRenameWindowStartedAt") && (typeof message.nameWarRenameWindowStartedAt === "object" ? message.nameWarRenameWindowStartedAt.low || message.nameWarRenameWindowStartedAt.high : message.nameWarRenameWindowStartedAt !== 0))
                 writer.uint32(/* id 30, wireType 0 =*/240).int64(message.nameWarRenameWindowStartedAt);
-            if (message.hasNameWarRenameWindowStartedAt != null && $Object.hasOwnProperty.call(message, "hasNameWarRenameWindowStartedAt") && message.hasNameWarRenameWindowStartedAt !== false)
-                writer.uint32(/* id 31, wireType 0 =*/248).bool(message.hasNameWarRenameWindowStartedAt);
             if (message.nameWarRenameCount != null && $Object.hasOwnProperty.call(message, "nameWarRenameCount") && message.nameWarRenameCount !== 0)
                 writer.uint32(/* id 32, wireType 0 =*/256).int32(message.nameWarRenameCount);
-            if (message.hasNameWarRenameCount != null && $Object.hasOwnProperty.call(message, "hasNameWarRenameCount") && message.hasNameWarRenameCount !== false)
-                writer.uint32(/* id 33, wireType 0 =*/264).bool(message.hasNameWarRenameCount);
             if (message.giveawayEnabled != null && $Object.hasOwnProperty.call(message, "giveawayEnabled") && message.giveawayEnabled !== false)
                 writer.uint32(/* id 34, wireType 0 =*/272).bool(message.giveawayEnabled);
-            if (message.hasGiveawayEnabled != null && $Object.hasOwnProperty.call(message, "hasGiveawayEnabled") && message.hasGiveawayEnabled !== false)
-                writer.uint32(/* id 35, wireType 0 =*/280).bool(message.hasGiveawayEnabled);
             if (message.giveawayValue != null && $Object.hasOwnProperty.call(message, "giveawayValue") && !$Object.is(message.giveawayValue, 0))
                 writer.uint32(/* id 36, wireType 1 =*/289).double(message.giveawayValue);
-            if (message.hasGiveawayValue != null && $Object.hasOwnProperty.call(message, "hasGiveawayValue") && message.hasGiveawayValue !== false)
-                writer.uint32(/* id 37, wireType 0 =*/296).bool(message.hasGiveawayValue);
             if (message.giveawayClicks != null && $Object.hasOwnProperty.call(message, "giveawayClicks") && message.giveawayClicks !== 0)
                 writer.uint32(/* id 38, wireType 0 =*/304).int32(message.giveawayClicks);
-            if (message.hasGiveawayClicks != null && $Object.hasOwnProperty.call(message, "hasGiveawayClicks") && message.hasGiveawayClicks !== false)
-                writer.uint32(/* id 39, wireType 0 =*/312).bool(message.hasGiveawayClicks);
             if (message.giveawayBoardText != null && $Object.hasOwnProperty.call(message, "giveawayBoardText") && message.giveawayBoardText !== "")
                 writer.uint32(/* id 40, wireType 2 =*/322).string(message.giveawayBoardText);
             if (message.giveawayBoardSubmittedAt != null && $Object.hasOwnProperty.call(message, "giveawayBoardSubmittedAt") && (typeof message.giveawayBoardSubmittedAt === "object" ? message.giveawayBoardSubmittedAt.low || message.giveawayBoardSubmittedAt.high : message.giveawayBoardSubmittedAt !== 0))
                 writer.uint32(/* id 41, wireType 0 =*/328).int64(message.giveawayBoardSubmittedAt);
-            if (message.hasGiveawayBoardSubmittedAt != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardSubmittedAt") && message.hasGiveawayBoardSubmittedAt !== false)
-                writer.uint32(/* id 42, wireType 0 =*/336).bool(message.hasGiveawayBoardSubmittedAt);
             if (message.giveawayBoardExpiresAt != null && $Object.hasOwnProperty.call(message, "giveawayBoardExpiresAt") && (typeof message.giveawayBoardExpiresAt === "object" ? message.giveawayBoardExpiresAt.low || message.giveawayBoardExpiresAt.high : message.giveawayBoardExpiresAt !== 0))
                 writer.uint32(/* id 43, wireType 0 =*/344).int64(message.giveawayBoardExpiresAt);
-            if (message.hasGiveawayBoardExpiresAt != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardExpiresAt") && message.hasGiveawayBoardExpiresAt !== false)
-                writer.uint32(/* id 44, wireType 0 =*/352).bool(message.hasGiveawayBoardExpiresAt);
             if (message.giveawayBoardLikes != null && $Object.hasOwnProperty.call(message, "giveawayBoardLikes") && message.giveawayBoardLikes !== 0)
                 writer.uint32(/* id 45, wireType 0 =*/360).int32(message.giveawayBoardLikes);
-            if (message.hasGiveawayBoardLikes != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardLikes") && message.hasGiveawayBoardLikes !== false)
-                writer.uint32(/* id 46, wireType 0 =*/368).bool(message.hasGiveawayBoardLikes);
             if (message.giveawayBoardDislikes != null && $Object.hasOwnProperty.call(message, "giveawayBoardDislikes") && message.giveawayBoardDislikes !== 0)
                 writer.uint32(/* id 47, wireType 0 =*/376).int32(message.giveawayBoardDislikes);
-            if (message.hasGiveawayBoardDislikes != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardDislikes") && message.hasGiveawayBoardDislikes !== false)
-                writer.uint32(/* id 48, wireType 0 =*/384).bool(message.hasGiveawayBoardDislikes);
             if (message.giveawayBoardLikesThisHour != null && $Object.hasOwnProperty.call(message, "giveawayBoardLikesThisHour") && message.giveawayBoardLikesThisHour !== 0)
                 writer.uint32(/* id 49, wireType 0 =*/392).int32(message.giveawayBoardLikesThisHour);
-            if (message.hasGiveawayBoardLikesThisHour != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardLikesThisHour") && message.hasGiveawayBoardLikesThisHour !== false)
-                writer.uint32(/* id 50, wireType 0 =*/400).bool(message.hasGiveawayBoardLikesThisHour);
             if (message.giveawayBoardLikeWindowStartedAt != null && $Object.hasOwnProperty.call(message, "giveawayBoardLikeWindowStartedAt") && (typeof message.giveawayBoardLikeWindowStartedAt === "object" ? message.giveawayBoardLikeWindowStartedAt.low || message.giveawayBoardLikeWindowStartedAt.high : message.giveawayBoardLikeWindowStartedAt !== 0))
                 writer.uint32(/* id 51, wireType 0 =*/408).int64(message.giveawayBoardLikeWindowStartedAt);
-            if (message.hasGiveawayBoardLikeWindowStartedAt != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardLikeWindowStartedAt") && message.hasGiveawayBoardLikeWindowStartedAt !== false)
-                writer.uint32(/* id 52, wireType 0 =*/416).bool(message.hasGiveawayBoardLikeWindowStartedAt);
             if (message.giveawayVoteWindowStartedAt != null && $Object.hasOwnProperty.call(message, "giveawayVoteWindowStartedAt") && (typeof message.giveawayVoteWindowStartedAt === "object" ? message.giveawayVoteWindowStartedAt.low || message.giveawayVoteWindowStartedAt.high : message.giveawayVoteWindowStartedAt !== 0))
                 writer.uint32(/* id 53, wireType 0 =*/424).int64(message.giveawayVoteWindowStartedAt);
-            if (message.hasGiveawayVoteWindowStartedAt != null && $Object.hasOwnProperty.call(message, "hasGiveawayVoteWindowStartedAt") && message.hasGiveawayVoteWindowStartedAt !== false)
-                writer.uint32(/* id 54, wireType 0 =*/432).bool(message.hasGiveawayVoteWindowStartedAt);
             if (message.giveawayVoteCount != null && $Object.hasOwnProperty.call(message, "giveawayVoteCount") && message.giveawayVoteCount !== 0)
                 writer.uint32(/* id 55, wireType 0 =*/440).int32(message.giveawayVoteCount);
-            if (message.hasGiveawayVoteCount != null && $Object.hasOwnProperty.call(message, "hasGiveawayVoteCount") && message.hasGiveawayVoteCount !== false)
-                writer.uint32(/* id 56, wireType 0 =*/448).bool(message.hasGiveawayVoteCount);
             if (message.giveawayVoteLikesThisHour != null && $Object.hasOwnProperty.call(message, "giveawayVoteLikesThisHour") && message.giveawayVoteLikesThisHour !== 0)
                 writer.uint32(/* id 57, wireType 0 =*/456).int32(message.giveawayVoteLikesThisHour);
-            if (message.hasGiveawayVoteLikesThisHour != null && $Object.hasOwnProperty.call(message, "hasGiveawayVoteLikesThisHour") && message.hasGiveawayVoteLikesThisHour !== false)
-                writer.uint32(/* id 58, wireType 0 =*/464).bool(message.hasGiveawayVoteLikesThisHour);
             if (message.giveawayVoteDislikesThisHour != null && $Object.hasOwnProperty.call(message, "giveawayVoteDislikesThisHour") && message.giveawayVoteDislikesThisHour !== 0)
                 writer.uint32(/* id 59, wireType 0 =*/472).int32(message.giveawayVoteDislikesThisHour);
-            if (message.hasGiveawayVoteDislikesThisHour != null && $Object.hasOwnProperty.call(message, "hasGiveawayVoteDislikesThisHour") && message.hasGiveawayVoteDislikesThisHour !== false)
-                writer.uint32(/* id 60, wireType 0 =*/480).bool(message.hasGiveawayVoteDislikesThisHour);
             if (message.rankMultiplierUnlocked != null && $Object.hasOwnProperty.call(message, "rankMultiplierUnlocked") && message.rankMultiplierUnlocked !== false)
                 writer.uint32(/* id 61, wireType 0 =*/488).bool(message.rankMultiplierUnlocked);
-            if (message.hasRankMultiplierUnlocked != null && $Object.hasOwnProperty.call(message, "hasRankMultiplierUnlocked") && message.hasRankMultiplierUnlocked !== false)
-                writer.uint32(/* id 62, wireType 0 =*/496).bool(message.hasRankMultiplierUnlocked);
             if (message.extremeModeEnabled != null && $Object.hasOwnProperty.call(message, "extremeModeEnabled") && message.extremeModeEnabled !== false)
                 writer.uint32(/* id 63, wireType 0 =*/504).bool(message.extremeModeEnabled);
-            if (message.hasExtremeModeEnabled != null && $Object.hasOwnProperty.call(message, "hasExtremeModeEnabled") && message.hasExtremeModeEnabled !== false)
-                writer.uint32(/* id 64, wireType 0 =*/512).bool(message.hasExtremeModeEnabled);
             if (message.extremeModeToggledAt != null && $Object.hasOwnProperty.call(message, "extremeModeToggledAt") && (typeof message.extremeModeToggledAt === "object" ? message.extremeModeToggledAt.low || message.extremeModeToggledAt.high : message.extremeModeToggledAt !== 0))
                 writer.uint32(/* id 65, wireType 0 =*/520).int64(message.extremeModeToggledAt);
-            if (message.hasExtremeModeToggledAt != null && $Object.hasOwnProperty.call(message, "hasExtremeModeToggledAt") && message.hasExtremeModeToggledAt !== false)
-                writer.uint32(/* id 66, wireType 0 =*/528).bool(message.hasExtremeModeToggledAt);
             if (message.extremeModeCooldownUntil != null && $Object.hasOwnProperty.call(message, "extremeModeCooldownUntil") && (typeof message.extremeModeCooldownUntil === "object" ? message.extremeModeCooldownUntil.low || message.extremeModeCooldownUntil.high : message.extremeModeCooldownUntil !== 0))
                 writer.uint32(/* id 67, wireType 0 =*/536).int64(message.extremeModeCooldownUntil);
-            if (message.hasExtremeModeCooldownUntil != null && $Object.hasOwnProperty.call(message, "hasExtremeModeCooldownUntil") && message.hasExtremeModeCooldownUntil !== false)
-                writer.uint32(/* id 68, wireType 0 =*/544).bool(message.hasExtremeModeCooldownUntil);
             if (message.extremeWinStreak != null && $Object.hasOwnProperty.call(message, "extremeWinStreak") && message.extremeWinStreak !== 0)
                 writer.uint32(/* id 69, wireType 0 =*/552).int32(message.extremeWinStreak);
-            if (message.hasExtremeWinStreak != null && $Object.hasOwnProperty.call(message, "hasExtremeWinStreak") && message.hasExtremeWinStreak !== false)
-                writer.uint32(/* id 70, wireType 0 =*/560).bool(message.hasExtremeWinStreak);
             if (message.extremeLastDecayHour != null && $Object.hasOwnProperty.call(message, "extremeLastDecayHour") && (typeof message.extremeLastDecayHour === "object" ? message.extremeLastDecayHour.low || message.extremeLastDecayHour.high : message.extremeLastDecayHour !== 0))
                 writer.uint32(/* id 71, wireType 0 =*/568).int64(message.extremeLastDecayHour);
-            if (message.hasExtremeLastDecayHour != null && $Object.hasOwnProperty.call(message, "hasExtremeLastDecayHour") && message.hasExtremeLastDecayHour !== false)
-                writer.uint32(/* id 72, wireType 0 =*/576).bool(message.hasExtremeLastDecayHour);
             if (message.extremeForceClosed != null && $Object.hasOwnProperty.call(message, "extremeForceClosed") && message.extremeForceClosed !== false)
                 writer.uint32(/* id 73, wireType 0 =*/584).bool(message.extremeForceClosed);
-            if (message.hasExtremeForceClosed != null && $Object.hasOwnProperty.call(message, "hasExtremeForceClosed") && message.hasExtremeForceClosed !== false)
-                writer.uint32(/* id 74, wireType 0 =*/592).bool(message.hasExtremeForceClosed);
             if (message.extremeForceClosedAt != null && $Object.hasOwnProperty.call(message, "extremeForceClosedAt") && (typeof message.extremeForceClosedAt === "object" ? message.extremeForceClosedAt.low || message.extremeForceClosedAt.high : message.extremeForceClosedAt !== 0))
                 writer.uint32(/* id 75, wireType 0 =*/600).int64(message.extremeForceClosedAt);
-            if (message.hasExtremeForceClosedAt != null && $Object.hasOwnProperty.call(message, "hasExtremeForceClosedAt") && message.hasExtremeForceClosedAt !== false)
-                writer.uint32(/* id 76, wireType 0 =*/608).bool(message.hasExtremeForceClosedAt);
             if (message.extremeRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "extremeRenameProtectedUntil") && (typeof message.extremeRenameProtectedUntil === "object" ? message.extremeRenameProtectedUntil.low || message.extremeRenameProtectedUntil.high : message.extremeRenameProtectedUntil !== 0))
                 writer.uint32(/* id 77, wireType 0 =*/616).int64(message.extremeRenameProtectedUntil);
-            if (message.hasExtremeRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "hasExtremeRenameProtectedUntil") && message.hasExtremeRenameProtectedUntil !== false)
-                writer.uint32(/* id 78, wireType 0 =*/624).bool(message.hasExtremeRenameProtectedUntil);
             if (message.extremeRenamedBy != null && $Object.hasOwnProperty.call(message, "extremeRenamedBy") && message.extremeRenamedBy !== "")
                 writer.uint32(/* id 79, wireType 2 =*/634).string(message.extremeRenamedBy);
             if (message.extremeRenamedByName != null && $Object.hasOwnProperty.call(message, "extremeRenamedByName") && message.extremeRenamedByName !== "")
@@ -4830,12 +4773,12 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 81, wireType 2 =*/650).string(message.roomId);
             if (message.isAdmin != null && $Object.hasOwnProperty.call(message, "isAdmin") && message.isAdmin !== false)
                 writer.uint32(/* id 82, wireType 0 =*/656).bool(message.isAdmin);
-            if (message.hasIsAdmin != null && $Object.hasOwnProperty.call(message, "hasIsAdmin") && message.hasIsAdmin !== false)
-                writer.uint32(/* id 83, wireType 0 =*/664).bool(message.hasIsAdmin);
             if (message.stats != null && $Object.hasOwnProperty.call(message, "stats"))
                 $root.game.PublicStats.encode(message.stats, writer.uint32(/* id 84, wireType 2 =*/674).fork(), _depth + 1).ldelim();
-            if (message.othelloStats != null && $Object.hasOwnProperty.call(message, "othelloStats"))
-                $root.game.OthelloStats.encode(message.othelloStats, writer.uint32(/* id 85, wireType 2 =*/682).fork(), _depth + 1).ldelim();
+            if (message.gameStats != null && $Object.hasOwnProperty.call(message, "gameStats"))
+                $root.game.GameStats.encode(message.gameStats, writer.uint32(/* id 85, wireType 2 =*/682).fork(), _depth + 1).ldelim();
+            if (message.avatarUrl != null && $Object.hasOwnProperty.call(message, "avatarUrl") && message.avatarUrl !== "")
+                writer.uint32(/* id 86, wireType 2 =*/690).string(message.avatarUrl);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -4928,6 +4871,15 @@ export const game = $root.game = (() => {
                             delete message.factionId;
                         continue;
                     }
+                case 86: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.avatarUrl = value;
+                        else
+                            delete message.avatarUrl;
+                        continue;
+                    }
                 case 6: {
                         if (wireType !== 2)
                             break;
@@ -4970,15 +4922,6 @@ export const game = $root.game = (() => {
                             delete message.disconnectedAt;
                         continue;
                     }
-                case 11: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasDisconnectedAt = value;
-                        else
-                            delete message.hasDisconnectedAt;
-                        continue;
-                    }
                 case 12: {
                         if (wireType !== 0)
                             break;
@@ -4986,15 +4929,6 @@ export const game = $root.game = (() => {
                             message.disconnectExpiresAt = value;
                         else
                             delete message.disconnectExpiresAt;
-                        continue;
-                    }
-                case 13: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasDisconnectExpiresAt = value;
-                        else
-                            delete message.hasDisconnectExpiresAt;
                         continue;
                     }
                 case 14: {
@@ -5006,15 +4940,6 @@ export const game = $root.game = (() => {
                             delete message.profileUpdatedAt;
                         continue;
                     }
-                case 15: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasProfileUpdatedAt = value;
-                        else
-                            delete message.hasProfileUpdatedAt;
-                        continue;
-                    }
                 case 16: {
                         if (wireType !== 0)
                             break;
@@ -5024,15 +4949,6 @@ export const game = $root.game = (() => {
                             delete message.nameWarEnabled;
                         continue;
                     }
-                case 17: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasNameWarEnabled = value;
-                        else
-                            delete message.hasNameWarEnabled;
-                        continue;
-                    }
                 case 18: {
                         if (wireType !== 0)
                             break;
@@ -5040,15 +4956,6 @@ export const game = $root.game = (() => {
                             message.nameWarToggledAt = value;
                         else
                             delete message.nameWarToggledAt;
-                        continue;
-                    }
-                case 19: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasNameWarToggledAt = value;
-                        else
-                            delete message.hasNameWarToggledAt;
                         continue;
                     }
                 case 20: {
@@ -5078,15 +4985,6 @@ export const game = $root.game = (() => {
                             delete message.nameWarPunished;
                         continue;
                     }
-                case 23: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasNameWarPunished = value;
-                        else
-                            delete message.hasNameWarPunished;
-                        continue;
-                    }
                 case 24: {
                         if (wireType !== 0)
                             break;
@@ -5096,15 +4994,6 @@ export const game = $root.game = (() => {
                             delete message.nameWarAllowRename;
                         continue;
                     }
-                case 25: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasNameWarAllowRename = value;
-                        else
-                            delete message.hasNameWarAllowRename;
-                        continue;
-                    }
                 case 26: {
                         if (wireType !== 0)
                             break;
@@ -5112,15 +5001,6 @@ export const game = $root.game = (() => {
                             message.nameWarRenameProtectedUntil = value;
                         else
                             delete message.nameWarRenameProtectedUntil;
-                        continue;
-                    }
-                case 27: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasNameWarRenameProtectedUntil = value;
-                        else
-                            delete message.hasNameWarRenameProtectedUntil;
                         continue;
                     }
                 case 28: {
@@ -5150,15 +5030,6 @@ export const game = $root.game = (() => {
                             delete message.nameWarRenameWindowStartedAt;
                         continue;
                     }
-                case 31: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasNameWarRenameWindowStartedAt = value;
-                        else
-                            delete message.hasNameWarRenameWindowStartedAt;
-                        continue;
-                    }
                 case 32: {
                         if (wireType !== 0)
                             break;
@@ -5166,15 +5037,6 @@ export const game = $root.game = (() => {
                             message.nameWarRenameCount = value;
                         else
                             delete message.nameWarRenameCount;
-                        continue;
-                    }
-                case 33: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasNameWarRenameCount = value;
-                        else
-                            delete message.hasNameWarRenameCount;
                         continue;
                     }
                 case 34: {
@@ -5186,15 +5048,6 @@ export const game = $root.game = (() => {
                             delete message.giveawayEnabled;
                         continue;
                     }
-                case 35: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasGiveawayEnabled = value;
-                        else
-                            delete message.hasGiveawayEnabled;
-                        continue;
-                    }
                 case 36: {
                         if (wireType !== 1)
                             break;
@@ -5204,15 +5057,6 @@ export const game = $root.game = (() => {
                             delete message.giveawayValue;
                         continue;
                     }
-                case 37: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasGiveawayValue = value;
-                        else
-                            delete message.hasGiveawayValue;
-                        continue;
-                    }
                 case 38: {
                         if (wireType !== 0)
                             break;
@@ -5220,15 +5064,6 @@ export const game = $root.game = (() => {
                             message.giveawayClicks = value;
                         else
                             delete message.giveawayClicks;
-                        continue;
-                    }
-                case 39: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasGiveawayClicks = value;
-                        else
-                            delete message.hasGiveawayClicks;
                         continue;
                     }
                 case 40: {
@@ -5249,15 +5084,6 @@ export const game = $root.game = (() => {
                             delete message.giveawayBoardSubmittedAt;
                         continue;
                     }
-                case 42: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasGiveawayBoardSubmittedAt = value;
-                        else
-                            delete message.hasGiveawayBoardSubmittedAt;
-                        continue;
-                    }
                 case 43: {
                         if (wireType !== 0)
                             break;
@@ -5265,15 +5091,6 @@ export const game = $root.game = (() => {
                             message.giveawayBoardExpiresAt = value;
                         else
                             delete message.giveawayBoardExpiresAt;
-                        continue;
-                    }
-                case 44: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasGiveawayBoardExpiresAt = value;
-                        else
-                            delete message.hasGiveawayBoardExpiresAt;
                         continue;
                     }
                 case 45: {
@@ -5285,15 +5102,6 @@ export const game = $root.game = (() => {
                             delete message.giveawayBoardLikes;
                         continue;
                     }
-                case 46: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasGiveawayBoardLikes = value;
-                        else
-                            delete message.hasGiveawayBoardLikes;
-                        continue;
-                    }
                 case 47: {
                         if (wireType !== 0)
                             break;
@@ -5301,15 +5109,6 @@ export const game = $root.game = (() => {
                             message.giveawayBoardDislikes = value;
                         else
                             delete message.giveawayBoardDislikes;
-                        continue;
-                    }
-                case 48: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasGiveawayBoardDislikes = value;
-                        else
-                            delete message.hasGiveawayBoardDislikes;
                         continue;
                     }
                 case 49: {
@@ -5321,15 +5120,6 @@ export const game = $root.game = (() => {
                             delete message.giveawayBoardLikesThisHour;
                         continue;
                     }
-                case 50: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasGiveawayBoardLikesThisHour = value;
-                        else
-                            delete message.hasGiveawayBoardLikesThisHour;
-                        continue;
-                    }
                 case 51: {
                         if (wireType !== 0)
                             break;
@@ -5337,15 +5127,6 @@ export const game = $root.game = (() => {
                             message.giveawayBoardLikeWindowStartedAt = value;
                         else
                             delete message.giveawayBoardLikeWindowStartedAt;
-                        continue;
-                    }
-                case 52: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasGiveawayBoardLikeWindowStartedAt = value;
-                        else
-                            delete message.hasGiveawayBoardLikeWindowStartedAt;
                         continue;
                     }
                 case 53: {
@@ -5357,15 +5138,6 @@ export const game = $root.game = (() => {
                             delete message.giveawayVoteWindowStartedAt;
                         continue;
                     }
-                case 54: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasGiveawayVoteWindowStartedAt = value;
-                        else
-                            delete message.hasGiveawayVoteWindowStartedAt;
-                        continue;
-                    }
                 case 55: {
                         if (wireType !== 0)
                             break;
@@ -5373,15 +5145,6 @@ export const game = $root.game = (() => {
                             message.giveawayVoteCount = value;
                         else
                             delete message.giveawayVoteCount;
-                        continue;
-                    }
-                case 56: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasGiveawayVoteCount = value;
-                        else
-                            delete message.hasGiveawayVoteCount;
                         continue;
                     }
                 case 57: {
@@ -5393,15 +5156,6 @@ export const game = $root.game = (() => {
                             delete message.giveawayVoteLikesThisHour;
                         continue;
                     }
-                case 58: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasGiveawayVoteLikesThisHour = value;
-                        else
-                            delete message.hasGiveawayVoteLikesThisHour;
-                        continue;
-                    }
                 case 59: {
                         if (wireType !== 0)
                             break;
@@ -5409,15 +5163,6 @@ export const game = $root.game = (() => {
                             message.giveawayVoteDislikesThisHour = value;
                         else
                             delete message.giveawayVoteDislikesThisHour;
-                        continue;
-                    }
-                case 60: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasGiveawayVoteDislikesThisHour = value;
-                        else
-                            delete message.hasGiveawayVoteDislikesThisHour;
                         continue;
                     }
                 case 61: {
@@ -5429,15 +5174,6 @@ export const game = $root.game = (() => {
                             delete message.rankMultiplierUnlocked;
                         continue;
                     }
-                case 62: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasRankMultiplierUnlocked = value;
-                        else
-                            delete message.hasRankMultiplierUnlocked;
-                        continue;
-                    }
                 case 63: {
                         if (wireType !== 0)
                             break;
@@ -5445,15 +5181,6 @@ export const game = $root.game = (() => {
                             message.extremeModeEnabled = value;
                         else
                             delete message.extremeModeEnabled;
-                        continue;
-                    }
-                case 64: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasExtremeModeEnabled = value;
-                        else
-                            delete message.hasExtremeModeEnabled;
                         continue;
                     }
                 case 65: {
@@ -5465,15 +5192,6 @@ export const game = $root.game = (() => {
                             delete message.extremeModeToggledAt;
                         continue;
                     }
-                case 66: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasExtremeModeToggledAt = value;
-                        else
-                            delete message.hasExtremeModeToggledAt;
-                        continue;
-                    }
                 case 67: {
                         if (wireType !== 0)
                             break;
@@ -5481,15 +5199,6 @@ export const game = $root.game = (() => {
                             message.extremeModeCooldownUntil = value;
                         else
                             delete message.extremeModeCooldownUntil;
-                        continue;
-                    }
-                case 68: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasExtremeModeCooldownUntil = value;
-                        else
-                            delete message.hasExtremeModeCooldownUntil;
                         continue;
                     }
                 case 69: {
@@ -5501,15 +5210,6 @@ export const game = $root.game = (() => {
                             delete message.extremeWinStreak;
                         continue;
                     }
-                case 70: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasExtremeWinStreak = value;
-                        else
-                            delete message.hasExtremeWinStreak;
-                        continue;
-                    }
                 case 71: {
                         if (wireType !== 0)
                             break;
@@ -5517,15 +5217,6 @@ export const game = $root.game = (() => {
                             message.extremeLastDecayHour = value;
                         else
                             delete message.extremeLastDecayHour;
-                        continue;
-                    }
-                case 72: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasExtremeLastDecayHour = value;
-                        else
-                            delete message.hasExtremeLastDecayHour;
                         continue;
                     }
                 case 73: {
@@ -5537,15 +5228,6 @@ export const game = $root.game = (() => {
                             delete message.extremeForceClosed;
                         continue;
                     }
-                case 74: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasExtremeForceClosed = value;
-                        else
-                            delete message.hasExtremeForceClosed;
-                        continue;
-                    }
                 case 75: {
                         if (wireType !== 0)
                             break;
@@ -5555,15 +5237,6 @@ export const game = $root.game = (() => {
                             delete message.extremeForceClosedAt;
                         continue;
                     }
-                case 76: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasExtremeForceClosedAt = value;
-                        else
-                            delete message.hasExtremeForceClosedAt;
-                        continue;
-                    }
                 case 77: {
                         if (wireType !== 0)
                             break;
@@ -5571,15 +5244,6 @@ export const game = $root.game = (() => {
                             message.extremeRenameProtectedUntil = value;
                         else
                             delete message.extremeRenameProtectedUntil;
-                        continue;
-                    }
-                case 78: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasExtremeRenameProtectedUntil = value;
-                        else
-                            delete message.hasExtremeRenameProtectedUntil;
                         continue;
                     }
                 case 79: {
@@ -5618,15 +5282,6 @@ export const game = $root.game = (() => {
                             delete message.isAdmin;
                         continue;
                     }
-                case 83: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasIsAdmin = value;
-                        else
-                            delete message.hasIsAdmin;
-                        continue;
-                    }
                 case 84: {
                         if (wireType !== 2)
                             break;
@@ -5636,7 +5291,7 @@ export const game = $root.game = (() => {
                 case 85: {
                         if (wireType !== 2)
                             break;
-                        message.othelloStats = $root.game.OthelloStats.decode(reader, reader.uint32(), $undefined, _depth + 1, message.othelloStats);
+                        message.gameStats = $root.game.GameStats.decode(reader, reader.uint32(), $undefined, _depth + 1, message.gameStats);
                         continue;
                     }
                 }
@@ -5697,6 +5352,9 @@ export const game = $root.game = (() => {
             if (message.factionId != null && $Object.hasOwnProperty.call(message, "factionId"))
                 if (!$util.isString(message.factionId))
                     return "factionId: string expected";
+            if (message.avatarUrl != null && $Object.hasOwnProperty.call(message, "avatarUrl"))
+                if (!$util.isString(message.avatarUrl))
+                    return "avatarUrl: string expected";
             if (message.factionLabel != null && $Object.hasOwnProperty.call(message, "factionLabel"))
                 if (!$util.isString(message.factionLabel))
                     return "factionLabel: string expected";
@@ -5714,33 +5372,18 @@ export const game = $root.game = (() => {
             if (message.disconnectedAt != null && $Object.hasOwnProperty.call(message, "disconnectedAt"))
                 if (!$util.isInteger(message.disconnectedAt) && !(message.disconnectedAt && $util.isInteger(message.disconnectedAt.low) && $util.isInteger(message.disconnectedAt.high)))
                     return "disconnectedAt: integer|Long expected";
-            if (message.hasDisconnectedAt != null && $Object.hasOwnProperty.call(message, "hasDisconnectedAt"))
-                if (typeof message.hasDisconnectedAt !== "boolean")
-                    return "hasDisconnectedAt: boolean expected";
             if (message.disconnectExpiresAt != null && $Object.hasOwnProperty.call(message, "disconnectExpiresAt"))
                 if (!$util.isInteger(message.disconnectExpiresAt) && !(message.disconnectExpiresAt && $util.isInteger(message.disconnectExpiresAt.low) && $util.isInteger(message.disconnectExpiresAt.high)))
                     return "disconnectExpiresAt: integer|Long expected";
-            if (message.hasDisconnectExpiresAt != null && $Object.hasOwnProperty.call(message, "hasDisconnectExpiresAt"))
-                if (typeof message.hasDisconnectExpiresAt !== "boolean")
-                    return "hasDisconnectExpiresAt: boolean expected";
             if (message.profileUpdatedAt != null && $Object.hasOwnProperty.call(message, "profileUpdatedAt"))
                 if (!$util.isInteger(message.profileUpdatedAt) && !(message.profileUpdatedAt && $util.isInteger(message.profileUpdatedAt.low) && $util.isInteger(message.profileUpdatedAt.high)))
                     return "profileUpdatedAt: integer|Long expected";
-            if (message.hasProfileUpdatedAt != null && $Object.hasOwnProperty.call(message, "hasProfileUpdatedAt"))
-                if (typeof message.hasProfileUpdatedAt !== "boolean")
-                    return "hasProfileUpdatedAt: boolean expected";
             if (message.nameWarEnabled != null && $Object.hasOwnProperty.call(message, "nameWarEnabled"))
                 if (typeof message.nameWarEnabled !== "boolean")
                     return "nameWarEnabled: boolean expected";
-            if (message.hasNameWarEnabled != null && $Object.hasOwnProperty.call(message, "hasNameWarEnabled"))
-                if (typeof message.hasNameWarEnabled !== "boolean")
-                    return "hasNameWarEnabled: boolean expected";
             if (message.nameWarToggledAt != null && $Object.hasOwnProperty.call(message, "nameWarToggledAt"))
                 if (!$util.isInteger(message.nameWarToggledAt) && !(message.nameWarToggledAt && $util.isInteger(message.nameWarToggledAt.low) && $util.isInteger(message.nameWarToggledAt.high)))
                     return "nameWarToggledAt: integer|Long expected";
-            if (message.hasNameWarToggledAt != null && $Object.hasOwnProperty.call(message, "hasNameWarToggledAt"))
-                if (typeof message.hasNameWarToggledAt !== "boolean")
-                    return "hasNameWarToggledAt: boolean expected";
             if (message.nameWarOriginalName != null && $Object.hasOwnProperty.call(message, "nameWarOriginalName"))
                 if (!$util.isString(message.nameWarOriginalName))
                     return "nameWarOriginalName: string expected";
@@ -5750,21 +5393,12 @@ export const game = $root.game = (() => {
             if (message.nameWarPunished != null && $Object.hasOwnProperty.call(message, "nameWarPunished"))
                 if (typeof message.nameWarPunished !== "boolean")
                     return "nameWarPunished: boolean expected";
-            if (message.hasNameWarPunished != null && $Object.hasOwnProperty.call(message, "hasNameWarPunished"))
-                if (typeof message.hasNameWarPunished !== "boolean")
-                    return "hasNameWarPunished: boolean expected";
             if (message.nameWarAllowRename != null && $Object.hasOwnProperty.call(message, "nameWarAllowRename"))
                 if (typeof message.nameWarAllowRename !== "boolean")
                     return "nameWarAllowRename: boolean expected";
-            if (message.hasNameWarAllowRename != null && $Object.hasOwnProperty.call(message, "hasNameWarAllowRename"))
-                if (typeof message.hasNameWarAllowRename !== "boolean")
-                    return "hasNameWarAllowRename: boolean expected";
             if (message.nameWarRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "nameWarRenameProtectedUntil"))
                 if (!$util.isInteger(message.nameWarRenameProtectedUntil) && !(message.nameWarRenameProtectedUntil && $util.isInteger(message.nameWarRenameProtectedUntil.low) && $util.isInteger(message.nameWarRenameProtectedUntil.high)))
                     return "nameWarRenameProtectedUntil: integer|Long expected";
-            if (message.hasNameWarRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "hasNameWarRenameProtectedUntil"))
-                if (typeof message.hasNameWarRenameProtectedUntil !== "boolean")
-                    return "hasNameWarRenameProtectedUntil: boolean expected";
             if (message.nameWarRenamedBy != null && $Object.hasOwnProperty.call(message, "nameWarRenamedBy"))
                 if (!$util.isString(message.nameWarRenamedBy))
                     return "nameWarRenamedBy: string expected";
@@ -5774,150 +5408,78 @@ export const game = $root.game = (() => {
             if (message.nameWarRenameWindowStartedAt != null && $Object.hasOwnProperty.call(message, "nameWarRenameWindowStartedAt"))
                 if (!$util.isInteger(message.nameWarRenameWindowStartedAt) && !(message.nameWarRenameWindowStartedAt && $util.isInteger(message.nameWarRenameWindowStartedAt.low) && $util.isInteger(message.nameWarRenameWindowStartedAt.high)))
                     return "nameWarRenameWindowStartedAt: integer|Long expected";
-            if (message.hasNameWarRenameWindowStartedAt != null && $Object.hasOwnProperty.call(message, "hasNameWarRenameWindowStartedAt"))
-                if (typeof message.hasNameWarRenameWindowStartedAt !== "boolean")
-                    return "hasNameWarRenameWindowStartedAt: boolean expected";
             if (message.nameWarRenameCount != null && $Object.hasOwnProperty.call(message, "nameWarRenameCount"))
                 if (!$util.isInteger(message.nameWarRenameCount))
                     return "nameWarRenameCount: integer expected";
-            if (message.hasNameWarRenameCount != null && $Object.hasOwnProperty.call(message, "hasNameWarRenameCount"))
-                if (typeof message.hasNameWarRenameCount !== "boolean")
-                    return "hasNameWarRenameCount: boolean expected";
             if (message.giveawayEnabled != null && $Object.hasOwnProperty.call(message, "giveawayEnabled"))
                 if (typeof message.giveawayEnabled !== "boolean")
                     return "giveawayEnabled: boolean expected";
-            if (message.hasGiveawayEnabled != null && $Object.hasOwnProperty.call(message, "hasGiveawayEnabled"))
-                if (typeof message.hasGiveawayEnabled !== "boolean")
-                    return "hasGiveawayEnabled: boolean expected";
             if (message.giveawayValue != null && $Object.hasOwnProperty.call(message, "giveawayValue"))
                 if (typeof message.giveawayValue !== "number")
                     return "giveawayValue: number expected";
-            if (message.hasGiveawayValue != null && $Object.hasOwnProperty.call(message, "hasGiveawayValue"))
-                if (typeof message.hasGiveawayValue !== "boolean")
-                    return "hasGiveawayValue: boolean expected";
             if (message.giveawayClicks != null && $Object.hasOwnProperty.call(message, "giveawayClicks"))
                 if (!$util.isInteger(message.giveawayClicks))
                     return "giveawayClicks: integer expected";
-            if (message.hasGiveawayClicks != null && $Object.hasOwnProperty.call(message, "hasGiveawayClicks"))
-                if (typeof message.hasGiveawayClicks !== "boolean")
-                    return "hasGiveawayClicks: boolean expected";
             if (message.giveawayBoardText != null && $Object.hasOwnProperty.call(message, "giveawayBoardText"))
                 if (!$util.isString(message.giveawayBoardText))
                     return "giveawayBoardText: string expected";
             if (message.giveawayBoardSubmittedAt != null && $Object.hasOwnProperty.call(message, "giveawayBoardSubmittedAt"))
                 if (!$util.isInteger(message.giveawayBoardSubmittedAt) && !(message.giveawayBoardSubmittedAt && $util.isInteger(message.giveawayBoardSubmittedAt.low) && $util.isInteger(message.giveawayBoardSubmittedAt.high)))
                     return "giveawayBoardSubmittedAt: integer|Long expected";
-            if (message.hasGiveawayBoardSubmittedAt != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardSubmittedAt"))
-                if (typeof message.hasGiveawayBoardSubmittedAt !== "boolean")
-                    return "hasGiveawayBoardSubmittedAt: boolean expected";
             if (message.giveawayBoardExpiresAt != null && $Object.hasOwnProperty.call(message, "giveawayBoardExpiresAt"))
                 if (!$util.isInteger(message.giveawayBoardExpiresAt) && !(message.giveawayBoardExpiresAt && $util.isInteger(message.giveawayBoardExpiresAt.low) && $util.isInteger(message.giveawayBoardExpiresAt.high)))
                     return "giveawayBoardExpiresAt: integer|Long expected";
-            if (message.hasGiveawayBoardExpiresAt != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardExpiresAt"))
-                if (typeof message.hasGiveawayBoardExpiresAt !== "boolean")
-                    return "hasGiveawayBoardExpiresAt: boolean expected";
             if (message.giveawayBoardLikes != null && $Object.hasOwnProperty.call(message, "giveawayBoardLikes"))
                 if (!$util.isInteger(message.giveawayBoardLikes))
                     return "giveawayBoardLikes: integer expected";
-            if (message.hasGiveawayBoardLikes != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardLikes"))
-                if (typeof message.hasGiveawayBoardLikes !== "boolean")
-                    return "hasGiveawayBoardLikes: boolean expected";
             if (message.giveawayBoardDislikes != null && $Object.hasOwnProperty.call(message, "giveawayBoardDislikes"))
                 if (!$util.isInteger(message.giveawayBoardDislikes))
                     return "giveawayBoardDislikes: integer expected";
-            if (message.hasGiveawayBoardDislikes != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardDislikes"))
-                if (typeof message.hasGiveawayBoardDislikes !== "boolean")
-                    return "hasGiveawayBoardDislikes: boolean expected";
             if (message.giveawayBoardLikesThisHour != null && $Object.hasOwnProperty.call(message, "giveawayBoardLikesThisHour"))
                 if (!$util.isInteger(message.giveawayBoardLikesThisHour))
                     return "giveawayBoardLikesThisHour: integer expected";
-            if (message.hasGiveawayBoardLikesThisHour != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardLikesThisHour"))
-                if (typeof message.hasGiveawayBoardLikesThisHour !== "boolean")
-                    return "hasGiveawayBoardLikesThisHour: boolean expected";
             if (message.giveawayBoardLikeWindowStartedAt != null && $Object.hasOwnProperty.call(message, "giveawayBoardLikeWindowStartedAt"))
                 if (!$util.isInteger(message.giveawayBoardLikeWindowStartedAt) && !(message.giveawayBoardLikeWindowStartedAt && $util.isInteger(message.giveawayBoardLikeWindowStartedAt.low) && $util.isInteger(message.giveawayBoardLikeWindowStartedAt.high)))
                     return "giveawayBoardLikeWindowStartedAt: integer|Long expected";
-            if (message.hasGiveawayBoardLikeWindowStartedAt != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardLikeWindowStartedAt"))
-                if (typeof message.hasGiveawayBoardLikeWindowStartedAt !== "boolean")
-                    return "hasGiveawayBoardLikeWindowStartedAt: boolean expected";
             if (message.giveawayVoteWindowStartedAt != null && $Object.hasOwnProperty.call(message, "giveawayVoteWindowStartedAt"))
                 if (!$util.isInteger(message.giveawayVoteWindowStartedAt) && !(message.giveawayVoteWindowStartedAt && $util.isInteger(message.giveawayVoteWindowStartedAt.low) && $util.isInteger(message.giveawayVoteWindowStartedAt.high)))
                     return "giveawayVoteWindowStartedAt: integer|Long expected";
-            if (message.hasGiveawayVoteWindowStartedAt != null && $Object.hasOwnProperty.call(message, "hasGiveawayVoteWindowStartedAt"))
-                if (typeof message.hasGiveawayVoteWindowStartedAt !== "boolean")
-                    return "hasGiveawayVoteWindowStartedAt: boolean expected";
             if (message.giveawayVoteCount != null && $Object.hasOwnProperty.call(message, "giveawayVoteCount"))
                 if (!$util.isInteger(message.giveawayVoteCount))
                     return "giveawayVoteCount: integer expected";
-            if (message.hasGiveawayVoteCount != null && $Object.hasOwnProperty.call(message, "hasGiveawayVoteCount"))
-                if (typeof message.hasGiveawayVoteCount !== "boolean")
-                    return "hasGiveawayVoteCount: boolean expected";
             if (message.giveawayVoteLikesThisHour != null && $Object.hasOwnProperty.call(message, "giveawayVoteLikesThisHour"))
                 if (!$util.isInteger(message.giveawayVoteLikesThisHour))
                     return "giveawayVoteLikesThisHour: integer expected";
-            if (message.hasGiveawayVoteLikesThisHour != null && $Object.hasOwnProperty.call(message, "hasGiveawayVoteLikesThisHour"))
-                if (typeof message.hasGiveawayVoteLikesThisHour !== "boolean")
-                    return "hasGiveawayVoteLikesThisHour: boolean expected";
             if (message.giveawayVoteDislikesThisHour != null && $Object.hasOwnProperty.call(message, "giveawayVoteDislikesThisHour"))
                 if (!$util.isInteger(message.giveawayVoteDislikesThisHour))
                     return "giveawayVoteDislikesThisHour: integer expected";
-            if (message.hasGiveawayVoteDislikesThisHour != null && $Object.hasOwnProperty.call(message, "hasGiveawayVoteDislikesThisHour"))
-                if (typeof message.hasGiveawayVoteDislikesThisHour !== "boolean")
-                    return "hasGiveawayVoteDislikesThisHour: boolean expected";
             if (message.rankMultiplierUnlocked != null && $Object.hasOwnProperty.call(message, "rankMultiplierUnlocked"))
                 if (typeof message.rankMultiplierUnlocked !== "boolean")
                     return "rankMultiplierUnlocked: boolean expected";
-            if (message.hasRankMultiplierUnlocked != null && $Object.hasOwnProperty.call(message, "hasRankMultiplierUnlocked"))
-                if (typeof message.hasRankMultiplierUnlocked !== "boolean")
-                    return "hasRankMultiplierUnlocked: boolean expected";
             if (message.extremeModeEnabled != null && $Object.hasOwnProperty.call(message, "extremeModeEnabled"))
                 if (typeof message.extremeModeEnabled !== "boolean")
                     return "extremeModeEnabled: boolean expected";
-            if (message.hasExtremeModeEnabled != null && $Object.hasOwnProperty.call(message, "hasExtremeModeEnabled"))
-                if (typeof message.hasExtremeModeEnabled !== "boolean")
-                    return "hasExtremeModeEnabled: boolean expected";
             if (message.extremeModeToggledAt != null && $Object.hasOwnProperty.call(message, "extremeModeToggledAt"))
                 if (!$util.isInteger(message.extremeModeToggledAt) && !(message.extremeModeToggledAt && $util.isInteger(message.extremeModeToggledAt.low) && $util.isInteger(message.extremeModeToggledAt.high)))
                     return "extremeModeToggledAt: integer|Long expected";
-            if (message.hasExtremeModeToggledAt != null && $Object.hasOwnProperty.call(message, "hasExtremeModeToggledAt"))
-                if (typeof message.hasExtremeModeToggledAt !== "boolean")
-                    return "hasExtremeModeToggledAt: boolean expected";
             if (message.extremeModeCooldownUntil != null && $Object.hasOwnProperty.call(message, "extremeModeCooldownUntil"))
                 if (!$util.isInteger(message.extremeModeCooldownUntil) && !(message.extremeModeCooldownUntil && $util.isInteger(message.extremeModeCooldownUntil.low) && $util.isInteger(message.extremeModeCooldownUntil.high)))
                     return "extremeModeCooldownUntil: integer|Long expected";
-            if (message.hasExtremeModeCooldownUntil != null && $Object.hasOwnProperty.call(message, "hasExtremeModeCooldownUntil"))
-                if (typeof message.hasExtremeModeCooldownUntil !== "boolean")
-                    return "hasExtremeModeCooldownUntil: boolean expected";
             if (message.extremeWinStreak != null && $Object.hasOwnProperty.call(message, "extremeWinStreak"))
                 if (!$util.isInteger(message.extremeWinStreak))
                     return "extremeWinStreak: integer expected";
-            if (message.hasExtremeWinStreak != null && $Object.hasOwnProperty.call(message, "hasExtremeWinStreak"))
-                if (typeof message.hasExtremeWinStreak !== "boolean")
-                    return "hasExtremeWinStreak: boolean expected";
             if (message.extremeLastDecayHour != null && $Object.hasOwnProperty.call(message, "extremeLastDecayHour"))
                 if (!$util.isInteger(message.extremeLastDecayHour) && !(message.extremeLastDecayHour && $util.isInteger(message.extremeLastDecayHour.low) && $util.isInteger(message.extremeLastDecayHour.high)))
                     return "extremeLastDecayHour: integer|Long expected";
-            if (message.hasExtremeLastDecayHour != null && $Object.hasOwnProperty.call(message, "hasExtremeLastDecayHour"))
-                if (typeof message.hasExtremeLastDecayHour !== "boolean")
-                    return "hasExtremeLastDecayHour: boolean expected";
             if (message.extremeForceClosed != null && $Object.hasOwnProperty.call(message, "extremeForceClosed"))
                 if (typeof message.extremeForceClosed !== "boolean")
                     return "extremeForceClosed: boolean expected";
-            if (message.hasExtremeForceClosed != null && $Object.hasOwnProperty.call(message, "hasExtremeForceClosed"))
-                if (typeof message.hasExtremeForceClosed !== "boolean")
-                    return "hasExtremeForceClosed: boolean expected";
             if (message.extremeForceClosedAt != null && $Object.hasOwnProperty.call(message, "extremeForceClosedAt"))
                 if (!$util.isInteger(message.extremeForceClosedAt) && !(message.extremeForceClosedAt && $util.isInteger(message.extremeForceClosedAt.low) && $util.isInteger(message.extremeForceClosedAt.high)))
                     return "extremeForceClosedAt: integer|Long expected";
-            if (message.hasExtremeForceClosedAt != null && $Object.hasOwnProperty.call(message, "hasExtremeForceClosedAt"))
-                if (typeof message.hasExtremeForceClosedAt !== "boolean")
-                    return "hasExtremeForceClosedAt: boolean expected";
             if (message.extremeRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "extremeRenameProtectedUntil"))
                 if (!$util.isInteger(message.extremeRenameProtectedUntil) && !(message.extremeRenameProtectedUntil && $util.isInteger(message.extremeRenameProtectedUntil.low) && $util.isInteger(message.extremeRenameProtectedUntil.high)))
                     return "extremeRenameProtectedUntil: integer|Long expected";
-            if (message.hasExtremeRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "hasExtremeRenameProtectedUntil"))
-                if (typeof message.hasExtremeRenameProtectedUntil !== "boolean")
-                    return "hasExtremeRenameProtectedUntil: boolean expected";
             if (message.extremeRenamedBy != null && $Object.hasOwnProperty.call(message, "extremeRenamedBy"))
                 if (!$util.isString(message.extremeRenamedBy))
                     return "extremeRenamedBy: string expected";
@@ -5930,18 +5492,15 @@ export const game = $root.game = (() => {
             if (message.isAdmin != null && $Object.hasOwnProperty.call(message, "isAdmin"))
                 if (typeof message.isAdmin !== "boolean")
                     return "isAdmin: boolean expected";
-            if (message.hasIsAdmin != null && $Object.hasOwnProperty.call(message, "hasIsAdmin"))
-                if (typeof message.hasIsAdmin !== "boolean")
-                    return "hasIsAdmin: boolean expected";
             if (message.stats != null && $Object.hasOwnProperty.call(message, "stats")) {
                 let error = $root.game.PublicStats.verify(message.stats, _depth + 1);
                 if (error)
                     return "stats." + error;
             }
-            if (message.othelloStats != null && $Object.hasOwnProperty.call(message, "othelloStats")) {
-                let error = $root.game.OthelloStats.verify(message.othelloStats, _depth + 1);
+            if (message.gameStats != null && $Object.hasOwnProperty.call(message, "gameStats")) {
+                let error = $root.game.GameStats.verify(message.gameStats, _depth + 1);
                 if (error)
-                    return "othelloStats." + error;
+                    return "gameStats." + error;
             }
             return null;
         };
@@ -5979,6 +5538,9 @@ export const game = $root.game = (() => {
             if (object.factionId != null)
                 if (typeof object.factionId !== "string" || object.factionId.length)
                     message.factionId = $String(object.factionId);
+            if (object.avatarUrl != null)
+                if (typeof object.avatarUrl !== "string" || object.avatarUrl.length)
+                    message.avatarUrl = $String(object.avatarUrl);
             if (object.factionLabel != null)
                 if (typeof object.factionLabel !== "string" || object.factionLabel.length)
                     message.factionLabel = $String(object.factionLabel);
@@ -6003,9 +5565,6 @@ export const game = $root.game = (() => {
                         message.disconnectedAt = object.disconnectedAt;
                     else if (typeof object.disconnectedAt === "object")
                         message.disconnectedAt = new $util.LongBits(object.disconnectedAt.low >>> 0, object.disconnectedAt.high >>> 0).toNumber();
-            if (object.hasDisconnectedAt != null)
-                if (object.hasDisconnectedAt)
-                    message.hasDisconnectedAt = $Boolean(object.hasDisconnectedAt);
             if (object.disconnectExpiresAt != null)
                 if (typeof object.disconnectExpiresAt === "object" ? object.disconnectExpiresAt.low || object.disconnectExpiresAt.high : $Number(object.disconnectExpiresAt) !== 0)
                     if ($util.Long)
@@ -6016,9 +5575,6 @@ export const game = $root.game = (() => {
                         message.disconnectExpiresAt = object.disconnectExpiresAt;
                     else if (typeof object.disconnectExpiresAt === "object")
                         message.disconnectExpiresAt = new $util.LongBits(object.disconnectExpiresAt.low >>> 0, object.disconnectExpiresAt.high >>> 0).toNumber();
-            if (object.hasDisconnectExpiresAt != null)
-                if (object.hasDisconnectExpiresAt)
-                    message.hasDisconnectExpiresAt = $Boolean(object.hasDisconnectExpiresAt);
             if (object.profileUpdatedAt != null)
                 if (typeof object.profileUpdatedAt === "object" ? object.profileUpdatedAt.low || object.profileUpdatedAt.high : $Number(object.profileUpdatedAt) !== 0)
                     if ($util.Long)
@@ -6029,15 +5585,9 @@ export const game = $root.game = (() => {
                         message.profileUpdatedAt = object.profileUpdatedAt;
                     else if (typeof object.profileUpdatedAt === "object")
                         message.profileUpdatedAt = new $util.LongBits(object.profileUpdatedAt.low >>> 0, object.profileUpdatedAt.high >>> 0).toNumber();
-            if (object.hasProfileUpdatedAt != null)
-                if (object.hasProfileUpdatedAt)
-                    message.hasProfileUpdatedAt = $Boolean(object.hasProfileUpdatedAt);
             if (object.nameWarEnabled != null)
                 if (object.nameWarEnabled)
                     message.nameWarEnabled = $Boolean(object.nameWarEnabled);
-            if (object.hasNameWarEnabled != null)
-                if (object.hasNameWarEnabled)
-                    message.hasNameWarEnabled = $Boolean(object.hasNameWarEnabled);
             if (object.nameWarToggledAt != null)
                 if (typeof object.nameWarToggledAt === "object" ? object.nameWarToggledAt.low || object.nameWarToggledAt.high : $Number(object.nameWarToggledAt) !== 0)
                     if ($util.Long)
@@ -6048,9 +5598,6 @@ export const game = $root.game = (() => {
                         message.nameWarToggledAt = object.nameWarToggledAt;
                     else if (typeof object.nameWarToggledAt === "object")
                         message.nameWarToggledAt = new $util.LongBits(object.nameWarToggledAt.low >>> 0, object.nameWarToggledAt.high >>> 0).toNumber();
-            if (object.hasNameWarToggledAt != null)
-                if (object.hasNameWarToggledAt)
-                    message.hasNameWarToggledAt = $Boolean(object.hasNameWarToggledAt);
             if (object.nameWarOriginalName != null)
                 if (typeof object.nameWarOriginalName !== "string" || object.nameWarOriginalName.length)
                     message.nameWarOriginalName = $String(object.nameWarOriginalName);
@@ -6060,15 +5607,9 @@ export const game = $root.game = (() => {
             if (object.nameWarPunished != null)
                 if (object.nameWarPunished)
                     message.nameWarPunished = $Boolean(object.nameWarPunished);
-            if (object.hasNameWarPunished != null)
-                if (object.hasNameWarPunished)
-                    message.hasNameWarPunished = $Boolean(object.hasNameWarPunished);
             if (object.nameWarAllowRename != null)
                 if (object.nameWarAllowRename)
                     message.nameWarAllowRename = $Boolean(object.nameWarAllowRename);
-            if (object.hasNameWarAllowRename != null)
-                if (object.hasNameWarAllowRename)
-                    message.hasNameWarAllowRename = $Boolean(object.hasNameWarAllowRename);
             if (object.nameWarRenameProtectedUntil != null)
                 if (typeof object.nameWarRenameProtectedUntil === "object" ? object.nameWarRenameProtectedUntil.low || object.nameWarRenameProtectedUntil.high : $Number(object.nameWarRenameProtectedUntil) !== 0)
                     if ($util.Long)
@@ -6079,9 +5620,6 @@ export const game = $root.game = (() => {
                         message.nameWarRenameProtectedUntil = object.nameWarRenameProtectedUntil;
                     else if (typeof object.nameWarRenameProtectedUntil === "object")
                         message.nameWarRenameProtectedUntil = new $util.LongBits(object.nameWarRenameProtectedUntil.low >>> 0, object.nameWarRenameProtectedUntil.high >>> 0).toNumber();
-            if (object.hasNameWarRenameProtectedUntil != null)
-                if (object.hasNameWarRenameProtectedUntil)
-                    message.hasNameWarRenameProtectedUntil = $Boolean(object.hasNameWarRenameProtectedUntil);
             if (object.nameWarRenamedBy != null)
                 if (typeof object.nameWarRenamedBy !== "string" || object.nameWarRenamedBy.length)
                     message.nameWarRenamedBy = $String(object.nameWarRenamedBy);
@@ -6098,33 +5636,18 @@ export const game = $root.game = (() => {
                         message.nameWarRenameWindowStartedAt = object.nameWarRenameWindowStartedAt;
                     else if (typeof object.nameWarRenameWindowStartedAt === "object")
                         message.nameWarRenameWindowStartedAt = new $util.LongBits(object.nameWarRenameWindowStartedAt.low >>> 0, object.nameWarRenameWindowStartedAt.high >>> 0).toNumber();
-            if (object.hasNameWarRenameWindowStartedAt != null)
-                if (object.hasNameWarRenameWindowStartedAt)
-                    message.hasNameWarRenameWindowStartedAt = $Boolean(object.hasNameWarRenameWindowStartedAt);
             if (object.nameWarRenameCount != null)
                 if ($Number(object.nameWarRenameCount) !== 0)
                     message.nameWarRenameCount = object.nameWarRenameCount | 0;
-            if (object.hasNameWarRenameCount != null)
-                if (object.hasNameWarRenameCount)
-                    message.hasNameWarRenameCount = $Boolean(object.hasNameWarRenameCount);
             if (object.giveawayEnabled != null)
                 if (object.giveawayEnabled)
                     message.giveawayEnabled = $Boolean(object.giveawayEnabled);
-            if (object.hasGiveawayEnabled != null)
-                if (object.hasGiveawayEnabled)
-                    message.hasGiveawayEnabled = $Boolean(object.hasGiveawayEnabled);
             if (object.giveawayValue != null)
                 if (!$Object.is($Number(object.giveawayValue), 0))
                     message.giveawayValue = $Number(object.giveawayValue);
-            if (object.hasGiveawayValue != null)
-                if (object.hasGiveawayValue)
-                    message.hasGiveawayValue = $Boolean(object.hasGiveawayValue);
             if (object.giveawayClicks != null)
                 if ($Number(object.giveawayClicks) !== 0)
                     message.giveawayClicks = object.giveawayClicks | 0;
-            if (object.hasGiveawayClicks != null)
-                if (object.hasGiveawayClicks)
-                    message.hasGiveawayClicks = $Boolean(object.hasGiveawayClicks);
             if (object.giveawayBoardText != null)
                 if (typeof object.giveawayBoardText !== "string" || object.giveawayBoardText.length)
                     message.giveawayBoardText = $String(object.giveawayBoardText);
@@ -6138,9 +5661,6 @@ export const game = $root.game = (() => {
                         message.giveawayBoardSubmittedAt = object.giveawayBoardSubmittedAt;
                     else if (typeof object.giveawayBoardSubmittedAt === "object")
                         message.giveawayBoardSubmittedAt = new $util.LongBits(object.giveawayBoardSubmittedAt.low >>> 0, object.giveawayBoardSubmittedAt.high >>> 0).toNumber();
-            if (object.hasGiveawayBoardSubmittedAt != null)
-                if (object.hasGiveawayBoardSubmittedAt)
-                    message.hasGiveawayBoardSubmittedAt = $Boolean(object.hasGiveawayBoardSubmittedAt);
             if (object.giveawayBoardExpiresAt != null)
                 if (typeof object.giveawayBoardExpiresAt === "object" ? object.giveawayBoardExpiresAt.low || object.giveawayBoardExpiresAt.high : $Number(object.giveawayBoardExpiresAt) !== 0)
                     if ($util.Long)
@@ -6151,27 +5671,15 @@ export const game = $root.game = (() => {
                         message.giveawayBoardExpiresAt = object.giveawayBoardExpiresAt;
                     else if (typeof object.giveawayBoardExpiresAt === "object")
                         message.giveawayBoardExpiresAt = new $util.LongBits(object.giveawayBoardExpiresAt.low >>> 0, object.giveawayBoardExpiresAt.high >>> 0).toNumber();
-            if (object.hasGiveawayBoardExpiresAt != null)
-                if (object.hasGiveawayBoardExpiresAt)
-                    message.hasGiveawayBoardExpiresAt = $Boolean(object.hasGiveawayBoardExpiresAt);
             if (object.giveawayBoardLikes != null)
                 if ($Number(object.giveawayBoardLikes) !== 0)
                     message.giveawayBoardLikes = object.giveawayBoardLikes | 0;
-            if (object.hasGiveawayBoardLikes != null)
-                if (object.hasGiveawayBoardLikes)
-                    message.hasGiveawayBoardLikes = $Boolean(object.hasGiveawayBoardLikes);
             if (object.giveawayBoardDislikes != null)
                 if ($Number(object.giveawayBoardDislikes) !== 0)
                     message.giveawayBoardDislikes = object.giveawayBoardDislikes | 0;
-            if (object.hasGiveawayBoardDislikes != null)
-                if (object.hasGiveawayBoardDislikes)
-                    message.hasGiveawayBoardDislikes = $Boolean(object.hasGiveawayBoardDislikes);
             if (object.giveawayBoardLikesThisHour != null)
                 if ($Number(object.giveawayBoardLikesThisHour) !== 0)
                     message.giveawayBoardLikesThisHour = object.giveawayBoardLikesThisHour | 0;
-            if (object.hasGiveawayBoardLikesThisHour != null)
-                if (object.hasGiveawayBoardLikesThisHour)
-                    message.hasGiveawayBoardLikesThisHour = $Boolean(object.hasGiveawayBoardLikesThisHour);
             if (object.giveawayBoardLikeWindowStartedAt != null)
                 if (typeof object.giveawayBoardLikeWindowStartedAt === "object" ? object.giveawayBoardLikeWindowStartedAt.low || object.giveawayBoardLikeWindowStartedAt.high : $Number(object.giveawayBoardLikeWindowStartedAt) !== 0)
                     if ($util.Long)
@@ -6182,9 +5690,6 @@ export const game = $root.game = (() => {
                         message.giveawayBoardLikeWindowStartedAt = object.giveawayBoardLikeWindowStartedAt;
                     else if (typeof object.giveawayBoardLikeWindowStartedAt === "object")
                         message.giveawayBoardLikeWindowStartedAt = new $util.LongBits(object.giveawayBoardLikeWindowStartedAt.low >>> 0, object.giveawayBoardLikeWindowStartedAt.high >>> 0).toNumber();
-            if (object.hasGiveawayBoardLikeWindowStartedAt != null)
-                if (object.hasGiveawayBoardLikeWindowStartedAt)
-                    message.hasGiveawayBoardLikeWindowStartedAt = $Boolean(object.hasGiveawayBoardLikeWindowStartedAt);
             if (object.giveawayVoteWindowStartedAt != null)
                 if (typeof object.giveawayVoteWindowStartedAt === "object" ? object.giveawayVoteWindowStartedAt.low || object.giveawayVoteWindowStartedAt.high : $Number(object.giveawayVoteWindowStartedAt) !== 0)
                     if ($util.Long)
@@ -6195,39 +5700,21 @@ export const game = $root.game = (() => {
                         message.giveawayVoteWindowStartedAt = object.giveawayVoteWindowStartedAt;
                     else if (typeof object.giveawayVoteWindowStartedAt === "object")
                         message.giveawayVoteWindowStartedAt = new $util.LongBits(object.giveawayVoteWindowStartedAt.low >>> 0, object.giveawayVoteWindowStartedAt.high >>> 0).toNumber();
-            if (object.hasGiveawayVoteWindowStartedAt != null)
-                if (object.hasGiveawayVoteWindowStartedAt)
-                    message.hasGiveawayVoteWindowStartedAt = $Boolean(object.hasGiveawayVoteWindowStartedAt);
             if (object.giveawayVoteCount != null)
                 if ($Number(object.giveawayVoteCount) !== 0)
                     message.giveawayVoteCount = object.giveawayVoteCount | 0;
-            if (object.hasGiveawayVoteCount != null)
-                if (object.hasGiveawayVoteCount)
-                    message.hasGiveawayVoteCount = $Boolean(object.hasGiveawayVoteCount);
             if (object.giveawayVoteLikesThisHour != null)
                 if ($Number(object.giveawayVoteLikesThisHour) !== 0)
                     message.giveawayVoteLikesThisHour = object.giveawayVoteLikesThisHour | 0;
-            if (object.hasGiveawayVoteLikesThisHour != null)
-                if (object.hasGiveawayVoteLikesThisHour)
-                    message.hasGiveawayVoteLikesThisHour = $Boolean(object.hasGiveawayVoteLikesThisHour);
             if (object.giveawayVoteDislikesThisHour != null)
                 if ($Number(object.giveawayVoteDislikesThisHour) !== 0)
                     message.giveawayVoteDislikesThisHour = object.giveawayVoteDislikesThisHour | 0;
-            if (object.hasGiveawayVoteDislikesThisHour != null)
-                if (object.hasGiveawayVoteDislikesThisHour)
-                    message.hasGiveawayVoteDislikesThisHour = $Boolean(object.hasGiveawayVoteDislikesThisHour);
             if (object.rankMultiplierUnlocked != null)
                 if (object.rankMultiplierUnlocked)
                     message.rankMultiplierUnlocked = $Boolean(object.rankMultiplierUnlocked);
-            if (object.hasRankMultiplierUnlocked != null)
-                if (object.hasRankMultiplierUnlocked)
-                    message.hasRankMultiplierUnlocked = $Boolean(object.hasRankMultiplierUnlocked);
             if (object.extremeModeEnabled != null)
                 if (object.extremeModeEnabled)
                     message.extremeModeEnabled = $Boolean(object.extremeModeEnabled);
-            if (object.hasExtremeModeEnabled != null)
-                if (object.hasExtremeModeEnabled)
-                    message.hasExtremeModeEnabled = $Boolean(object.hasExtremeModeEnabled);
             if (object.extremeModeToggledAt != null)
                 if (typeof object.extremeModeToggledAt === "object" ? object.extremeModeToggledAt.low || object.extremeModeToggledAt.high : $Number(object.extremeModeToggledAt) !== 0)
                     if ($util.Long)
@@ -6238,9 +5725,6 @@ export const game = $root.game = (() => {
                         message.extremeModeToggledAt = object.extremeModeToggledAt;
                     else if (typeof object.extremeModeToggledAt === "object")
                         message.extremeModeToggledAt = new $util.LongBits(object.extremeModeToggledAt.low >>> 0, object.extremeModeToggledAt.high >>> 0).toNumber();
-            if (object.hasExtremeModeToggledAt != null)
-                if (object.hasExtremeModeToggledAt)
-                    message.hasExtremeModeToggledAt = $Boolean(object.hasExtremeModeToggledAt);
             if (object.extremeModeCooldownUntil != null)
                 if (typeof object.extremeModeCooldownUntil === "object" ? object.extremeModeCooldownUntil.low || object.extremeModeCooldownUntil.high : $Number(object.extremeModeCooldownUntil) !== 0)
                     if ($util.Long)
@@ -6251,15 +5735,9 @@ export const game = $root.game = (() => {
                         message.extremeModeCooldownUntil = object.extremeModeCooldownUntil;
                     else if (typeof object.extremeModeCooldownUntil === "object")
                         message.extremeModeCooldownUntil = new $util.LongBits(object.extremeModeCooldownUntil.low >>> 0, object.extremeModeCooldownUntil.high >>> 0).toNumber();
-            if (object.hasExtremeModeCooldownUntil != null)
-                if (object.hasExtremeModeCooldownUntil)
-                    message.hasExtremeModeCooldownUntil = $Boolean(object.hasExtremeModeCooldownUntil);
             if (object.extremeWinStreak != null)
                 if ($Number(object.extremeWinStreak) !== 0)
                     message.extremeWinStreak = object.extremeWinStreak | 0;
-            if (object.hasExtremeWinStreak != null)
-                if (object.hasExtremeWinStreak)
-                    message.hasExtremeWinStreak = $Boolean(object.hasExtremeWinStreak);
             if (object.extremeLastDecayHour != null)
                 if (typeof object.extremeLastDecayHour === "object" ? object.extremeLastDecayHour.low || object.extremeLastDecayHour.high : $Number(object.extremeLastDecayHour) !== 0)
                     if ($util.Long)
@@ -6270,15 +5748,9 @@ export const game = $root.game = (() => {
                         message.extremeLastDecayHour = object.extremeLastDecayHour;
                     else if (typeof object.extremeLastDecayHour === "object")
                         message.extremeLastDecayHour = new $util.LongBits(object.extremeLastDecayHour.low >>> 0, object.extremeLastDecayHour.high >>> 0).toNumber();
-            if (object.hasExtremeLastDecayHour != null)
-                if (object.hasExtremeLastDecayHour)
-                    message.hasExtremeLastDecayHour = $Boolean(object.hasExtremeLastDecayHour);
             if (object.extremeForceClosed != null)
                 if (object.extremeForceClosed)
                     message.extremeForceClosed = $Boolean(object.extremeForceClosed);
-            if (object.hasExtremeForceClosed != null)
-                if (object.hasExtremeForceClosed)
-                    message.hasExtremeForceClosed = $Boolean(object.hasExtremeForceClosed);
             if (object.extremeForceClosedAt != null)
                 if (typeof object.extremeForceClosedAt === "object" ? object.extremeForceClosedAt.low || object.extremeForceClosedAt.high : $Number(object.extremeForceClosedAt) !== 0)
                     if ($util.Long)
@@ -6289,9 +5761,6 @@ export const game = $root.game = (() => {
                         message.extremeForceClosedAt = object.extremeForceClosedAt;
                     else if (typeof object.extremeForceClosedAt === "object")
                         message.extremeForceClosedAt = new $util.LongBits(object.extremeForceClosedAt.low >>> 0, object.extremeForceClosedAt.high >>> 0).toNumber();
-            if (object.hasExtremeForceClosedAt != null)
-                if (object.hasExtremeForceClosedAt)
-                    message.hasExtremeForceClosedAt = $Boolean(object.hasExtremeForceClosedAt);
             if (object.extremeRenameProtectedUntil != null)
                 if (typeof object.extremeRenameProtectedUntil === "object" ? object.extremeRenameProtectedUntil.low || object.extremeRenameProtectedUntil.high : $Number(object.extremeRenameProtectedUntil) !== 0)
                     if ($util.Long)
@@ -6302,9 +5771,6 @@ export const game = $root.game = (() => {
                         message.extremeRenameProtectedUntil = object.extremeRenameProtectedUntil;
                     else if (typeof object.extremeRenameProtectedUntil === "object")
                         message.extremeRenameProtectedUntil = new $util.LongBits(object.extremeRenameProtectedUntil.low >>> 0, object.extremeRenameProtectedUntil.high >>> 0).toNumber();
-            if (object.hasExtremeRenameProtectedUntil != null)
-                if (object.hasExtremeRenameProtectedUntil)
-                    message.hasExtremeRenameProtectedUntil = $Boolean(object.hasExtremeRenameProtectedUntil);
             if (object.extremeRenamedBy != null)
                 if (typeof object.extremeRenamedBy !== "string" || object.extremeRenamedBy.length)
                     message.extremeRenamedBy = $String(object.extremeRenamedBy);
@@ -6317,18 +5783,15 @@ export const game = $root.game = (() => {
             if (object.isAdmin != null)
                 if (object.isAdmin)
                     message.isAdmin = $Boolean(object.isAdmin);
-            if (object.hasIsAdmin != null)
-                if (object.hasIsAdmin)
-                    message.hasIsAdmin = $Boolean(object.hasIsAdmin);
             if (object.stats != null) {
                 if (!$util.isObject(object.stats))
                     throw $TypeError(".game.PublicPlayer.stats: object expected");
                 message.stats = $root.game.PublicStats.fromObject(object.stats, _depth + 1);
             }
-            if (object.othelloStats != null) {
-                if (!$util.isObject(object.othelloStats))
-                    throw $TypeError(".game.PublicPlayer.othelloStats: object expected");
-                message.othelloStats = $root.game.OthelloStats.fromObject(object.othelloStats, _depth + 1);
+            if (object.gameStats != null) {
+                if (!$util.isObject(object.gameStats))
+                    throw $TypeError(".game.PublicPlayer.gameStats: object expected");
+                message.gameStats = $root.game.GameStats.fromObject(object.gameStats, _depth + 1);
             }
             return message;
         };
@@ -6365,39 +5828,31 @@ export const game = $root.game = (() => {
                     object.disconnectedAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.disconnectedAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasDisconnectedAt = false;
                 if ($util.Long) {
                     let long = new $util.Long(0, 0, false);
                     object.disconnectExpiresAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.disconnectExpiresAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasDisconnectExpiresAt = false;
                 if ($util.Long) {
                     let long = new $util.Long(0, 0, false);
                     object.profileUpdatedAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.profileUpdatedAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasProfileUpdatedAt = false;
                 object.nameWarEnabled = false;
-                object.hasNameWarEnabled = false;
                 if ($util.Long) {
                     let long = new $util.Long(0, 0, false);
                     object.nameWarToggledAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.nameWarToggledAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasNameWarToggledAt = false;
                 object.nameWarOriginalName = "";
                 object.nameWarPenaltyName = "";
                 object.nameWarPunished = false;
-                object.hasNameWarPunished = false;
                 object.nameWarAllowRename = false;
-                object.hasNameWarAllowRename = false;
                 if ($util.Long) {
                     let long = new $util.Long(0, 0, false);
                     object.nameWarRenameProtectedUntil = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.nameWarRenameProtectedUntil = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasNameWarRenameProtectedUntil = false;
                 object.nameWarRenamedBy = "";
                 object.nameWarRenamedByName = "";
                 if ($util.Long) {
@@ -6405,97 +5860,73 @@ export const game = $root.game = (() => {
                     object.nameWarRenameWindowStartedAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.nameWarRenameWindowStartedAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasNameWarRenameWindowStartedAt = false;
                 object.nameWarRenameCount = 0;
-                object.hasNameWarRenameCount = false;
                 object.giveawayEnabled = false;
-                object.hasGiveawayEnabled = false;
                 object.giveawayValue = 0;
-                object.hasGiveawayValue = false;
                 object.giveawayClicks = 0;
-                object.hasGiveawayClicks = false;
                 object.giveawayBoardText = "";
                 if ($util.Long) {
                     let long = new $util.Long(0, 0, false);
                     object.giveawayBoardSubmittedAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.giveawayBoardSubmittedAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasGiveawayBoardSubmittedAt = false;
                 if ($util.Long) {
                     let long = new $util.Long(0, 0, false);
                     object.giveawayBoardExpiresAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.giveawayBoardExpiresAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasGiveawayBoardExpiresAt = false;
                 object.giveawayBoardLikes = 0;
-                object.hasGiveawayBoardLikes = false;
                 object.giveawayBoardDislikes = 0;
-                object.hasGiveawayBoardDislikes = false;
                 object.giveawayBoardLikesThisHour = 0;
-                object.hasGiveawayBoardLikesThisHour = false;
                 if ($util.Long) {
                     let long = new $util.Long(0, 0, false);
                     object.giveawayBoardLikeWindowStartedAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.giveawayBoardLikeWindowStartedAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasGiveawayBoardLikeWindowStartedAt = false;
                 if ($util.Long) {
                     let long = new $util.Long(0, 0, false);
                     object.giveawayVoteWindowStartedAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.giveawayVoteWindowStartedAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasGiveawayVoteWindowStartedAt = false;
                 object.giveawayVoteCount = 0;
-                object.hasGiveawayVoteCount = false;
                 object.giveawayVoteLikesThisHour = 0;
-                object.hasGiveawayVoteLikesThisHour = false;
                 object.giveawayVoteDislikesThisHour = 0;
-                object.hasGiveawayVoteDislikesThisHour = false;
                 object.rankMultiplierUnlocked = false;
-                object.hasRankMultiplierUnlocked = false;
                 object.extremeModeEnabled = false;
-                object.hasExtremeModeEnabled = false;
                 if ($util.Long) {
                     let long = new $util.Long(0, 0, false);
                     object.extremeModeToggledAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.extremeModeToggledAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasExtremeModeToggledAt = false;
                 if ($util.Long) {
                     let long = new $util.Long(0, 0, false);
                     object.extremeModeCooldownUntil = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.extremeModeCooldownUntil = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasExtremeModeCooldownUntil = false;
                 object.extremeWinStreak = 0;
-                object.hasExtremeWinStreak = false;
                 if ($util.Long) {
                     let long = new $util.Long(0, 0, false);
                     object.extremeLastDecayHour = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.extremeLastDecayHour = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasExtremeLastDecayHour = false;
                 object.extremeForceClosed = false;
-                object.hasExtremeForceClosed = false;
                 if ($util.Long) {
                     let long = new $util.Long(0, 0, false);
                     object.extremeForceClosedAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.extremeForceClosedAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasExtremeForceClosedAt = false;
                 if ($util.Long) {
                     let long = new $util.Long(0, 0, false);
                     object.extremeRenameProtectedUntil = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.extremeRenameProtectedUntil = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasExtremeRenameProtectedUntil = false;
                 object.extremeRenamedBy = "";
                 object.extremeRenamedByName = "";
                 object.roomId = "";
                 object.isAdmin = false;
-                object.hasIsAdmin = false;
                 object.stats = null;
-                object.othelloStats = null;
+                object.gameStats = null;
+                object.avatarUrl = "";
             }
             if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
                 object.id = message.id;
@@ -6522,8 +5953,6 @@ export const game = $root.game = (() => {
                     object.disconnectedAt = options.longs === $String ? $String(message.disconnectedAt) : message.disconnectedAt;
                 else
                     object.disconnectedAt = options.longs === $String ? $util.Long.prototype.toString.call(message.disconnectedAt) : options.longs === $Number ? new $util.LongBits(message.disconnectedAt.low >>> 0, message.disconnectedAt.high >>> 0).toNumber() : message.disconnectedAt;
-            if (message.hasDisconnectedAt != null && $Object.hasOwnProperty.call(message, "hasDisconnectedAt"))
-                object.hasDisconnectedAt = message.hasDisconnectedAt;
             if (message.disconnectExpiresAt != null && $Object.hasOwnProperty.call(message, "disconnectExpiresAt"))
                 if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
                     object.disconnectExpiresAt = typeof message.disconnectExpiresAt === "number" ? $BigInt(message.disconnectExpiresAt) : $util.Long.fromBits(message.disconnectExpiresAt.low >>> 0, message.disconnectExpiresAt.high >>> 0, false).toBigInt();
@@ -6531,8 +5960,6 @@ export const game = $root.game = (() => {
                     object.disconnectExpiresAt = options.longs === $String ? $String(message.disconnectExpiresAt) : message.disconnectExpiresAt;
                 else
                     object.disconnectExpiresAt = options.longs === $String ? $util.Long.prototype.toString.call(message.disconnectExpiresAt) : options.longs === $Number ? new $util.LongBits(message.disconnectExpiresAt.low >>> 0, message.disconnectExpiresAt.high >>> 0).toNumber() : message.disconnectExpiresAt;
-            if (message.hasDisconnectExpiresAt != null && $Object.hasOwnProperty.call(message, "hasDisconnectExpiresAt"))
-                object.hasDisconnectExpiresAt = message.hasDisconnectExpiresAt;
             if (message.profileUpdatedAt != null && $Object.hasOwnProperty.call(message, "profileUpdatedAt"))
                 if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
                     object.profileUpdatedAt = typeof message.profileUpdatedAt === "number" ? $BigInt(message.profileUpdatedAt) : $util.Long.fromBits(message.profileUpdatedAt.low >>> 0, message.profileUpdatedAt.high >>> 0, false).toBigInt();
@@ -6540,12 +5967,8 @@ export const game = $root.game = (() => {
                     object.profileUpdatedAt = options.longs === $String ? $String(message.profileUpdatedAt) : message.profileUpdatedAt;
                 else
                     object.profileUpdatedAt = options.longs === $String ? $util.Long.prototype.toString.call(message.profileUpdatedAt) : options.longs === $Number ? new $util.LongBits(message.profileUpdatedAt.low >>> 0, message.profileUpdatedAt.high >>> 0).toNumber() : message.profileUpdatedAt;
-            if (message.hasProfileUpdatedAt != null && $Object.hasOwnProperty.call(message, "hasProfileUpdatedAt"))
-                object.hasProfileUpdatedAt = message.hasProfileUpdatedAt;
             if (message.nameWarEnabled != null && $Object.hasOwnProperty.call(message, "nameWarEnabled"))
                 object.nameWarEnabled = message.nameWarEnabled;
-            if (message.hasNameWarEnabled != null && $Object.hasOwnProperty.call(message, "hasNameWarEnabled"))
-                object.hasNameWarEnabled = message.hasNameWarEnabled;
             if (message.nameWarToggledAt != null && $Object.hasOwnProperty.call(message, "nameWarToggledAt"))
                 if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
                     object.nameWarToggledAt = typeof message.nameWarToggledAt === "number" ? $BigInt(message.nameWarToggledAt) : $util.Long.fromBits(message.nameWarToggledAt.low >>> 0, message.nameWarToggledAt.high >>> 0, false).toBigInt();
@@ -6553,20 +5976,14 @@ export const game = $root.game = (() => {
                     object.nameWarToggledAt = options.longs === $String ? $String(message.nameWarToggledAt) : message.nameWarToggledAt;
                 else
                     object.nameWarToggledAt = options.longs === $String ? $util.Long.prototype.toString.call(message.nameWarToggledAt) : options.longs === $Number ? new $util.LongBits(message.nameWarToggledAt.low >>> 0, message.nameWarToggledAt.high >>> 0).toNumber() : message.nameWarToggledAt;
-            if (message.hasNameWarToggledAt != null && $Object.hasOwnProperty.call(message, "hasNameWarToggledAt"))
-                object.hasNameWarToggledAt = message.hasNameWarToggledAt;
             if (message.nameWarOriginalName != null && $Object.hasOwnProperty.call(message, "nameWarOriginalName"))
                 object.nameWarOriginalName = message.nameWarOriginalName;
             if (message.nameWarPenaltyName != null && $Object.hasOwnProperty.call(message, "nameWarPenaltyName"))
                 object.nameWarPenaltyName = message.nameWarPenaltyName;
             if (message.nameWarPunished != null && $Object.hasOwnProperty.call(message, "nameWarPunished"))
                 object.nameWarPunished = message.nameWarPunished;
-            if (message.hasNameWarPunished != null && $Object.hasOwnProperty.call(message, "hasNameWarPunished"))
-                object.hasNameWarPunished = message.hasNameWarPunished;
             if (message.nameWarAllowRename != null && $Object.hasOwnProperty.call(message, "nameWarAllowRename"))
                 object.nameWarAllowRename = message.nameWarAllowRename;
-            if (message.hasNameWarAllowRename != null && $Object.hasOwnProperty.call(message, "hasNameWarAllowRename"))
-                object.hasNameWarAllowRename = message.hasNameWarAllowRename;
             if (message.nameWarRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "nameWarRenameProtectedUntil"))
                 if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
                     object.nameWarRenameProtectedUntil = typeof message.nameWarRenameProtectedUntil === "number" ? $BigInt(message.nameWarRenameProtectedUntil) : $util.Long.fromBits(message.nameWarRenameProtectedUntil.low >>> 0, message.nameWarRenameProtectedUntil.high >>> 0, false).toBigInt();
@@ -6574,8 +5991,6 @@ export const game = $root.game = (() => {
                     object.nameWarRenameProtectedUntil = options.longs === $String ? $String(message.nameWarRenameProtectedUntil) : message.nameWarRenameProtectedUntil;
                 else
                     object.nameWarRenameProtectedUntil = options.longs === $String ? $util.Long.prototype.toString.call(message.nameWarRenameProtectedUntil) : options.longs === $Number ? new $util.LongBits(message.nameWarRenameProtectedUntil.low >>> 0, message.nameWarRenameProtectedUntil.high >>> 0).toNumber() : message.nameWarRenameProtectedUntil;
-            if (message.hasNameWarRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "hasNameWarRenameProtectedUntil"))
-                object.hasNameWarRenameProtectedUntil = message.hasNameWarRenameProtectedUntil;
             if (message.nameWarRenamedBy != null && $Object.hasOwnProperty.call(message, "nameWarRenamedBy"))
                 object.nameWarRenamedBy = message.nameWarRenamedBy;
             if (message.nameWarRenamedByName != null && $Object.hasOwnProperty.call(message, "nameWarRenamedByName"))
@@ -6587,24 +6002,14 @@ export const game = $root.game = (() => {
                     object.nameWarRenameWindowStartedAt = options.longs === $String ? $String(message.nameWarRenameWindowStartedAt) : message.nameWarRenameWindowStartedAt;
                 else
                     object.nameWarRenameWindowStartedAt = options.longs === $String ? $util.Long.prototype.toString.call(message.nameWarRenameWindowStartedAt) : options.longs === $Number ? new $util.LongBits(message.nameWarRenameWindowStartedAt.low >>> 0, message.nameWarRenameWindowStartedAt.high >>> 0).toNumber() : message.nameWarRenameWindowStartedAt;
-            if (message.hasNameWarRenameWindowStartedAt != null && $Object.hasOwnProperty.call(message, "hasNameWarRenameWindowStartedAt"))
-                object.hasNameWarRenameWindowStartedAt = message.hasNameWarRenameWindowStartedAt;
             if (message.nameWarRenameCount != null && $Object.hasOwnProperty.call(message, "nameWarRenameCount"))
                 object.nameWarRenameCount = message.nameWarRenameCount;
-            if (message.hasNameWarRenameCount != null && $Object.hasOwnProperty.call(message, "hasNameWarRenameCount"))
-                object.hasNameWarRenameCount = message.hasNameWarRenameCount;
             if (message.giveawayEnabled != null && $Object.hasOwnProperty.call(message, "giveawayEnabled"))
                 object.giveawayEnabled = message.giveawayEnabled;
-            if (message.hasGiveawayEnabled != null && $Object.hasOwnProperty.call(message, "hasGiveawayEnabled"))
-                object.hasGiveawayEnabled = message.hasGiveawayEnabled;
             if (message.giveawayValue != null && $Object.hasOwnProperty.call(message, "giveawayValue"))
                 object.giveawayValue = options.json && !$isFinite(message.giveawayValue) ? $String(message.giveawayValue) : message.giveawayValue;
-            if (message.hasGiveawayValue != null && $Object.hasOwnProperty.call(message, "hasGiveawayValue"))
-                object.hasGiveawayValue = message.hasGiveawayValue;
             if (message.giveawayClicks != null && $Object.hasOwnProperty.call(message, "giveawayClicks"))
                 object.giveawayClicks = message.giveawayClicks;
-            if (message.hasGiveawayClicks != null && $Object.hasOwnProperty.call(message, "hasGiveawayClicks"))
-                object.hasGiveawayClicks = message.hasGiveawayClicks;
             if (message.giveawayBoardText != null && $Object.hasOwnProperty.call(message, "giveawayBoardText"))
                 object.giveawayBoardText = message.giveawayBoardText;
             if (message.giveawayBoardSubmittedAt != null && $Object.hasOwnProperty.call(message, "giveawayBoardSubmittedAt"))
@@ -6614,8 +6019,6 @@ export const game = $root.game = (() => {
                     object.giveawayBoardSubmittedAt = options.longs === $String ? $String(message.giveawayBoardSubmittedAt) : message.giveawayBoardSubmittedAt;
                 else
                     object.giveawayBoardSubmittedAt = options.longs === $String ? $util.Long.prototype.toString.call(message.giveawayBoardSubmittedAt) : options.longs === $Number ? new $util.LongBits(message.giveawayBoardSubmittedAt.low >>> 0, message.giveawayBoardSubmittedAt.high >>> 0).toNumber() : message.giveawayBoardSubmittedAt;
-            if (message.hasGiveawayBoardSubmittedAt != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardSubmittedAt"))
-                object.hasGiveawayBoardSubmittedAt = message.hasGiveawayBoardSubmittedAt;
             if (message.giveawayBoardExpiresAt != null && $Object.hasOwnProperty.call(message, "giveawayBoardExpiresAt"))
                 if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
                     object.giveawayBoardExpiresAt = typeof message.giveawayBoardExpiresAt === "number" ? $BigInt(message.giveawayBoardExpiresAt) : $util.Long.fromBits(message.giveawayBoardExpiresAt.low >>> 0, message.giveawayBoardExpiresAt.high >>> 0, false).toBigInt();
@@ -6623,20 +6026,12 @@ export const game = $root.game = (() => {
                     object.giveawayBoardExpiresAt = options.longs === $String ? $String(message.giveawayBoardExpiresAt) : message.giveawayBoardExpiresAt;
                 else
                     object.giveawayBoardExpiresAt = options.longs === $String ? $util.Long.prototype.toString.call(message.giveawayBoardExpiresAt) : options.longs === $Number ? new $util.LongBits(message.giveawayBoardExpiresAt.low >>> 0, message.giveawayBoardExpiresAt.high >>> 0).toNumber() : message.giveawayBoardExpiresAt;
-            if (message.hasGiveawayBoardExpiresAt != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardExpiresAt"))
-                object.hasGiveawayBoardExpiresAt = message.hasGiveawayBoardExpiresAt;
             if (message.giveawayBoardLikes != null && $Object.hasOwnProperty.call(message, "giveawayBoardLikes"))
                 object.giveawayBoardLikes = message.giveawayBoardLikes;
-            if (message.hasGiveawayBoardLikes != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardLikes"))
-                object.hasGiveawayBoardLikes = message.hasGiveawayBoardLikes;
             if (message.giveawayBoardDislikes != null && $Object.hasOwnProperty.call(message, "giveawayBoardDislikes"))
                 object.giveawayBoardDislikes = message.giveawayBoardDislikes;
-            if (message.hasGiveawayBoardDislikes != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardDislikes"))
-                object.hasGiveawayBoardDislikes = message.hasGiveawayBoardDislikes;
             if (message.giveawayBoardLikesThisHour != null && $Object.hasOwnProperty.call(message, "giveawayBoardLikesThisHour"))
                 object.giveawayBoardLikesThisHour = message.giveawayBoardLikesThisHour;
-            if (message.hasGiveawayBoardLikesThisHour != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardLikesThisHour"))
-                object.hasGiveawayBoardLikesThisHour = message.hasGiveawayBoardLikesThisHour;
             if (message.giveawayBoardLikeWindowStartedAt != null && $Object.hasOwnProperty.call(message, "giveawayBoardLikeWindowStartedAt"))
                 if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
                     object.giveawayBoardLikeWindowStartedAt = typeof message.giveawayBoardLikeWindowStartedAt === "number" ? $BigInt(message.giveawayBoardLikeWindowStartedAt) : $util.Long.fromBits(message.giveawayBoardLikeWindowStartedAt.low >>> 0, message.giveawayBoardLikeWindowStartedAt.high >>> 0, false).toBigInt();
@@ -6644,8 +6039,6 @@ export const game = $root.game = (() => {
                     object.giveawayBoardLikeWindowStartedAt = options.longs === $String ? $String(message.giveawayBoardLikeWindowStartedAt) : message.giveawayBoardLikeWindowStartedAt;
                 else
                     object.giveawayBoardLikeWindowStartedAt = options.longs === $String ? $util.Long.prototype.toString.call(message.giveawayBoardLikeWindowStartedAt) : options.longs === $Number ? new $util.LongBits(message.giveawayBoardLikeWindowStartedAt.low >>> 0, message.giveawayBoardLikeWindowStartedAt.high >>> 0).toNumber() : message.giveawayBoardLikeWindowStartedAt;
-            if (message.hasGiveawayBoardLikeWindowStartedAt != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardLikeWindowStartedAt"))
-                object.hasGiveawayBoardLikeWindowStartedAt = message.hasGiveawayBoardLikeWindowStartedAt;
             if (message.giveawayVoteWindowStartedAt != null && $Object.hasOwnProperty.call(message, "giveawayVoteWindowStartedAt"))
                 if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
                     object.giveawayVoteWindowStartedAt = typeof message.giveawayVoteWindowStartedAt === "number" ? $BigInt(message.giveawayVoteWindowStartedAt) : $util.Long.fromBits(message.giveawayVoteWindowStartedAt.low >>> 0, message.giveawayVoteWindowStartedAt.high >>> 0, false).toBigInt();
@@ -6653,28 +6046,16 @@ export const game = $root.game = (() => {
                     object.giveawayVoteWindowStartedAt = options.longs === $String ? $String(message.giveawayVoteWindowStartedAt) : message.giveawayVoteWindowStartedAt;
                 else
                     object.giveawayVoteWindowStartedAt = options.longs === $String ? $util.Long.prototype.toString.call(message.giveawayVoteWindowStartedAt) : options.longs === $Number ? new $util.LongBits(message.giveawayVoteWindowStartedAt.low >>> 0, message.giveawayVoteWindowStartedAt.high >>> 0).toNumber() : message.giveawayVoteWindowStartedAt;
-            if (message.hasGiveawayVoteWindowStartedAt != null && $Object.hasOwnProperty.call(message, "hasGiveawayVoteWindowStartedAt"))
-                object.hasGiveawayVoteWindowStartedAt = message.hasGiveawayVoteWindowStartedAt;
             if (message.giveawayVoteCount != null && $Object.hasOwnProperty.call(message, "giveawayVoteCount"))
                 object.giveawayVoteCount = message.giveawayVoteCount;
-            if (message.hasGiveawayVoteCount != null && $Object.hasOwnProperty.call(message, "hasGiveawayVoteCount"))
-                object.hasGiveawayVoteCount = message.hasGiveawayVoteCount;
             if (message.giveawayVoteLikesThisHour != null && $Object.hasOwnProperty.call(message, "giveawayVoteLikesThisHour"))
                 object.giveawayVoteLikesThisHour = message.giveawayVoteLikesThisHour;
-            if (message.hasGiveawayVoteLikesThisHour != null && $Object.hasOwnProperty.call(message, "hasGiveawayVoteLikesThisHour"))
-                object.hasGiveawayVoteLikesThisHour = message.hasGiveawayVoteLikesThisHour;
             if (message.giveawayVoteDislikesThisHour != null && $Object.hasOwnProperty.call(message, "giveawayVoteDislikesThisHour"))
                 object.giveawayVoteDislikesThisHour = message.giveawayVoteDislikesThisHour;
-            if (message.hasGiveawayVoteDislikesThisHour != null && $Object.hasOwnProperty.call(message, "hasGiveawayVoteDislikesThisHour"))
-                object.hasGiveawayVoteDislikesThisHour = message.hasGiveawayVoteDislikesThisHour;
             if (message.rankMultiplierUnlocked != null && $Object.hasOwnProperty.call(message, "rankMultiplierUnlocked"))
                 object.rankMultiplierUnlocked = message.rankMultiplierUnlocked;
-            if (message.hasRankMultiplierUnlocked != null && $Object.hasOwnProperty.call(message, "hasRankMultiplierUnlocked"))
-                object.hasRankMultiplierUnlocked = message.hasRankMultiplierUnlocked;
             if (message.extremeModeEnabled != null && $Object.hasOwnProperty.call(message, "extremeModeEnabled"))
                 object.extremeModeEnabled = message.extremeModeEnabled;
-            if (message.hasExtremeModeEnabled != null && $Object.hasOwnProperty.call(message, "hasExtremeModeEnabled"))
-                object.hasExtremeModeEnabled = message.hasExtremeModeEnabled;
             if (message.extremeModeToggledAt != null && $Object.hasOwnProperty.call(message, "extremeModeToggledAt"))
                 if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
                     object.extremeModeToggledAt = typeof message.extremeModeToggledAt === "number" ? $BigInt(message.extremeModeToggledAt) : $util.Long.fromBits(message.extremeModeToggledAt.low >>> 0, message.extremeModeToggledAt.high >>> 0, false).toBigInt();
@@ -6682,8 +6063,6 @@ export const game = $root.game = (() => {
                     object.extremeModeToggledAt = options.longs === $String ? $String(message.extremeModeToggledAt) : message.extremeModeToggledAt;
                 else
                     object.extremeModeToggledAt = options.longs === $String ? $util.Long.prototype.toString.call(message.extremeModeToggledAt) : options.longs === $Number ? new $util.LongBits(message.extremeModeToggledAt.low >>> 0, message.extremeModeToggledAt.high >>> 0).toNumber() : message.extremeModeToggledAt;
-            if (message.hasExtremeModeToggledAt != null && $Object.hasOwnProperty.call(message, "hasExtremeModeToggledAt"))
-                object.hasExtremeModeToggledAt = message.hasExtremeModeToggledAt;
             if (message.extremeModeCooldownUntil != null && $Object.hasOwnProperty.call(message, "extremeModeCooldownUntil"))
                 if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
                     object.extremeModeCooldownUntil = typeof message.extremeModeCooldownUntil === "number" ? $BigInt(message.extremeModeCooldownUntil) : $util.Long.fromBits(message.extremeModeCooldownUntil.low >>> 0, message.extremeModeCooldownUntil.high >>> 0, false).toBigInt();
@@ -6691,12 +6070,8 @@ export const game = $root.game = (() => {
                     object.extremeModeCooldownUntil = options.longs === $String ? $String(message.extremeModeCooldownUntil) : message.extremeModeCooldownUntil;
                 else
                     object.extremeModeCooldownUntil = options.longs === $String ? $util.Long.prototype.toString.call(message.extremeModeCooldownUntil) : options.longs === $Number ? new $util.LongBits(message.extremeModeCooldownUntil.low >>> 0, message.extremeModeCooldownUntil.high >>> 0).toNumber() : message.extremeModeCooldownUntil;
-            if (message.hasExtremeModeCooldownUntil != null && $Object.hasOwnProperty.call(message, "hasExtremeModeCooldownUntil"))
-                object.hasExtremeModeCooldownUntil = message.hasExtremeModeCooldownUntil;
             if (message.extremeWinStreak != null && $Object.hasOwnProperty.call(message, "extremeWinStreak"))
                 object.extremeWinStreak = message.extremeWinStreak;
-            if (message.hasExtremeWinStreak != null && $Object.hasOwnProperty.call(message, "hasExtremeWinStreak"))
-                object.hasExtremeWinStreak = message.hasExtremeWinStreak;
             if (message.extremeLastDecayHour != null && $Object.hasOwnProperty.call(message, "extremeLastDecayHour"))
                 if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
                     object.extremeLastDecayHour = typeof message.extremeLastDecayHour === "number" ? $BigInt(message.extremeLastDecayHour) : $util.Long.fromBits(message.extremeLastDecayHour.low >>> 0, message.extremeLastDecayHour.high >>> 0, false).toBigInt();
@@ -6704,12 +6079,8 @@ export const game = $root.game = (() => {
                     object.extremeLastDecayHour = options.longs === $String ? $String(message.extremeLastDecayHour) : message.extremeLastDecayHour;
                 else
                     object.extremeLastDecayHour = options.longs === $String ? $util.Long.prototype.toString.call(message.extremeLastDecayHour) : options.longs === $Number ? new $util.LongBits(message.extremeLastDecayHour.low >>> 0, message.extremeLastDecayHour.high >>> 0).toNumber() : message.extremeLastDecayHour;
-            if (message.hasExtremeLastDecayHour != null && $Object.hasOwnProperty.call(message, "hasExtremeLastDecayHour"))
-                object.hasExtremeLastDecayHour = message.hasExtremeLastDecayHour;
             if (message.extremeForceClosed != null && $Object.hasOwnProperty.call(message, "extremeForceClosed"))
                 object.extremeForceClosed = message.extremeForceClosed;
-            if (message.hasExtremeForceClosed != null && $Object.hasOwnProperty.call(message, "hasExtremeForceClosed"))
-                object.hasExtremeForceClosed = message.hasExtremeForceClosed;
             if (message.extremeForceClosedAt != null && $Object.hasOwnProperty.call(message, "extremeForceClosedAt"))
                 if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
                     object.extremeForceClosedAt = typeof message.extremeForceClosedAt === "number" ? $BigInt(message.extremeForceClosedAt) : $util.Long.fromBits(message.extremeForceClosedAt.low >>> 0, message.extremeForceClosedAt.high >>> 0, false).toBigInt();
@@ -6717,8 +6088,6 @@ export const game = $root.game = (() => {
                     object.extremeForceClosedAt = options.longs === $String ? $String(message.extremeForceClosedAt) : message.extremeForceClosedAt;
                 else
                     object.extremeForceClosedAt = options.longs === $String ? $util.Long.prototype.toString.call(message.extremeForceClosedAt) : options.longs === $Number ? new $util.LongBits(message.extremeForceClosedAt.low >>> 0, message.extremeForceClosedAt.high >>> 0).toNumber() : message.extremeForceClosedAt;
-            if (message.hasExtremeForceClosedAt != null && $Object.hasOwnProperty.call(message, "hasExtremeForceClosedAt"))
-                object.hasExtremeForceClosedAt = message.hasExtremeForceClosedAt;
             if (message.extremeRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "extremeRenameProtectedUntil"))
                 if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
                     object.extremeRenameProtectedUntil = typeof message.extremeRenameProtectedUntil === "number" ? $BigInt(message.extremeRenameProtectedUntil) : $util.Long.fromBits(message.extremeRenameProtectedUntil.low >>> 0, message.extremeRenameProtectedUntil.high >>> 0, false).toBigInt();
@@ -6726,8 +6095,6 @@ export const game = $root.game = (() => {
                     object.extremeRenameProtectedUntil = options.longs === $String ? $String(message.extremeRenameProtectedUntil) : message.extremeRenameProtectedUntil;
                 else
                     object.extremeRenameProtectedUntil = options.longs === $String ? $util.Long.prototype.toString.call(message.extremeRenameProtectedUntil) : options.longs === $Number ? new $util.LongBits(message.extremeRenameProtectedUntil.low >>> 0, message.extremeRenameProtectedUntil.high >>> 0).toNumber() : message.extremeRenameProtectedUntil;
-            if (message.hasExtremeRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "hasExtremeRenameProtectedUntil"))
-                object.hasExtremeRenameProtectedUntil = message.hasExtremeRenameProtectedUntil;
             if (message.extremeRenamedBy != null && $Object.hasOwnProperty.call(message, "extremeRenamedBy"))
                 object.extremeRenamedBy = message.extremeRenamedBy;
             if (message.extremeRenamedByName != null && $Object.hasOwnProperty.call(message, "extremeRenamedByName"))
@@ -6736,12 +6103,12 @@ export const game = $root.game = (() => {
                 object.roomId = message.roomId;
             if (message.isAdmin != null && $Object.hasOwnProperty.call(message, "isAdmin"))
                 object.isAdmin = message.isAdmin;
-            if (message.hasIsAdmin != null && $Object.hasOwnProperty.call(message, "hasIsAdmin"))
-                object.hasIsAdmin = message.hasIsAdmin;
             if (message.stats != null && $Object.hasOwnProperty.call(message, "stats"))
                 object.stats = $root.game.PublicStats.toObject(message.stats, options, _depth + 1);
-            if (message.othelloStats != null && $Object.hasOwnProperty.call(message, "othelloStats"))
-                object.othelloStats = $root.game.OthelloStats.toObject(message.othelloStats, options, _depth + 1);
+            if (message.gameStats != null && $Object.hasOwnProperty.call(message, "gameStats"))
+                object.gameStats = $root.game.GameStats.toObject(message.gameStats, options, _depth + 1);
+            if (message.avatarUrl != null && $Object.hasOwnProperty.call(message, "avatarUrl"))
+                object.avatarUrl = message.avatarUrl;
             return object;
         };
 
@@ -6788,46 +6155,30 @@ export const game = $root.game = (() => {
          * @property {string|null} [displayName] LobbyPlayer displayName
          * @property {boolean|null} [connected] LobbyPlayer connected
          * @property {number|Long|null} [disconnectedAt] LobbyPlayer disconnectedAt
-         * @property {boolean|null} [hasDisconnectedAt] LobbyPlayer hasDisconnectedAt
          * @property {number|Long|null} [disconnectExpiresAt] LobbyPlayer disconnectExpiresAt
-         * @property {boolean|null} [hasDisconnectExpiresAt] LobbyPlayer hasDisconnectExpiresAt
          * @property {boolean|null} [nameWarEnabled] LobbyPlayer nameWarEnabled
-         * @property {boolean|null} [hasNameWarEnabled] LobbyPlayer hasNameWarEnabled
          * @property {string|null} [nameWarPenaltyName] LobbyPlayer nameWarPenaltyName
          * @property {boolean|null} [nameWarPunished] LobbyPlayer nameWarPunished
-         * @property {boolean|null} [hasNameWarPunished] LobbyPlayer hasNameWarPunished
          * @property {boolean|null} [nameWarAllowRename] LobbyPlayer nameWarAllowRename
-         * @property {boolean|null} [hasNameWarAllowRename] LobbyPlayer hasNameWarAllowRename
          * @property {number|Long|null} [nameWarRenameProtectedUntil] LobbyPlayer nameWarRenameProtectedUntil
-         * @property {boolean|null} [hasNameWarRenameProtectedUntil] LobbyPlayer hasNameWarRenameProtectedUntil
          * @property {string|null} [nameWarRenamedByName] LobbyPlayer nameWarRenamedByName
          * @property {boolean|null} [giveawayEnabled] LobbyPlayer giveawayEnabled
-         * @property {boolean|null} [hasGiveawayEnabled] LobbyPlayer hasGiveawayEnabled
          * @property {number|null} [giveawayValue] LobbyPlayer giveawayValue
-         * @property {boolean|null} [hasGiveawayValue] LobbyPlayer hasGiveawayValue
          * @property {string|null} [giveawayBoardText] LobbyPlayer giveawayBoardText
          * @property {number|Long|null} [giveawayBoardExpiresAt] LobbyPlayer giveawayBoardExpiresAt
-         * @property {boolean|null} [hasGiveawayBoardExpiresAt] LobbyPlayer hasGiveawayBoardExpiresAt
          * @property {number|null} [giveawayBoardLikes] LobbyPlayer giveawayBoardLikes
-         * @property {boolean|null} [hasGiveawayBoardLikes] LobbyPlayer hasGiveawayBoardLikes
          * @property {number|null} [giveawayBoardDislikes] LobbyPlayer giveawayBoardDislikes
-         * @property {boolean|null} [hasGiveawayBoardDislikes] LobbyPlayer hasGiveawayBoardDislikes
          * @property {boolean|null} [rankMultiplierUnlocked] LobbyPlayer rankMultiplierUnlocked
-         * @property {boolean|null} [hasRankMultiplierUnlocked] LobbyPlayer hasRankMultiplierUnlocked
          * @property {boolean|null} [extremeModeEnabled] LobbyPlayer extremeModeEnabled
-         * @property {boolean|null} [hasExtremeModeEnabled] LobbyPlayer hasExtremeModeEnabled
          * @property {number|null} [extremeWinStreak] LobbyPlayer extremeWinStreak
-         * @property {boolean|null} [hasExtremeWinStreak] LobbyPlayer hasExtremeWinStreak
          * @property {boolean|null} [extremeForceClosed] LobbyPlayer extremeForceClosed
-         * @property {boolean|null} [hasExtremeForceClosed] LobbyPlayer hasExtremeForceClosed
          * @property {number|Long|null} [extremeForceClosedAt] LobbyPlayer extremeForceClosedAt
-         * @property {boolean|null} [hasExtremeForceClosedAt] LobbyPlayer hasExtremeForceClosedAt
          * @property {number|Long|null} [extremeRenameProtectedUntil] LobbyPlayer extremeRenameProtectedUntil
-         * @property {boolean|null} [hasExtremeRenameProtectedUntil] LobbyPlayer hasExtremeRenameProtectedUntil
          * @property {string|null} [extremeRenamedByName] LobbyPlayer extremeRenamedByName
          * @property {string|null} [roomId] LobbyPlayer roomId
          * @property {game.LobbyStats.$Properties|null} [stats] LobbyPlayer stats
-         * @property {game.OthelloStats.$Properties|null} [othelloStats] LobbyPlayer othelloStats
+         * @property {game.GameStats.$Properties|null} [gameStats] LobbyPlayer gameStats
+         * @property {string|null} [avatarUrl] LobbyPlayer avatarUrl
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -6940,14 +6291,6 @@ export const game = $root.game = (() => {
         LobbyPlayer.prototype.disconnectedAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
-         * LobbyPlayer hasDisconnectedAt.
-         * @member {boolean} hasDisconnectedAt
-         * @memberof game.LobbyPlayer
-         * @instance
-         */
-        LobbyPlayer.prototype.hasDisconnectedAt = false;
-
-        /**
          * LobbyPlayer disconnectExpiresAt.
          * @member {number|Long} disconnectExpiresAt
          * @memberof game.LobbyPlayer
@@ -6956,28 +6299,12 @@ export const game = $root.game = (() => {
         LobbyPlayer.prototype.disconnectExpiresAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
-         * LobbyPlayer hasDisconnectExpiresAt.
-         * @member {boolean} hasDisconnectExpiresAt
-         * @memberof game.LobbyPlayer
-         * @instance
-         */
-        LobbyPlayer.prototype.hasDisconnectExpiresAt = false;
-
-        /**
          * LobbyPlayer nameWarEnabled.
          * @member {boolean} nameWarEnabled
          * @memberof game.LobbyPlayer
          * @instance
          */
         LobbyPlayer.prototype.nameWarEnabled = false;
-
-        /**
-         * LobbyPlayer hasNameWarEnabled.
-         * @member {boolean} hasNameWarEnabled
-         * @memberof game.LobbyPlayer
-         * @instance
-         */
-        LobbyPlayer.prototype.hasNameWarEnabled = false;
 
         /**
          * LobbyPlayer nameWarPenaltyName.
@@ -6996,14 +6323,6 @@ export const game = $root.game = (() => {
         LobbyPlayer.prototype.nameWarPunished = false;
 
         /**
-         * LobbyPlayer hasNameWarPunished.
-         * @member {boolean} hasNameWarPunished
-         * @memberof game.LobbyPlayer
-         * @instance
-         */
-        LobbyPlayer.prototype.hasNameWarPunished = false;
-
-        /**
          * LobbyPlayer nameWarAllowRename.
          * @member {boolean} nameWarAllowRename
          * @memberof game.LobbyPlayer
@@ -7012,28 +6331,12 @@ export const game = $root.game = (() => {
         LobbyPlayer.prototype.nameWarAllowRename = false;
 
         /**
-         * LobbyPlayer hasNameWarAllowRename.
-         * @member {boolean} hasNameWarAllowRename
-         * @memberof game.LobbyPlayer
-         * @instance
-         */
-        LobbyPlayer.prototype.hasNameWarAllowRename = false;
-
-        /**
          * LobbyPlayer nameWarRenameProtectedUntil.
          * @member {number|Long} nameWarRenameProtectedUntil
          * @memberof game.LobbyPlayer
          * @instance
          */
         LobbyPlayer.prototype.nameWarRenameProtectedUntil = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
-
-        /**
-         * LobbyPlayer hasNameWarRenameProtectedUntil.
-         * @member {boolean} hasNameWarRenameProtectedUntil
-         * @memberof game.LobbyPlayer
-         * @instance
-         */
-        LobbyPlayer.prototype.hasNameWarRenameProtectedUntil = false;
 
         /**
          * LobbyPlayer nameWarRenamedByName.
@@ -7052,28 +6355,12 @@ export const game = $root.game = (() => {
         LobbyPlayer.prototype.giveawayEnabled = false;
 
         /**
-         * LobbyPlayer hasGiveawayEnabled.
-         * @member {boolean} hasGiveawayEnabled
-         * @memberof game.LobbyPlayer
-         * @instance
-         */
-        LobbyPlayer.prototype.hasGiveawayEnabled = false;
-
-        /**
          * LobbyPlayer giveawayValue.
          * @member {number} giveawayValue
          * @memberof game.LobbyPlayer
          * @instance
          */
         LobbyPlayer.prototype.giveawayValue = 0;
-
-        /**
-         * LobbyPlayer hasGiveawayValue.
-         * @member {boolean} hasGiveawayValue
-         * @memberof game.LobbyPlayer
-         * @instance
-         */
-        LobbyPlayer.prototype.hasGiveawayValue = false;
 
         /**
          * LobbyPlayer giveawayBoardText.
@@ -7092,28 +6379,12 @@ export const game = $root.game = (() => {
         LobbyPlayer.prototype.giveawayBoardExpiresAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
-         * LobbyPlayer hasGiveawayBoardExpiresAt.
-         * @member {boolean} hasGiveawayBoardExpiresAt
-         * @memberof game.LobbyPlayer
-         * @instance
-         */
-        LobbyPlayer.prototype.hasGiveawayBoardExpiresAt = false;
-
-        /**
          * LobbyPlayer giveawayBoardLikes.
          * @member {number} giveawayBoardLikes
          * @memberof game.LobbyPlayer
          * @instance
          */
         LobbyPlayer.prototype.giveawayBoardLikes = 0;
-
-        /**
-         * LobbyPlayer hasGiveawayBoardLikes.
-         * @member {boolean} hasGiveawayBoardLikes
-         * @memberof game.LobbyPlayer
-         * @instance
-         */
-        LobbyPlayer.prototype.hasGiveawayBoardLikes = false;
 
         /**
          * LobbyPlayer giveawayBoardDislikes.
@@ -7124,28 +6395,12 @@ export const game = $root.game = (() => {
         LobbyPlayer.prototype.giveawayBoardDislikes = 0;
 
         /**
-         * LobbyPlayer hasGiveawayBoardDislikes.
-         * @member {boolean} hasGiveawayBoardDislikes
-         * @memberof game.LobbyPlayer
-         * @instance
-         */
-        LobbyPlayer.prototype.hasGiveawayBoardDislikes = false;
-
-        /**
          * LobbyPlayer rankMultiplierUnlocked.
          * @member {boolean} rankMultiplierUnlocked
          * @memberof game.LobbyPlayer
          * @instance
          */
         LobbyPlayer.prototype.rankMultiplierUnlocked = false;
-
-        /**
-         * LobbyPlayer hasRankMultiplierUnlocked.
-         * @member {boolean} hasRankMultiplierUnlocked
-         * @memberof game.LobbyPlayer
-         * @instance
-         */
-        LobbyPlayer.prototype.hasRankMultiplierUnlocked = false;
 
         /**
          * LobbyPlayer extremeModeEnabled.
@@ -7156,28 +6411,12 @@ export const game = $root.game = (() => {
         LobbyPlayer.prototype.extremeModeEnabled = false;
 
         /**
-         * LobbyPlayer hasExtremeModeEnabled.
-         * @member {boolean} hasExtremeModeEnabled
-         * @memberof game.LobbyPlayer
-         * @instance
-         */
-        LobbyPlayer.prototype.hasExtremeModeEnabled = false;
-
-        /**
          * LobbyPlayer extremeWinStreak.
          * @member {number} extremeWinStreak
          * @memberof game.LobbyPlayer
          * @instance
          */
         LobbyPlayer.prototype.extremeWinStreak = 0;
-
-        /**
-         * LobbyPlayer hasExtremeWinStreak.
-         * @member {boolean} hasExtremeWinStreak
-         * @memberof game.LobbyPlayer
-         * @instance
-         */
-        LobbyPlayer.prototype.hasExtremeWinStreak = false;
 
         /**
          * LobbyPlayer extremeForceClosed.
@@ -7188,14 +6427,6 @@ export const game = $root.game = (() => {
         LobbyPlayer.prototype.extremeForceClosed = false;
 
         /**
-         * LobbyPlayer hasExtremeForceClosed.
-         * @member {boolean} hasExtremeForceClosed
-         * @memberof game.LobbyPlayer
-         * @instance
-         */
-        LobbyPlayer.prototype.hasExtremeForceClosed = false;
-
-        /**
          * LobbyPlayer extremeForceClosedAt.
          * @member {number|Long} extremeForceClosedAt
          * @memberof game.LobbyPlayer
@@ -7204,28 +6435,12 @@ export const game = $root.game = (() => {
         LobbyPlayer.prototype.extremeForceClosedAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
-         * LobbyPlayer hasExtremeForceClosedAt.
-         * @member {boolean} hasExtremeForceClosedAt
-         * @memberof game.LobbyPlayer
-         * @instance
-         */
-        LobbyPlayer.prototype.hasExtremeForceClosedAt = false;
-
-        /**
          * LobbyPlayer extremeRenameProtectedUntil.
          * @member {number|Long} extremeRenameProtectedUntil
          * @memberof game.LobbyPlayer
          * @instance
          */
         LobbyPlayer.prototype.extremeRenameProtectedUntil = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
-
-        /**
-         * LobbyPlayer hasExtremeRenameProtectedUntil.
-         * @member {boolean} hasExtremeRenameProtectedUntil
-         * @memberof game.LobbyPlayer
-         * @instance
-         */
-        LobbyPlayer.prototype.hasExtremeRenameProtectedUntil = false;
 
         /**
          * LobbyPlayer extremeRenamedByName.
@@ -7252,12 +6467,20 @@ export const game = $root.game = (() => {
         LobbyPlayer.prototype.stats = null;
 
         /**
-         * LobbyPlayer othelloStats.
-         * @member {game.OthelloStats.$Properties|null|undefined} othelloStats
+         * LobbyPlayer gameStats.
+         * @member {game.GameStats.$Properties|null|undefined} gameStats
          * @memberof game.LobbyPlayer
          * @instance
          */
-        LobbyPlayer.prototype.othelloStats = null;
+        LobbyPlayer.prototype.gameStats = null;
+
+        /**
+         * LobbyPlayer avatarUrl.
+         * @member {string} avatarUrl
+         * @memberof game.LobbyPlayer
+         * @instance
+         */
+        LobbyPlayer.prototype.avatarUrl = "";
 
         /**
          * Creates a new LobbyPlayer instance using the specified properties.
@@ -7311,86 +6534,54 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 9, wireType 0 =*/72).bool(message.connected);
             if (message.disconnectedAt != null && $Object.hasOwnProperty.call(message, "disconnectedAt") && (typeof message.disconnectedAt === "object" ? message.disconnectedAt.low || message.disconnectedAt.high : message.disconnectedAt !== 0))
                 writer.uint32(/* id 10, wireType 0 =*/80).int64(message.disconnectedAt);
-            if (message.hasDisconnectedAt != null && $Object.hasOwnProperty.call(message, "hasDisconnectedAt") && message.hasDisconnectedAt !== false)
-                writer.uint32(/* id 11, wireType 0 =*/88).bool(message.hasDisconnectedAt);
             if (message.disconnectExpiresAt != null && $Object.hasOwnProperty.call(message, "disconnectExpiresAt") && (typeof message.disconnectExpiresAt === "object" ? message.disconnectExpiresAt.low || message.disconnectExpiresAt.high : message.disconnectExpiresAt !== 0))
                 writer.uint32(/* id 12, wireType 0 =*/96).int64(message.disconnectExpiresAt);
-            if (message.hasDisconnectExpiresAt != null && $Object.hasOwnProperty.call(message, "hasDisconnectExpiresAt") && message.hasDisconnectExpiresAt !== false)
-                writer.uint32(/* id 13, wireType 0 =*/104).bool(message.hasDisconnectExpiresAt);
             if (message.nameWarEnabled != null && $Object.hasOwnProperty.call(message, "nameWarEnabled") && message.nameWarEnabled !== false)
                 writer.uint32(/* id 14, wireType 0 =*/112).bool(message.nameWarEnabled);
-            if (message.hasNameWarEnabled != null && $Object.hasOwnProperty.call(message, "hasNameWarEnabled") && message.hasNameWarEnabled !== false)
-                writer.uint32(/* id 15, wireType 0 =*/120).bool(message.hasNameWarEnabled);
             if (message.nameWarPenaltyName != null && $Object.hasOwnProperty.call(message, "nameWarPenaltyName") && message.nameWarPenaltyName !== "")
                 writer.uint32(/* id 16, wireType 2 =*/130).string(message.nameWarPenaltyName);
             if (message.nameWarPunished != null && $Object.hasOwnProperty.call(message, "nameWarPunished") && message.nameWarPunished !== false)
                 writer.uint32(/* id 17, wireType 0 =*/136).bool(message.nameWarPunished);
-            if (message.hasNameWarPunished != null && $Object.hasOwnProperty.call(message, "hasNameWarPunished") && message.hasNameWarPunished !== false)
-                writer.uint32(/* id 18, wireType 0 =*/144).bool(message.hasNameWarPunished);
             if (message.nameWarAllowRename != null && $Object.hasOwnProperty.call(message, "nameWarAllowRename") && message.nameWarAllowRename !== false)
                 writer.uint32(/* id 19, wireType 0 =*/152).bool(message.nameWarAllowRename);
-            if (message.hasNameWarAllowRename != null && $Object.hasOwnProperty.call(message, "hasNameWarAllowRename") && message.hasNameWarAllowRename !== false)
-                writer.uint32(/* id 20, wireType 0 =*/160).bool(message.hasNameWarAllowRename);
             if (message.nameWarRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "nameWarRenameProtectedUntil") && (typeof message.nameWarRenameProtectedUntil === "object" ? message.nameWarRenameProtectedUntil.low || message.nameWarRenameProtectedUntil.high : message.nameWarRenameProtectedUntil !== 0))
                 writer.uint32(/* id 21, wireType 0 =*/168).int64(message.nameWarRenameProtectedUntil);
-            if (message.hasNameWarRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "hasNameWarRenameProtectedUntil") && message.hasNameWarRenameProtectedUntil !== false)
-                writer.uint32(/* id 22, wireType 0 =*/176).bool(message.hasNameWarRenameProtectedUntil);
             if (message.nameWarRenamedByName != null && $Object.hasOwnProperty.call(message, "nameWarRenamedByName") && message.nameWarRenamedByName !== "")
                 writer.uint32(/* id 23, wireType 2 =*/186).string(message.nameWarRenamedByName);
             if (message.giveawayEnabled != null && $Object.hasOwnProperty.call(message, "giveawayEnabled") && message.giveawayEnabled !== false)
                 writer.uint32(/* id 24, wireType 0 =*/192).bool(message.giveawayEnabled);
-            if (message.hasGiveawayEnabled != null && $Object.hasOwnProperty.call(message, "hasGiveawayEnabled") && message.hasGiveawayEnabled !== false)
-                writer.uint32(/* id 25, wireType 0 =*/200).bool(message.hasGiveawayEnabled);
             if (message.giveawayValue != null && $Object.hasOwnProperty.call(message, "giveawayValue") && !$Object.is(message.giveawayValue, 0))
                 writer.uint32(/* id 26, wireType 1 =*/209).double(message.giveawayValue);
-            if (message.hasGiveawayValue != null && $Object.hasOwnProperty.call(message, "hasGiveawayValue") && message.hasGiveawayValue !== false)
-                writer.uint32(/* id 27, wireType 0 =*/216).bool(message.hasGiveawayValue);
             if (message.giveawayBoardText != null && $Object.hasOwnProperty.call(message, "giveawayBoardText") && message.giveawayBoardText !== "")
                 writer.uint32(/* id 28, wireType 2 =*/226).string(message.giveawayBoardText);
             if (message.giveawayBoardExpiresAt != null && $Object.hasOwnProperty.call(message, "giveawayBoardExpiresAt") && (typeof message.giveawayBoardExpiresAt === "object" ? message.giveawayBoardExpiresAt.low || message.giveawayBoardExpiresAt.high : message.giveawayBoardExpiresAt !== 0))
                 writer.uint32(/* id 29, wireType 0 =*/232).int64(message.giveawayBoardExpiresAt);
-            if (message.hasGiveawayBoardExpiresAt != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardExpiresAt") && message.hasGiveawayBoardExpiresAt !== false)
-                writer.uint32(/* id 30, wireType 0 =*/240).bool(message.hasGiveawayBoardExpiresAt);
             if (message.giveawayBoardLikes != null && $Object.hasOwnProperty.call(message, "giveawayBoardLikes") && message.giveawayBoardLikes !== 0)
                 writer.uint32(/* id 31, wireType 0 =*/248).int32(message.giveawayBoardLikes);
-            if (message.hasGiveawayBoardLikes != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardLikes") && message.hasGiveawayBoardLikes !== false)
-                writer.uint32(/* id 32, wireType 0 =*/256).bool(message.hasGiveawayBoardLikes);
             if (message.giveawayBoardDislikes != null && $Object.hasOwnProperty.call(message, "giveawayBoardDislikes") && message.giveawayBoardDislikes !== 0)
                 writer.uint32(/* id 33, wireType 0 =*/264).int32(message.giveawayBoardDislikes);
-            if (message.hasGiveawayBoardDislikes != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardDislikes") && message.hasGiveawayBoardDislikes !== false)
-                writer.uint32(/* id 34, wireType 0 =*/272).bool(message.hasGiveawayBoardDislikes);
             if (message.rankMultiplierUnlocked != null && $Object.hasOwnProperty.call(message, "rankMultiplierUnlocked") && message.rankMultiplierUnlocked !== false)
                 writer.uint32(/* id 35, wireType 0 =*/280).bool(message.rankMultiplierUnlocked);
-            if (message.hasRankMultiplierUnlocked != null && $Object.hasOwnProperty.call(message, "hasRankMultiplierUnlocked") && message.hasRankMultiplierUnlocked !== false)
-                writer.uint32(/* id 36, wireType 0 =*/288).bool(message.hasRankMultiplierUnlocked);
             if (message.extremeModeEnabled != null && $Object.hasOwnProperty.call(message, "extremeModeEnabled") && message.extremeModeEnabled !== false)
                 writer.uint32(/* id 37, wireType 0 =*/296).bool(message.extremeModeEnabled);
-            if (message.hasExtremeModeEnabled != null && $Object.hasOwnProperty.call(message, "hasExtremeModeEnabled") && message.hasExtremeModeEnabled !== false)
-                writer.uint32(/* id 38, wireType 0 =*/304).bool(message.hasExtremeModeEnabled);
             if (message.extremeWinStreak != null && $Object.hasOwnProperty.call(message, "extremeWinStreak") && message.extremeWinStreak !== 0)
                 writer.uint32(/* id 39, wireType 0 =*/312).int32(message.extremeWinStreak);
-            if (message.hasExtremeWinStreak != null && $Object.hasOwnProperty.call(message, "hasExtremeWinStreak") && message.hasExtremeWinStreak !== false)
-                writer.uint32(/* id 40, wireType 0 =*/320).bool(message.hasExtremeWinStreak);
             if (message.extremeForceClosed != null && $Object.hasOwnProperty.call(message, "extremeForceClosed") && message.extremeForceClosed !== false)
                 writer.uint32(/* id 41, wireType 0 =*/328).bool(message.extremeForceClosed);
-            if (message.hasExtremeForceClosed != null && $Object.hasOwnProperty.call(message, "hasExtremeForceClosed") && message.hasExtremeForceClosed !== false)
-                writer.uint32(/* id 42, wireType 0 =*/336).bool(message.hasExtremeForceClosed);
             if (message.extremeForceClosedAt != null && $Object.hasOwnProperty.call(message, "extremeForceClosedAt") && (typeof message.extremeForceClosedAt === "object" ? message.extremeForceClosedAt.low || message.extremeForceClosedAt.high : message.extremeForceClosedAt !== 0))
                 writer.uint32(/* id 43, wireType 0 =*/344).int64(message.extremeForceClosedAt);
-            if (message.hasExtremeForceClosedAt != null && $Object.hasOwnProperty.call(message, "hasExtremeForceClosedAt") && message.hasExtremeForceClosedAt !== false)
-                writer.uint32(/* id 44, wireType 0 =*/352).bool(message.hasExtremeForceClosedAt);
             if (message.extremeRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "extremeRenameProtectedUntil") && (typeof message.extremeRenameProtectedUntil === "object" ? message.extremeRenameProtectedUntil.low || message.extremeRenameProtectedUntil.high : message.extremeRenameProtectedUntil !== 0))
                 writer.uint32(/* id 45, wireType 0 =*/360).int64(message.extremeRenameProtectedUntil);
-            if (message.hasExtremeRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "hasExtremeRenameProtectedUntil") && message.hasExtremeRenameProtectedUntil !== false)
-                writer.uint32(/* id 46, wireType 0 =*/368).bool(message.hasExtremeRenameProtectedUntil);
             if (message.extremeRenamedByName != null && $Object.hasOwnProperty.call(message, "extremeRenamedByName") && message.extremeRenamedByName !== "")
                 writer.uint32(/* id 47, wireType 2 =*/378).string(message.extremeRenamedByName);
             if (message.roomId != null && $Object.hasOwnProperty.call(message, "roomId") && message.roomId !== "")
                 writer.uint32(/* id 48, wireType 2 =*/386).string(message.roomId);
             if (message.stats != null && $Object.hasOwnProperty.call(message, "stats"))
                 $root.game.LobbyStats.encode(message.stats, writer.uint32(/* id 49, wireType 2 =*/394).fork(), _depth + 1).ldelim();
-            if (message.othelloStats != null && $Object.hasOwnProperty.call(message, "othelloStats"))
-                $root.game.OthelloStats.encode(message.othelloStats, writer.uint32(/* id 50, wireType 2 =*/402).fork(), _depth + 1).ldelim();
+            if (message.gameStats != null && $Object.hasOwnProperty.call(message, "gameStats"))
+                $root.game.GameStats.encode(message.gameStats, writer.uint32(/* id 50, wireType 2 =*/402).fork(), _depth + 1).ldelim();
+            if (message.avatarUrl != null && $Object.hasOwnProperty.call(message, "avatarUrl") && message.avatarUrl !== "")
+                writer.uint32(/* id 51, wireType 2 =*/410).string(message.avatarUrl);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -7525,15 +6716,6 @@ export const game = $root.game = (() => {
                             delete message.disconnectedAt;
                         continue;
                     }
-                case 11: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasDisconnectedAt = value;
-                        else
-                            delete message.hasDisconnectedAt;
-                        continue;
-                    }
                 case 12: {
                         if (wireType !== 0)
                             break;
@@ -7543,15 +6725,6 @@ export const game = $root.game = (() => {
                             delete message.disconnectExpiresAt;
                         continue;
                     }
-                case 13: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasDisconnectExpiresAt = value;
-                        else
-                            delete message.hasDisconnectExpiresAt;
-                        continue;
-                    }
                 case 14: {
                         if (wireType !== 0)
                             break;
@@ -7559,15 +6732,6 @@ export const game = $root.game = (() => {
                             message.nameWarEnabled = value;
                         else
                             delete message.nameWarEnabled;
-                        continue;
-                    }
-                case 15: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasNameWarEnabled = value;
-                        else
-                            delete message.hasNameWarEnabled;
                         continue;
                     }
                 case 16: {
@@ -7588,15 +6752,6 @@ export const game = $root.game = (() => {
                             delete message.nameWarPunished;
                         continue;
                     }
-                case 18: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasNameWarPunished = value;
-                        else
-                            delete message.hasNameWarPunished;
-                        continue;
-                    }
                 case 19: {
                         if (wireType !== 0)
                             break;
@@ -7606,15 +6761,6 @@ export const game = $root.game = (() => {
                             delete message.nameWarAllowRename;
                         continue;
                     }
-                case 20: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasNameWarAllowRename = value;
-                        else
-                            delete message.hasNameWarAllowRename;
-                        continue;
-                    }
                 case 21: {
                         if (wireType !== 0)
                             break;
@@ -7622,15 +6768,6 @@ export const game = $root.game = (() => {
                             message.nameWarRenameProtectedUntil = value;
                         else
                             delete message.nameWarRenameProtectedUntil;
-                        continue;
-                    }
-                case 22: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasNameWarRenameProtectedUntil = value;
-                        else
-                            delete message.hasNameWarRenameProtectedUntil;
                         continue;
                     }
                 case 23: {
@@ -7651,15 +6788,6 @@ export const game = $root.game = (() => {
                             delete message.giveawayEnabled;
                         continue;
                     }
-                case 25: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasGiveawayEnabled = value;
-                        else
-                            delete message.hasGiveawayEnabled;
-                        continue;
-                    }
                 case 26: {
                         if (wireType !== 1)
                             break;
@@ -7667,15 +6795,6 @@ export const game = $root.game = (() => {
                             message.giveawayValue = value;
                         else
                             delete message.giveawayValue;
-                        continue;
-                    }
-                case 27: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasGiveawayValue = value;
-                        else
-                            delete message.hasGiveawayValue;
                         continue;
                     }
                 case 28: {
@@ -7696,15 +6815,6 @@ export const game = $root.game = (() => {
                             delete message.giveawayBoardExpiresAt;
                         continue;
                     }
-                case 30: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasGiveawayBoardExpiresAt = value;
-                        else
-                            delete message.hasGiveawayBoardExpiresAt;
-                        continue;
-                    }
                 case 31: {
                         if (wireType !== 0)
                             break;
@@ -7712,15 +6822,6 @@ export const game = $root.game = (() => {
                             message.giveawayBoardLikes = value;
                         else
                             delete message.giveawayBoardLikes;
-                        continue;
-                    }
-                case 32: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasGiveawayBoardLikes = value;
-                        else
-                            delete message.hasGiveawayBoardLikes;
                         continue;
                     }
                 case 33: {
@@ -7732,15 +6833,6 @@ export const game = $root.game = (() => {
                             delete message.giveawayBoardDislikes;
                         continue;
                     }
-                case 34: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasGiveawayBoardDislikes = value;
-                        else
-                            delete message.hasGiveawayBoardDislikes;
-                        continue;
-                    }
                 case 35: {
                         if (wireType !== 0)
                             break;
@@ -7748,15 +6840,6 @@ export const game = $root.game = (() => {
                             message.rankMultiplierUnlocked = value;
                         else
                             delete message.rankMultiplierUnlocked;
-                        continue;
-                    }
-                case 36: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasRankMultiplierUnlocked = value;
-                        else
-                            delete message.hasRankMultiplierUnlocked;
                         continue;
                     }
                 case 37: {
@@ -7768,15 +6851,6 @@ export const game = $root.game = (() => {
                             delete message.extremeModeEnabled;
                         continue;
                     }
-                case 38: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasExtremeModeEnabled = value;
-                        else
-                            delete message.hasExtremeModeEnabled;
-                        continue;
-                    }
                 case 39: {
                         if (wireType !== 0)
                             break;
@@ -7784,15 +6858,6 @@ export const game = $root.game = (() => {
                             message.extremeWinStreak = value;
                         else
                             delete message.extremeWinStreak;
-                        continue;
-                    }
-                case 40: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasExtremeWinStreak = value;
-                        else
-                            delete message.hasExtremeWinStreak;
                         continue;
                     }
                 case 41: {
@@ -7804,15 +6869,6 @@ export const game = $root.game = (() => {
                             delete message.extremeForceClosed;
                         continue;
                     }
-                case 42: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasExtremeForceClosed = value;
-                        else
-                            delete message.hasExtremeForceClosed;
-                        continue;
-                    }
                 case 43: {
                         if (wireType !== 0)
                             break;
@@ -7822,15 +6878,6 @@ export const game = $root.game = (() => {
                             delete message.extremeForceClosedAt;
                         continue;
                     }
-                case 44: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasExtremeForceClosedAt = value;
-                        else
-                            delete message.hasExtremeForceClosedAt;
-                        continue;
-                    }
                 case 45: {
                         if (wireType !== 0)
                             break;
@@ -7838,15 +6885,6 @@ export const game = $root.game = (() => {
                             message.extremeRenameProtectedUntil = value;
                         else
                             delete message.extremeRenameProtectedUntil;
-                        continue;
-                    }
-                case 46: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasExtremeRenameProtectedUntil = value;
-                        else
-                            delete message.hasExtremeRenameProtectedUntil;
                         continue;
                     }
                 case 47: {
@@ -7876,7 +6914,16 @@ export const game = $root.game = (() => {
                 case 50: {
                         if (wireType !== 2)
                             break;
-                        message.othelloStats = $root.game.OthelloStats.decode(reader, reader.uint32(), $undefined, _depth + 1, message.othelloStats);
+                        message.gameStats = $root.game.GameStats.decode(reader, reader.uint32(), $undefined, _depth + 1, message.gameStats);
+                        continue;
+                    }
+                case 51: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.avatarUrl = value;
+                        else
+                            delete message.avatarUrl;
                         continue;
                     }
                 }
@@ -7954,114 +7001,63 @@ export const game = $root.game = (() => {
             if (message.disconnectedAt != null && $Object.hasOwnProperty.call(message, "disconnectedAt"))
                 if (!$util.isInteger(message.disconnectedAt) && !(message.disconnectedAt && $util.isInteger(message.disconnectedAt.low) && $util.isInteger(message.disconnectedAt.high)))
                     return "disconnectedAt: integer|Long expected";
-            if (message.hasDisconnectedAt != null && $Object.hasOwnProperty.call(message, "hasDisconnectedAt"))
-                if (typeof message.hasDisconnectedAt !== "boolean")
-                    return "hasDisconnectedAt: boolean expected";
             if (message.disconnectExpiresAt != null && $Object.hasOwnProperty.call(message, "disconnectExpiresAt"))
                 if (!$util.isInteger(message.disconnectExpiresAt) && !(message.disconnectExpiresAt && $util.isInteger(message.disconnectExpiresAt.low) && $util.isInteger(message.disconnectExpiresAt.high)))
                     return "disconnectExpiresAt: integer|Long expected";
-            if (message.hasDisconnectExpiresAt != null && $Object.hasOwnProperty.call(message, "hasDisconnectExpiresAt"))
-                if (typeof message.hasDisconnectExpiresAt !== "boolean")
-                    return "hasDisconnectExpiresAt: boolean expected";
             if (message.nameWarEnabled != null && $Object.hasOwnProperty.call(message, "nameWarEnabled"))
                 if (typeof message.nameWarEnabled !== "boolean")
                     return "nameWarEnabled: boolean expected";
-            if (message.hasNameWarEnabled != null && $Object.hasOwnProperty.call(message, "hasNameWarEnabled"))
-                if (typeof message.hasNameWarEnabled !== "boolean")
-                    return "hasNameWarEnabled: boolean expected";
             if (message.nameWarPenaltyName != null && $Object.hasOwnProperty.call(message, "nameWarPenaltyName"))
                 if (!$util.isString(message.nameWarPenaltyName))
                     return "nameWarPenaltyName: string expected";
             if (message.nameWarPunished != null && $Object.hasOwnProperty.call(message, "nameWarPunished"))
                 if (typeof message.nameWarPunished !== "boolean")
                     return "nameWarPunished: boolean expected";
-            if (message.hasNameWarPunished != null && $Object.hasOwnProperty.call(message, "hasNameWarPunished"))
-                if (typeof message.hasNameWarPunished !== "boolean")
-                    return "hasNameWarPunished: boolean expected";
             if (message.nameWarAllowRename != null && $Object.hasOwnProperty.call(message, "nameWarAllowRename"))
                 if (typeof message.nameWarAllowRename !== "boolean")
                     return "nameWarAllowRename: boolean expected";
-            if (message.hasNameWarAllowRename != null && $Object.hasOwnProperty.call(message, "hasNameWarAllowRename"))
-                if (typeof message.hasNameWarAllowRename !== "boolean")
-                    return "hasNameWarAllowRename: boolean expected";
             if (message.nameWarRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "nameWarRenameProtectedUntil"))
                 if (!$util.isInteger(message.nameWarRenameProtectedUntil) && !(message.nameWarRenameProtectedUntil && $util.isInteger(message.nameWarRenameProtectedUntil.low) && $util.isInteger(message.nameWarRenameProtectedUntil.high)))
                     return "nameWarRenameProtectedUntil: integer|Long expected";
-            if (message.hasNameWarRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "hasNameWarRenameProtectedUntil"))
-                if (typeof message.hasNameWarRenameProtectedUntil !== "boolean")
-                    return "hasNameWarRenameProtectedUntil: boolean expected";
             if (message.nameWarRenamedByName != null && $Object.hasOwnProperty.call(message, "nameWarRenamedByName"))
                 if (!$util.isString(message.nameWarRenamedByName))
                     return "nameWarRenamedByName: string expected";
             if (message.giveawayEnabled != null && $Object.hasOwnProperty.call(message, "giveawayEnabled"))
                 if (typeof message.giveawayEnabled !== "boolean")
                     return "giveawayEnabled: boolean expected";
-            if (message.hasGiveawayEnabled != null && $Object.hasOwnProperty.call(message, "hasGiveawayEnabled"))
-                if (typeof message.hasGiveawayEnabled !== "boolean")
-                    return "hasGiveawayEnabled: boolean expected";
             if (message.giveawayValue != null && $Object.hasOwnProperty.call(message, "giveawayValue"))
                 if (typeof message.giveawayValue !== "number")
                     return "giveawayValue: number expected";
-            if (message.hasGiveawayValue != null && $Object.hasOwnProperty.call(message, "hasGiveawayValue"))
-                if (typeof message.hasGiveawayValue !== "boolean")
-                    return "hasGiveawayValue: boolean expected";
             if (message.giveawayBoardText != null && $Object.hasOwnProperty.call(message, "giveawayBoardText"))
                 if (!$util.isString(message.giveawayBoardText))
                     return "giveawayBoardText: string expected";
             if (message.giveawayBoardExpiresAt != null && $Object.hasOwnProperty.call(message, "giveawayBoardExpiresAt"))
                 if (!$util.isInteger(message.giveawayBoardExpiresAt) && !(message.giveawayBoardExpiresAt && $util.isInteger(message.giveawayBoardExpiresAt.low) && $util.isInteger(message.giveawayBoardExpiresAt.high)))
                     return "giveawayBoardExpiresAt: integer|Long expected";
-            if (message.hasGiveawayBoardExpiresAt != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardExpiresAt"))
-                if (typeof message.hasGiveawayBoardExpiresAt !== "boolean")
-                    return "hasGiveawayBoardExpiresAt: boolean expected";
             if (message.giveawayBoardLikes != null && $Object.hasOwnProperty.call(message, "giveawayBoardLikes"))
                 if (!$util.isInteger(message.giveawayBoardLikes))
                     return "giveawayBoardLikes: integer expected";
-            if (message.hasGiveawayBoardLikes != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardLikes"))
-                if (typeof message.hasGiveawayBoardLikes !== "boolean")
-                    return "hasGiveawayBoardLikes: boolean expected";
             if (message.giveawayBoardDislikes != null && $Object.hasOwnProperty.call(message, "giveawayBoardDislikes"))
                 if (!$util.isInteger(message.giveawayBoardDislikes))
                     return "giveawayBoardDislikes: integer expected";
-            if (message.hasGiveawayBoardDislikes != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardDislikes"))
-                if (typeof message.hasGiveawayBoardDislikes !== "boolean")
-                    return "hasGiveawayBoardDislikes: boolean expected";
             if (message.rankMultiplierUnlocked != null && $Object.hasOwnProperty.call(message, "rankMultiplierUnlocked"))
                 if (typeof message.rankMultiplierUnlocked !== "boolean")
                     return "rankMultiplierUnlocked: boolean expected";
-            if (message.hasRankMultiplierUnlocked != null && $Object.hasOwnProperty.call(message, "hasRankMultiplierUnlocked"))
-                if (typeof message.hasRankMultiplierUnlocked !== "boolean")
-                    return "hasRankMultiplierUnlocked: boolean expected";
             if (message.extremeModeEnabled != null && $Object.hasOwnProperty.call(message, "extremeModeEnabled"))
                 if (typeof message.extremeModeEnabled !== "boolean")
                     return "extremeModeEnabled: boolean expected";
-            if (message.hasExtremeModeEnabled != null && $Object.hasOwnProperty.call(message, "hasExtremeModeEnabled"))
-                if (typeof message.hasExtremeModeEnabled !== "boolean")
-                    return "hasExtremeModeEnabled: boolean expected";
             if (message.extremeWinStreak != null && $Object.hasOwnProperty.call(message, "extremeWinStreak"))
                 if (!$util.isInteger(message.extremeWinStreak))
                     return "extremeWinStreak: integer expected";
-            if (message.hasExtremeWinStreak != null && $Object.hasOwnProperty.call(message, "hasExtremeWinStreak"))
-                if (typeof message.hasExtremeWinStreak !== "boolean")
-                    return "hasExtremeWinStreak: boolean expected";
             if (message.extremeForceClosed != null && $Object.hasOwnProperty.call(message, "extremeForceClosed"))
                 if (typeof message.extremeForceClosed !== "boolean")
                     return "extremeForceClosed: boolean expected";
-            if (message.hasExtremeForceClosed != null && $Object.hasOwnProperty.call(message, "hasExtremeForceClosed"))
-                if (typeof message.hasExtremeForceClosed !== "boolean")
-                    return "hasExtremeForceClosed: boolean expected";
             if (message.extremeForceClosedAt != null && $Object.hasOwnProperty.call(message, "extremeForceClosedAt"))
                 if (!$util.isInteger(message.extremeForceClosedAt) && !(message.extremeForceClosedAt && $util.isInteger(message.extremeForceClosedAt.low) && $util.isInteger(message.extremeForceClosedAt.high)))
                     return "extremeForceClosedAt: integer|Long expected";
-            if (message.hasExtremeForceClosedAt != null && $Object.hasOwnProperty.call(message, "hasExtremeForceClosedAt"))
-                if (typeof message.hasExtremeForceClosedAt !== "boolean")
-                    return "hasExtremeForceClosedAt: boolean expected";
             if (message.extremeRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "extremeRenameProtectedUntil"))
                 if (!$util.isInteger(message.extremeRenameProtectedUntil) && !(message.extremeRenameProtectedUntil && $util.isInteger(message.extremeRenameProtectedUntil.low) && $util.isInteger(message.extremeRenameProtectedUntil.high)))
                     return "extremeRenameProtectedUntil: integer|Long expected";
-            if (message.hasExtremeRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "hasExtremeRenameProtectedUntil"))
-                if (typeof message.hasExtremeRenameProtectedUntil !== "boolean")
-                    return "hasExtremeRenameProtectedUntil: boolean expected";
             if (message.extremeRenamedByName != null && $Object.hasOwnProperty.call(message, "extremeRenamedByName"))
                 if (!$util.isString(message.extremeRenamedByName))
                     return "extremeRenamedByName: string expected";
@@ -8073,11 +7069,14 @@ export const game = $root.game = (() => {
                 if (error)
                     return "stats." + error;
             }
-            if (message.othelloStats != null && $Object.hasOwnProperty.call(message, "othelloStats")) {
-                let error = $root.game.OthelloStats.verify(message.othelloStats, _depth + 1);
+            if (message.gameStats != null && $Object.hasOwnProperty.call(message, "gameStats")) {
+                let error = $root.game.GameStats.verify(message.gameStats, _depth + 1);
                 if (error)
-                    return "othelloStats." + error;
+                    return "gameStats." + error;
             }
+            if (message.avatarUrl != null && $Object.hasOwnProperty.call(message, "avatarUrl"))
+                if (!$util.isString(message.avatarUrl))
+                    return "avatarUrl: string expected";
             return null;
         };
 
@@ -8138,9 +7137,6 @@ export const game = $root.game = (() => {
                         message.disconnectedAt = object.disconnectedAt;
                     else if (typeof object.disconnectedAt === "object")
                         message.disconnectedAt = new $util.LongBits(object.disconnectedAt.low >>> 0, object.disconnectedAt.high >>> 0).toNumber();
-            if (object.hasDisconnectedAt != null)
-                if (object.hasDisconnectedAt)
-                    message.hasDisconnectedAt = $Boolean(object.hasDisconnectedAt);
             if (object.disconnectExpiresAt != null)
                 if (typeof object.disconnectExpiresAt === "object" ? object.disconnectExpiresAt.low || object.disconnectExpiresAt.high : $Number(object.disconnectExpiresAt) !== 0)
                     if ($util.Long)
@@ -8151,30 +7147,18 @@ export const game = $root.game = (() => {
                         message.disconnectExpiresAt = object.disconnectExpiresAt;
                     else if (typeof object.disconnectExpiresAt === "object")
                         message.disconnectExpiresAt = new $util.LongBits(object.disconnectExpiresAt.low >>> 0, object.disconnectExpiresAt.high >>> 0).toNumber();
-            if (object.hasDisconnectExpiresAt != null)
-                if (object.hasDisconnectExpiresAt)
-                    message.hasDisconnectExpiresAt = $Boolean(object.hasDisconnectExpiresAt);
             if (object.nameWarEnabled != null)
                 if (object.nameWarEnabled)
                     message.nameWarEnabled = $Boolean(object.nameWarEnabled);
-            if (object.hasNameWarEnabled != null)
-                if (object.hasNameWarEnabled)
-                    message.hasNameWarEnabled = $Boolean(object.hasNameWarEnabled);
             if (object.nameWarPenaltyName != null)
                 if (typeof object.nameWarPenaltyName !== "string" || object.nameWarPenaltyName.length)
                     message.nameWarPenaltyName = $String(object.nameWarPenaltyName);
             if (object.nameWarPunished != null)
                 if (object.nameWarPunished)
                     message.nameWarPunished = $Boolean(object.nameWarPunished);
-            if (object.hasNameWarPunished != null)
-                if (object.hasNameWarPunished)
-                    message.hasNameWarPunished = $Boolean(object.hasNameWarPunished);
             if (object.nameWarAllowRename != null)
                 if (object.nameWarAllowRename)
                     message.nameWarAllowRename = $Boolean(object.nameWarAllowRename);
-            if (object.hasNameWarAllowRename != null)
-                if (object.hasNameWarAllowRename)
-                    message.hasNameWarAllowRename = $Boolean(object.hasNameWarAllowRename);
             if (object.nameWarRenameProtectedUntil != null)
                 if (typeof object.nameWarRenameProtectedUntil === "object" ? object.nameWarRenameProtectedUntil.low || object.nameWarRenameProtectedUntil.high : $Number(object.nameWarRenameProtectedUntil) !== 0)
                     if ($util.Long)
@@ -8185,24 +7169,15 @@ export const game = $root.game = (() => {
                         message.nameWarRenameProtectedUntil = object.nameWarRenameProtectedUntil;
                     else if (typeof object.nameWarRenameProtectedUntil === "object")
                         message.nameWarRenameProtectedUntil = new $util.LongBits(object.nameWarRenameProtectedUntil.low >>> 0, object.nameWarRenameProtectedUntil.high >>> 0).toNumber();
-            if (object.hasNameWarRenameProtectedUntil != null)
-                if (object.hasNameWarRenameProtectedUntil)
-                    message.hasNameWarRenameProtectedUntil = $Boolean(object.hasNameWarRenameProtectedUntil);
             if (object.nameWarRenamedByName != null)
                 if (typeof object.nameWarRenamedByName !== "string" || object.nameWarRenamedByName.length)
                     message.nameWarRenamedByName = $String(object.nameWarRenamedByName);
             if (object.giveawayEnabled != null)
                 if (object.giveawayEnabled)
                     message.giveawayEnabled = $Boolean(object.giveawayEnabled);
-            if (object.hasGiveawayEnabled != null)
-                if (object.hasGiveawayEnabled)
-                    message.hasGiveawayEnabled = $Boolean(object.hasGiveawayEnabled);
             if (object.giveawayValue != null)
                 if (!$Object.is($Number(object.giveawayValue), 0))
                     message.giveawayValue = $Number(object.giveawayValue);
-            if (object.hasGiveawayValue != null)
-                if (object.hasGiveawayValue)
-                    message.hasGiveawayValue = $Boolean(object.hasGiveawayValue);
             if (object.giveawayBoardText != null)
                 if (typeof object.giveawayBoardText !== "string" || object.giveawayBoardText.length)
                     message.giveawayBoardText = $String(object.giveawayBoardText);
@@ -8216,45 +7191,24 @@ export const game = $root.game = (() => {
                         message.giveawayBoardExpiresAt = object.giveawayBoardExpiresAt;
                     else if (typeof object.giveawayBoardExpiresAt === "object")
                         message.giveawayBoardExpiresAt = new $util.LongBits(object.giveawayBoardExpiresAt.low >>> 0, object.giveawayBoardExpiresAt.high >>> 0).toNumber();
-            if (object.hasGiveawayBoardExpiresAt != null)
-                if (object.hasGiveawayBoardExpiresAt)
-                    message.hasGiveawayBoardExpiresAt = $Boolean(object.hasGiveawayBoardExpiresAt);
             if (object.giveawayBoardLikes != null)
                 if ($Number(object.giveawayBoardLikes) !== 0)
                     message.giveawayBoardLikes = object.giveawayBoardLikes | 0;
-            if (object.hasGiveawayBoardLikes != null)
-                if (object.hasGiveawayBoardLikes)
-                    message.hasGiveawayBoardLikes = $Boolean(object.hasGiveawayBoardLikes);
             if (object.giveawayBoardDislikes != null)
                 if ($Number(object.giveawayBoardDislikes) !== 0)
                     message.giveawayBoardDislikes = object.giveawayBoardDislikes | 0;
-            if (object.hasGiveawayBoardDislikes != null)
-                if (object.hasGiveawayBoardDislikes)
-                    message.hasGiveawayBoardDislikes = $Boolean(object.hasGiveawayBoardDislikes);
             if (object.rankMultiplierUnlocked != null)
                 if (object.rankMultiplierUnlocked)
                     message.rankMultiplierUnlocked = $Boolean(object.rankMultiplierUnlocked);
-            if (object.hasRankMultiplierUnlocked != null)
-                if (object.hasRankMultiplierUnlocked)
-                    message.hasRankMultiplierUnlocked = $Boolean(object.hasRankMultiplierUnlocked);
             if (object.extremeModeEnabled != null)
                 if (object.extremeModeEnabled)
                     message.extremeModeEnabled = $Boolean(object.extremeModeEnabled);
-            if (object.hasExtremeModeEnabled != null)
-                if (object.hasExtremeModeEnabled)
-                    message.hasExtremeModeEnabled = $Boolean(object.hasExtremeModeEnabled);
             if (object.extremeWinStreak != null)
                 if ($Number(object.extremeWinStreak) !== 0)
                     message.extremeWinStreak = object.extremeWinStreak | 0;
-            if (object.hasExtremeWinStreak != null)
-                if (object.hasExtremeWinStreak)
-                    message.hasExtremeWinStreak = $Boolean(object.hasExtremeWinStreak);
             if (object.extremeForceClosed != null)
                 if (object.extremeForceClosed)
                     message.extremeForceClosed = $Boolean(object.extremeForceClosed);
-            if (object.hasExtremeForceClosed != null)
-                if (object.hasExtremeForceClosed)
-                    message.hasExtremeForceClosed = $Boolean(object.hasExtremeForceClosed);
             if (object.extremeForceClosedAt != null)
                 if (typeof object.extremeForceClosedAt === "object" ? object.extremeForceClosedAt.low || object.extremeForceClosedAt.high : $Number(object.extremeForceClosedAt) !== 0)
                     if ($util.Long)
@@ -8265,9 +7219,6 @@ export const game = $root.game = (() => {
                         message.extremeForceClosedAt = object.extremeForceClosedAt;
                     else if (typeof object.extremeForceClosedAt === "object")
                         message.extremeForceClosedAt = new $util.LongBits(object.extremeForceClosedAt.low >>> 0, object.extremeForceClosedAt.high >>> 0).toNumber();
-            if (object.hasExtremeForceClosedAt != null)
-                if (object.hasExtremeForceClosedAt)
-                    message.hasExtremeForceClosedAt = $Boolean(object.hasExtremeForceClosedAt);
             if (object.extremeRenameProtectedUntil != null)
                 if (typeof object.extremeRenameProtectedUntil === "object" ? object.extremeRenameProtectedUntil.low || object.extremeRenameProtectedUntil.high : $Number(object.extremeRenameProtectedUntil) !== 0)
                     if ($util.Long)
@@ -8278,9 +7229,6 @@ export const game = $root.game = (() => {
                         message.extremeRenameProtectedUntil = object.extremeRenameProtectedUntil;
                     else if (typeof object.extremeRenameProtectedUntil === "object")
                         message.extremeRenameProtectedUntil = new $util.LongBits(object.extremeRenameProtectedUntil.low >>> 0, object.extremeRenameProtectedUntil.high >>> 0).toNumber();
-            if (object.hasExtremeRenameProtectedUntil != null)
-                if (object.hasExtremeRenameProtectedUntil)
-                    message.hasExtremeRenameProtectedUntil = $Boolean(object.hasExtremeRenameProtectedUntil);
             if (object.extremeRenamedByName != null)
                 if (typeof object.extremeRenamedByName !== "string" || object.extremeRenamedByName.length)
                     message.extremeRenamedByName = $String(object.extremeRenamedByName);
@@ -8292,11 +7240,14 @@ export const game = $root.game = (() => {
                     throw $TypeError(".game.LobbyPlayer.stats: object expected");
                 message.stats = $root.game.LobbyStats.fromObject(object.stats, _depth + 1);
             }
-            if (object.othelloStats != null) {
-                if (!$util.isObject(object.othelloStats))
-                    throw $TypeError(".game.LobbyPlayer.othelloStats: object expected");
-                message.othelloStats = $root.game.OthelloStats.fromObject(object.othelloStats, _depth + 1);
+            if (object.gameStats != null) {
+                if (!$util.isObject(object.gameStats))
+                    throw $TypeError(".game.LobbyPlayer.gameStats: object expected");
+                message.gameStats = $root.game.GameStats.fromObject(object.gameStats, _depth + 1);
             }
+            if (object.avatarUrl != null)
+                if (typeof object.avatarUrl !== "string" || object.avatarUrl.length)
+                    message.avatarUrl = $String(object.avatarUrl);
             return message;
         };
 
@@ -8332,66 +7283,50 @@ export const game = $root.game = (() => {
                     object.disconnectedAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.disconnectedAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasDisconnectedAt = false;
                 if ($util.Long) {
                     let long = new $util.Long(0, 0, false);
                     object.disconnectExpiresAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.disconnectExpiresAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasDisconnectExpiresAt = false;
                 object.nameWarEnabled = false;
-                object.hasNameWarEnabled = false;
                 object.nameWarPenaltyName = "";
                 object.nameWarPunished = false;
-                object.hasNameWarPunished = false;
                 object.nameWarAllowRename = false;
-                object.hasNameWarAllowRename = false;
                 if ($util.Long) {
                     let long = new $util.Long(0, 0, false);
                     object.nameWarRenameProtectedUntil = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.nameWarRenameProtectedUntil = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasNameWarRenameProtectedUntil = false;
                 object.nameWarRenamedByName = "";
                 object.giveawayEnabled = false;
-                object.hasGiveawayEnabled = false;
                 object.giveawayValue = 0;
-                object.hasGiveawayValue = false;
                 object.giveawayBoardText = "";
                 if ($util.Long) {
                     let long = new $util.Long(0, 0, false);
                     object.giveawayBoardExpiresAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.giveawayBoardExpiresAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasGiveawayBoardExpiresAt = false;
                 object.giveawayBoardLikes = 0;
-                object.hasGiveawayBoardLikes = false;
                 object.giveawayBoardDislikes = 0;
-                object.hasGiveawayBoardDislikes = false;
                 object.rankMultiplierUnlocked = false;
-                object.hasRankMultiplierUnlocked = false;
                 object.extremeModeEnabled = false;
-                object.hasExtremeModeEnabled = false;
                 object.extremeWinStreak = 0;
-                object.hasExtremeWinStreak = false;
                 object.extremeForceClosed = false;
-                object.hasExtremeForceClosed = false;
                 if ($util.Long) {
                     let long = new $util.Long(0, 0, false);
                     object.extremeForceClosedAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.extremeForceClosedAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasExtremeForceClosedAt = false;
                 if ($util.Long) {
                     let long = new $util.Long(0, 0, false);
                     object.extremeRenameProtectedUntil = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.extremeRenameProtectedUntil = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasExtremeRenameProtectedUntil = false;
                 object.extremeRenamedByName = "";
                 object.roomId = "";
                 object.stats = null;
-                object.othelloStats = null;
+                object.gameStats = null;
+                object.avatarUrl = "";
             }
             if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
                 object.id = message.id;
@@ -8418,8 +7353,6 @@ export const game = $root.game = (() => {
                     object.disconnectedAt = options.longs === $String ? $String(message.disconnectedAt) : message.disconnectedAt;
                 else
                     object.disconnectedAt = options.longs === $String ? $util.Long.prototype.toString.call(message.disconnectedAt) : options.longs === $Number ? new $util.LongBits(message.disconnectedAt.low >>> 0, message.disconnectedAt.high >>> 0).toNumber() : message.disconnectedAt;
-            if (message.hasDisconnectedAt != null && $Object.hasOwnProperty.call(message, "hasDisconnectedAt"))
-                object.hasDisconnectedAt = message.hasDisconnectedAt;
             if (message.disconnectExpiresAt != null && $Object.hasOwnProperty.call(message, "disconnectExpiresAt"))
                 if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
                     object.disconnectExpiresAt = typeof message.disconnectExpiresAt === "number" ? $BigInt(message.disconnectExpiresAt) : $util.Long.fromBits(message.disconnectExpiresAt.low >>> 0, message.disconnectExpiresAt.high >>> 0, false).toBigInt();
@@ -8427,22 +7360,14 @@ export const game = $root.game = (() => {
                     object.disconnectExpiresAt = options.longs === $String ? $String(message.disconnectExpiresAt) : message.disconnectExpiresAt;
                 else
                     object.disconnectExpiresAt = options.longs === $String ? $util.Long.prototype.toString.call(message.disconnectExpiresAt) : options.longs === $Number ? new $util.LongBits(message.disconnectExpiresAt.low >>> 0, message.disconnectExpiresAt.high >>> 0).toNumber() : message.disconnectExpiresAt;
-            if (message.hasDisconnectExpiresAt != null && $Object.hasOwnProperty.call(message, "hasDisconnectExpiresAt"))
-                object.hasDisconnectExpiresAt = message.hasDisconnectExpiresAt;
             if (message.nameWarEnabled != null && $Object.hasOwnProperty.call(message, "nameWarEnabled"))
                 object.nameWarEnabled = message.nameWarEnabled;
-            if (message.hasNameWarEnabled != null && $Object.hasOwnProperty.call(message, "hasNameWarEnabled"))
-                object.hasNameWarEnabled = message.hasNameWarEnabled;
             if (message.nameWarPenaltyName != null && $Object.hasOwnProperty.call(message, "nameWarPenaltyName"))
                 object.nameWarPenaltyName = message.nameWarPenaltyName;
             if (message.nameWarPunished != null && $Object.hasOwnProperty.call(message, "nameWarPunished"))
                 object.nameWarPunished = message.nameWarPunished;
-            if (message.hasNameWarPunished != null && $Object.hasOwnProperty.call(message, "hasNameWarPunished"))
-                object.hasNameWarPunished = message.hasNameWarPunished;
             if (message.nameWarAllowRename != null && $Object.hasOwnProperty.call(message, "nameWarAllowRename"))
                 object.nameWarAllowRename = message.nameWarAllowRename;
-            if (message.hasNameWarAllowRename != null && $Object.hasOwnProperty.call(message, "hasNameWarAllowRename"))
-                object.hasNameWarAllowRename = message.hasNameWarAllowRename;
             if (message.nameWarRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "nameWarRenameProtectedUntil"))
                 if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
                     object.nameWarRenameProtectedUntil = typeof message.nameWarRenameProtectedUntil === "number" ? $BigInt(message.nameWarRenameProtectedUntil) : $util.Long.fromBits(message.nameWarRenameProtectedUntil.low >>> 0, message.nameWarRenameProtectedUntil.high >>> 0, false).toBigInt();
@@ -8450,18 +7375,12 @@ export const game = $root.game = (() => {
                     object.nameWarRenameProtectedUntil = options.longs === $String ? $String(message.nameWarRenameProtectedUntil) : message.nameWarRenameProtectedUntil;
                 else
                     object.nameWarRenameProtectedUntil = options.longs === $String ? $util.Long.prototype.toString.call(message.nameWarRenameProtectedUntil) : options.longs === $Number ? new $util.LongBits(message.nameWarRenameProtectedUntil.low >>> 0, message.nameWarRenameProtectedUntil.high >>> 0).toNumber() : message.nameWarRenameProtectedUntil;
-            if (message.hasNameWarRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "hasNameWarRenameProtectedUntil"))
-                object.hasNameWarRenameProtectedUntil = message.hasNameWarRenameProtectedUntil;
             if (message.nameWarRenamedByName != null && $Object.hasOwnProperty.call(message, "nameWarRenamedByName"))
                 object.nameWarRenamedByName = message.nameWarRenamedByName;
             if (message.giveawayEnabled != null && $Object.hasOwnProperty.call(message, "giveawayEnabled"))
                 object.giveawayEnabled = message.giveawayEnabled;
-            if (message.hasGiveawayEnabled != null && $Object.hasOwnProperty.call(message, "hasGiveawayEnabled"))
-                object.hasGiveawayEnabled = message.hasGiveawayEnabled;
             if (message.giveawayValue != null && $Object.hasOwnProperty.call(message, "giveawayValue"))
                 object.giveawayValue = options.json && !$isFinite(message.giveawayValue) ? $String(message.giveawayValue) : message.giveawayValue;
-            if (message.hasGiveawayValue != null && $Object.hasOwnProperty.call(message, "hasGiveawayValue"))
-                object.hasGiveawayValue = message.hasGiveawayValue;
             if (message.giveawayBoardText != null && $Object.hasOwnProperty.call(message, "giveawayBoardText"))
                 object.giveawayBoardText = message.giveawayBoardText;
             if (message.giveawayBoardExpiresAt != null && $Object.hasOwnProperty.call(message, "giveawayBoardExpiresAt"))
@@ -8471,32 +7390,18 @@ export const game = $root.game = (() => {
                     object.giveawayBoardExpiresAt = options.longs === $String ? $String(message.giveawayBoardExpiresAt) : message.giveawayBoardExpiresAt;
                 else
                     object.giveawayBoardExpiresAt = options.longs === $String ? $util.Long.prototype.toString.call(message.giveawayBoardExpiresAt) : options.longs === $Number ? new $util.LongBits(message.giveawayBoardExpiresAt.low >>> 0, message.giveawayBoardExpiresAt.high >>> 0).toNumber() : message.giveawayBoardExpiresAt;
-            if (message.hasGiveawayBoardExpiresAt != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardExpiresAt"))
-                object.hasGiveawayBoardExpiresAt = message.hasGiveawayBoardExpiresAt;
             if (message.giveawayBoardLikes != null && $Object.hasOwnProperty.call(message, "giveawayBoardLikes"))
                 object.giveawayBoardLikes = message.giveawayBoardLikes;
-            if (message.hasGiveawayBoardLikes != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardLikes"))
-                object.hasGiveawayBoardLikes = message.hasGiveawayBoardLikes;
             if (message.giveawayBoardDislikes != null && $Object.hasOwnProperty.call(message, "giveawayBoardDislikes"))
                 object.giveawayBoardDislikes = message.giveawayBoardDislikes;
-            if (message.hasGiveawayBoardDislikes != null && $Object.hasOwnProperty.call(message, "hasGiveawayBoardDislikes"))
-                object.hasGiveawayBoardDislikes = message.hasGiveawayBoardDislikes;
             if (message.rankMultiplierUnlocked != null && $Object.hasOwnProperty.call(message, "rankMultiplierUnlocked"))
                 object.rankMultiplierUnlocked = message.rankMultiplierUnlocked;
-            if (message.hasRankMultiplierUnlocked != null && $Object.hasOwnProperty.call(message, "hasRankMultiplierUnlocked"))
-                object.hasRankMultiplierUnlocked = message.hasRankMultiplierUnlocked;
             if (message.extremeModeEnabled != null && $Object.hasOwnProperty.call(message, "extremeModeEnabled"))
                 object.extremeModeEnabled = message.extremeModeEnabled;
-            if (message.hasExtremeModeEnabled != null && $Object.hasOwnProperty.call(message, "hasExtremeModeEnabled"))
-                object.hasExtremeModeEnabled = message.hasExtremeModeEnabled;
             if (message.extremeWinStreak != null && $Object.hasOwnProperty.call(message, "extremeWinStreak"))
                 object.extremeWinStreak = message.extremeWinStreak;
-            if (message.hasExtremeWinStreak != null && $Object.hasOwnProperty.call(message, "hasExtremeWinStreak"))
-                object.hasExtremeWinStreak = message.hasExtremeWinStreak;
             if (message.extremeForceClosed != null && $Object.hasOwnProperty.call(message, "extremeForceClosed"))
                 object.extremeForceClosed = message.extremeForceClosed;
-            if (message.hasExtremeForceClosed != null && $Object.hasOwnProperty.call(message, "hasExtremeForceClosed"))
-                object.hasExtremeForceClosed = message.hasExtremeForceClosed;
             if (message.extremeForceClosedAt != null && $Object.hasOwnProperty.call(message, "extremeForceClosedAt"))
                 if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
                     object.extremeForceClosedAt = typeof message.extremeForceClosedAt === "number" ? $BigInt(message.extremeForceClosedAt) : $util.Long.fromBits(message.extremeForceClosedAt.low >>> 0, message.extremeForceClosedAt.high >>> 0, false).toBigInt();
@@ -8504,8 +7409,6 @@ export const game = $root.game = (() => {
                     object.extremeForceClosedAt = options.longs === $String ? $String(message.extremeForceClosedAt) : message.extremeForceClosedAt;
                 else
                     object.extremeForceClosedAt = options.longs === $String ? $util.Long.prototype.toString.call(message.extremeForceClosedAt) : options.longs === $Number ? new $util.LongBits(message.extremeForceClosedAt.low >>> 0, message.extremeForceClosedAt.high >>> 0).toNumber() : message.extremeForceClosedAt;
-            if (message.hasExtremeForceClosedAt != null && $Object.hasOwnProperty.call(message, "hasExtremeForceClosedAt"))
-                object.hasExtremeForceClosedAt = message.hasExtremeForceClosedAt;
             if (message.extremeRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "extremeRenameProtectedUntil"))
                 if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
                     object.extremeRenameProtectedUntil = typeof message.extremeRenameProtectedUntil === "number" ? $BigInt(message.extremeRenameProtectedUntil) : $util.Long.fromBits(message.extremeRenameProtectedUntil.low >>> 0, message.extremeRenameProtectedUntil.high >>> 0, false).toBigInt();
@@ -8513,16 +7416,16 @@ export const game = $root.game = (() => {
                     object.extremeRenameProtectedUntil = options.longs === $String ? $String(message.extremeRenameProtectedUntil) : message.extremeRenameProtectedUntil;
                 else
                     object.extremeRenameProtectedUntil = options.longs === $String ? $util.Long.prototype.toString.call(message.extremeRenameProtectedUntil) : options.longs === $Number ? new $util.LongBits(message.extremeRenameProtectedUntil.low >>> 0, message.extremeRenameProtectedUntil.high >>> 0).toNumber() : message.extremeRenameProtectedUntil;
-            if (message.hasExtremeRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "hasExtremeRenameProtectedUntil"))
-                object.hasExtremeRenameProtectedUntil = message.hasExtremeRenameProtectedUntil;
             if (message.extremeRenamedByName != null && $Object.hasOwnProperty.call(message, "extremeRenamedByName"))
                 object.extremeRenamedByName = message.extremeRenamedByName;
             if (message.roomId != null && $Object.hasOwnProperty.call(message, "roomId"))
                 object.roomId = message.roomId;
             if (message.stats != null && $Object.hasOwnProperty.call(message, "stats"))
                 object.stats = $root.game.LobbyStats.toObject(message.stats, options, _depth + 1);
-            if (message.othelloStats != null && $Object.hasOwnProperty.call(message, "othelloStats"))
-                object.othelloStats = $root.game.OthelloStats.toObject(message.othelloStats, options, _depth + 1);
+            if (message.gameStats != null && $Object.hasOwnProperty.call(message, "gameStats"))
+                object.gameStats = $root.game.GameStats.toObject(message.gameStats, options, _depth + 1);
+            if (message.avatarUrl != null && $Object.hasOwnProperty.call(message, "avatarUrl"))
+                object.avatarUrl = message.avatarUrl;
             return object;
         };
 
@@ -9244,7 +8147,6 @@ export const game = $root.game = (() => {
          * @property {boolean|null} [system] ChatMessage system
          * @property {boolean|null} [transient] ChatMessage transient
          * @property {number|Long|null} [expiresAt] ChatMessage expiresAt
-         * @property {boolean|null} [hasExpiresAt] ChatMessage hasExpiresAt
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -9365,14 +8267,6 @@ export const game = $root.game = (() => {
         ChatMessage.prototype.expiresAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
-         * ChatMessage hasExpiresAt.
-         * @member {boolean} hasExpiresAt
-         * @memberof game.ChatMessage
-         * @instance
-         */
-        ChatMessage.prototype.hasExpiresAt = false;
-
-        /**
          * Creates a new ChatMessage instance using the specified properties.
          * @function create
          * @memberof game.ChatMessage
@@ -9426,8 +8320,6 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 10, wireType 0 =*/80).bool(message.transient);
             if (message.expiresAt != null && $Object.hasOwnProperty.call(message, "expiresAt") && (typeof message.expiresAt === "object" ? message.expiresAt.low || message.expiresAt.high : message.expiresAt !== 0))
                 writer.uint32(/* id 11, wireType 0 =*/88).int64(message.expiresAt);
-            if (message.hasExpiresAt != null && $Object.hasOwnProperty.call(message, "hasExpiresAt") && message.hasExpiresAt !== false)
-                writer.uint32(/* id 12, wireType 0 =*/96).bool(message.hasExpiresAt);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -9571,15 +8463,6 @@ export const game = $root.game = (() => {
                             delete message.expiresAt;
                         continue;
                     }
-                case 12: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasExpiresAt = value;
-                        else
-                            delete message.hasExpiresAt;
-                        continue;
-                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -9658,9 +8541,6 @@ export const game = $root.game = (() => {
             if (message.expiresAt != null && $Object.hasOwnProperty.call(message, "expiresAt"))
                 if (!$util.isInteger(message.expiresAt) && !(message.expiresAt && $util.isInteger(message.expiresAt.low) && $util.isInteger(message.expiresAt.high)))
                     return "expiresAt: integer|Long expected";
-            if (message.hasExpiresAt != null && $Object.hasOwnProperty.call(message, "hasExpiresAt"))
-                if (typeof message.hasExpiresAt !== "boolean")
-                    return "hasExpiresAt: boolean expected";
             return null;
         };
 
@@ -9731,9 +8611,6 @@ export const game = $root.game = (() => {
                         message.expiresAt = object.expiresAt;
                     else if (typeof object.expiresAt === "object")
                         message.expiresAt = new $util.LongBits(object.expiresAt.low >>> 0, object.expiresAt.high >>> 0).toNumber();
-            if (object.hasExpiresAt != null)
-                if (object.hasExpiresAt)
-                    message.hasExpiresAt = $Boolean(object.hasExpiresAt);
             return message;
         };
 
@@ -9774,7 +8651,6 @@ export const game = $root.game = (() => {
                     object.expiresAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.expiresAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasExpiresAt = false;
             }
             if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
                 object.id = message.id;
@@ -9808,8 +8684,6 @@ export const game = $root.game = (() => {
                     object.expiresAt = options.longs === $String ? $String(message.expiresAt) : message.expiresAt;
                 else
                     object.expiresAt = options.longs === $String ? $util.Long.prototype.toString.call(message.expiresAt) : options.longs === $Number ? new $util.LongBits(message.expiresAt.low >>> 0, message.expiresAt.high >>> 0).toNumber() : message.expiresAt;
-            if (message.hasExpiresAt != null && $Object.hasOwnProperty.call(message, "hasExpiresAt"))
-                object.hasExpiresAt = message.hasExpiresAt;
             return object;
         };
 
@@ -10282,7 +9156,6 @@ export const game = $root.game = (() => {
          * @property {boolean|null} [enableTags] RoomSettings enableTags
          * @property {Array.<string>|null} [tags] RoomSettings tags
          * @property {boolean|null} [allowProofImage] RoomSettings allowProofImage
-         * @property {boolean|null} [hasAllowProofImage] RoomSettings hasAllowProofImage
          * @property {boolean|null} [tieDoublePunish] RoomSettings tieDoublePunish
          * @property {boolean|null} [requireOpponentConfirm] RoomSettings requireOpponentConfirm
          * @property {boolean|null} [enableRanked] RoomSettings enableRanked
@@ -10294,6 +9167,7 @@ export const game = $root.game = (() => {
          * @property {string|null} [tictactoeBoardTheme] RoomSettings tictactoeBoardTheme
          * @property {number|null} [liarsDiceMinPlayers] RoomSettings liarsDiceMinPlayers
          * @property {number|null} [liarsDiceMaxPlayers] RoomSettings liarsDiceMaxPlayers
+         * @property {string|null} [gomokuBoardTheme] RoomSettings gomokuBoardTheme
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -10432,14 +9306,6 @@ export const game = $root.game = (() => {
         RoomSettings.prototype.allowProofImage = false;
 
         /**
-         * RoomSettings hasAllowProofImage.
-         * @member {boolean} hasAllowProofImage
-         * @memberof game.RoomSettings
-         * @instance
-         */
-        RoomSettings.prototype.hasAllowProofImage = false;
-
-        /**
          * RoomSettings tieDoublePunish.
          * @member {boolean} tieDoublePunish
          * @memberof game.RoomSettings
@@ -10528,6 +9394,14 @@ export const game = $root.game = (() => {
         RoomSettings.prototype.liarsDiceMaxPlayers = 0;
 
         /**
+         * RoomSettings gomokuBoardTheme.
+         * @member {string} gomokuBoardTheme
+         * @memberof game.RoomSettings
+         * @instance
+         */
+        RoomSettings.prototype.gomokuBoardTheme = "";
+
+        /**
          * Creates a new RoomSettings instance using the specified properties.
          * @function create
          * @memberof game.RoomSettings
@@ -10587,8 +9461,6 @@ export const game = $root.game = (() => {
                     writer.uint32(/* id 12, wireType 2 =*/98).string(message.tags[i]);
             if (message.allowProofImage != null && $Object.hasOwnProperty.call(message, "allowProofImage") && message.allowProofImage !== false)
                 writer.uint32(/* id 13, wireType 0 =*/104).bool(message.allowProofImage);
-            if (message.hasAllowProofImage != null && $Object.hasOwnProperty.call(message, "hasAllowProofImage") && message.hasAllowProofImage !== false)
-                writer.uint32(/* id 14, wireType 0 =*/112).bool(message.hasAllowProofImage);
             if (message.tieDoublePunish != null && $Object.hasOwnProperty.call(message, "tieDoublePunish") && message.tieDoublePunish !== false)
                 writer.uint32(/* id 15, wireType 0 =*/120).bool(message.tieDoublePunish);
             if (message.requireOpponentConfirm != null && $Object.hasOwnProperty.call(message, "requireOpponentConfirm") && message.requireOpponentConfirm !== false)
@@ -10611,6 +9483,8 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 24, wireType 0 =*/192).int32(message.liarsDiceMinPlayers);
             if (message.liarsDiceMaxPlayers != null && $Object.hasOwnProperty.call(message, "liarsDiceMaxPlayers") && message.liarsDiceMaxPlayers !== 0)
                 writer.uint32(/* id 25, wireType 0 =*/200).int32(message.liarsDiceMaxPlayers);
+            if (message.gomokuBoardTheme != null && $Object.hasOwnProperty.call(message, "gomokuBoardTheme") && message.gomokuBoardTheme !== "")
+                writer.uint32(/* id 26, wireType 2 =*/210).string(message.gomokuBoardTheme);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -10773,15 +9647,6 @@ export const game = $root.game = (() => {
                             delete message.allowProofImage;
                         continue;
                     }
-                case 14: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasAllowProofImage = value;
-                        else
-                            delete message.hasAllowProofImage;
-                        continue;
-                    }
                 case 15: {
                         if (wireType !== 0)
                             break;
@@ -10881,6 +9746,15 @@ export const game = $root.game = (() => {
                             delete message.liarsDiceMaxPlayers;
                         continue;
                     }
+                case 26: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.gomokuBoardTheme = value;
+                        else
+                            delete message.gomokuBoardTheme;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -10971,9 +9845,6 @@ export const game = $root.game = (() => {
             if (message.allowProofImage != null && $Object.hasOwnProperty.call(message, "allowProofImage"))
                 if (typeof message.allowProofImage !== "boolean")
                     return "allowProofImage: boolean expected";
-            if (message.hasAllowProofImage != null && $Object.hasOwnProperty.call(message, "hasAllowProofImage"))
-                if (typeof message.hasAllowProofImage !== "boolean")
-                    return "hasAllowProofImage: boolean expected";
             if (message.tieDoublePunish != null && $Object.hasOwnProperty.call(message, "tieDoublePunish"))
                 if (typeof message.tieDoublePunish !== "boolean")
                     return "tieDoublePunish: boolean expected";
@@ -11007,6 +9878,9 @@ export const game = $root.game = (() => {
             if (message.liarsDiceMaxPlayers != null && $Object.hasOwnProperty.call(message, "liarsDiceMaxPlayers"))
                 if (!$util.isInteger(message.liarsDiceMaxPlayers))
                     return "liarsDiceMaxPlayers: integer expected";
+            if (message.gomokuBoardTheme != null && $Object.hasOwnProperty.call(message, "gomokuBoardTheme"))
+                if (!$util.isString(message.gomokuBoardTheme))
+                    return "gomokuBoardTheme: string expected";
             return null;
         };
 
@@ -11075,9 +9949,6 @@ export const game = $root.game = (() => {
             if (object.allowProofImage != null)
                 if (object.allowProofImage)
                     message.allowProofImage = $Boolean(object.allowProofImage);
-            if (object.hasAllowProofImage != null)
-                if (object.hasAllowProofImage)
-                    message.hasAllowProofImage = $Boolean(object.hasAllowProofImage);
             if (object.tieDoublePunish != null)
                 if (object.tieDoublePunish)
                     message.tieDoublePunish = $Boolean(object.tieDoublePunish);
@@ -11111,6 +9982,9 @@ export const game = $root.game = (() => {
             if (object.liarsDiceMaxPlayers != null)
                 if ($Number(object.liarsDiceMaxPlayers) !== 0)
                     message.liarsDiceMaxPlayers = object.liarsDiceMaxPlayers | 0;
+            if (object.gomokuBoardTheme != null)
+                if (typeof object.gomokuBoardTheme !== "string" || object.gomokuBoardTheme.length)
+                    message.gomokuBoardTheme = $String(object.gomokuBoardTheme);
             return message;
         };
 
@@ -11147,7 +10021,6 @@ export const game = $root.game = (() => {
                 object.roomBackgroundImage = "";
                 object.enableTags = false;
                 object.allowProofImage = false;
-                object.hasAllowProofImage = false;
                 object.tieDoublePunish = false;
                 object.requireOpponentConfirm = false;
                 object.enableRanked = false;
@@ -11159,6 +10032,7 @@ export const game = $root.game = (() => {
                 object.tictactoeBoardTheme = "";
                 object.liarsDiceMinPlayers = 0;
                 object.liarsDiceMaxPlayers = 0;
+                object.gomokuBoardTheme = "";
             }
             if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
                 object.name = message.name;
@@ -11192,8 +10066,6 @@ export const game = $root.game = (() => {
             }
             if (message.allowProofImage != null && $Object.hasOwnProperty.call(message, "allowProofImage"))
                 object.allowProofImage = message.allowProofImage;
-            if (message.hasAllowProofImage != null && $Object.hasOwnProperty.call(message, "hasAllowProofImage"))
-                object.hasAllowProofImage = message.hasAllowProofImage;
             if (message.tieDoublePunish != null && $Object.hasOwnProperty.call(message, "tieDoublePunish"))
                 object.tieDoublePunish = message.tieDoublePunish;
             if (message.requireOpponentConfirm != null && $Object.hasOwnProperty.call(message, "requireOpponentConfirm"))
@@ -11216,6 +10088,8 @@ export const game = $root.game = (() => {
                 object.liarsDiceMinPlayers = message.liarsDiceMinPlayers;
             if (message.liarsDiceMaxPlayers != null && $Object.hasOwnProperty.call(message, "liarsDiceMaxPlayers"))
                 object.liarsDiceMaxPlayers = message.liarsDiceMaxPlayers;
+            if (message.gomokuBoardTheme != null && $Object.hasOwnProperty.call(message, "gomokuBoardTheme"))
+                object.gomokuBoardTheme = message.gomokuBoardTheme;
             return object;
         };
 
@@ -11247,6 +10121,1390 @@ export const game = $root.game = (() => {
         return RoomSettings;
     })();
 
+    game.GomokuUndoRequest = (function() {
+
+        /**
+         * Properties of a GomokuUndoRequest.
+         * @typedef {Object} game.GomokuUndoRequest.$Properties
+         * @property {string|null} [fromSeat] GomokuUndoRequest fromSeat
+         * @property {string|null} [toSeat] GomokuUndoRequest toSeat
+         * @property {number|Long|null} [createdAt] GomokuUndoRequest createdAt
+         * @property {number|Long|null} [expiresAt] GomokuUndoRequest expiresAt
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a GomokuUndoRequest.
+         * @memberof game
+         * @interface IGomokuUndoRequest
+         * @augments game.GomokuUndoRequest.$Properties
+         * @deprecated Use game.GomokuUndoRequest.$Properties instead.
+         */
+
+        /**
+         * Shape of a GomokuUndoRequest.
+         * @typedef {game.GomokuUndoRequest.$Properties} game.GomokuUndoRequest.$Shape
+         */
+
+        /**
+         * Constructs a new GomokuUndoRequest.
+         * @memberof game
+         * @classdesc Represents a GomokuUndoRequest.
+         * @constructor
+         * @param {game.GomokuUndoRequest.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const GomokuUndoRequest = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * GomokuUndoRequest fromSeat.
+         * @member {string} fromSeat
+         * @memberof game.GomokuUndoRequest
+         * @instance
+         */
+        GomokuUndoRequest.prototype.fromSeat = "";
+
+        /**
+         * GomokuUndoRequest toSeat.
+         * @member {string} toSeat
+         * @memberof game.GomokuUndoRequest
+         * @instance
+         */
+        GomokuUndoRequest.prototype.toSeat = "";
+
+        /**
+         * GomokuUndoRequest createdAt.
+         * @member {number|Long} createdAt
+         * @memberof game.GomokuUndoRequest
+         * @instance
+         */
+        GomokuUndoRequest.prototype.createdAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * GomokuUndoRequest expiresAt.
+         * @member {number|Long} expiresAt
+         * @memberof game.GomokuUndoRequest
+         * @instance
+         */
+        GomokuUndoRequest.prototype.expiresAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * Creates a new GomokuUndoRequest instance using the specified properties.
+         * @function create
+         * @memberof game.GomokuUndoRequest
+         * @static
+         * @param {game.GomokuUndoRequest.$Properties=} [properties] Properties to set
+         * @returns {game.GomokuUndoRequest} GomokuUndoRequest instance
+         * @type {{
+         *   (properties: game.GomokuUndoRequest.$Shape): game.GomokuUndoRequest & game.GomokuUndoRequest.$Shape;
+         *   (properties?: game.GomokuUndoRequest.$Properties): game.GomokuUndoRequest;
+         * }}
+         */
+        GomokuUndoRequest.create = function(properties) {
+            return new GomokuUndoRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GomokuUndoRequest message. Does not implicitly {@link game.GomokuUndoRequest.verify|verify} messages.
+         * @function encode
+         * @memberof game.GomokuUndoRequest
+         * @static
+         * @param {game.GomokuUndoRequest.$Properties} message GomokuUndoRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GomokuUndoRequest.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat") && message.fromSeat !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.fromSeat);
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat") && message.toSeat !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.toSeat);
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt") && (typeof message.createdAt === "object" ? message.createdAt.low || message.createdAt.high : message.createdAt !== 0))
+                writer.uint32(/* id 3, wireType 0 =*/24).int64(message.createdAt);
+            if (message.expiresAt != null && $Object.hasOwnProperty.call(message, "expiresAt") && (typeof message.expiresAt === "object" ? message.expiresAt.low || message.expiresAt.high : message.expiresAt !== 0))
+                writer.uint32(/* id 4, wireType 0 =*/32).int64(message.expiresAt);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GomokuUndoRequest message, length delimited. Does not implicitly {@link game.GomokuUndoRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.GomokuUndoRequest
+         * @static
+         * @param {game.GomokuUndoRequest.$Properties} message GomokuUndoRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GomokuUndoRequest.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a GomokuUndoRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.GomokuUndoRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.GomokuUndoRequest & game.GomokuUndoRequest.$Shape} GomokuUndoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GomokuUndoRequest.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.GomokuUndoRequest(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.fromSeat = value;
+                        else
+                            delete message.fromSeat;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.toSeat = value;
+                        else
+                            delete message.toSeat;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 0)
+                            break;
+                        if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                            message.createdAt = value;
+                        else
+                            delete message.createdAt;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 0)
+                            break;
+                        if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                            message.expiresAt = value;
+                        else
+                            delete message.expiresAt;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a GomokuUndoRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.GomokuUndoRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.GomokuUndoRequest & game.GomokuUndoRequest.$Shape} GomokuUndoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GomokuUndoRequest.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GomokuUndoRequest message.
+         * @function verify
+         * @memberof game.GomokuUndoRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GomokuUndoRequest.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat"))
+                if (!$util.isString(message.fromSeat))
+                    return "fromSeat: string expected";
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat"))
+                if (!$util.isString(message.toSeat))
+                    return "toSeat: string expected";
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt"))
+                if (!$util.isInteger(message.createdAt) && !(message.createdAt && $util.isInteger(message.createdAt.low) && $util.isInteger(message.createdAt.high)))
+                    return "createdAt: integer|Long expected";
+            if (message.expiresAt != null && $Object.hasOwnProperty.call(message, "expiresAt"))
+                if (!$util.isInteger(message.expiresAt) && !(message.expiresAt && $util.isInteger(message.expiresAt.low) && $util.isInteger(message.expiresAt.high)))
+                    return "expiresAt: integer|Long expected";
+            return null;
+        };
+
+        /**
+         * Creates a GomokuUndoRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.GomokuUndoRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.GomokuUndoRequest} GomokuUndoRequest
+         */
+        GomokuUndoRequest.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.GomokuUndoRequest)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.GomokuUndoRequest: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.GomokuUndoRequest();
+            if (object.fromSeat != null)
+                if (typeof object.fromSeat !== "string" || object.fromSeat.length)
+                    message.fromSeat = $String(object.fromSeat);
+            if (object.toSeat != null)
+                if (typeof object.toSeat !== "string" || object.toSeat.length)
+                    message.toSeat = $String(object.toSeat);
+            if (object.createdAt != null)
+                if (typeof object.createdAt === "object" ? object.createdAt.low || object.createdAt.high : $Number(object.createdAt) !== 0)
+                    if ($util.Long)
+                        message.createdAt = $util.Long.fromValue(object.createdAt, false);
+                    else if (typeof object.createdAt === "string")
+                        message.createdAt = $parseInt(object.createdAt, 10);
+                    else if (typeof object.createdAt === "number")
+                        message.createdAt = object.createdAt;
+                    else if (typeof object.createdAt === "object")
+                        message.createdAt = new $util.LongBits(object.createdAt.low >>> 0, object.createdAt.high >>> 0).toNumber();
+            if (object.expiresAt != null)
+                if (typeof object.expiresAt === "object" ? object.expiresAt.low || object.expiresAt.high : $Number(object.expiresAt) !== 0)
+                    if ($util.Long)
+                        message.expiresAt = $util.Long.fromValue(object.expiresAt, false);
+                    else if (typeof object.expiresAt === "string")
+                        message.expiresAt = $parseInt(object.expiresAt, 10);
+                    else if (typeof object.expiresAt === "number")
+                        message.expiresAt = object.expiresAt;
+                    else if (typeof object.expiresAt === "object")
+                        message.expiresAt = new $util.LongBits(object.expiresAt.low >>> 0, object.expiresAt.high >>> 0).toNumber();
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GomokuUndoRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.GomokuUndoRequest
+         * @static
+         * @param {game.GomokuUndoRequest} message GomokuUndoRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GomokuUndoRequest.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.fromSeat = "";
+                object.toSeat = "";
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.createdAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                } else
+                    object.createdAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.expiresAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                } else
+                    object.expiresAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+            }
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat"))
+                object.fromSeat = message.fromSeat;
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat"))
+                object.toSeat = message.toSeat;
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt"))
+                if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                    object.createdAt = typeof message.createdAt === "number" ? $BigInt(message.createdAt) : $util.Long.fromBits(message.createdAt.low >>> 0, message.createdAt.high >>> 0, false).toBigInt();
+                else if (typeof message.createdAt === "number")
+                    object.createdAt = options.longs === $String ? $String(message.createdAt) : message.createdAt;
+                else
+                    object.createdAt = options.longs === $String ? $util.Long.prototype.toString.call(message.createdAt) : options.longs === $Number ? new $util.LongBits(message.createdAt.low >>> 0, message.createdAt.high >>> 0).toNumber() : message.createdAt;
+            if (message.expiresAt != null && $Object.hasOwnProperty.call(message, "expiresAt"))
+                if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                    object.expiresAt = typeof message.expiresAt === "number" ? $BigInt(message.expiresAt) : $util.Long.fromBits(message.expiresAt.low >>> 0, message.expiresAt.high >>> 0, false).toBigInt();
+                else if (typeof message.expiresAt === "number")
+                    object.expiresAt = options.longs === $String ? $String(message.expiresAt) : message.expiresAt;
+                else
+                    object.expiresAt = options.longs === $String ? $util.Long.prototype.toString.call(message.expiresAt) : options.longs === $Number ? new $util.LongBits(message.expiresAt.low >>> 0, message.expiresAt.high >>> 0).toNumber() : message.expiresAt;
+            return object;
+        };
+
+        /**
+         * Converts this GomokuUndoRequest to JSON.
+         * @function toJSON
+         * @memberof game.GomokuUndoRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GomokuUndoRequest.prototype.toJSON = function() {
+            return GomokuUndoRequest.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for GomokuUndoRequest
+         * @function getTypeUrl
+         * @memberof game.GomokuUndoRequest
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        GomokuUndoRequest.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.GomokuUndoRequest";
+        };
+
+        return GomokuUndoRequest;
+    })();
+
+    game.GomokuResignRequest = (function() {
+
+        /**
+         * Properties of a GomokuResignRequest.
+         * @typedef {Object} game.GomokuResignRequest.$Properties
+         * @property {string|null} [fromSeat] GomokuResignRequest fromSeat
+         * @property {string|null} [toSeat] GomokuResignRequest toSeat
+         * @property {number|Long|null} [createdAt] GomokuResignRequest createdAt
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a GomokuResignRequest.
+         * @memberof game
+         * @interface IGomokuResignRequest
+         * @augments game.GomokuResignRequest.$Properties
+         * @deprecated Use game.GomokuResignRequest.$Properties instead.
+         */
+
+        /**
+         * Shape of a GomokuResignRequest.
+         * @typedef {game.GomokuResignRequest.$Properties} game.GomokuResignRequest.$Shape
+         */
+
+        /**
+         * Constructs a new GomokuResignRequest.
+         * @memberof game
+         * @classdesc Represents a GomokuResignRequest.
+         * @constructor
+         * @param {game.GomokuResignRequest.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const GomokuResignRequest = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * GomokuResignRequest fromSeat.
+         * @member {string} fromSeat
+         * @memberof game.GomokuResignRequest
+         * @instance
+         */
+        GomokuResignRequest.prototype.fromSeat = "";
+
+        /**
+         * GomokuResignRequest toSeat.
+         * @member {string} toSeat
+         * @memberof game.GomokuResignRequest
+         * @instance
+         */
+        GomokuResignRequest.prototype.toSeat = "";
+
+        /**
+         * GomokuResignRequest createdAt.
+         * @member {number|Long} createdAt
+         * @memberof game.GomokuResignRequest
+         * @instance
+         */
+        GomokuResignRequest.prototype.createdAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * Creates a new GomokuResignRequest instance using the specified properties.
+         * @function create
+         * @memberof game.GomokuResignRequest
+         * @static
+         * @param {game.GomokuResignRequest.$Properties=} [properties] Properties to set
+         * @returns {game.GomokuResignRequest} GomokuResignRequest instance
+         * @type {{
+         *   (properties: game.GomokuResignRequest.$Shape): game.GomokuResignRequest & game.GomokuResignRequest.$Shape;
+         *   (properties?: game.GomokuResignRequest.$Properties): game.GomokuResignRequest;
+         * }}
+         */
+        GomokuResignRequest.create = function(properties) {
+            return new GomokuResignRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GomokuResignRequest message. Does not implicitly {@link game.GomokuResignRequest.verify|verify} messages.
+         * @function encode
+         * @memberof game.GomokuResignRequest
+         * @static
+         * @param {game.GomokuResignRequest.$Properties} message GomokuResignRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GomokuResignRequest.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat") && message.fromSeat !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.fromSeat);
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat") && message.toSeat !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.toSeat);
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt") && (typeof message.createdAt === "object" ? message.createdAt.low || message.createdAt.high : message.createdAt !== 0))
+                writer.uint32(/* id 3, wireType 0 =*/24).int64(message.createdAt);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GomokuResignRequest message, length delimited. Does not implicitly {@link game.GomokuResignRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.GomokuResignRequest
+         * @static
+         * @param {game.GomokuResignRequest.$Properties} message GomokuResignRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GomokuResignRequest.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a GomokuResignRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.GomokuResignRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.GomokuResignRequest & game.GomokuResignRequest.$Shape} GomokuResignRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GomokuResignRequest.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.GomokuResignRequest(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.fromSeat = value;
+                        else
+                            delete message.fromSeat;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.toSeat = value;
+                        else
+                            delete message.toSeat;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 0)
+                            break;
+                        if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                            message.createdAt = value;
+                        else
+                            delete message.createdAt;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a GomokuResignRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.GomokuResignRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.GomokuResignRequest & game.GomokuResignRequest.$Shape} GomokuResignRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GomokuResignRequest.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GomokuResignRequest message.
+         * @function verify
+         * @memberof game.GomokuResignRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GomokuResignRequest.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat"))
+                if (!$util.isString(message.fromSeat))
+                    return "fromSeat: string expected";
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat"))
+                if (!$util.isString(message.toSeat))
+                    return "toSeat: string expected";
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt"))
+                if (!$util.isInteger(message.createdAt) && !(message.createdAt && $util.isInteger(message.createdAt.low) && $util.isInteger(message.createdAt.high)))
+                    return "createdAt: integer|Long expected";
+            return null;
+        };
+
+        /**
+         * Creates a GomokuResignRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.GomokuResignRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.GomokuResignRequest} GomokuResignRequest
+         */
+        GomokuResignRequest.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.GomokuResignRequest)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.GomokuResignRequest: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.GomokuResignRequest();
+            if (object.fromSeat != null)
+                if (typeof object.fromSeat !== "string" || object.fromSeat.length)
+                    message.fromSeat = $String(object.fromSeat);
+            if (object.toSeat != null)
+                if (typeof object.toSeat !== "string" || object.toSeat.length)
+                    message.toSeat = $String(object.toSeat);
+            if (object.createdAt != null)
+                if (typeof object.createdAt === "object" ? object.createdAt.low || object.createdAt.high : $Number(object.createdAt) !== 0)
+                    if ($util.Long)
+                        message.createdAt = $util.Long.fromValue(object.createdAt, false);
+                    else if (typeof object.createdAt === "string")
+                        message.createdAt = $parseInt(object.createdAt, 10);
+                    else if (typeof object.createdAt === "number")
+                        message.createdAt = object.createdAt;
+                    else if (typeof object.createdAt === "object")
+                        message.createdAt = new $util.LongBits(object.createdAt.low >>> 0, object.createdAt.high >>> 0).toNumber();
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GomokuResignRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.GomokuResignRequest
+         * @static
+         * @param {game.GomokuResignRequest} message GomokuResignRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GomokuResignRequest.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.fromSeat = "";
+                object.toSeat = "";
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.createdAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                } else
+                    object.createdAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+            }
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat"))
+                object.fromSeat = message.fromSeat;
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat"))
+                object.toSeat = message.toSeat;
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt"))
+                if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                    object.createdAt = typeof message.createdAt === "number" ? $BigInt(message.createdAt) : $util.Long.fromBits(message.createdAt.low >>> 0, message.createdAt.high >>> 0, false).toBigInt();
+                else if (typeof message.createdAt === "number")
+                    object.createdAt = options.longs === $String ? $String(message.createdAt) : message.createdAt;
+                else
+                    object.createdAt = options.longs === $String ? $util.Long.prototype.toString.call(message.createdAt) : options.longs === $Number ? new $util.LongBits(message.createdAt.low >>> 0, message.createdAt.high >>> 0).toNumber() : message.createdAt;
+            return object;
+        };
+
+        /**
+         * Converts this GomokuResignRequest to JSON.
+         * @function toJSON
+         * @memberof game.GomokuResignRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GomokuResignRequest.prototype.toJSON = function() {
+            return GomokuResignRequest.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for GomokuResignRequest
+         * @function getTypeUrl
+         * @memberof game.GomokuResignRequest
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        GomokuResignRequest.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.GomokuResignRequest";
+        };
+
+        return GomokuResignRequest;
+    })();
+
+    game.GomokuState = (function() {
+
+        /**
+         * Properties of a GomokuState.
+         * @typedef {Object} game.GomokuState.$Properties
+         * @property {Array.<game.BoardRow.$Properties>|null} [board] GomokuState board
+         * @property {string|null} [turn] GomokuState turn
+         * @property {string|null} [blackSeat] GomokuState blackSeat
+         * @property {number|null} [moveCount] GomokuState moveCount
+         * @property {Array.<game.Pos.$Properties>|null} [moves] GomokuState moves
+         * @property {Array.<game.Pos.$Properties>|null} [winningLine] GomokuState winningLine
+         * @property {Array.<game.IntPair.$Properties>|null} [rankedDelta] GomokuState rankedDelta
+         * @property {Array.<game.IntPair.$Properties>|null} [undoCount] GomokuState undoCount
+         * @property {game.GomokuUndoRequest.$Properties|null} [undoRequest] GomokuState undoRequest
+         * @property {game.GomokuResignRequest.$Properties|null} [resignRequest] GomokuState resignRequest
+         * @property {boolean|null} [ended] GomokuState ended
+         * @property {string|null} [winner] GomokuState winner
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a GomokuState.
+         * @memberof game
+         * @interface IGomokuState
+         * @augments game.GomokuState.$Properties
+         * @deprecated Use game.GomokuState.$Properties instead.
+         */
+
+        /**
+         * Shape of a GomokuState.
+         * @typedef {game.GomokuState.$Properties} game.GomokuState.$Shape
+         */
+
+        /**
+         * Constructs a new GomokuState.
+         * @memberof game
+         * @classdesc Represents a GomokuState.
+         * @constructor
+         * @param {game.GomokuState.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const GomokuState = function (properties) {
+            this.board = [];
+            this.moves = [];
+            this.winningLine = [];
+            this.rankedDelta = [];
+            this.undoCount = [];
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * GomokuState board.
+         * @member {Array.<game.BoardRow.$Properties>} board
+         * @memberof game.GomokuState
+         * @instance
+         */
+        GomokuState.prototype.board = $util.emptyArray;
+
+        /**
+         * GomokuState turn.
+         * @member {string} turn
+         * @memberof game.GomokuState
+         * @instance
+         */
+        GomokuState.prototype.turn = "";
+
+        /**
+         * GomokuState blackSeat.
+         * @member {string} blackSeat
+         * @memberof game.GomokuState
+         * @instance
+         */
+        GomokuState.prototype.blackSeat = "";
+
+        /**
+         * GomokuState moveCount.
+         * @member {number} moveCount
+         * @memberof game.GomokuState
+         * @instance
+         */
+        GomokuState.prototype.moveCount = 0;
+
+        /**
+         * GomokuState moves.
+         * @member {Array.<game.Pos.$Properties>} moves
+         * @memberof game.GomokuState
+         * @instance
+         */
+        GomokuState.prototype.moves = $util.emptyArray;
+
+        /**
+         * GomokuState winningLine.
+         * @member {Array.<game.Pos.$Properties>} winningLine
+         * @memberof game.GomokuState
+         * @instance
+         */
+        GomokuState.prototype.winningLine = $util.emptyArray;
+
+        /**
+         * GomokuState rankedDelta.
+         * @member {Array.<game.IntPair.$Properties>} rankedDelta
+         * @memberof game.GomokuState
+         * @instance
+         */
+        GomokuState.prototype.rankedDelta = $util.emptyArray;
+
+        /**
+         * GomokuState undoCount.
+         * @member {Array.<game.IntPair.$Properties>} undoCount
+         * @memberof game.GomokuState
+         * @instance
+         */
+        GomokuState.prototype.undoCount = $util.emptyArray;
+
+        /**
+         * GomokuState undoRequest.
+         * @member {game.GomokuUndoRequest.$Properties|null|undefined} undoRequest
+         * @memberof game.GomokuState
+         * @instance
+         */
+        GomokuState.prototype.undoRequest = null;
+
+        /**
+         * GomokuState resignRequest.
+         * @member {game.GomokuResignRequest.$Properties|null|undefined} resignRequest
+         * @memberof game.GomokuState
+         * @instance
+         */
+        GomokuState.prototype.resignRequest = null;
+
+        /**
+         * GomokuState ended.
+         * @member {boolean} ended
+         * @memberof game.GomokuState
+         * @instance
+         */
+        GomokuState.prototype.ended = false;
+
+        /**
+         * GomokuState winner.
+         * @member {string} winner
+         * @memberof game.GomokuState
+         * @instance
+         */
+        GomokuState.prototype.winner = "";
+
+        /**
+         * Creates a new GomokuState instance using the specified properties.
+         * @function create
+         * @memberof game.GomokuState
+         * @static
+         * @param {game.GomokuState.$Properties=} [properties] Properties to set
+         * @returns {game.GomokuState} GomokuState instance
+         * @type {{
+         *   (properties: game.GomokuState.$Shape): game.GomokuState & game.GomokuState.$Shape;
+         *   (properties?: game.GomokuState.$Properties): game.GomokuState;
+         * }}
+         */
+        GomokuState.create = function(properties) {
+            return new GomokuState(properties);
+        };
+
+        /**
+         * Encodes the specified GomokuState message. Does not implicitly {@link game.GomokuState.verify|verify} messages.
+         * @function encode
+         * @memberof game.GomokuState
+         * @static
+         * @param {game.GomokuState.$Properties} message GomokuState message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GomokuState.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.board != null && message.board.length)
+                for (let i = 0; i < message.board.length; ++i)
+                    $root.game.BoardRow.encode(message.board[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
+            if (message.turn != null && $Object.hasOwnProperty.call(message, "turn") && message.turn !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.turn);
+            if (message.blackSeat != null && $Object.hasOwnProperty.call(message, "blackSeat") && message.blackSeat !== "")
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.blackSeat);
+            if (message.moveCount != null && $Object.hasOwnProperty.call(message, "moveCount") && message.moveCount !== 0)
+                writer.uint32(/* id 4, wireType 0 =*/32).int32(message.moveCount);
+            if (message.moves != null && message.moves.length)
+                for (let i = 0; i < message.moves.length; ++i)
+                    $root.game.Pos.encode(message.moves[i], writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
+            if (message.winningLine != null && message.winningLine.length)
+                for (let i = 0; i < message.winningLine.length; ++i)
+                    $root.game.Pos.encode(message.winningLine[i], writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
+            if (message.rankedDelta != null && message.rankedDelta.length)
+                for (let i = 0; i < message.rankedDelta.length; ++i)
+                    $root.game.IntPair.encode(message.rankedDelta[i], writer.uint32(/* id 7, wireType 2 =*/58).fork(), _depth + 1).ldelim();
+            if (message.undoCount != null && message.undoCount.length)
+                for (let i = 0; i < message.undoCount.length; ++i)
+                    $root.game.IntPair.encode(message.undoCount[i], writer.uint32(/* id 8, wireType 2 =*/66).fork(), _depth + 1).ldelim();
+            if (message.undoRequest != null && $Object.hasOwnProperty.call(message, "undoRequest"))
+                $root.game.GomokuUndoRequest.encode(message.undoRequest, writer.uint32(/* id 9, wireType 2 =*/74).fork(), _depth + 1).ldelim();
+            if (message.resignRequest != null && $Object.hasOwnProperty.call(message, "resignRequest"))
+                $root.game.GomokuResignRequest.encode(message.resignRequest, writer.uint32(/* id 10, wireType 2 =*/82).fork(), _depth + 1).ldelim();
+            if (message.ended != null && $Object.hasOwnProperty.call(message, "ended") && message.ended !== false)
+                writer.uint32(/* id 11, wireType 0 =*/88).bool(message.ended);
+            if (message.winner != null && $Object.hasOwnProperty.call(message, "winner") && message.winner !== "")
+                writer.uint32(/* id 12, wireType 2 =*/98).string(message.winner);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GomokuState message, length delimited. Does not implicitly {@link game.GomokuState.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.GomokuState
+         * @static
+         * @param {game.GomokuState.$Properties} message GomokuState message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GomokuState.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a GomokuState message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.GomokuState
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.GomokuState & game.GomokuState.$Shape} GomokuState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GomokuState.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.GomokuState(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.board && message.board.length))
+                            message.board = [];
+                        message.board.push($root.game.BoardRow.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.turn = value;
+                        else
+                            delete message.turn;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.blackSeat = value;
+                        else
+                            delete message.blackSeat;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.moveCount = value;
+                        else
+                            delete message.moveCount;
+                        continue;
+                    }
+                case 5: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.moves && message.moves.length))
+                            message.moves = [];
+                        message.moves.push($root.game.Pos.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 6: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.winningLine && message.winningLine.length))
+                            message.winningLine = [];
+                        message.winningLine.push($root.game.Pos.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 7: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.rankedDelta && message.rankedDelta.length))
+                            message.rankedDelta = [];
+                        message.rankedDelta.push($root.game.IntPair.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 8: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.undoCount && message.undoCount.length))
+                            message.undoCount = [];
+                        message.undoCount.push($root.game.IntPair.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 9: {
+                        if (wireType !== 2)
+                            break;
+                        message.undoRequest = $root.game.GomokuUndoRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.undoRequest);
+                        continue;
+                    }
+                case 10: {
+                        if (wireType !== 2)
+                            break;
+                        message.resignRequest = $root.game.GomokuResignRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.resignRequest);
+                        continue;
+                    }
+                case 11: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.ended = value;
+                        else
+                            delete message.ended;
+                        continue;
+                    }
+                case 12: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.winner = value;
+                        else
+                            delete message.winner;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a GomokuState message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.GomokuState
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.GomokuState & game.GomokuState.$Shape} GomokuState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GomokuState.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GomokuState message.
+         * @function verify
+         * @memberof game.GomokuState
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GomokuState.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.board != null && $Object.hasOwnProperty.call(message, "board")) {
+                if (!$Array.isArray(message.board))
+                    return "board: array expected";
+                for (let i = 0; i < message.board.length; ++i) {
+                    let error = $root.game.BoardRow.verify(message.board[i], _depth + 1);
+                    if (error)
+                        return "board." + error;
+                }
+            }
+            if (message.turn != null && $Object.hasOwnProperty.call(message, "turn"))
+                if (!$util.isString(message.turn))
+                    return "turn: string expected";
+            if (message.blackSeat != null && $Object.hasOwnProperty.call(message, "blackSeat"))
+                if (!$util.isString(message.blackSeat))
+                    return "blackSeat: string expected";
+            if (message.moveCount != null && $Object.hasOwnProperty.call(message, "moveCount"))
+                if (!$util.isInteger(message.moveCount))
+                    return "moveCount: integer expected";
+            if (message.moves != null && $Object.hasOwnProperty.call(message, "moves")) {
+                if (!$Array.isArray(message.moves))
+                    return "moves: array expected";
+                for (let i = 0; i < message.moves.length; ++i) {
+                    let error = $root.game.Pos.verify(message.moves[i], _depth + 1);
+                    if (error)
+                        return "moves." + error;
+                }
+            }
+            if (message.winningLine != null && $Object.hasOwnProperty.call(message, "winningLine")) {
+                if (!$Array.isArray(message.winningLine))
+                    return "winningLine: array expected";
+                for (let i = 0; i < message.winningLine.length; ++i) {
+                    let error = $root.game.Pos.verify(message.winningLine[i], _depth + 1);
+                    if (error)
+                        return "winningLine." + error;
+                }
+            }
+            if (message.rankedDelta != null && $Object.hasOwnProperty.call(message, "rankedDelta")) {
+                if (!$Array.isArray(message.rankedDelta))
+                    return "rankedDelta: array expected";
+                for (let i = 0; i < message.rankedDelta.length; ++i) {
+                    let error = $root.game.IntPair.verify(message.rankedDelta[i], _depth + 1);
+                    if (error)
+                        return "rankedDelta." + error;
+                }
+            }
+            if (message.undoCount != null && $Object.hasOwnProperty.call(message, "undoCount")) {
+                if (!$Array.isArray(message.undoCount))
+                    return "undoCount: array expected";
+                for (let i = 0; i < message.undoCount.length; ++i) {
+                    let error = $root.game.IntPair.verify(message.undoCount[i], _depth + 1);
+                    if (error)
+                        return "undoCount." + error;
+                }
+            }
+            if (message.undoRequest != null && $Object.hasOwnProperty.call(message, "undoRequest")) {
+                let error = $root.game.GomokuUndoRequest.verify(message.undoRequest, _depth + 1);
+                if (error)
+                    return "undoRequest." + error;
+            }
+            if (message.resignRequest != null && $Object.hasOwnProperty.call(message, "resignRequest")) {
+                let error = $root.game.GomokuResignRequest.verify(message.resignRequest, _depth + 1);
+                if (error)
+                    return "resignRequest." + error;
+            }
+            if (message.ended != null && $Object.hasOwnProperty.call(message, "ended"))
+                if (typeof message.ended !== "boolean")
+                    return "ended: boolean expected";
+            if (message.winner != null && $Object.hasOwnProperty.call(message, "winner"))
+                if (!$util.isString(message.winner))
+                    return "winner: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a GomokuState message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.GomokuState
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.GomokuState} GomokuState
+         */
+        GomokuState.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.GomokuState)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.GomokuState: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.GomokuState();
+            if (object.board) {
+                if (!$Array.isArray(object.board))
+                    throw $TypeError(".game.GomokuState.board: array expected");
+                message.board = $Array(object.board.length);
+                for (let i = 0; i < object.board.length; ++i) {
+                    if (!$util.isObject(object.board[i]))
+                        throw $TypeError(".game.GomokuState.board: object expected");
+                    message.board[i] = $root.game.BoardRow.fromObject(object.board[i], _depth + 1);
+                }
+            }
+            if (object.turn != null)
+                if (typeof object.turn !== "string" || object.turn.length)
+                    message.turn = $String(object.turn);
+            if (object.blackSeat != null)
+                if (typeof object.blackSeat !== "string" || object.blackSeat.length)
+                    message.blackSeat = $String(object.blackSeat);
+            if (object.moveCount != null)
+                if ($Number(object.moveCount) !== 0)
+                    message.moveCount = object.moveCount | 0;
+            if (object.moves) {
+                if (!$Array.isArray(object.moves))
+                    throw $TypeError(".game.GomokuState.moves: array expected");
+                message.moves = $Array(object.moves.length);
+                for (let i = 0; i < object.moves.length; ++i) {
+                    if (!$util.isObject(object.moves[i]))
+                        throw $TypeError(".game.GomokuState.moves: object expected");
+                    message.moves[i] = $root.game.Pos.fromObject(object.moves[i], _depth + 1);
+                }
+            }
+            if (object.winningLine) {
+                if (!$Array.isArray(object.winningLine))
+                    throw $TypeError(".game.GomokuState.winningLine: array expected");
+                message.winningLine = $Array(object.winningLine.length);
+                for (let i = 0; i < object.winningLine.length; ++i) {
+                    if (!$util.isObject(object.winningLine[i]))
+                        throw $TypeError(".game.GomokuState.winningLine: object expected");
+                    message.winningLine[i] = $root.game.Pos.fromObject(object.winningLine[i], _depth + 1);
+                }
+            }
+            if (object.rankedDelta) {
+                if (!$Array.isArray(object.rankedDelta))
+                    throw $TypeError(".game.GomokuState.rankedDelta: array expected");
+                message.rankedDelta = $Array(object.rankedDelta.length);
+                for (let i = 0; i < object.rankedDelta.length; ++i) {
+                    if (!$util.isObject(object.rankedDelta[i]))
+                        throw $TypeError(".game.GomokuState.rankedDelta: object expected");
+                    message.rankedDelta[i] = $root.game.IntPair.fromObject(object.rankedDelta[i], _depth + 1);
+                }
+            }
+            if (object.undoCount) {
+                if (!$Array.isArray(object.undoCount))
+                    throw $TypeError(".game.GomokuState.undoCount: array expected");
+                message.undoCount = $Array(object.undoCount.length);
+                for (let i = 0; i < object.undoCount.length; ++i) {
+                    if (!$util.isObject(object.undoCount[i]))
+                        throw $TypeError(".game.GomokuState.undoCount: object expected");
+                    message.undoCount[i] = $root.game.IntPair.fromObject(object.undoCount[i], _depth + 1);
+                }
+            }
+            if (object.undoRequest != null) {
+                if (!$util.isObject(object.undoRequest))
+                    throw $TypeError(".game.GomokuState.undoRequest: object expected");
+                message.undoRequest = $root.game.GomokuUndoRequest.fromObject(object.undoRequest, _depth + 1);
+            }
+            if (object.resignRequest != null) {
+                if (!$util.isObject(object.resignRequest))
+                    throw $TypeError(".game.GomokuState.resignRequest: object expected");
+                message.resignRequest = $root.game.GomokuResignRequest.fromObject(object.resignRequest, _depth + 1);
+            }
+            if (object.ended != null)
+                if (object.ended)
+                    message.ended = $Boolean(object.ended);
+            if (object.winner != null)
+                if (typeof object.winner !== "string" || object.winner.length)
+                    message.winner = $String(object.winner);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GomokuState message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.GomokuState
+         * @static
+         * @param {game.GomokuState} message GomokuState
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GomokuState.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.arrays || options.defaults) {
+                object.board = [];
+                object.moves = [];
+                object.winningLine = [];
+                object.rankedDelta = [];
+                object.undoCount = [];
+            }
+            if (options.defaults) {
+                object.turn = "";
+                object.blackSeat = "";
+                object.moveCount = 0;
+                object.undoRequest = null;
+                object.resignRequest = null;
+                object.ended = false;
+                object.winner = "";
+            }
+            if (message.board && message.board.length) {
+                object.board = $Array(message.board.length);
+                for (let j = 0; j < message.board.length; ++j)
+                    object.board[j] = $root.game.BoardRow.toObject(message.board[j], options, _depth + 1);
+            }
+            if (message.turn != null && $Object.hasOwnProperty.call(message, "turn"))
+                object.turn = message.turn;
+            if (message.blackSeat != null && $Object.hasOwnProperty.call(message, "blackSeat"))
+                object.blackSeat = message.blackSeat;
+            if (message.moveCount != null && $Object.hasOwnProperty.call(message, "moveCount"))
+                object.moveCount = message.moveCount;
+            if (message.moves && message.moves.length) {
+                object.moves = $Array(message.moves.length);
+                for (let j = 0; j < message.moves.length; ++j)
+                    object.moves[j] = $root.game.Pos.toObject(message.moves[j], options, _depth + 1);
+            }
+            if (message.winningLine && message.winningLine.length) {
+                object.winningLine = $Array(message.winningLine.length);
+                for (let j = 0; j < message.winningLine.length; ++j)
+                    object.winningLine[j] = $root.game.Pos.toObject(message.winningLine[j], options, _depth + 1);
+            }
+            if (message.rankedDelta && message.rankedDelta.length) {
+                object.rankedDelta = $Array(message.rankedDelta.length);
+                for (let j = 0; j < message.rankedDelta.length; ++j)
+                    object.rankedDelta[j] = $root.game.IntPair.toObject(message.rankedDelta[j], options, _depth + 1);
+            }
+            if (message.undoCount && message.undoCount.length) {
+                object.undoCount = $Array(message.undoCount.length);
+                for (let j = 0; j < message.undoCount.length; ++j)
+                    object.undoCount[j] = $root.game.IntPair.toObject(message.undoCount[j], options, _depth + 1);
+            }
+            if (message.undoRequest != null && $Object.hasOwnProperty.call(message, "undoRequest"))
+                object.undoRequest = $root.game.GomokuUndoRequest.toObject(message.undoRequest, options, _depth + 1);
+            if (message.resignRequest != null && $Object.hasOwnProperty.call(message, "resignRequest"))
+                object.resignRequest = $root.game.GomokuResignRequest.toObject(message.resignRequest, options, _depth + 1);
+            if (message.ended != null && $Object.hasOwnProperty.call(message, "ended"))
+                object.ended = message.ended;
+            if (message.winner != null && $Object.hasOwnProperty.call(message, "winner"))
+                object.winner = message.winner;
+            return object;
+        };
+
+        /**
+         * Converts this GomokuState to JSON.
+         * @function toJSON
+         * @memberof game.GomokuState
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GomokuState.prototype.toJSON = function() {
+            return GomokuState.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for GomokuState
+         * @function getTypeUrl
+         * @memberof game.GomokuState
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        GomokuState.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.GomokuState";
+        };
+
+        return GomokuState;
+    })();
+
     game.PunishmentProof = (function() {
 
         /**
@@ -11260,7 +11518,6 @@ export const game = $root.game = (() => {
          * @property {string|null} [confirmedBy] PunishmentProof confirmedBy
          * @property {string|null} [reviewedBy] PunishmentProof reviewedBy
          * @property {number|Long|null} [reviewedAt] PunishmentProof reviewedAt
-         * @property {boolean|null} [hasReviewedAt] PunishmentProof hasReviewedAt
          * @property {string|null} [rejectReason] PunishmentProof rejectReason
          * @property {string|null} [redoTaskText] PunishmentProof redoTaskText
          * @property {number|Long|null} [submittedAt] PunishmentProof submittedAt
@@ -11360,14 +11617,6 @@ export const game = $root.game = (() => {
         PunishmentProof.prototype.reviewedAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
-         * PunishmentProof hasReviewedAt.
-         * @member {boolean} hasReviewedAt
-         * @memberof game.PunishmentProof
-         * @instance
-         */
-        PunishmentProof.prototype.hasReviewedAt = false;
-
-        /**
          * PunishmentProof rejectReason.
          * @member {string} rejectReason
          * @memberof game.PunishmentProof
@@ -11439,8 +11688,6 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 7, wireType 2 =*/58).string(message.reviewedBy);
             if (message.reviewedAt != null && $Object.hasOwnProperty.call(message, "reviewedAt") && (typeof message.reviewedAt === "object" ? message.reviewedAt.low || message.reviewedAt.high : message.reviewedAt !== 0))
                 writer.uint32(/* id 8, wireType 0 =*/64).int64(message.reviewedAt);
-            if (message.hasReviewedAt != null && $Object.hasOwnProperty.call(message, "hasReviewedAt") && message.hasReviewedAt !== false)
-                writer.uint32(/* id 9, wireType 0 =*/72).bool(message.hasReviewedAt);
             if (message.rejectReason != null && $Object.hasOwnProperty.call(message, "rejectReason") && message.rejectReason !== "")
                 writer.uint32(/* id 10, wireType 2 =*/82).string(message.rejectReason);
             if (message.redoTaskText != null && $Object.hasOwnProperty.call(message, "redoTaskText") && message.redoTaskText !== "")
@@ -11566,15 +11813,6 @@ export const game = $root.game = (() => {
                             delete message.reviewedAt;
                         continue;
                     }
-                case 9: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasReviewedAt = value;
-                        else
-                            delete message.hasReviewedAt;
-                        continue;
-                    }
                 case 10: {
                         if (wireType !== 2)
                             break;
@@ -11669,9 +11907,6 @@ export const game = $root.game = (() => {
             if (message.reviewedAt != null && $Object.hasOwnProperty.call(message, "reviewedAt"))
                 if (!$util.isInteger(message.reviewedAt) && !(message.reviewedAt && $util.isInteger(message.reviewedAt.low) && $util.isInteger(message.reviewedAt.high)))
                     return "reviewedAt: integer|Long expected";
-            if (message.hasReviewedAt != null && $Object.hasOwnProperty.call(message, "hasReviewedAt"))
-                if (typeof message.hasReviewedAt !== "boolean")
-                    return "hasReviewedAt: boolean expected";
             if (message.rejectReason != null && $Object.hasOwnProperty.call(message, "rejectReason"))
                 if (!$util.isString(message.rejectReason))
                     return "rejectReason: string expected";
@@ -11733,9 +11968,6 @@ export const game = $root.game = (() => {
                         message.reviewedAt = object.reviewedAt;
                     else if (typeof object.reviewedAt === "object")
                         message.reviewedAt = new $util.LongBits(object.reviewedAt.low >>> 0, object.reviewedAt.high >>> 0).toNumber();
-            if (object.hasReviewedAt != null)
-                if (object.hasReviewedAt)
-                    message.hasReviewedAt = $Boolean(object.hasReviewedAt);
             if (object.rejectReason != null)
                 if (typeof object.rejectReason !== "string" || object.rejectReason.length)
                     message.rejectReason = $String(object.rejectReason);
@@ -11785,7 +12017,6 @@ export const game = $root.game = (() => {
                     object.reviewedAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.reviewedAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasReviewedAt = false;
                 object.rejectReason = "";
                 object.redoTaskText = "";
                 if ($util.Long) {
@@ -11815,8 +12046,6 @@ export const game = $root.game = (() => {
                     object.reviewedAt = options.longs === $String ? $String(message.reviewedAt) : message.reviewedAt;
                 else
                     object.reviewedAt = options.longs === $String ? $util.Long.prototype.toString.call(message.reviewedAt) : options.longs === $Number ? new $util.LongBits(message.reviewedAt.low >>> 0, message.reviewedAt.high >>> 0).toNumber() : message.reviewedAt;
-            if (message.hasReviewedAt != null && $Object.hasOwnProperty.call(message, "hasReviewedAt"))
-                object.hasReviewedAt = message.hasReviewedAt;
             if (message.rejectReason != null && $Object.hasOwnProperty.call(message, "rejectReason"))
                 object.rejectReason = message.rejectReason;
             if (message.redoTaskText != null && $Object.hasOwnProperty.call(message, "redoTaskText"))
@@ -12509,7 +12738,6 @@ export const game = $root.game = (() => {
          * @property {string|null} [taskText] PunishmentTask taskText
          * @property {string|null} [backgroundImage] PunishmentTask backgroundImage
          * @property {number|null} [backgroundOpacity] PunishmentTask backgroundOpacity
-         * @property {boolean|null} [hasBackgroundOpacity] PunishmentTask hasBackgroundOpacity
          * @property {string|null} [assignedBy] PunishmentTask assignedBy
          * @property {string|null} [assignedByName] PunishmentTask assignedByName
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
@@ -12600,14 +12828,6 @@ export const game = $root.game = (() => {
         PunishmentTask.prototype.backgroundOpacity = 0;
 
         /**
-         * PunishmentTask hasBackgroundOpacity.
-         * @member {boolean} hasBackgroundOpacity
-         * @memberof game.PunishmentTask
-         * @instance
-         */
-        PunishmentTask.prototype.hasBackgroundOpacity = false;
-
-        /**
          * PunishmentTask assignedBy.
          * @member {string} assignedBy
          * @memberof game.PunishmentTask
@@ -12669,8 +12889,6 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.backgroundImage);
             if (message.backgroundOpacity != null && $Object.hasOwnProperty.call(message, "backgroundOpacity") && !$Object.is(message.backgroundOpacity, 0))
                 writer.uint32(/* id 7, wireType 1 =*/57).double(message.backgroundOpacity);
-            if (message.hasBackgroundOpacity != null && $Object.hasOwnProperty.call(message, "hasBackgroundOpacity") && message.hasBackgroundOpacity !== false)
-                writer.uint32(/* id 8, wireType 0 =*/64).bool(message.hasBackgroundOpacity);
             if (message.assignedBy != null && $Object.hasOwnProperty.call(message, "assignedBy") && message.assignedBy !== "")
                 writer.uint32(/* id 9, wireType 2 =*/74).string(message.assignedBy);
             if (message.assignedByName != null && $Object.hasOwnProperty.call(message, "assignedByName") && message.assignedByName !== "")
@@ -12785,15 +13003,6 @@ export const game = $root.game = (() => {
                             delete message.backgroundOpacity;
                         continue;
                     }
-                case 8: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasBackgroundOpacity = value;
-                        else
-                            delete message.hasBackgroundOpacity;
-                        continue;
-                    }
                 case 9: {
                         if (wireType !== 2)
                             break;
@@ -12876,9 +13085,6 @@ export const game = $root.game = (() => {
             if (message.backgroundOpacity != null && $Object.hasOwnProperty.call(message, "backgroundOpacity"))
                 if (typeof message.backgroundOpacity !== "number")
                     return "backgroundOpacity: number expected";
-            if (message.hasBackgroundOpacity != null && $Object.hasOwnProperty.call(message, "hasBackgroundOpacity"))
-                if (typeof message.hasBackgroundOpacity !== "boolean")
-                    return "hasBackgroundOpacity: boolean expected";
             if (message.assignedBy != null && $Object.hasOwnProperty.call(message, "assignedBy"))
                 if (!$util.isString(message.assignedBy))
                     return "assignedBy: string expected";
@@ -12927,9 +13133,6 @@ export const game = $root.game = (() => {
             if (object.backgroundOpacity != null)
                 if (!$Object.is($Number(object.backgroundOpacity), 0))
                     message.backgroundOpacity = $Number(object.backgroundOpacity);
-            if (object.hasBackgroundOpacity != null)
-                if (object.hasBackgroundOpacity)
-                    message.hasBackgroundOpacity = $Boolean(object.hasBackgroundOpacity);
             if (object.assignedBy != null)
                 if (typeof object.assignedBy !== "string" || object.assignedBy.length)
                     message.assignedBy = $String(object.assignedBy);
@@ -12964,7 +13167,6 @@ export const game = $root.game = (() => {
                 object.taskText = "";
                 object.backgroundImage = "";
                 object.backgroundOpacity = 0;
-                object.hasBackgroundOpacity = false;
                 object.assignedBy = "";
                 object.assignedByName = "";
             }
@@ -12982,8 +13184,6 @@ export const game = $root.game = (() => {
                 object.backgroundImage = message.backgroundImage;
             if (message.backgroundOpacity != null && $Object.hasOwnProperty.call(message, "backgroundOpacity"))
                 object.backgroundOpacity = options.json && !$isFinite(message.backgroundOpacity) ? $String(message.backgroundOpacity) : message.backgroundOpacity;
-            if (message.hasBackgroundOpacity != null && $Object.hasOwnProperty.call(message, "hasBackgroundOpacity"))
-                object.hasBackgroundOpacity = message.hasBackgroundOpacity;
             if (message.assignedBy != null && $Object.hasOwnProperty.call(message, "assignedBy"))
                 object.assignedBy = message.assignedBy;
             if (message.assignedByName != null && $Object.hasOwnProperty.call(message, "assignedByName"))
@@ -13032,7 +13232,6 @@ export const game = $root.game = (() => {
          * @property {string|null} [status] HistoryProof status
          * @property {string|null} [reviewedBy] HistoryProof reviewedBy
          * @property {number|Long|null} [reviewedAt] HistoryProof reviewedAt
-         * @property {boolean|null} [hasReviewedAt] HistoryProof hasReviewedAt
          * @property {string|null} [rejectReason] HistoryProof rejectReason
          * @property {string|null} [redoTaskText] HistoryProof redoTaskText
          * @property {number|Long|null} [submittedAt] HistoryProof submittedAt
@@ -13132,14 +13331,6 @@ export const game = $root.game = (() => {
         HistoryProof.prototype.reviewedAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
-         * HistoryProof hasReviewedAt.
-         * @member {boolean} hasReviewedAt
-         * @memberof game.HistoryProof
-         * @instance
-         */
-        HistoryProof.prototype.hasReviewedAt = false;
-
-        /**
          * HistoryProof rejectReason.
          * @member {string} rejectReason
          * @memberof game.HistoryProof
@@ -13211,8 +13402,6 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 7, wireType 2 =*/58).string(message.reviewedBy);
             if (message.reviewedAt != null && $Object.hasOwnProperty.call(message, "reviewedAt") && (typeof message.reviewedAt === "object" ? message.reviewedAt.low || message.reviewedAt.high : message.reviewedAt !== 0))
                 writer.uint32(/* id 8, wireType 0 =*/64).int64(message.reviewedAt);
-            if (message.hasReviewedAt != null && $Object.hasOwnProperty.call(message, "hasReviewedAt") && message.hasReviewedAt !== false)
-                writer.uint32(/* id 9, wireType 0 =*/72).bool(message.hasReviewedAt);
             if (message.rejectReason != null && $Object.hasOwnProperty.call(message, "rejectReason") && message.rejectReason !== "")
                 writer.uint32(/* id 10, wireType 2 =*/82).string(message.rejectReason);
             if (message.redoTaskText != null && $Object.hasOwnProperty.call(message, "redoTaskText") && message.redoTaskText !== "")
@@ -13338,15 +13527,6 @@ export const game = $root.game = (() => {
                             delete message.reviewedAt;
                         continue;
                     }
-                case 9: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasReviewedAt = value;
-                        else
-                            delete message.hasReviewedAt;
-                        continue;
-                    }
                 case 10: {
                         if (wireType !== 2)
                             break;
@@ -13441,9 +13621,6 @@ export const game = $root.game = (() => {
             if (message.reviewedAt != null && $Object.hasOwnProperty.call(message, "reviewedAt"))
                 if (!$util.isInteger(message.reviewedAt) && !(message.reviewedAt && $util.isInteger(message.reviewedAt.low) && $util.isInteger(message.reviewedAt.high)))
                     return "reviewedAt: integer|Long expected";
-            if (message.hasReviewedAt != null && $Object.hasOwnProperty.call(message, "hasReviewedAt"))
-                if (typeof message.hasReviewedAt !== "boolean")
-                    return "hasReviewedAt: boolean expected";
             if (message.rejectReason != null && $Object.hasOwnProperty.call(message, "rejectReason"))
                 if (!$util.isString(message.rejectReason))
                     return "rejectReason: string expected";
@@ -13505,9 +13682,6 @@ export const game = $root.game = (() => {
                         message.reviewedAt = object.reviewedAt;
                     else if (typeof object.reviewedAt === "object")
                         message.reviewedAt = new $util.LongBits(object.reviewedAt.low >>> 0, object.reviewedAt.high >>> 0).toNumber();
-            if (object.hasReviewedAt != null)
-                if (object.hasReviewedAt)
-                    message.hasReviewedAt = $Boolean(object.hasReviewedAt);
             if (object.rejectReason != null)
                 if (typeof object.rejectReason !== "string" || object.rejectReason.length)
                     message.rejectReason = $String(object.rejectReason);
@@ -13557,7 +13731,6 @@ export const game = $root.game = (() => {
                     object.reviewedAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.reviewedAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
-                object.hasReviewedAt = false;
                 object.rejectReason = "";
                 object.redoTaskText = "";
                 if ($util.Long) {
@@ -13587,8 +13760,6 @@ export const game = $root.game = (() => {
                     object.reviewedAt = options.longs === $String ? $String(message.reviewedAt) : message.reviewedAt;
                 else
                     object.reviewedAt = options.longs === $String ? $util.Long.prototype.toString.call(message.reviewedAt) : options.longs === $Number ? new $util.LongBits(message.reviewedAt.low >>> 0, message.reviewedAt.high >>> 0).toNumber() : message.reviewedAt;
-            if (message.hasReviewedAt != null && $Object.hasOwnProperty.call(message, "hasReviewedAt"))
-                object.hasReviewedAt = message.hasReviewedAt;
             if (message.rejectReason != null && $Object.hasOwnProperty.call(message, "rejectReason"))
                 object.rejectReason = message.rejectReason;
             if (message.redoTaskText != null && $Object.hasOwnProperty.call(message, "redoTaskText"))
@@ -13653,11 +13824,8 @@ export const game = $root.game = (() => {
          * @property {Array.<game.Pos.$Properties>|null} [tictactoeLine] RoundHistoryItem tictactoeLine
          * @property {boolean|null} [ranked] RoundHistoryItem ranked
          * @property {number|null} [stake] RoundHistoryItem stake
-         * @property {boolean|null} [hasStake] RoundHistoryItem hasStake
          * @property {number|null} [rankMultiplier] RoundHistoryItem rankMultiplier
-         * @property {boolean|null} [hasRankMultiplier] RoundHistoryItem hasRankMultiplier
          * @property {number|null} [effectiveStake] RoundHistoryItem effectiveStake
-         * @property {boolean|null} [hasEffectiveStake] RoundHistoryItem hasEffectiveStake
          * @property {boolean|null} [extremeRanked] RoundHistoryItem extremeRanked
          * @property {string|null} [punishmentName] RoundHistoryItem punishmentName
          * @property {string|null} [punishmentDescription] RoundHistoryItem punishmentDescription
@@ -13672,6 +13840,8 @@ export const game = $root.game = (() => {
          * @property {Array.<game.LiarsDiceHandsPair.$Properties>|null} [liarsDiceHands] RoundHistoryItem liarsDiceHands
          * @property {Array.<string>|null} [liarsDiceHandOrder] RoundHistoryItem liarsDiceHandOrder
          * @property {Array.<game.StringPair.$Properties>|null} [liarsDiceNames] RoundHistoryItem liarsDiceNames
+         * @property {string|null} [gomokuBlackSeat] RoundHistoryItem gomokuBlackSeat
+         * @property {Array.<game.Pos.$Properties>|null} [gomokuLine] RoundHistoryItem gomokuLine
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -13704,6 +13874,7 @@ export const game = $root.game = (() => {
             this.liarsDiceHands = [];
             this.liarsDiceHandOrder = [];
             this.liarsDiceNames = [];
+            this.gomokuLine = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -13847,14 +14018,6 @@ export const game = $root.game = (() => {
         RoundHistoryItem.prototype.stake = 0;
 
         /**
-         * RoundHistoryItem hasStake.
-         * @member {boolean} hasStake
-         * @memberof game.RoundHistoryItem
-         * @instance
-         */
-        RoundHistoryItem.prototype.hasStake = false;
-
-        /**
          * RoundHistoryItem rankMultiplier.
          * @member {number} rankMultiplier
          * @memberof game.RoundHistoryItem
@@ -13863,28 +14026,12 @@ export const game = $root.game = (() => {
         RoundHistoryItem.prototype.rankMultiplier = 0;
 
         /**
-         * RoundHistoryItem hasRankMultiplier.
-         * @member {boolean} hasRankMultiplier
-         * @memberof game.RoundHistoryItem
-         * @instance
-         */
-        RoundHistoryItem.prototype.hasRankMultiplier = false;
-
-        /**
          * RoundHistoryItem effectiveStake.
          * @member {number} effectiveStake
          * @memberof game.RoundHistoryItem
          * @instance
          */
         RoundHistoryItem.prototype.effectiveStake = 0;
-
-        /**
-         * RoundHistoryItem hasEffectiveStake.
-         * @member {boolean} hasEffectiveStake
-         * @memberof game.RoundHistoryItem
-         * @instance
-         */
-        RoundHistoryItem.prototype.hasEffectiveStake = false;
 
         /**
          * RoundHistoryItem extremeRanked.
@@ -13999,6 +14146,22 @@ export const game = $root.game = (() => {
         RoundHistoryItem.prototype.liarsDiceNames = $util.emptyArray;
 
         /**
+         * RoundHistoryItem gomokuBlackSeat.
+         * @member {string} gomokuBlackSeat
+         * @memberof game.RoundHistoryItem
+         * @instance
+         */
+        RoundHistoryItem.prototype.gomokuBlackSeat = "";
+
+        /**
+         * RoundHistoryItem gomokuLine.
+         * @member {Array.<game.Pos.$Properties>} gomokuLine
+         * @memberof game.RoundHistoryItem
+         * @instance
+         */
+        RoundHistoryItem.prototype.gomokuLine = $util.emptyArray;
+
+        /**
          * Creates a new RoundHistoryItem instance using the specified properties.
          * @function create
          * @memberof game.RoundHistoryItem
@@ -14065,16 +14228,10 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 16, wireType 0 =*/128).bool(message.ranked);
             if (message.stake != null && $Object.hasOwnProperty.call(message, "stake") && message.stake !== 0)
                 writer.uint32(/* id 17, wireType 0 =*/136).int32(message.stake);
-            if (message.hasStake != null && $Object.hasOwnProperty.call(message, "hasStake") && message.hasStake !== false)
-                writer.uint32(/* id 18, wireType 0 =*/144).bool(message.hasStake);
             if (message.rankMultiplier != null && $Object.hasOwnProperty.call(message, "rankMultiplier") && message.rankMultiplier !== 0)
                 writer.uint32(/* id 19, wireType 0 =*/152).int32(message.rankMultiplier);
-            if (message.hasRankMultiplier != null && $Object.hasOwnProperty.call(message, "hasRankMultiplier") && message.hasRankMultiplier !== false)
-                writer.uint32(/* id 20, wireType 0 =*/160).bool(message.hasRankMultiplier);
             if (message.effectiveStake != null && $Object.hasOwnProperty.call(message, "effectiveStake") && message.effectiveStake !== 0)
                 writer.uint32(/* id 21, wireType 0 =*/168).int32(message.effectiveStake);
-            if (message.hasEffectiveStake != null && $Object.hasOwnProperty.call(message, "hasEffectiveStake") && message.hasEffectiveStake !== false)
-                writer.uint32(/* id 22, wireType 0 =*/176).bool(message.hasEffectiveStake);
             if (message.extremeRanked != null && $Object.hasOwnProperty.call(message, "extremeRanked") && message.extremeRanked !== false)
                 writer.uint32(/* id 23, wireType 0 =*/184).bool(message.extremeRanked);
             if (message.punishmentName != null && $Object.hasOwnProperty.call(message, "punishmentName") && message.punishmentName !== "")
@@ -14109,6 +14266,11 @@ export const game = $root.game = (() => {
             if (message.liarsDiceNames != null && message.liarsDiceNames.length)
                 for (let i = 0; i < message.liarsDiceNames.length; ++i)
                     $root.game.StringPair.encode(message.liarsDiceNames[i], writer.uint32(/* id 36, wireType 2 =*/290).fork(), _depth + 1).ldelim();
+            if (message.gomokuBlackSeat != null && $Object.hasOwnProperty.call(message, "gomokuBlackSeat") && message.gomokuBlackSeat !== "")
+                writer.uint32(/* id 37, wireType 2 =*/298).string(message.gomokuBlackSeat);
+            if (message.gomokuLine != null && message.gomokuLine.length)
+                for (let i = 0; i < message.gomokuLine.length; ++i)
+                    $root.game.Pos.encode(message.gomokuLine[i], writer.uint32(/* id 38, wireType 2 =*/306).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -14305,15 +14467,6 @@ export const game = $root.game = (() => {
                             delete message.stake;
                         continue;
                     }
-                case 18: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasStake = value;
-                        else
-                            delete message.hasStake;
-                        continue;
-                    }
                 case 19: {
                         if (wireType !== 0)
                             break;
@@ -14323,15 +14476,6 @@ export const game = $root.game = (() => {
                             delete message.rankMultiplier;
                         continue;
                     }
-                case 20: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasRankMultiplier = value;
-                        else
-                            delete message.hasRankMultiplier;
-                        continue;
-                    }
                 case 21: {
                         if (wireType !== 0)
                             break;
@@ -14339,15 +14483,6 @@ export const game = $root.game = (() => {
                             message.effectiveStake = value;
                         else
                             delete message.effectiveStake;
-                        continue;
-                    }
-                case 22: {
-                        if (wireType !== 0)
-                            break;
-                        if (value = reader.bool())
-                            message.hasEffectiveStake = value;
-                        else
-                            delete message.hasEffectiveStake;
                         continue;
                     }
                 case 23: {
@@ -14470,6 +14605,23 @@ export const game = $root.game = (() => {
                         message.liarsDiceNames.push($root.game.StringPair.decode(reader, reader.uint32(), $undefined, _depth + 1));
                         continue;
                     }
+                case 37: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.gomokuBlackSeat = value;
+                        else
+                            delete message.gomokuBlackSeat;
+                        continue;
+                    }
+                case 38: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.gomokuLine && message.gomokuLine.length))
+                            message.gomokuLine = [];
+                        message.gomokuLine.push($root.game.Pos.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -14572,21 +14724,12 @@ export const game = $root.game = (() => {
             if (message.stake != null && $Object.hasOwnProperty.call(message, "stake"))
                 if (!$util.isInteger(message.stake))
                     return "stake: integer expected";
-            if (message.hasStake != null && $Object.hasOwnProperty.call(message, "hasStake"))
-                if (typeof message.hasStake !== "boolean")
-                    return "hasStake: boolean expected";
             if (message.rankMultiplier != null && $Object.hasOwnProperty.call(message, "rankMultiplier"))
                 if (!$util.isInteger(message.rankMultiplier))
                     return "rankMultiplier: integer expected";
-            if (message.hasRankMultiplier != null && $Object.hasOwnProperty.call(message, "hasRankMultiplier"))
-                if (typeof message.hasRankMultiplier !== "boolean")
-                    return "hasRankMultiplier: boolean expected";
             if (message.effectiveStake != null && $Object.hasOwnProperty.call(message, "effectiveStake"))
                 if (!$util.isInteger(message.effectiveStake))
                     return "effectiveStake: integer expected";
-            if (message.hasEffectiveStake != null && $Object.hasOwnProperty.call(message, "hasEffectiveStake"))
-                if (typeof message.hasEffectiveStake !== "boolean")
-                    return "hasEffectiveStake: boolean expected";
             if (message.extremeRanked != null && $Object.hasOwnProperty.call(message, "extremeRanked"))
                 if (typeof message.extremeRanked !== "boolean")
                     return "extremeRanked: boolean expected";
@@ -14659,6 +14802,18 @@ export const game = $root.game = (() => {
                     let error = $root.game.StringPair.verify(message.liarsDiceNames[i], _depth + 1);
                     if (error)
                         return "liarsDiceNames." + error;
+                }
+            }
+            if (message.gomokuBlackSeat != null && $Object.hasOwnProperty.call(message, "gomokuBlackSeat"))
+                if (!$util.isString(message.gomokuBlackSeat))
+                    return "gomokuBlackSeat: string expected";
+            if (message.gomokuLine != null && $Object.hasOwnProperty.call(message, "gomokuLine")) {
+                if (!$Array.isArray(message.gomokuLine))
+                    return "gomokuLine: array expected";
+                for (let i = 0; i < message.gomokuLine.length; ++i) {
+                    let error = $root.game.Pos.verify(message.gomokuLine[i], _depth + 1);
+                    if (error)
+                        return "gomokuLine." + error;
                 }
             }
             return null;
@@ -14749,21 +14904,12 @@ export const game = $root.game = (() => {
             if (object.stake != null)
                 if ($Number(object.stake) !== 0)
                     message.stake = object.stake | 0;
-            if (object.hasStake != null)
-                if (object.hasStake)
-                    message.hasStake = $Boolean(object.hasStake);
             if (object.rankMultiplier != null)
                 if ($Number(object.rankMultiplier) !== 0)
                     message.rankMultiplier = object.rankMultiplier | 0;
-            if (object.hasRankMultiplier != null)
-                if (object.hasRankMultiplier)
-                    message.hasRankMultiplier = $Boolean(object.hasRankMultiplier);
             if (object.effectiveStake != null)
                 if ($Number(object.effectiveStake) !== 0)
                     message.effectiveStake = object.effectiveStake | 0;
-            if (object.hasEffectiveStake != null)
-                if (object.hasEffectiveStake)
-                    message.hasEffectiveStake = $Boolean(object.hasEffectiveStake);
             if (object.extremeRanked != null)
                 if (object.extremeRanked)
                     message.extremeRanked = $Boolean(object.extremeRanked);
@@ -14842,6 +14988,19 @@ export const game = $root.game = (() => {
                     message.liarsDiceNames[i] = $root.game.StringPair.fromObject(object.liarsDiceNames[i], _depth + 1);
                 }
             }
+            if (object.gomokuBlackSeat != null)
+                if (typeof object.gomokuBlackSeat !== "string" || object.gomokuBlackSeat.length)
+                    message.gomokuBlackSeat = $String(object.gomokuBlackSeat);
+            if (object.gomokuLine) {
+                if (!$Array.isArray(object.gomokuLine))
+                    throw $TypeError(".game.RoundHistoryItem.gomokuLine: array expected");
+                message.gomokuLine = $Array(object.gomokuLine.length);
+                for (let i = 0; i < object.gomokuLine.length; ++i) {
+                    if (!$util.isObject(object.gomokuLine[i]))
+                        throw $TypeError(".game.RoundHistoryItem.gomokuLine: object expected");
+                    message.gomokuLine[i] = $root.game.Pos.fromObject(object.gomokuLine[i], _depth + 1);
+                }
+            }
             return message;
         };
 
@@ -14870,6 +15029,7 @@ export const game = $root.game = (() => {
                 object.liarsDiceHands = [];
                 object.liarsDiceHandOrder = [];
                 object.liarsDiceNames = [];
+                object.gomokuLine = [];
             }
             if (options.defaults) {
                 object.id = "";
@@ -14892,11 +15052,8 @@ export const game = $root.game = (() => {
                 object.tictactoeXSeat = "";
                 object.ranked = false;
                 object.stake = 0;
-                object.hasStake = false;
                 object.rankMultiplier = 0;
-                object.hasRankMultiplier = false;
                 object.effectiveStake = 0;
-                object.hasEffectiveStake = false;
                 object.extremeRanked = false;
                 object.punishmentName = "";
                 object.punishmentDescription = "";
@@ -14905,6 +15062,7 @@ export const game = $root.game = (() => {
                 object.liarsDiceBidCount = 0;
                 object.liarsDiceBidFace = 0;
                 object.liarsDiceActualCount = 0;
+                object.gomokuBlackSeat = "";
             }
             if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
                 object.id = message.id;
@@ -14948,16 +15106,10 @@ export const game = $root.game = (() => {
                 object.ranked = message.ranked;
             if (message.stake != null && $Object.hasOwnProperty.call(message, "stake"))
                 object.stake = message.stake;
-            if (message.hasStake != null && $Object.hasOwnProperty.call(message, "hasStake"))
-                object.hasStake = message.hasStake;
             if (message.rankMultiplier != null && $Object.hasOwnProperty.call(message, "rankMultiplier"))
                 object.rankMultiplier = message.rankMultiplier;
-            if (message.hasRankMultiplier != null && $Object.hasOwnProperty.call(message, "hasRankMultiplier"))
-                object.hasRankMultiplier = message.hasRankMultiplier;
             if (message.effectiveStake != null && $Object.hasOwnProperty.call(message, "effectiveStake"))
                 object.effectiveStake = message.effectiveStake;
-            if (message.hasEffectiveStake != null && $Object.hasOwnProperty.call(message, "hasEffectiveStake"))
-                object.hasEffectiveStake = message.hasEffectiveStake;
             if (message.extremeRanked != null && $Object.hasOwnProperty.call(message, "extremeRanked"))
                 object.extremeRanked = message.extremeRanked;
             if (message.punishmentName != null && $Object.hasOwnProperty.call(message, "punishmentName"))
@@ -15003,6 +15155,13 @@ export const game = $root.game = (() => {
                 object.liarsDiceNames = $Array(message.liarsDiceNames.length);
                 for (let j = 0; j < message.liarsDiceNames.length; ++j)
                     object.liarsDiceNames[j] = $root.game.StringPair.toObject(message.liarsDiceNames[j], options, _depth + 1);
+            }
+            if (message.gomokuBlackSeat != null && $Object.hasOwnProperty.call(message, "gomokuBlackSeat"))
+                object.gomokuBlackSeat = message.gomokuBlackSeat;
+            if (message.gomokuLine && message.gomokuLine.length) {
+                object.gomokuLine = $Array(message.gomokuLine.length);
+                for (let j = 0; j < message.gomokuLine.length; ++j)
+                    object.gomokuLine[j] = $root.game.Pos.toObject(message.gomokuLine[j], options, _depth + 1);
             }
             return object;
         };
@@ -20906,6 +21065,7 @@ export const game = $root.game = (() => {
          * @property {game.OthelloState.$Properties|null} [othello] RoomSnapshot othello
          * @property {game.TicTacToeState.$Properties|null} [tictactoe] RoomSnapshot tictactoe
          * @property {game.LiarsDiceState.$Properties|null} [liarsDice] RoomSnapshot liarsDice
+         * @property {game.GomokuState.$Properties|null} [gomoku] RoomSnapshot gomoku
          * @property {string|null} [resultText] RoomSnapshot resultText
          * @property {Array.<string>|null} [punishedPlayerIds] RoomSnapshot punishedPlayerIds
          * @property {Array.<game.PunishmentProof.$Properties>|null} [proofs] RoomSnapshot proofs
@@ -20915,6 +21075,8 @@ export const game = $root.game = (() => {
          * @property {Array.<game.RoundHistoryItem.$Properties>|null} [roundHistory] RoomSnapshot roundHistory
          * @property {number|null} [roundHistoryTotal] RoomSnapshot roundHistoryTotal
          * @property {Array.<game.ChatMessage.$Properties>|null} [chat] RoomSnapshot chat
+         * @property {string|null} [forgiveAdvantageTargetId] RoomSnapshot forgiveAdvantageTargetId
+         * @property {string|null} [forgiveAdvantageBeneficiaryId] RoomSnapshot forgiveAdvantageBeneficiaryId
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -20943,6 +21105,7 @@ export const game = $root.game = (() => {
          *   othello?: game.OthelloState.$Shape|null;
          *   tictactoe?: game.TicTacToeState.$Shape|null;
          *   liarsDice?: game.LiarsDiceState.$Shape|null;
+         *   gomoku?: game.GomokuState.$Shape|null;
          *   resultText?: string|null;
          *   punishedPlayerIds?: Array.<string>|null;
          *   proofs?: Array.<game.PunishmentProof.$Shape>|null;
@@ -20952,6 +21115,8 @@ export const game = $root.game = (() => {
          *   roundHistory?: Array.<game.RoundHistoryItem.$Shape>|null;
          *   roundHistoryTotal?: number|null;
          *   chat?: Array.<game.ChatMessage.$Shape>|null;
+         *   forgiveAdvantageTargetId?: string|null;
+         *   forgiveAdvantageBeneficiaryId?: string|null;
          *   $unknowns?: Array.<Uint8Array>;
          * }} game.RoomSnapshot.$Shape
          */
@@ -21096,6 +21261,14 @@ export const game = $root.game = (() => {
         RoomSnapshot.prototype.liarsDice = null;
 
         /**
+         * RoomSnapshot gomoku.
+         * @member {game.GomokuState.$Properties|null|undefined} gomoku
+         * @memberof game.RoomSnapshot
+         * @instance
+         */
+        RoomSnapshot.prototype.gomoku = null;
+
+        /**
          * RoomSnapshot resultText.
          * @member {string} resultText
          * @memberof game.RoomSnapshot
@@ -21166,6 +21339,22 @@ export const game = $root.game = (() => {
          * @instance
          */
         RoomSnapshot.prototype.chat = $util.emptyArray;
+
+        /**
+         * RoomSnapshot forgiveAdvantageTargetId.
+         * @member {string} forgiveAdvantageTargetId
+         * @memberof game.RoomSnapshot
+         * @instance
+         */
+        RoomSnapshot.prototype.forgiveAdvantageTargetId = "";
+
+        /**
+         * RoomSnapshot forgiveAdvantageBeneficiaryId.
+         * @member {string} forgiveAdvantageBeneficiaryId
+         * @memberof game.RoomSnapshot
+         * @instance
+         */
+        RoomSnapshot.prototype.forgiveAdvantageBeneficiaryId = "";
 
         /**
          * Creates a new RoomSnapshot instance using the specified properties.
@@ -21257,6 +21446,12 @@ export const game = $root.game = (() => {
                     $root.game.ChatMessage.encode(message.chat[i], writer.uint32(/* id 22, wireType 2 =*/178).fork(), _depth + 1).ldelim();
             if (message.liarsDice != null && $Object.hasOwnProperty.call(message, "liarsDice"))
                 $root.game.LiarsDiceState.encode(message.liarsDice, writer.uint32(/* id 23, wireType 2 =*/186).fork(), _depth + 1).ldelim();
+            if (message.gomoku != null && $Object.hasOwnProperty.call(message, "gomoku"))
+                $root.game.GomokuState.encode(message.gomoku, writer.uint32(/* id 24, wireType 2 =*/194).fork(), _depth + 1).ldelim();
+            if (message.forgiveAdvantageTargetId != null && $Object.hasOwnProperty.call(message, "forgiveAdvantageTargetId") && message.forgiveAdvantageTargetId !== "")
+                writer.uint32(/* id 25, wireType 2 =*/202).string(message.forgiveAdvantageTargetId);
+            if (message.forgiveAdvantageBeneficiaryId != null && $Object.hasOwnProperty.call(message, "forgiveAdvantageBeneficiaryId") && message.forgiveAdvantageBeneficiaryId !== "")
+                writer.uint32(/* id 26, wireType 2 =*/210).string(message.forgiveAdvantageBeneficiaryId);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -21413,6 +21608,12 @@ export const game = $root.game = (() => {
                         message.liarsDice = $root.game.LiarsDiceState.decode(reader, reader.uint32(), $undefined, _depth + 1, message.liarsDice);
                         continue;
                     }
+                case 24: {
+                        if (wireType !== 2)
+                            break;
+                        message.gomoku = $root.game.GomokuState.decode(reader, reader.uint32(), $undefined, _depth + 1, message.gomoku);
+                        continue;
+                    }
                 case 14: {
                         if (wireType !== 2)
                             break;
@@ -21485,6 +21686,24 @@ export const game = $root.game = (() => {
                         if (!(message.chat && message.chat.length))
                             message.chat = [];
                         message.chat.push($root.game.ChatMessage.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 25: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.forgiveAdvantageTargetId = value;
+                        else
+                            delete message.forgiveAdvantageTargetId;
+                        continue;
+                    }
+                case 26: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.forgiveAdvantageBeneficiaryId = value;
+                        else
+                            delete message.forgiveAdvantageBeneficiaryId;
                         continue;
                     }
                 }
@@ -21610,6 +21829,11 @@ export const game = $root.game = (() => {
                 if (error)
                     return "liarsDice." + error;
             }
+            if (message.gomoku != null && $Object.hasOwnProperty.call(message, "gomoku")) {
+                let error = $root.game.GomokuState.verify(message.gomoku, _depth + 1);
+                if (error)
+                    return "gomoku." + error;
+            }
             if (message.resultText != null && $Object.hasOwnProperty.call(message, "resultText"))
                 if (!$util.isString(message.resultText))
                     return "resultText: string expected";
@@ -21677,6 +21901,12 @@ export const game = $root.game = (() => {
                         return "chat." + error;
                 }
             }
+            if (message.forgiveAdvantageTargetId != null && $Object.hasOwnProperty.call(message, "forgiveAdvantageTargetId"))
+                if (!$util.isString(message.forgiveAdvantageTargetId))
+                    return "forgiveAdvantageTargetId: string expected";
+            if (message.forgiveAdvantageBeneficiaryId != null && $Object.hasOwnProperty.call(message, "forgiveAdvantageBeneficiaryId"))
+                if (!$util.isString(message.forgiveAdvantageBeneficiaryId))
+                    return "forgiveAdvantageBeneficiaryId: string expected";
             return null;
         };
 
@@ -21790,6 +22020,11 @@ export const game = $root.game = (() => {
                     throw $TypeError(".game.RoomSnapshot.liarsDice: object expected");
                 message.liarsDice = $root.game.LiarsDiceState.fromObject(object.liarsDice, _depth + 1);
             }
+            if (object.gomoku != null) {
+                if (!$util.isObject(object.gomoku))
+                    throw $TypeError(".game.RoomSnapshot.gomoku: object expected");
+                message.gomoku = $root.game.GomokuState.fromObject(object.gomoku, _depth + 1);
+            }
             if (object.resultText != null)
                 if (typeof object.resultText !== "string" || object.resultText.length)
                     message.resultText = $String(object.resultText);
@@ -21863,6 +22098,12 @@ export const game = $root.game = (() => {
                     message.chat[i] = $root.game.ChatMessage.fromObject(object.chat[i], _depth + 1);
                 }
             }
+            if (object.forgiveAdvantageTargetId != null)
+                if (typeof object.forgiveAdvantageTargetId !== "string" || object.forgiveAdvantageTargetId.length)
+                    message.forgiveAdvantageTargetId = $String(object.forgiveAdvantageTargetId);
+            if (object.forgiveAdvantageBeneficiaryId != null)
+                if (typeof object.forgiveAdvantageBeneficiaryId !== "string" || object.forgiveAdvantageBeneficiaryId.length)
+                    message.forgiveAdvantageBeneficiaryId = $String(object.forgiveAdvantageBeneficiaryId);
             return message;
         };
 
@@ -21913,6 +22154,9 @@ export const game = $root.game = (() => {
                 object.resultText = "";
                 object.roundHistoryTotal = 0;
                 object.liarsDice = null;
+                object.gomoku = null;
+                object.forgiveAdvantageTargetId = "";
+                object.forgiveAdvantageBeneficiaryId = "";
             }
             if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
                 object.id = message.id;
@@ -22001,6 +22245,12 @@ export const game = $root.game = (() => {
             }
             if (message.liarsDice != null && $Object.hasOwnProperty.call(message, "liarsDice"))
                 object.liarsDice = $root.game.LiarsDiceState.toObject(message.liarsDice, options, _depth + 1);
+            if (message.gomoku != null && $Object.hasOwnProperty.call(message, "gomoku"))
+                object.gomoku = $root.game.GomokuState.toObject(message.gomoku, options, _depth + 1);
+            if (message.forgiveAdvantageTargetId != null && $Object.hasOwnProperty.call(message, "forgiveAdvantageTargetId"))
+                object.forgiveAdvantageTargetId = message.forgiveAdvantageTargetId;
+            if (message.forgiveAdvantageBeneficiaryId != null && $Object.hasOwnProperty.call(message, "forgiveAdvantageBeneficiaryId"))
+                object.forgiveAdvantageBeneficiaryId = message.forgiveAdvantageBeneficiaryId;
             return object;
         };
 
@@ -28713,41 +28963,39 @@ export const game = $root.game = (() => {
         return GameConfig;
     })();
 
-    game.DailyAnnouncement = (function() {
+    game.AnnouncementBoard = (function() {
 
         /**
-         * Properties of a DailyAnnouncement.
-         * @typedef {Object} game.DailyAnnouncement.$Properties
-         * @property {boolean|null} [enabled] DailyAnnouncement enabled
-         * @property {string|null} [title] DailyAnnouncement title
-         * @property {string|null} [content] DailyAnnouncement content
-         * @property {string|null} [buttonText] DailyAnnouncement buttonText
-         * @property {string|null} [version] DailyAnnouncement version
+         * Properties of an AnnouncementBoard.
+         * @typedef {Object} game.AnnouncementBoard.$Properties
+         * @property {boolean|null} [enabled] AnnouncementBoard enabled
+         * @property {string|null} [title] AnnouncementBoard title
+         * @property {string|null} [content] AnnouncementBoard content
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
         /**
-         * Properties of a DailyAnnouncement.
+         * Properties of an AnnouncementBoard.
          * @memberof game
-         * @interface IDailyAnnouncement
-         * @augments game.DailyAnnouncement.$Properties
-         * @deprecated Use game.DailyAnnouncement.$Properties instead.
+         * @interface IAnnouncementBoard
+         * @augments game.AnnouncementBoard.$Properties
+         * @deprecated Use game.AnnouncementBoard.$Properties instead.
          */
 
         /**
-         * Shape of a DailyAnnouncement.
-         * @typedef {game.DailyAnnouncement.$Properties} game.DailyAnnouncement.$Shape
+         * Shape of an AnnouncementBoard.
+         * @typedef {game.AnnouncementBoard.$Properties} game.AnnouncementBoard.$Shape
          */
 
         /**
-         * Constructs a new DailyAnnouncement.
+         * Constructs a new AnnouncementBoard.
          * @memberof game
-         * @classdesc Represents a DailyAnnouncement.
+         * @classdesc Represents an AnnouncementBoard.
          * @constructor
-         * @param {game.DailyAnnouncement.$Properties=} [properties] Properties to set
+         * @param {game.AnnouncementBoard.$Properties=} [properties] Properties to set
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
-        const DailyAnnouncement = function (properties) {
+        const AnnouncementBoard = function (properties) {
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -28755,71 +29003,55 @@ export const game = $root.game = (() => {
         };
 
         /**
-         * DailyAnnouncement enabled.
+         * AnnouncementBoard enabled.
          * @member {boolean} enabled
-         * @memberof game.DailyAnnouncement
+         * @memberof game.AnnouncementBoard
          * @instance
          */
-        DailyAnnouncement.prototype.enabled = false;
+        AnnouncementBoard.prototype.enabled = false;
 
         /**
-         * DailyAnnouncement title.
+         * AnnouncementBoard title.
          * @member {string} title
-         * @memberof game.DailyAnnouncement
+         * @memberof game.AnnouncementBoard
          * @instance
          */
-        DailyAnnouncement.prototype.title = "";
+        AnnouncementBoard.prototype.title = "";
 
         /**
-         * DailyAnnouncement content.
+         * AnnouncementBoard content.
          * @member {string} content
-         * @memberof game.DailyAnnouncement
+         * @memberof game.AnnouncementBoard
          * @instance
          */
-        DailyAnnouncement.prototype.content = "";
+        AnnouncementBoard.prototype.content = "";
 
         /**
-         * DailyAnnouncement buttonText.
-         * @member {string} buttonText
-         * @memberof game.DailyAnnouncement
-         * @instance
-         */
-        DailyAnnouncement.prototype.buttonText = "";
-
-        /**
-         * DailyAnnouncement version.
-         * @member {string} version
-         * @memberof game.DailyAnnouncement
-         * @instance
-         */
-        DailyAnnouncement.prototype.version = "";
-
-        /**
-         * Creates a new DailyAnnouncement instance using the specified properties.
+         * Creates a new AnnouncementBoard instance using the specified properties.
          * @function create
-         * @memberof game.DailyAnnouncement
+         * @memberof game.AnnouncementBoard
          * @static
-         * @param {game.DailyAnnouncement.$Properties=} [properties] Properties to set
-         * @returns {game.DailyAnnouncement} DailyAnnouncement instance
+         * @param {game.AnnouncementBoard.$Properties=} [properties] Properties to set
+         * @returns {game.AnnouncementBoard} AnnouncementBoard instance
          * @type {{
-         *   (properties: game.DailyAnnouncement.$Shape): game.DailyAnnouncement & game.DailyAnnouncement.$Shape;
-         *   (properties?: game.DailyAnnouncement.$Properties): game.DailyAnnouncement;
+         *   (properties: game.AnnouncementBoard.$Shape): game.AnnouncementBoard & game.AnnouncementBoard.$Shape;
+         *   (properties?: game.AnnouncementBoard.$Properties): game.AnnouncementBoard;
          * }}
          */
-        DailyAnnouncement.create = function(properties) {
-            return new DailyAnnouncement(properties);
+        AnnouncementBoard.create = function(properties) {
+            return new AnnouncementBoard(properties);
         };
 
         /**
-         * Encodes the specified DailyAnnouncement message. Does not implicitly {@link game.DailyAnnouncement.verify|verify} messages.
+         * Encodes the specified AnnouncementBoard message. Does not implicitly {@link game.AnnouncementBoard.verify|verify} messages.
          * @function encode
-         * @memberof game.DailyAnnouncement
+         * @memberof game.AnnouncementBoard
          * @static
-         * @param {game.DailyAnnouncement.$Properties} message DailyAnnouncement message or plain object to encode
+         * @param {game.AnnouncementBoard.$Properties} message AnnouncementBoard message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        DailyAnnouncement.encode = function (message, writer, _depth) {
+        AnnouncementBoard.encode = function (message, writer, _depth) {
             if (!writer)
                 writer = $Writer.create();
             if (_depth === $undefined)
@@ -28832,10 +29064,6 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.title);
             if (message.content != null && $Object.hasOwnProperty.call(message, "content") && message.content !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.content);
-            if (message.buttonText != null && $Object.hasOwnProperty.call(message, "buttonText") && message.buttonText !== "")
-                writer.uint32(/* id 4, wireType 2 =*/34).string(message.buttonText);
-            if (message.version != null && $Object.hasOwnProperty.call(message, "version") && message.version !== "")
-                writer.uint32(/* id 5, wireType 2 =*/42).string(message.version);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -28843,37 +29071,37 @@ export const game = $root.game = (() => {
         };
 
         /**
-         * Encodes the specified DailyAnnouncement message, length delimited. Does not implicitly {@link game.DailyAnnouncement.verify|verify} messages.
+         * Encodes the specified AnnouncementBoard message, length delimited. Does not implicitly {@link game.AnnouncementBoard.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof game.DailyAnnouncement
+         * @memberof game.AnnouncementBoard
          * @static
-         * @param {game.DailyAnnouncement.$Properties} message DailyAnnouncement message or plain object to encode
+         * @param {game.AnnouncementBoard.$Properties} message AnnouncementBoard message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        DailyAnnouncement.encodeDelimited = function(message, writer) {
+        AnnouncementBoard.encodeDelimited = function(message, writer) {
             return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
-         * Decodes a DailyAnnouncement message from the specified reader or buffer.
+         * Decodes an AnnouncementBoard message from the specified reader or buffer.
          * @function decode
-         * @memberof game.DailyAnnouncement
+         * @memberof game.AnnouncementBoard
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {game.DailyAnnouncement & game.DailyAnnouncement.$Shape} DailyAnnouncement
+         * @returns {game.AnnouncementBoard & game.AnnouncementBoard.$Shape} AnnouncementBoard
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DailyAnnouncement.decode = function (reader, length, _end, _depth, _target) {
+        AnnouncementBoard.decode = function (reader, length, _end, _depth, _target) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
             if (_depth === $undefined)
                 _depth = 0;
             if (_depth > $Reader.recursionLimit)
                 throw $Error("max depth exceeded");
-            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.DailyAnnouncement(), value;
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.AnnouncementBoard(), value;
             while (reader.pos < end) {
                 let start = reader.pos;
                 let tag = reader.tag();
@@ -28910,24 +29138,6 @@ export const game = $root.game = (() => {
                             delete message.content;
                         continue;
                     }
-                case 4: {
-                        if (wireType !== 2)
-                            break;
-                        if ((value = reader.stringVerify()).length)
-                            message.buttonText = value;
-                        else
-                            delete message.buttonText;
-                        continue;
-                    }
-                case 5: {
-                        if (wireType !== 2)
-                            break;
-                        if ((value = reader.stringVerify()).length)
-                            message.version = value;
-                        else
-                            delete message.version;
-                        continue;
-                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -28941,30 +29151,30 @@ export const game = $root.game = (() => {
         };
 
         /**
-         * Decodes a DailyAnnouncement message from the specified reader or buffer, length delimited.
+         * Decodes an AnnouncementBoard message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof game.DailyAnnouncement
+         * @memberof game.AnnouncementBoard
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {game.DailyAnnouncement & game.DailyAnnouncement.$Shape} DailyAnnouncement
+         * @returns {game.AnnouncementBoard & game.AnnouncementBoard.$Shape} AnnouncementBoard
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        DailyAnnouncement.decodeDelimited = function(reader) {
+        AnnouncementBoard.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies a DailyAnnouncement message.
+         * Verifies an AnnouncementBoard message.
          * @function verify
-         * @memberof game.DailyAnnouncement
+         * @memberof game.AnnouncementBoard
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        DailyAnnouncement.verify = function (message, _depth) {
+        AnnouncementBoard.verify = function (message, _depth) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
             if (_depth === $undefined)
@@ -28980,33 +29190,27 @@ export const game = $root.game = (() => {
             if (message.content != null && $Object.hasOwnProperty.call(message, "content"))
                 if (!$util.isString(message.content))
                     return "content: string expected";
-            if (message.buttonText != null && $Object.hasOwnProperty.call(message, "buttonText"))
-                if (!$util.isString(message.buttonText))
-                    return "buttonText: string expected";
-            if (message.version != null && $Object.hasOwnProperty.call(message, "version"))
-                if (!$util.isString(message.version))
-                    return "version: string expected";
             return null;
         };
 
         /**
-         * Creates a DailyAnnouncement message from a plain object. Also converts values to their respective internal types.
+         * Creates an AnnouncementBoard message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof game.DailyAnnouncement
+         * @memberof game.AnnouncementBoard
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {game.DailyAnnouncement} DailyAnnouncement
+         * @returns {game.AnnouncementBoard} AnnouncementBoard
          */
-        DailyAnnouncement.fromObject = function (object, _depth) {
-            if (object instanceof $root.game.DailyAnnouncement)
+        AnnouncementBoard.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.AnnouncementBoard)
                 return object;
             if (!$util.isObject(object))
-                throw $TypeError(".game.DailyAnnouncement: object expected");
+                throw $TypeError(".game.AnnouncementBoard: object expected");
             if (_depth === $undefined)
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            let message = new $root.game.DailyAnnouncement();
+            let message = new $root.game.AnnouncementBoard();
             if (object.enabled != null)
                 if (object.enabled)
                     message.enabled = $Boolean(object.enabled);
@@ -29016,25 +29220,19 @@ export const game = $root.game = (() => {
             if (object.content != null)
                 if (typeof object.content !== "string" || object.content.length)
                     message.content = $String(object.content);
-            if (object.buttonText != null)
-                if (typeof object.buttonText !== "string" || object.buttonText.length)
-                    message.buttonText = $String(object.buttonText);
-            if (object.version != null)
-                if (typeof object.version !== "string" || object.version.length)
-                    message.version = $String(object.version);
             return message;
         };
 
         /**
-         * Creates a plain object from a DailyAnnouncement message. Also converts values to other types if specified.
+         * Creates a plain object from an AnnouncementBoard message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof game.DailyAnnouncement
+         * @memberof game.AnnouncementBoard
          * @static
-         * @param {game.DailyAnnouncement} message DailyAnnouncement
+         * @param {game.AnnouncementBoard} message AnnouncementBoard
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        DailyAnnouncement.toObject = function (message, options, _depth) {
+        AnnouncementBoard.toObject = function (message, options, _depth) {
             if (!options)
                 options = {};
             if (_depth === $undefined)
@@ -29046,8 +29244,6 @@ export const game = $root.game = (() => {
                 object.enabled = false;
                 object.title = "";
                 object.content = "";
-                object.buttonText = "";
-                object.version = "";
             }
             if (message.enabled != null && $Object.hasOwnProperty.call(message, "enabled"))
                 object.enabled = message.enabled;
@@ -29055,39 +29251,295 @@ export const game = $root.game = (() => {
                 object.title = message.title;
             if (message.content != null && $Object.hasOwnProperty.call(message, "content"))
                 object.content = message.content;
-            if (message.buttonText != null && $Object.hasOwnProperty.call(message, "buttonText"))
-                object.buttonText = message.buttonText;
-            if (message.version != null && $Object.hasOwnProperty.call(message, "version"))
-                object.version = message.version;
             return object;
         };
 
         /**
-         * Converts this DailyAnnouncement to JSON.
+         * Converts this AnnouncementBoard to JSON.
          * @function toJSON
-         * @memberof game.DailyAnnouncement
+         * @memberof game.AnnouncementBoard
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        DailyAnnouncement.prototype.toJSON = function() {
-            return DailyAnnouncement.toObject(this, $protobuf.util.toJSONOptions);
+        AnnouncementBoard.prototype.toJSON = function() {
+            return AnnouncementBoard.toObject(this, $protobuf.util.toJSONOptions);
         };
 
         /**
-         * Gets the type url for DailyAnnouncement
+         * Gets the type url for AnnouncementBoard
          * @function getTypeUrl
-         * @memberof game.DailyAnnouncement
+         * @memberof game.AnnouncementBoard
          * @static
          * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
          * @returns {string} The type url
          */
-        DailyAnnouncement.getTypeUrl = function(prefix) {
+        AnnouncementBoard.getTypeUrl = function(prefix) {
             if (prefix === $undefined)
                 prefix = "type.googleapis.com";
-            return prefix + "/game.DailyAnnouncement";
+            return prefix + "/game.AnnouncementBoard";
         };
 
-        return DailyAnnouncement;
+        return AnnouncementBoard;
+    })();
+
+    game.SecurityDisclaimerConfig = (function() {
+
+        /**
+         * Properties of a SecurityDisclaimerConfig.
+         * @typedef {Object} game.SecurityDisclaimerConfig.$Properties
+         * @property {boolean|null} [enabled] SecurityDisclaimerConfig enabled
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a SecurityDisclaimerConfig.
+         * @memberof game
+         * @interface ISecurityDisclaimerConfig
+         * @augments game.SecurityDisclaimerConfig.$Properties
+         * @deprecated Use game.SecurityDisclaimerConfig.$Properties instead.
+         */
+
+        /**
+         * Shape of a SecurityDisclaimerConfig.
+         * @typedef {game.SecurityDisclaimerConfig.$Properties} game.SecurityDisclaimerConfig.$Shape
+         */
+
+        /**
+         * Constructs a new SecurityDisclaimerConfig.
+         * @memberof game
+         * @classdesc Represents a SecurityDisclaimerConfig.
+         * @constructor
+         * @param {game.SecurityDisclaimerConfig.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const SecurityDisclaimerConfig = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * SecurityDisclaimerConfig enabled.
+         * @member {boolean} enabled
+         * @memberof game.SecurityDisclaimerConfig
+         * @instance
+         */
+        SecurityDisclaimerConfig.prototype.enabled = false;
+
+        /**
+         * Creates a new SecurityDisclaimerConfig instance using the specified properties.
+         * @function create
+         * @memberof game.SecurityDisclaimerConfig
+         * @static
+         * @param {game.SecurityDisclaimerConfig.$Properties=} [properties] Properties to set
+         * @returns {game.SecurityDisclaimerConfig} SecurityDisclaimerConfig instance
+         * @type {{
+         *   (properties: game.SecurityDisclaimerConfig.$Shape): game.SecurityDisclaimerConfig & game.SecurityDisclaimerConfig.$Shape;
+         *   (properties?: game.SecurityDisclaimerConfig.$Properties): game.SecurityDisclaimerConfig;
+         * }}
+         */
+        SecurityDisclaimerConfig.create = function(properties) {
+            return new SecurityDisclaimerConfig(properties);
+        };
+
+        /**
+         * Encodes the specified SecurityDisclaimerConfig message. Does not implicitly {@link game.SecurityDisclaimerConfig.verify|verify} messages.
+         * @function encode
+         * @memberof game.SecurityDisclaimerConfig
+         * @static
+         * @param {game.SecurityDisclaimerConfig.$Properties} message SecurityDisclaimerConfig message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SecurityDisclaimerConfig.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.enabled != null && $Object.hasOwnProperty.call(message, "enabled") && message.enabled !== false)
+                writer.uint32(/* id 1, wireType 0 =*/8).bool(message.enabled);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified SecurityDisclaimerConfig message, length delimited. Does not implicitly {@link game.SecurityDisclaimerConfig.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.SecurityDisclaimerConfig
+         * @static
+         * @param {game.SecurityDisclaimerConfig.$Properties} message SecurityDisclaimerConfig message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SecurityDisclaimerConfig.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a SecurityDisclaimerConfig message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.SecurityDisclaimerConfig
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.SecurityDisclaimerConfig & game.SecurityDisclaimerConfig.$Shape} SecurityDisclaimerConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SecurityDisclaimerConfig.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.SecurityDisclaimerConfig(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.enabled = value;
+                        else
+                            delete message.enabled;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a SecurityDisclaimerConfig message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.SecurityDisclaimerConfig
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.SecurityDisclaimerConfig & game.SecurityDisclaimerConfig.$Shape} SecurityDisclaimerConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SecurityDisclaimerConfig.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a SecurityDisclaimerConfig message.
+         * @function verify
+         * @memberof game.SecurityDisclaimerConfig
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SecurityDisclaimerConfig.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.enabled != null && $Object.hasOwnProperty.call(message, "enabled"))
+                if (typeof message.enabled !== "boolean")
+                    return "enabled: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a SecurityDisclaimerConfig message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.SecurityDisclaimerConfig
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.SecurityDisclaimerConfig} SecurityDisclaimerConfig
+         */
+        SecurityDisclaimerConfig.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.SecurityDisclaimerConfig)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.SecurityDisclaimerConfig: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.SecurityDisclaimerConfig();
+            if (object.enabled != null)
+                if (object.enabled)
+                    message.enabled = $Boolean(object.enabled);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a SecurityDisclaimerConfig message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.SecurityDisclaimerConfig
+         * @static
+         * @param {game.SecurityDisclaimerConfig} message SecurityDisclaimerConfig
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        SecurityDisclaimerConfig.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults)
+                object.enabled = false;
+            if (message.enabled != null && $Object.hasOwnProperty.call(message, "enabled"))
+                object.enabled = message.enabled;
+            return object;
+        };
+
+        /**
+         * Converts this SecurityDisclaimerConfig to JSON.
+         * @function toJSON
+         * @memberof game.SecurityDisclaimerConfig
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        SecurityDisclaimerConfig.prototype.toJSON = function() {
+            return SecurityDisclaimerConfig.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for SecurityDisclaimerConfig
+         * @function getTypeUrl
+         * @memberof game.SecurityDisclaimerConfig
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        SecurityDisclaimerConfig.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.SecurityDisclaimerConfig";
+        };
+
+        return SecurityDisclaimerConfig;
     })();
 
     game.DoublePair = (function() {
@@ -31701,7 +32153,7 @@ export const game = $root.game = (() => {
          * Properties of an AppConfig.
          * @typedef {Object} game.AppConfig.$Properties
          * @property {game.SiteConfig.$Properties|null} [site] AppConfig site
-         * @property {game.DailyAnnouncement.$Properties|null} [dailyAnnouncement] AppConfig dailyAnnouncement
+         * @property {game.AnnouncementBoard.$Properties|null} [announcementBoard] AppConfig announcementBoard
          * @property {Array.<game.GenderOption.$Properties>|null} [genders] AppConfig genders
          * @property {Array.<game.GenderFaction.$Properties>|null} [genderFactions] AppConfig genderFactions
          * @property {Array.<game.TitleSegment.$Properties>|null} [titles] AppConfig titles
@@ -31716,6 +32168,7 @@ export const game = $root.game = (() => {
          * @property {game.BotsConfig.$Properties|null} [bots] AppConfig bots
          * @property {Array.<game.GameConfig.$Properties>|null} [games] AppConfig games
          * @property {Array.<game.StringPair.$Properties>|null} [messages] AppConfig messages
+         * @property {game.SecurityDisclaimerConfig.$Properties|null} [securityDisclaimer] AppConfig securityDisclaimer
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -31764,12 +32217,12 @@ export const game = $root.game = (() => {
         AppConfig.prototype.site = null;
 
         /**
-         * AppConfig dailyAnnouncement.
-         * @member {game.DailyAnnouncement.$Properties|null|undefined} dailyAnnouncement
+         * AppConfig announcementBoard.
+         * @member {game.AnnouncementBoard.$Properties|null|undefined} announcementBoard
          * @memberof game.AppConfig
          * @instance
          */
-        AppConfig.prototype.dailyAnnouncement = null;
+        AppConfig.prototype.announcementBoard = null;
 
         /**
          * AppConfig genders.
@@ -31884,6 +32337,14 @@ export const game = $root.game = (() => {
         AppConfig.prototype.messages = $util.emptyArray;
 
         /**
+         * AppConfig securityDisclaimer.
+         * @member {game.SecurityDisclaimerConfig.$Properties|null|undefined} securityDisclaimer
+         * @memberof game.AppConfig
+         * @instance
+         */
+        AppConfig.prototype.securityDisclaimer = null;
+
+        /**
          * Creates a new AppConfig instance using the specified properties.
          * @function create
          * @memberof game.AppConfig
@@ -31917,8 +32378,8 @@ export const game = $root.game = (() => {
                 throw $Error("max depth exceeded");
             if (message.site != null && $Object.hasOwnProperty.call(message, "site"))
                 $root.game.SiteConfig.encode(message.site, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.dailyAnnouncement != null && $Object.hasOwnProperty.call(message, "dailyAnnouncement"))
-                $root.game.DailyAnnouncement.encode(message.dailyAnnouncement, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
+            if (message.announcementBoard != null && $Object.hasOwnProperty.call(message, "announcementBoard"))
+                $root.game.AnnouncementBoard.encode(message.announcementBoard, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.genders != null && message.genders.length)
                 for (let i = 0; i < message.genders.length; ++i)
                     $root.game.GenderOption.encode(message.genders[i], writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
@@ -31955,6 +32416,8 @@ export const game = $root.game = (() => {
             if (message.messages != null && message.messages.length)
                 for (let i = 0; i < message.messages.length; ++i)
                     $root.game.StringPair.encode(message.messages[i], writer.uint32(/* id 16, wireType 2 =*/130).fork(), _depth + 1).ldelim();
+            if (message.securityDisclaimer != null && $Object.hasOwnProperty.call(message, "securityDisclaimer"))
+                $root.game.SecurityDisclaimerConfig.encode(message.securityDisclaimer, writer.uint32(/* id 17, wireType 2 =*/138).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -32011,7 +32474,7 @@ export const game = $root.game = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.dailyAnnouncement = $root.game.DailyAnnouncement.decode(reader, reader.uint32(), $undefined, _depth + 1, message.dailyAnnouncement);
+                        message.announcementBoard = $root.game.AnnouncementBoard.decode(reader, reader.uint32(), $undefined, _depth + 1, message.announcementBoard);
                         continue;
                     }
                 case 3: {
@@ -32114,6 +32577,12 @@ export const game = $root.game = (() => {
                         message.messages.push($root.game.StringPair.decode(reader, reader.uint32(), $undefined, _depth + 1));
                         continue;
                     }
+                case 17: {
+                        if (wireType !== 2)
+                            break;
+                        message.securityDisclaimer = $root.game.SecurityDisclaimerConfig.decode(reader, reader.uint32(), $undefined, _depth + 1, message.securityDisclaimer);
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -32162,10 +32631,10 @@ export const game = $root.game = (() => {
                 if (error)
                     return "site." + error;
             }
-            if (message.dailyAnnouncement != null && $Object.hasOwnProperty.call(message, "dailyAnnouncement")) {
-                let error = $root.game.DailyAnnouncement.verify(message.dailyAnnouncement, _depth + 1);
+            if (message.announcementBoard != null && $Object.hasOwnProperty.call(message, "announcementBoard")) {
+                let error = $root.game.AnnouncementBoard.verify(message.announcementBoard, _depth + 1);
                 if (error)
-                    return "dailyAnnouncement." + error;
+                    return "announcementBoard." + error;
             }
             if (message.genders != null && $Object.hasOwnProperty.call(message, "genders")) {
                 if (!$Array.isArray(message.genders))
@@ -32267,6 +32736,11 @@ export const game = $root.game = (() => {
                         return "messages." + error;
                 }
             }
+            if (message.securityDisclaimer != null && $Object.hasOwnProperty.call(message, "securityDisclaimer")) {
+                let error = $root.game.SecurityDisclaimerConfig.verify(message.securityDisclaimer, _depth + 1);
+                if (error)
+                    return "securityDisclaimer." + error;
+            }
             return null;
         };
 
@@ -32293,10 +32767,10 @@ export const game = $root.game = (() => {
                     throw $TypeError(".game.AppConfig.site: object expected");
                 message.site = $root.game.SiteConfig.fromObject(object.site, _depth + 1);
             }
-            if (object.dailyAnnouncement != null) {
-                if (!$util.isObject(object.dailyAnnouncement))
-                    throw $TypeError(".game.AppConfig.dailyAnnouncement: object expected");
-                message.dailyAnnouncement = $root.game.DailyAnnouncement.fromObject(object.dailyAnnouncement, _depth + 1);
+            if (object.announcementBoard != null) {
+                if (!$util.isObject(object.announcementBoard))
+                    throw $TypeError(".game.AppConfig.announcementBoard: object expected");
+                message.announcementBoard = $root.game.AnnouncementBoard.fromObject(object.announcementBoard, _depth + 1);
             }
             if (object.genders) {
                 if (!$Array.isArray(object.genders))
@@ -32405,6 +32879,11 @@ export const game = $root.game = (() => {
                     message.messages[i] = $root.game.StringPair.fromObject(object.messages[i], _depth + 1);
                 }
             }
+            if (object.securityDisclaimer != null) {
+                if (!$util.isObject(object.securityDisclaimer))
+                    throw $TypeError(".game.AppConfig.securityDisclaimer: object expected");
+                message.securityDisclaimer = $root.game.SecurityDisclaimerConfig.fromObject(object.securityDisclaimer, _depth + 1);
+            }
             return message;
         };
 
@@ -32437,18 +32916,19 @@ export const game = $root.game = (() => {
             }
             if (options.defaults) {
                 object.site = null;
-                object.dailyAnnouncement = null;
+                object.announcementBoard = null;
                 object.playerPunishmentRoomNamePool = null;
                 object.accessControl = null;
                 object.nameWar = null;
                 object.giveaway = null;
                 object.extremeMode = null;
                 object.bots = null;
+                object.securityDisclaimer = null;
             }
             if (message.site != null && $Object.hasOwnProperty.call(message, "site"))
                 object.site = $root.game.SiteConfig.toObject(message.site, options, _depth + 1);
-            if (message.dailyAnnouncement != null && $Object.hasOwnProperty.call(message, "dailyAnnouncement"))
-                object.dailyAnnouncement = $root.game.DailyAnnouncement.toObject(message.dailyAnnouncement, options, _depth + 1);
+            if (message.announcementBoard != null && $Object.hasOwnProperty.call(message, "announcementBoard"))
+                object.announcementBoard = $root.game.AnnouncementBoard.toObject(message.announcementBoard, options, _depth + 1);
             if (message.genders && message.genders.length) {
                 object.genders = $Array(message.genders.length);
                 for (let j = 0; j < message.genders.length; ++j)
@@ -32501,6 +32981,8 @@ export const game = $root.game = (() => {
                 for (let j = 0; j < message.messages.length; ++j)
                     object.messages[j] = $root.game.StringPair.toObject(message.messages[j], options, _depth + 1);
             }
+            if (message.securityDisclaimer != null && $Object.hasOwnProperty.call(message, "securityDisclaimer"))
+                object.securityDisclaimer = $root.game.SecurityDisclaimerConfig.toObject(message.securityDisclaimer, options, _depth + 1);
             return object;
         };
 

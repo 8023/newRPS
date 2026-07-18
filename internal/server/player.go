@@ -245,10 +245,8 @@ func (s *Server) applyGender(player *PlayerState, genderID string) {
 }
 
 func (s *Server) publicPlayer(player *PlayerState) types.PublicPlayer {
-	if player.OthelloStats == (types.OthelloStats{}) && player.OthelloStats.Games == 0 {
-		// always ensure othelloStats exists (zero value is fine)
-	}
 	p := player.PublicPlayer
+	p.SyncTotalsFromGameStats()
 	return p
 }
 
@@ -358,7 +356,7 @@ func (s *Server) createPlayer(name, genderID, token string, identityPlayerID, id
 				Title:          title,
 				TitleSegmentID: titleSegID,
 			},
-			OthelloStats: freshOthelloStats(),
+			GameStats: freshGameStats(),
 		},
 		Token:      token,
 		RecentMoves: nil,

@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Crown, HeartHandshake, Moon, Sun, UserRound } from "lucide-react";
+import { Crown, Info, Moon, Sun, UserRound } from "lucide-react";
 import { socket } from "./main";
 import type { AppConfig, ChatMessage, LobbySnapshot, PublicPlayer, RoomSnapshot } from "./shared/types";
-import { dailyAnnouncementKey, leaderboardRefreshMs, tokenKey } from "./lib/constants";
+import { leaderboardRefreshMs, securityDisclaimerKey, tokenKey } from "./lib/constants";
 import {
   bumpWsAuthRetryCount, connectSocketWithSession, getWsAuthRetryCount, hasCachedLogin,
   joinIdentityPayload, resetWsAuthRetryCount, sessionTokenLooksValid
 } from "./lib/session";
-import { ask, dailyAnnouncementSeenKey, isAdminRoute } from "./lib/rpc";
+import { ask, isAdminRoute, todayKey } from "./lib/rpc";
 import {
   lobbyOnlineCount, mergeRoundHistory, normalizeConfig, normalizeLobbySnapshot,
   normalizeRoomSnapshot, normalizeRoundHistoryItem, playerSyncKey, replacePlayerInLobby, replacePlayerInRoom
@@ -16,7 +16,7 @@ import { refreshActiveChats } from "./lib/chatStore";
 import { fetchPushPreferences, notifyMentionIfHidden, notifySeatIfHidden, notifyTurnIfHidden, setPushMeId } from "./lib/pushNotify";
 import type { AnnouncementPayload, MeState } from "./lib/types";
 import {
-  AdminPanel, GlobalLeaderboardPanel, Lobby, Login, PlayerBadge, ProfilePanel, Room, SponsorPanel,
+  AboutPanel, AdminPanel, GlobalLeaderboardPanel, Lobby, Login, PlayerBadge, ProfilePanel, Room, SecurityDisclaimer,
   connectionStateText, phaseText
 } from "./ui/AppViews";
 
@@ -56,6 +56,8 @@ function checkRoomLevel1Notifications(old: RoomSnapshot | null, next: RoomSnapsh
     if (old.othello?.turn !== mySeat && next.othello.turn === mySeat) notifyTurnIfHidden();
   } else if (next.settings.gameId === "tictactoe" && next.tictactoe) {
     if (old.tictactoe?.turn !== mySeat && next.tictactoe.turn === mySeat) notifyTurnIfHidden();
+  } else if (next.settings.gameId === "gomoku" && next.gomoku) {
+    if (old.gomoku?.turn !== mySeat && next.gomoku.turn === mySeat) notifyTurnIfHidden();
   }
 }
 
@@ -70,10 +72,11 @@ export function App() {
   const [restoringSession, setRestoringSession] = useState(() => !isAdminRoute() && hasCachedLogin());
   const [profileOpen, setProfileOpen] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
-  const [sponsorOpen, setSponsorOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [announcement, setAnnouncement] = useState<AnnouncementPayload | null>(null);
-  const [dailyAnnouncementOpen, setDailyAnnouncementOpen] = useState(false);
+  // 每天每个浏览器只需确认一次；未过期就跳过声明页，直接走原来的连接流程。
+  const [disclaimerConfirmed, setDisclaimerConfirmed] = useState(() => localStorage.getItem(securityDisclaimerKey) === todayKey());
   const [connectionState, setConnectionState] = useState<"connected" | "connecting" | "disconnected">(() => socket.connected ? "connected" : "connecting");
   const [restoreKickPending, setRestoreKickPending] = useState<Record<string, unknown> | null>(null);
   const [restoreKickBusy, setRestoreKickBusy] = useState(false);
@@ -255,7 +258,9 @@ export function App() {
         if (!old) return old;
         const p = byId.get(old.player.id);
         if (!p) return old;
-        return { ...old, player: { ...old.player, ...p }, room: old.room ? replacePlayerInRoom(old.room, { ...old.player, ...p }) : old.room };
+        // LobbyPlayer 省略空 avatarUrl；合并时必须显式清空，否则旧头像会残留。
+        const merged = { ...old.player, ...p, avatarUrl: p.avatarUrl || undefined };
+        return { ...old, player: merged, room: old.room ? replacePlayerInRoom(old.room, merged) : old.room };
       });
     }
     socket.on("player:batch", (list: PublicPlayer[]) => applyPlayerPatches(Array.isArray(list) ? list : []));
@@ -376,13 +381,8 @@ export function App() {
   }, [notice]);
 
   useEffect(() => {
-    if (!config) return;
-    if (!config.dailyAnnouncement.enabled) {
-      setDailyAnnouncementOpen(false);
-      return;
-    }
-    const seenKey = dailyAnnouncementSeenKey(config);
-    setDailyAnnouncementOpen(localStorage.getItem(dailyAnnouncementKey) !== seenKey);
+    // 管理员把声明总开关关掉时，即使今天还没确认过也直接放行，不强行卡住。
+    if (config && !config.securityDisclaimer.enabled) setDisclaimerConfirmed(true);
   }, [config]);
 
   useEffect(() => {
@@ -391,10 +391,9 @@ export function App() {
     return () => window.clearTimeout(timer);
   }, [announcement]);
 
-  function closeDailyAnnouncement() {
-    if (!config) return;
-    localStorage.setItem(dailyAnnouncementKey, dailyAnnouncementSeenKey(config));
-    setDailyAnnouncementOpen(false);
+  function confirmDisclaimer() {
+    localStorage.setItem(securityDisclaimerKey, todayKey());
+    setDisclaimerConfirmed(true);
   }
 
   useEffect(() => {
@@ -430,6 +429,9 @@ export function App() {
     }
   }, [lobby, me]);
 
+  // 声明页先于"正在连接服务器"展示：WS 连接（上面的 useEffect）与声明页的强制停留同时进行，
+  // 不用先等连上服务器才弹声明，省掉两段等待叠加的时间。
+  if (!disclaimerConfirmed) return <SecurityDisclaimer onConfirm={confirmDisclaimer} />;
   if (!config) return <div className="loading">正在连接服务器...</div>;
   const leaderboardSource = leaderboardPlayersSnapshot.length ? leaderboardPlayersSnapshot : lobby?.players || [];
 
@@ -443,8 +445,8 @@ export function App() {
         </div>
         <div className="top-actions">
           {me && <PlayerBadge player={me.player} compact />}
-          <button className="soft-button top-sponsor-button" title="赞助支持" onClick={() => setSponsorOpen(true)}>
-            <HeartHandshake size={18} /> <span>赞助</span>
+          <button className="soft-button top-sponsor-button" title="关于" onClick={() => setAboutOpen(true)}>
+            <Info size={18} /> <span>关于</span>
           </button>
           {me && (
             <button className="soft-button top-profile-button" title="个人设置" onClick={() => setProfileOpen(true)}>
@@ -471,18 +473,6 @@ export function App() {
           <button className="icon-button" type="button" aria-label="关闭公告" onClick={() => setAnnouncement(null)}>×</button>
         </div>
       )}
-      {dailyAnnouncementOpen && (
-        <div className="daily-announcement-backdrop" role="dialog" aria-modal="true" aria-labelledby="daily-announcement-title">
-          <section className="daily-announcement-card">
-            <div>
-              <span className="daily-announcement-kicker">📢 每日公告</span>
-              <h2 id="daily-announcement-title">{config.dailyAnnouncement.title}</h2>
-              <p className="daily-announcement-content">{config.dailyAnnouncement.content}</p>
-            </div>
-            <button className="primary" type="button" onClick={closeDailyAnnouncement}>{config.dailyAnnouncement.buttonText}</button>
-          </section>
-        </div>
-      )}
       {view === "login" && restoringSession && !restoreKickPending && <section className="panel">正在恢复登录状态...</section>}
       {view === "login" && restoreKickPending && (
         <section className="login-card kick-confirm-card">
@@ -507,7 +497,7 @@ export function App() {
       {view === "room" && me && room && <Room config={config} room={room} me={me.player} onBack={() => setView("lobby")} onError={setNotice} />}
       {view === "admin" && lobby && <AdminPanel config={config} lobby={lobby} onBack={() => { if (window.location.hash === "#admin") window.location.hash = ""; setView(me ? "lobby" : "login"); }} onError={setNotice} />}
       {view === "room" && !room && <section className="panel">你暂时不在房间里。</section>}
-      {sponsorOpen && <SponsorPanel onClose={() => setSponsorOpen(false)} />}
+      {aboutOpen && <AboutPanel config={config} onClose={() => setAboutOpen(false)} />}
       {profileOpen && me && (
         <ProfilePanel
           config={config}

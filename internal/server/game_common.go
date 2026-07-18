@@ -27,22 +27,33 @@ func (s *Server) startTurnBasedPlaying(room *RoomState) {
 	room.Ready = map[types.SeatKey]bool{types.SeatA: false, types.SeatB: false}
 }
 
-// applySeatOutcome 按 result 更新人类玩家战绩、座位分与 seatStats；不处理排位分。
+// applySeatOutcome 按 result 更新人类玩家分游戏战绩、座位分与 seatStats；不处理排位分。
 func (s *Server) applySeatOutcome(room *RoomState, result types.RoundResult) (playerA, playerB *PlayerState) {
 	playerA = s.humanPlayerFromSeat(room, types.SeatA)
 	playerB = s.humanPlayerFromSeat(room, types.SeatB)
+	gameID := room.Settings.GameID
+	if gameID == "" {
+		gameID = types.GameRPS
+	}
 	if result == types.ResultDraw {
-		if playerA != nil {
-			playerA.Stats.Draws++
-		}
-		if playerB != nil {
-			playerB.Stats.Draws++
-		}
+		recordGameOutcome(playerA, gameID, "draw")
+		recordGameOutcome(playerB, gameID, "draw")
 		ssA := room.SeatStats[types.SeatA]
 		ssA.Draws++
 		room.SeatStats[types.SeatA] = ssA
 		ssB := room.SeatStats[types.SeatB]
 		ssB.Draws++
+		room.SeatStats[types.SeatB] = ssB
+		return
+	}
+	if result == types.ResultDoubleLoss {
+		recordGameOutcome(playerA, gameID, "loss")
+		recordGameOutcome(playerB, gameID, "loss")
+		ssA := room.SeatStats[types.SeatA]
+		ssA.Losses++
+		room.SeatStats[types.SeatA] = ssA
+		ssB := room.SeatStats[types.SeatB]
+		ssB.Losses++
 		room.SeatStats[types.SeatB] = ssB
 		return
 	}
@@ -52,12 +63,8 @@ func (s *Server) applySeatOutcome(room *RoomState, result types.RoundResult) (pl
 	loserSeat := oppositeSeat(types.SeatKey(result))
 	winner := s.humanPlayerFromSeat(room, types.SeatKey(result))
 	loser := s.humanPlayerFromSeat(room, loserSeat)
-	if winner != nil {
-		winner.Stats.Wins++
-	}
-	if loser != nil {
-		loser.Stats.Losses++
-	}
+	recordGameOutcome(winner, gameID, "win")
+	recordGameOutcome(loser, gameID, "loss")
 	room.Score[types.SeatKey(result)]++
 	room.SeatedScore[types.SeatKey(result)]++
 	ssW := room.SeatStats[types.SeatKey(result)]

@@ -6,9 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"strings"
-	"unicode"
-	"unicode/utf8"
+	"sort"
 
 	"github.com/doumiao/newRPS/internal/types"
 	"github.com/doumiao/newRPS/internal/wire"
@@ -203,6 +201,8 @@ func LobbyToProto(snap types.LobbySnapshot) (*wire.LobbySnapshot, error) {
 		}
 		out.Rooms = append(out.Rooms, &wire.LobbyRoomEntry{Id: id, Room: rr})
 	}
+	// map 遍历顺序是随机的，不排序的话大厅房间列表会在每次广播时乱跳；按 id 稳定排序。
+	sort.Slice(out.Rooms, func(i, j int) bool { return out.Rooms[i].Id < out.Rooms[j].Id })
 	for _, p := range snap.NormalLeaderboard {
 		pp, err := lobbyPlayerToProto(p)
 		if err != nil {
@@ -240,82 +240,7 @@ func lobbyPlayerToProto(p types.LobbyPlayer) (*wire.LobbyPlayer, error) {
 	if err := JSONCamelToProto(p, m); err != nil {
 		return nil, err
 	}
-	// pointer fields → has_ flags via re-marshal special
-	// JSONCamelToProto won't set has_* ; frontend uses zero as missing for most
-	// Fix optional presence from original pointers:
-	setLobbyPlayerPresence(m, p)
 	return m, nil
-}
-
-func setLobbyPlayerPresence(m *wire.LobbyPlayer, p types.LobbyPlayer) {
-	if p.DisconnectedAt != nil {
-		m.DisconnectedAt = *p.DisconnectedAt
-		m.HasDisconnectedAt = true
-	}
-	if p.DisconnectExpiresAt != nil {
-		m.DisconnectExpiresAt = *p.DisconnectExpiresAt
-		m.HasDisconnectExpiresAt = true
-	}
-	if p.NameWarEnabled != nil {
-		m.NameWarEnabled = *p.NameWarEnabled
-		m.HasNameWarEnabled = true
-	}
-	if p.NameWarPunished != nil {
-		m.NameWarPunished = *p.NameWarPunished
-		m.HasNameWarPunished = true
-	}
-	if p.NameWarAllowRename != nil {
-		m.NameWarAllowRename = *p.NameWarAllowRename
-		m.HasNameWarAllowRename = true
-	}
-	if p.NameWarRenameProtectedUntil != nil {
-		m.NameWarRenameProtectedUntil = *p.NameWarRenameProtectedUntil
-		m.HasNameWarRenameProtectedUntil = true
-	}
-	if p.GiveawayEnabled != nil {
-		m.GiveawayEnabled = *p.GiveawayEnabled
-		m.HasGiveawayEnabled = true
-	}
-	if p.GiveawayValue != nil {
-		m.GiveawayValue = *p.GiveawayValue
-		m.HasGiveawayValue = true
-	}
-	if p.GiveawayBoardExpiresAt != nil {
-		m.GiveawayBoardExpiresAt = *p.GiveawayBoardExpiresAt
-		m.HasGiveawayBoardExpiresAt = true
-	}
-	if p.GiveawayBoardLikes != nil {
-		m.GiveawayBoardLikes = int32(*p.GiveawayBoardLikes)
-		m.HasGiveawayBoardLikes = true
-	}
-	if p.GiveawayBoardDislikes != nil {
-		m.GiveawayBoardDislikes = int32(*p.GiveawayBoardDislikes)
-		m.HasGiveawayBoardDislikes = true
-	}
-	if p.RankMultiplierUnlocked != nil {
-		m.RankMultiplierUnlocked = *p.RankMultiplierUnlocked
-		m.HasRankMultiplierUnlocked = true
-	}
-	if p.ExtremeModeEnabled != nil {
-		m.ExtremeModeEnabled = *p.ExtremeModeEnabled
-		m.HasExtremeModeEnabled = true
-	}
-	if p.ExtremeWinStreak != nil {
-		m.ExtremeWinStreak = int32(*p.ExtremeWinStreak)
-		m.HasExtremeWinStreak = true
-	}
-	if p.ExtremeForceClosed != nil {
-		m.ExtremeForceClosed = *p.ExtremeForceClosed
-		m.HasExtremeForceClosed = true
-	}
-	if p.ExtremeForceClosedAt != nil {
-		m.ExtremeForceClosedAt = *p.ExtremeForceClosedAt
-		m.HasExtremeForceClosedAt = true
-	}
-	if p.ExtremeRenameProtectedUntil != nil {
-		m.ExtremeRenameProtectedUntil = *p.ExtremeRenameProtectedUntil
-		m.HasExtremeRenameProtectedUntil = true
-	}
 }
 
 func anyPlayerToProto(v any) (*wire.PublicPlayer, error) {
@@ -352,144 +277,7 @@ func publicPlayerToProto(p types.PublicPlayer) (*wire.PublicPlayer, error) {
 	if err := JSONCamelToProto(p, m); err != nil {
 		return nil, err
 	}
-	setPublicPlayerPresence(m, p)
 	return m, nil
-}
-
-func setPublicPlayerPresence(m *wire.PublicPlayer, p types.PublicPlayer) {
-	// reuse pointer copies similar to lobby — comprehensive
-	if p.DisconnectedAt != nil {
-		m.DisconnectedAt = *p.DisconnectedAt
-		m.HasDisconnectedAt = true
-	}
-	if p.DisconnectExpiresAt != nil {
-		m.DisconnectExpiresAt = *p.DisconnectExpiresAt
-		m.HasDisconnectExpiresAt = true
-	}
-	if p.ProfileUpdatedAt != nil {
-		m.ProfileUpdatedAt = *p.ProfileUpdatedAt
-		m.HasProfileUpdatedAt = true
-	}
-	if p.NameWarEnabled != nil {
-		m.NameWarEnabled = *p.NameWarEnabled
-		m.HasNameWarEnabled = true
-	}
-	if p.NameWarToggledAt != nil {
-		m.NameWarToggledAt = *p.NameWarToggledAt
-		m.HasNameWarToggledAt = true
-	}
-	if p.NameWarPunished != nil {
-		m.NameWarPunished = *p.NameWarPunished
-		m.HasNameWarPunished = true
-	}
-	if p.NameWarAllowRename != nil {
-		m.NameWarAllowRename = *p.NameWarAllowRename
-		m.HasNameWarAllowRename = true
-	}
-	if p.NameWarRenameProtectedUntil != nil {
-		m.NameWarRenameProtectedUntil = *p.NameWarRenameProtectedUntil
-		m.HasNameWarRenameProtectedUntil = true
-	}
-	if p.NameWarRenameWindowStartedAt != nil {
-		m.NameWarRenameWindowStartedAt = *p.NameWarRenameWindowStartedAt
-		m.HasNameWarRenameWindowStartedAt = true
-	}
-	if p.NameWarRenameCount != nil {
-		m.NameWarRenameCount = int32(*p.NameWarRenameCount)
-		m.HasNameWarRenameCount = true
-	}
-	if p.GiveawayEnabled != nil {
-		m.GiveawayEnabled = *p.GiveawayEnabled
-		m.HasGiveawayEnabled = true
-	}
-	if p.GiveawayValue != nil {
-		m.GiveawayValue = *p.GiveawayValue
-		m.HasGiveawayValue = true
-	}
-	if p.GiveawayClicks != nil {
-		m.GiveawayClicks = int32(*p.GiveawayClicks)
-		m.HasGiveawayClicks = true
-	}
-	if p.GiveawayBoardSubmittedAt != nil {
-		m.GiveawayBoardSubmittedAt = *p.GiveawayBoardSubmittedAt
-		m.HasGiveawayBoardSubmittedAt = true
-	}
-	if p.GiveawayBoardExpiresAt != nil {
-		m.GiveawayBoardExpiresAt = *p.GiveawayBoardExpiresAt
-		m.HasGiveawayBoardExpiresAt = true
-	}
-	if p.GiveawayBoardLikes != nil {
-		m.GiveawayBoardLikes = int32(*p.GiveawayBoardLikes)
-		m.HasGiveawayBoardLikes = true
-	}
-	if p.GiveawayBoardDislikes != nil {
-		m.GiveawayBoardDislikes = int32(*p.GiveawayBoardDislikes)
-		m.HasGiveawayBoardDislikes = true
-	}
-	if p.GiveawayBoardLikesThisHour != nil {
-		m.GiveawayBoardLikesThisHour = int32(*p.GiveawayBoardLikesThisHour)
-		m.HasGiveawayBoardLikesThisHour = true
-	}
-	if p.GiveawayBoardLikeWindowStartedAt != nil {
-		m.GiveawayBoardLikeWindowStartedAt = *p.GiveawayBoardLikeWindowStartedAt
-		m.HasGiveawayBoardLikeWindowStartedAt = true
-	}
-	if p.GiveawayVoteWindowStartedAt != nil {
-		m.GiveawayVoteWindowStartedAt = *p.GiveawayVoteWindowStartedAt
-		m.HasGiveawayVoteWindowStartedAt = true
-	}
-	if p.GiveawayVoteCount != nil {
-		m.GiveawayVoteCount = int32(*p.GiveawayVoteCount)
-		m.HasGiveawayVoteCount = true
-	}
-	if p.GiveawayVoteLikesThisHour != nil {
-		m.GiveawayVoteLikesThisHour = int32(*p.GiveawayVoteLikesThisHour)
-		m.HasGiveawayVoteLikesThisHour = true
-	}
-	if p.GiveawayVoteDislikesThisHour != nil {
-		m.GiveawayVoteDislikesThisHour = int32(*p.GiveawayVoteDislikesThisHour)
-		m.HasGiveawayVoteDislikesThisHour = true
-	}
-	if p.RankMultiplierUnlocked != nil {
-		m.RankMultiplierUnlocked = *p.RankMultiplierUnlocked
-		m.HasRankMultiplierUnlocked = true
-	}
-	if p.ExtremeModeEnabled != nil {
-		m.ExtremeModeEnabled = *p.ExtremeModeEnabled
-		m.HasExtremeModeEnabled = true
-	}
-	if p.ExtremeModeToggledAt != nil {
-		m.ExtremeModeToggledAt = *p.ExtremeModeToggledAt
-		m.HasExtremeModeToggledAt = true
-	}
-	if p.ExtremeModeCooldownUntil != nil {
-		m.ExtremeModeCooldownUntil = *p.ExtremeModeCooldownUntil
-		m.HasExtremeModeCooldownUntil = true
-	}
-	if p.ExtremeWinStreak != nil {
-		m.ExtremeWinStreak = int32(*p.ExtremeWinStreak)
-		m.HasExtremeWinStreak = true
-	}
-	if p.ExtremeLastDecayHour != nil {
-		m.ExtremeLastDecayHour = *p.ExtremeLastDecayHour
-		m.HasExtremeLastDecayHour = true
-	}
-	if p.ExtremeForceClosed != nil {
-		m.ExtremeForceClosed = *p.ExtremeForceClosed
-		m.HasExtremeForceClosed = true
-	}
-	if p.ExtremeForceClosedAt != nil {
-		m.ExtremeForceClosedAt = *p.ExtremeForceClosedAt
-		m.HasExtremeForceClosedAt = true
-	}
-	if p.ExtremeRenameProtectedUntil != nil {
-		m.ExtremeRenameProtectedUntil = *p.ExtremeRenameProtectedUntil
-		m.HasExtremeRenameProtectedUntil = true
-	}
-	if p.IsAdmin != nil {
-		m.IsAdmin = *p.IsAdmin
-		m.HasIsAdmin = true
-	}
 }
 
 func chatToProto(c types.ChatMessage) (*wire.ChatMessage, error) {
@@ -503,10 +291,6 @@ func chatToProto(c types.ChatMessage) (*wire.ChatMessage, error) {
 			return nil, err
 		}
 		m.AuthorPlayer = ap
-	}
-	if c.ExpiresAt != nil {
-		m.ExpiresAt = *c.ExpiresAt
-		m.HasExpiresAt = true
 	}
 	return m, nil
 }
@@ -600,14 +384,12 @@ func RoomToProto(snap types.RoomSnapshot) (*wire.RoomSnapshot, error) {
 		Id: snap.ID, Code: snap.Code, UpdatedAt: snap.UpdatedAt,
 		Status: snap.Status, Phase: string(snap.Phase), ResultText: snap.ResultText,
 		PunishedPlayerIds: snap.PunishedPlayerIDs, RoundHistoryTotal: int32(snap.RoundHistoryTotal),
+		ForgiveAdvantageTargetId:      snap.ForgiveAdvantageTargetID,
+		ForgiveAdvantageBeneficiaryId: snap.ForgiveAdvantageBeneficiaryID,
 	}
 	rs := &wire.RoomSettings{}
 	if err := JSONCamelToProto(snap.Settings, rs); err != nil {
 		return nil, err
-	}
-	if snap.Settings.AllowProofImage != nil {
-		rs.AllowProofImage = *snap.Settings.AllowProofImage
-		rs.HasAllowProofImage = true
 	}
 	rs.GameId = string(snap.Settings.GameID)
 	rs.BotDifficulty = string(snap.Settings.BotDifficulty)
@@ -661,10 +443,6 @@ func RoomToProto(snap types.RoomSnapshot) (*wire.RoomSnapshot, error) {
 	for _, pr := range snap.Proofs {
 		pp := &wire.PunishmentProof{}
 		_ = JSONCamelToProto(pr, pp)
-		if pr.ReviewedAt != nil {
-			pp.ReviewedAt = *pr.ReviewedAt
-			pp.HasReviewedAt = true
-		}
 		m.Proofs = append(m.Proofs, pp)
 	}
 	for _, h := range snap.RoundHistory {
@@ -701,6 +479,13 @@ func RoomToProto(snap types.RoomSnapshot) (*wire.RoomSnapshot, error) {
 			return nil, err
 		}
 		m.LiarsDice = l
+	}
+	if snap.Gomoku != nil {
+		g, err := gomokuToProto(snap.Gomoku)
+		if err != nil {
+			return nil, err
+		}
+		m.Gomoku = g
 	}
 	return m, nil
 }
@@ -804,18 +589,6 @@ func historyToProto(h types.RoundHistoryItem) (*wire.RoundHistoryItem, error) {
 	m.MoveB = string(h.MoveB)
 	m.Result = string(h.Result)
 	m.GameId = string(h.GameID)
-	if h.Stake != nil {
-		m.Stake = int32(*h.Stake)
-		m.HasStake = true
-	}
-	if h.RankMultiplier != nil {
-		m.RankMultiplier = int32(*h.RankMultiplier)
-		m.HasRankMultiplier = true
-	}
-	if h.EffectiveStake != nil {
-		m.EffectiveStake = int32(*h.EffectiveStake)
-		m.HasEffectiveStake = true
-	}
 	for k, v := range h.LiarsDiceHands {
 		m.LiarsDiceHands = append(m.LiarsDiceHands, &wire.LiarsDiceHandsPair{Key: k, Value: int32List(v)})
 	}
@@ -891,6 +664,49 @@ func tictactoeToProto(s *types.TicTacToeState) (*wire.TicTacToeState, error) {
 		m.GiveawayPrompt = &wire.TicTacToeGiveawayPrompt{
 			Seat: string(s.GiveawayPrompt.Seat), Forced: s.GiveawayPrompt.Forced,
 			StartedAt: s.GiveawayPrompt.StartedAt, ExpiresAt: s.GiveawayPrompt.ExpiresAt,
+		}
+	}
+	return m, nil
+}
+
+func gomokuToProto(s *types.GomokuState) (*wire.GomokuState, error) {
+	m := &wire.GomokuState{
+		Turn: string(s.Turn), BlackSeat: string(s.BlackSeat), MoveCount: int32(s.MoveCount),
+		Ended: s.Ended, Winner: string(s.Winner),
+	}
+	for _, row := range s.Board {
+		br := &wire.BoardRow{}
+		for _, cell := range row {
+			if cell == nil {
+				br.Cells = append(br.Cells, "")
+			} else {
+				br.Cells = append(br.Cells, string(*cell))
+			}
+		}
+		m.Board = append(m.Board, br)
+	}
+	for _, p := range s.Moves {
+		m.Moves = append(m.Moves, &wire.Pos{Row: int32(p.Row), Col: int32(p.Col)})
+	}
+	for _, p := range s.WinningLine {
+		m.WinningLine = append(m.WinningLine, &wire.Pos{Row: int32(p.Row), Col: int32(p.Col)})
+	}
+	for k, v := range s.RankedDelta {
+		m.RankedDelta = append(m.RankedDelta, &wire.IntPair{Key: string(k), Value: int32(v)})
+	}
+	for k, v := range s.UndoCount {
+		m.UndoCount = append(m.UndoCount, &wire.IntPair{Key: string(k), Value: int32(v)})
+	}
+	if s.UndoRequest != nil {
+		m.UndoRequest = &wire.GomokuUndoRequest{
+			FromSeat: string(s.UndoRequest.FromSeat), ToSeat: string(s.UndoRequest.ToSeat),
+			CreatedAt: s.UndoRequest.CreatedAt, ExpiresAt: s.UndoRequest.ExpiresAt,
+		}
+	}
+	if s.ResignRequest != nil {
+		m.ResignRequest = &wire.GomokuResignRequest{
+			FromSeat: string(s.ResignRequest.FromSeat), ToSeat: string(s.ResignRequest.ToSeat),
+			CreatedAt: s.ResignRequest.CreatedAt,
 		}
 	}
 	return m, nil
@@ -1057,91 +873,114 @@ func LobbyProtoToFront(pb *wire.LobbySnapshot) (map[string]any, error) {
 }
 
 func flattenPlayerPresence(p any) any {
-	return resolvePresenceFlags(p)
+	return fillPlayerDefaults(p)
 }
 
-// businessHasKeys：名字像 presence 但本身是业务布尔（无 companion）。
-var businessHasKeys = map[string]struct{}{
-	"hasPassword": {},
+// playerBoolFields/playerNumFields：对应 Go domain PublicPlayer/LobbyPlayer 里的 *T 指针字段
+// （允许真正的"从未设置"，即 nil）。前端从不区分"从未设置"和"设置为 false/0"（全部只做真值
+// 判断），而 protojson EmitUnpopulated:false 又会把 false/0 连 key 一起丢掉——按零值统一补齐，
+// 与前端 wire.ts 的 PLAYER_BOOL_FIELDS/PLAYER_NUM_FIELDS 保持一致。
+var playerBoolFields = []string{
+	"nameWarEnabled", "nameWarPunished", "nameWarAllowRename",
+	"giveawayEnabled", "rankMultiplierUnlocked", "extremeModeEnabled",
+	"extremeForceClosed", "isAdmin",
+}
+var playerNumFields = []string{
+	"disconnectedAt", "disconnectExpiresAt", "profileUpdatedAt",
+	"nameWarToggledAt", "nameWarRenameProtectedUntil", "nameWarRenameWindowStartedAt", "nameWarRenameCount",
+	"giveawayValue", "giveawayClicks", "giveawayBoardSubmittedAt", "giveawayBoardExpiresAt",
+	"giveawayBoardLikes", "giveawayBoardDislikes", "giveawayBoardLikesThisHour", "giveawayBoardLikeWindowStartedAt",
+	"giveawayVoteWindowStartedAt", "giveawayVoteCount", "giveawayVoteLikesThisHour", "giveawayVoteDislikesThisHour",
+	"extremeModeToggledAt", "extremeModeCooldownUntil", "extremeWinStreak", "extremeLastDecayHour",
+	"extremeForceClosedAt", "extremeRenameProtectedUntil",
 }
 
-// boolPresenceCompanions：presence 配对中 companion 为 bool。
-// EmitUnpopulated:false 会丢掉 false，只剩 hasX=true —— 必须还原 false（如 allowProofImage）。
-var boolPresenceCompanions = map[string]struct{}{
-	"nameWarEnabled":         {},
-	"nameWarPunished":        {},
-	"nameWarAllowRename":     {},
-	"giveawayEnabled":        {},
-	"rankMultiplierUnlocked": {},
-	"extremeModeEnabled":     {},
-	"extremeForceClosed":     {},
-	"isAdmin":                {},
-	"allowProofImage":        {},
-}
-
-// resolvePresenceFlags 对齐前端 wire.stripHasFlags：
-// - 保留业务 hasPassword
-// - 丢弃 hasX presence；若 hasX=true 且 companion 缺失则还原 false/0
-func resolvePresenceFlags(v any) any {
-	switch t := v.(type) {
-	case map[string]any:
-		skip := map[string]struct{}{}
-		restore := map[string]any{}
-		for k, val := range t {
-			b, ok := val.(bool)
-			if !ok || !isPresenceKey(k) {
-				continue
-			}
-			if _, biz := businessHasKeys[k]; biz {
-				continue
-			}
-			companion := presenceCompanion(k)
-			skip[k] = struct{}{}
-			if _, exists := t[companion]; exists {
-				continue
-			}
-			if b {
-				if _, isBool := boolPresenceCompanions[companion]; isBool {
-					restore[companion] = false
-				} else {
-					restore[companion] = float64(0) // JSON numbers
-				}
-			}
-		}
-		out := make(map[string]any, len(t)+len(restore))
-		for k, val := range restore {
-			out[k] = val
-		}
-		for k, val := range t {
-			if _, drop := skip[k]; drop {
-				continue
-			}
-			out[k] = resolvePresenceFlags(val)
-		}
-		return out
-	case []any:
-		out := make([]any, len(t))
-		for i := range t {
-			out[i] = resolvePresenceFlags(t[i])
-		}
-		return out
-	default:
-		return v
+func fillPlayerDefaults(p any) any {
+	pm, ok := p.(map[string]any)
+	if !ok {
+		return p
 	}
-}
-
-func isPresenceKey(k string) bool {
-	if !strings.HasPrefix(k, "has") || len(k) < 4 {
-		return false
+	if _, isBot := pm["isBot"]; isBot {
+		return pm
 	}
-	r, _ := utf8.DecodeRuneInString(k[3:])
-	return unicode.IsUpper(r)
+	for _, k := range playerBoolFields {
+		if _, exists := pm[k]; !exists {
+			pm[k] = false
+		}
+	}
+	for _, k := range playerNumFields {
+		if _, exists := pm[k]; !exists {
+			pm[k] = float64(0)
+		}
+	}
+	return pm
 }
 
-func presenceCompanion(hasKey string) string {
-	rest := hasKey[3:]
-	r, size := utf8.DecodeRuneInString(rest)
-	return string(unicode.ToLower(r)) + rest[size:]
+// allowProofImage 对应 *bool 指针，但 handlers_room.go 建房时已把 nil 归一化成
+// true/false 的具体值，线上真正存在的房间永远不会是"未设置"——false 就是它的零值，
+// 缺省按 false 补齐即可无损还原（true 是非零值，protojson 永远不会丢，不受影响）。
+func fillRoomSettingsDefaults(s any) any {
+	sm, ok := s.(map[string]any)
+	if !ok {
+		return s
+	}
+	if _, exists := sm["allowProofImage"]; !exists {
+		sm["allowProofImage"] = false
+	}
+	return sm
+}
+
+// reviewedAt 对应 *int64 指针，缺省即"尚未审核"。
+func fillReviewedAtDefault(p any) any {
+	pm, ok := p.(map[string]any)
+	if !ok {
+		return p
+	}
+	if _, exists := pm["reviewedAt"]; !exists {
+		pm["reviewedAt"] = float64(0)
+	}
+	return pm
+}
+
+// backgroundOpacity 对应 *float64 指针，缺省按 0 补齐。
+func fillBackgroundOpacityDefault(t any) any {
+	tm, ok := t.(map[string]any)
+	if !ok {
+		return t
+	}
+	if _, exists := tm["backgroundOpacity"]; !exists {
+		tm["backgroundOpacity"] = float64(0)
+	}
+	return tm
+}
+
+// stake/rankMultiplier/effectiveStake 对应 *int 指针，缺省即"非排位/未生效"，按 0 补齐；
+// 并顺带补齐嵌套的 proofs（HistoryProof.reviewedAt）与 punishmentTasks（backgroundOpacity）。
+func fillRoundHistoryItemDefaults(item any) any {
+	im, ok := item.(map[string]any)
+	if !ok {
+		return item
+	}
+	if _, exists := im["stake"]; !exists {
+		im["stake"] = float64(0)
+	}
+	if _, exists := im["rankMultiplier"]; !exists {
+		im["rankMultiplier"] = float64(0)
+	}
+	if _, exists := im["effectiveStake"]; !exists {
+		im["effectiveStake"] = float64(0)
+	}
+	if proofs, ok := im["proofs"].([]any); ok {
+		for i, p := range proofs {
+			proofs[i] = fillReviewedAtDefault(p)
+		}
+	}
+	if tasks, ok := im["punishmentTasks"].([]any); ok {
+		for i, t := range tasks {
+			tasks[i] = fillBackgroundOpacityDefault(t)
+		}
+	}
+	return im
 }
 
 func expandLobbyRoom(r any) any {
@@ -1160,16 +999,15 @@ func expandLobbyRoom(r any) any {
 			val := im["value"]
 			if vm, ok := val.(map[string]any); ok {
 				if vm["player"] != nil {
-					obj[key] = map[string]any{"player": resolvePresenceFlags(vm["player"])}
+					obj[key] = map[string]any{"player": fillPlayerDefaults(vm["player"])}
 				} else if vm["bot"] != nil {
-					obj[key] = resolvePresenceFlags(vm["bot"])
+					obj[key] = vm["bot"]
 				}
 			}
 		}
 		rm["versus"] = obj
 	}
-	// hasPassword 是业务字段会保留；其它 has* 若出现则按规则处理
-	return resolvePresenceFlags(rm)
+	return rm
 }
 
 func fixConfigMaps(cfg map[string]any) {
@@ -1209,7 +1047,13 @@ func fixConfigMaps(cfg map[string]any) {
 						continue
 					}
 					k, _ := tm["key"].(string)
-					obj[k] = tm["value"]
+					// value 合法取值含 0（如某难度掉分率为 0%），EmitUnpopulated:false 会把它连 key
+					// 一起丢掉，tm["value"] 缺失时 Go 侧读到 nil——补回 0，否则后台数字框显示空白。
+					v := tm["value"]
+					if v == nil {
+						v = float64(0)
+					}
+					obj[k] = v
 				}
 				em[field] = obj
 			}
@@ -1250,20 +1094,54 @@ func RoomProtoToFront(pb *wire.RoomSnapshot) (map[string]any, error) {
 		l["revealedHands"] = pairsToIntListMap(l["revealedHands"])
 		m["liarsDice"] = l
 	}
+	if g, ok := m["gomoku"].(map[string]any); ok {
+		g["board"] = boardRowsToMatrix(g["board"])
+		g["rankedDelta"] = pairsToIntMap(g["rankedDelta"])
+		g["undoCount"] = pairsToIntMap(g["undoCount"])
+		m["gomoku"] = g
+	}
 	if hist, ok := m["roundHistory"].([]any); ok {
-		for _, item := range hist {
+		for i, item := range hist {
 			im, ok := item.(map[string]any)
 			if !ok {
 				continue
 			}
 			im["liarsDiceHands"] = pairsToIntListMap(im["liarsDiceHands"])
 			im["liarsDiceNames"] = pairsToStringMap(im["liarsDiceNames"])
+			hist[i] = fillRoundHistoryItemDefaults(im)
 		}
 	}
-	// 与前端 stripHasFlags 对齐（allowProofImage:false / presence zero 等）
-	resolved, _ := resolvePresenceFlags(m).(map[string]any)
-	if resolved != nil {
-		return resolved, nil
+	// 与前端 wire.materializeRoom 对齐（allowProofImage:false / presence zero 等）
+	m["settings"] = fillRoomSettingsDefaults(m["settings"])
+	if seats, ok := m["seats"].(map[string]any); ok {
+		for k, v := range seats {
+			seats[k] = fillPlayerDefaults(v)
+		}
+	}
+	if spectators, ok := m["spectators"].([]any); ok {
+		for i, p := range spectators {
+			spectators[i] = fillPlayerDefaults(p)
+		}
+	}
+	if proofs, ok := m["proofs"].([]any); ok {
+		for i, p := range proofs {
+			proofs[i] = fillReviewedAtDefault(p)
+		}
+	}
+	if chat, ok := m["chat"].([]any); ok {
+		for i, c := range chat {
+			cm, ok := c.(map[string]any)
+			if !ok {
+				continue
+			}
+			if _, exists := cm["expiresAt"]; !exists {
+				cm["expiresAt"] = float64(0)
+			}
+			if ap, ok := cm["authorPlayer"]; ok {
+				cm["authorPlayer"] = fillPlayerDefaults(ap)
+			}
+			chat[i] = cm
+		}
 	}
 	return m, nil
 }
@@ -1673,13 +1551,12 @@ func StateDocToFront(doc *wire.StateDocument) (any, error) {
 	}
 }
 
-// NormalizeFrontTree 对齐前端 wire.materialize*：
-// - presence has* 还原 zero / 剥离（与 stripHasFlags 一致）
+// NormalizeFrontTree 对齐前端 wire.materialize*（presence 零值补齐已在 LobbyProtoToFront/
+// RoomProtoToFront 里做过，这里只负责剩下的）：
 // - int 0 不得丢失（legalMoves.row/col）
 // - 棋盘 pad 完整尺寸
 // - nil 数组 → []
 func NormalizeFrontTree(v any) any {
-	v = resolvePresenceFlags(v)
 	switch t := v.(type) {
 	case map[string]any:
 		out := make(map[string]any, len(t))

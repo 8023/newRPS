@@ -1,14 +1,8 @@
-import type { AppConfig } from "../shared/types";
 import { socket } from "../ws";
 
 export function todayKey() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-}
-
-export function dailyAnnouncementSeenKey(config: AppConfig) {
-  const daily = config.dailyAnnouncement;
-  return `${todayKey()}|${daily.version}|${daily.title}|${daily.content}`;
 }
 
 export function isAdminRoute() {

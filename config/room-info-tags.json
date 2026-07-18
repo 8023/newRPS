@@ -11,6 +11,12 @@
     "borderColor": "#ffbf75",
     "label": "极限排位"
   },
+  "gameGomoku": {
+    "textColor": "#3d4a29",
+    "backgroundColor": "#eaf3d8",
+    "borderColor": "#b7cf8a",
+    "label": "五子棋"
+  },
   "gameLiarsDice": {
     "textColor": "#7a4a1e",
     "backgroundColor": "#fdecd2",

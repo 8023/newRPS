@@ -141,6 +141,76 @@ func TestStartLiarsDiceRoundRollsFreshHandsAndPicksTurn(t *testing.T) {
 	}
 }
 
+func TestShuffleStringsIsPermutation(t *testing.T) {
+	in := []string{"a", "b", "c", "d"}
+	out := shuffleStrings(in)
+	if len(out) != len(in) {
+		t.Fatalf("len = %d, want %d", len(out), len(in))
+	}
+	// 入参不被修改
+	if stringsJoin(in) != "a,b,c,d" {
+		t.Fatalf("input mutated: %v", in)
+	}
+	seen := map[string]int{}
+	for _, id := range out {
+		seen[id]++
+	}
+	for _, id := range in {
+		if seen[id] != 1 {
+			t.Fatalf("shuffle result %v is not a permutation of %v", out, in)
+		}
+	}
+}
+
+func TestStartLiarsDiceRoundRandomizesOrder(t *testing.T) {
+	s := newLiarsDiceTestServer(t)
+	// 足够多的玩家与重复次数，几乎必会观察到至少一次与初始顺序不同的排列
+	ids := []string{"a", "b", "c", "d", "e"}
+	for _, id := range ids {
+		s.players[id] = newLiarsDiceTestPlayer(id, id)
+	}
+	original := append([]string{}, ids...)
+	sawDifferent := false
+	for i := 0; i < 40; i++ {
+		room := newLiarsDiceTestRoom("r1", 2, 8)
+		room.LiarsDice.ParticipantIDs = append([]string{}, original...)
+		s.rooms[room.ID] = room
+		s.startLiarsDiceRound(room)
+		got := room.LiarsDice.ParticipantIDs
+		if len(got) != len(original) {
+			t.Fatalf("len participants = %d, want %d", len(got), len(original))
+		}
+		// 集合不变
+		seen := map[string]bool{}
+		for _, id := range got {
+			seen[id] = true
+		}
+		for _, id := range original {
+			if !seen[id] {
+				t.Fatalf("missing participant %s after shuffle: %v", id, got)
+			}
+		}
+		if stringsJoin(got) != stringsJoin(original) {
+			sawDifferent = true
+			break
+		}
+	}
+	if !sawDifferent {
+		t.Fatal("expected at least one shuffled order different from join order")
+	}
+}
+
+func stringsJoin(list []string) string {
+	if len(list) == 0 {
+		return ""
+	}
+	out := list[0]
+	for _, s := range list[1:] {
+		out += "," + s
+	}
+	return out
+}
+
 // TestResolveLiarsDiceChallenge_BidderWins：手动摆好骰子让实际数量 >= 叫点数，验证叫点者赢、
 // 挑战者输，排位分正确结算，历史记录字段完整。
 func TestResolveLiarsDiceChallenge_BidderWins(t *testing.T) {

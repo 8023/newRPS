@@ -1,0 +1,525 @@
+package server
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/doumiao/newRPS/internal/types"
+)
+
+const (
+	gomokuBoardSize  = 15
+	gomokuWinLength  = 5
+	gomokuUndoLimit  = 3
+	gomokuUndoWindow = 30 * time.Second
+)
+
+func initialGomokuBoard() [][]*types.GomokuCell {
+	board := make([][]*types.GomokuCell, gomokuBoardSize)
+	for i := 0; i < gomokuBoardSize; i++ {
+		board[i] = make([]*types.GomokuCell, gomokuBoardSize)
+	}
+	return board
+}
+
+func freshGomokuState(blackSeat types.SeatKey) *types.GomokuState {
+	return &types.GomokuState{
+		Board:       initialGomokuBoard(),
+		Turn:        blackSeat,
+		BlackSeat:   blackSeat,
+		MoveCount:   0,
+		Moves:       []types.Pos{},
+		RankedDelta: map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0},
+		UndoCount:   map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0},
+	}
+}
+
+func gomokuMarkForSeat(state *types.GomokuState, seat types.SeatKey) types.GomokuCell {
+	if state.BlackSeat == seat {
+		return types.GomokuBlack
+	}
+	return types.GomokuWhite
+}
+
+func gomokuSeatForMark(state *types.GomokuState, mark types.GomokuCell) types.SeatKey {
+	if mark == types.GomokuBlack {
+		return state.BlackSeat
+	}
+	return oppositeSeat(state.BlackSeat)
+}
+
+var gomokuDirections = [4][2]int{{0, 1}, {1, 0}, {1, 1}, {1, -1}}
+
+// gomokuWinningLine 从刚落子的位置沿四个方向扫描，找到 >=5 连子即返回整条连线。
+func gomokuWinningLine(board [][]*types.GomokuCell, row, col int) []types.Pos {
+	cell := board[row][col]
+	if cell == nil {
+		return nil
+	}
+	for _, dir := range gomokuDirections {
+		var forward []types.Pos
+		r, c := row+dir[0], col+dir[1]
+		for r >= 0 && r < gomokuBoardSize && c >= 0 && c < gomokuBoardSize && board[r][c] != nil && *board[r][c] == *cell {
+			forward = append(forward, types.Pos{Row: r, Col: c})
+			r += dir[0]
+			c += dir[1]
+		}
+		var backward []types.Pos
+		r, c = row-dir[0], col-dir[1]
+		for r >= 0 && r < gomokuBoardSize && c >= 0 && c < gomokuBoardSize && board[r][c] != nil && *board[r][c] == *cell {
+			backward = append(backward, types.Pos{Row: r, Col: c})
+			r -= dir[0]
+			c -= dir[1]
+		}
+		total := len(forward) + len(backward) + 1
+		if total >= gomokuWinLength {
+			line := make([]types.Pos, 0, total)
+			for i := len(backward) - 1; i >= 0; i-- {
+				line = append(line, backward[i])
+			}
+			line = append(line, types.Pos{Row: row, Col: col})
+			line = append(line, forward...)
+			return line
+		}
+	}
+	return nil
+}
+
+func (s *Server) gomokuTurnPlayer(room *RoomState) *PlayerState {
+	if room.Gomoku == nil {
+		return nil
+	}
+	return s.humanPlayerFromSeat(room, room.Gomoku.Turn)
+}
+
+func (s *Server) clearGomokuUndoTimer(roomID string) {
+	if t := s.gomokuUndoTimers[roomID]; t != nil {
+		t.Stop()
+		delete(s.gomokuUndoTimers, roomID)
+	}
+}
+
+func (s *Server) resetGomokuRoom(room *RoomState) {
+	s.clearGomokuUndoTimer(room.ID)
+	room.Gomoku = nil
+	s.resetTurnBasedRoom(room)
+}
+
+func (s *Server) startGomokuRoom(room *RoomState) {
+	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
+		return
+	}
+	s.clearGomokuUndoTimer(room.ID)
+	blackSeat := randomSeat()
+	s.startTurnBasedPlaying(room)
+	room.Gomoku = freshGomokuState(blackSeat)
+}
+
+func (s *Server) scheduleGomokuReadyStart(room *RoomState) {
+	if room.Settings.GameID != types.GameGomoku {
+		return
+	}
+	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
+		return
+	}
+	if room.Phase != types.PhaseReady {
+		return
+	}
+	if !room.Ready[types.SeatA] || !room.Ready[types.SeatB] {
+		return
+	}
+	if room.ResultText == "正在随机五子棋先手..." {
+		return
+	}
+	room.ResultText = "正在随机五子棋先手..."
+	s.broadcastRoom(room.ID, true)
+	roomID := room.ID
+	timeAfterFunc(1200*time.Millisecond, func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		current := s.rooms[roomID]
+		if current == nil || current.Settings.GameID != types.GameGomoku {
+			return
+		}
+		if current.Phase != types.PhaseReady || current.Seats[types.SeatA] == nil || current.Seats[types.SeatB] == nil ||
+			!current.Ready[types.SeatA] || !current.Ready[types.SeatB] {
+			return
+		}
+		s.startGomokuRoom(current)
+		blackSeat := types.SeatA
+		if current.Gomoku != nil {
+			blackSeat = current.Gomoku.BlackSeat
+		}
+		s.roomNotice(current, fmt.Sprintf("随机完成：%s 执黑先手。", occupantName(current.Seats[blackSeat])))
+		s.broadcastRoom(current.ID, true)
+	})
+}
+
+func gomokuRankedText(state *types.GomokuState) string {
+	if state == nil || state.RankedDelta == nil {
+		return ""
+	}
+	blackDelta := state.RankedDelta[state.BlackSeat]
+	whiteDelta := state.RankedDelta[oppositeSeat(state.BlackSeat)]
+	return fmt.Sprintf("黑 %s，白 %s", formatSigned(blackDelta), formatSigned(whiteDelta))
+}
+
+// finishGomokuGame 结束对局；note 非空时会作为「（认输）」这类后缀追加到结果文案与历史记录。
+func (s *Server) finishGomokuGame(room *RoomState, result types.RoundResult, winningLine []types.Pos, note string) {
+	if room.Gomoku == nil {
+		return
+	}
+	s.clearGomokuUndoTimer(room.ID)
+	room.Gomoku.UndoRequest = nil
+	room.Gomoku.ResignRequest = nil
+	rankedDelta := room.Gomoku.RankedDelta
+	if rankedDelta == nil {
+		rankedDelta = map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}
+	}
+	rankedText := ""
+	streakText := ""
+	playerA, playerB := s.applySeatOutcome(room, result)
+	if result == types.ResultDraw {
+		if room.Settings.EnableRanked && room.Settings.TieDoublePunish {
+			dA, dB := s.applyRankedDrawPenaltyStake(playerA, playerB, effectiveRankedStake(room.Settings))
+			rankedDelta[types.SeatA] += dA
+			rankedDelta[types.SeatB] += dB
+			rankedText = fmt.Sprintf("（平局双扣：A %d，B %d）", dA, dB)
+		}
+	} else if result == types.ResultA || result == types.ResultB {
+		if room.Settings.EnableRanked {
+			loserSeat := oppositeSeat(types.SeatKey(result))
+			winner := s.humanPlayerFromSeat(room, types.SeatKey(result))
+			loser := s.humanPlayerFromSeat(room, loserSeat)
+			wD, lD := s.applyRankedStake(winner, loser, effectiveRankedStake(room.Settings))
+			rankedDelta[types.SeatKey(result)] += wD
+			rankedDelta[loserSeat] += lD
+			resetExtremeWinStreak(loser)
+			streakText = s.applyExtremeWinStreakRisk(room, winner)
+			rankedText = fmt.Sprintf("（%s %s，%s %d）",
+				occupantName(room.Seats[types.SeatKey(result)]), formatSigned(wD),
+				occupantName(room.Seats[loserSeat]), lD)
+		}
+	}
+	room.Gomoku.RankedDelta = rankedDelta
+	room.Gomoku.WinningLine = winningLine
+	room.Gomoku.Ended = true
+	room.Gomoku.Winner = result
+	room.Phase = types.PhaseResult
+	room.Status = "playing"
+	noteSuffix := ""
+	if note != "" {
+		noteSuffix = "（" + note + "）"
+	}
+	if result == types.ResultDraw {
+		room.ResultText = "五子棋平局" + rankedText + noteSuffix
+	} else {
+		room.ResultText = occupantName(room.Seats[types.SeatKey(result)]) + " 五子棋胜利" + rankedText + streakText + noteSuffix
+	}
+	s.refreshHumans(playerA, playerB)
+	resultLabel := "五子棋平局"
+	if result != types.ResultDraw {
+		resultLabel = occupantName(room.Seats[types.SeatKey(result)]) + "胜利"
+	}
+	item := s.buildMatchHistoryShell(room, result, types.GameGomoku, resultLabel, room.ResultText)
+	item.GomokuBlackSeat = room.Gomoku.BlackSeat
+	item.GomokuLine = winningLine
+	item.ExtremeRanked = room.Settings.EnableExtremeRanked
+	if room.Settings.EnableRanked {
+		es := effectiveRankedStake(room.Settings)
+		item.EffectiveStake = &es
+	}
+	s.roomNotice(room, room.ResultText)
+	s.finalizeMatch(room, result, item)
+}
+
+func (s *Server) applyGomokuMove(room *RoomState, seat types.SeatKey, row, col int) (bool, string) {
+	if room.Gomoku == nil {
+		return false, "五子棋还没有开始"
+	}
+	if room.Phase != types.PhaseChoosing {
+		return false, "当前不能落子"
+	}
+	if room.Gomoku.Ended {
+		return false, "当前五子棋对局已经结束"
+	}
+	if room.Gomoku.Turn != seat {
+		return false, "还没轮到你落子"
+	}
+	if room.Gomoku.UndoRequest != nil {
+		return false, "悔棋请求处理完成前不能落子"
+	}
+	if room.Gomoku.ResignRequest != nil {
+		return false, "认输请求处理完成前不能落子"
+	}
+	if row < 0 || row >= gomokuBoardSize || col < 0 || col >= gomokuBoardSize {
+		return false, "这个位置不能落子"
+	}
+	if room.Gomoku.Board[row][col] != nil {
+		return false, "这个位置已经有棋子"
+	}
+	mark := gomokuMarkForSeat(room.Gomoku, seat)
+	board := cloneGomokuBoard(room.Gomoku.Board)
+	m := mark
+	board[row][col] = &m
+	moveCount := room.Gomoku.MoveCount + 1
+	winningLine := gomokuWinningLine(board, row, col)
+	room.Gomoku.Board = board
+	room.Gomoku.MoveCount = moveCount
+	room.Gomoku.Moves = append(room.Gomoku.Moves, types.Pos{Row: row, Col: col})
+	room.Gomoku.Turn = oppositeSeat(seat)
+	if winningLine != nil {
+		s.finishGomokuGame(room, types.RoundResult(gomokuSeatForMark(room.Gomoku, mark)), winningLine, "")
+	} else if moveCount >= gomokuBoardSize*gomokuBoardSize {
+		s.finishGomokuGame(room, types.ResultDraw, nil, "")
+	} else {
+		room.ResultText = ""
+		s.notifyOpponentTurn(room, room.Gomoku.Turn)
+	}
+	return true, ""
+}
+
+func cloneGomokuBoard(board [][]*types.GomokuCell) [][]*types.GomokuCell {
+	out := make([][]*types.GomokuCell, len(board))
+	for i, row := range board {
+		out[i] = make([]*types.GomokuCell, len(row))
+		for j, cell := range row {
+			if cell != nil {
+				c := *cell
+				out[i][j] = &c
+			}
+		}
+	}
+	return out
+}
+
+// requestGomokuUndo：只能由「当前轮到落子的一方」发起，悔回自己上一手 + 对方紧接着的应手，
+// 双方各限 3 次/局，30 秒无响应自动拒绝。
+func (s *Server) requestGomokuUndo(room *RoomState, seat types.SeatKey) (bool, string) {
+	if room.Gomoku == nil || room.Phase != types.PhaseChoosing || room.Gomoku.Ended {
+		return false, "当前不能悔棋"
+	}
+	if room.Gomoku.Turn != seat {
+		return false, "只能在轮到你落子时申请悔棋"
+	}
+	if room.Gomoku.MoveCount < 2 {
+		return false, "棋局刚开始，还不能悔棋"
+	}
+	if room.Gomoku.UndoRequest != nil {
+		return false, "当前已有悔棋请求，请先处理"
+	}
+	if room.Gomoku.ResignRequest != nil {
+		return false, "认输请求处理完成前不能悔棋"
+	}
+	if room.Gomoku.UndoCount[seat] >= gomokuUndoLimit {
+		return false, "你本局的悔棋次数已经用完"
+	}
+	toSeat := oppositeSeat(seat)
+	if room.Seats[toSeat] == nil {
+		return false, "对手不在战斗席，不能悔棋"
+	}
+	startedAt := nowMs()
+	room.Gomoku.UndoRequest = &types.GomokuUndoRequest{
+		FromSeat: seat, ToSeat: toSeat, CreatedAt: startedAt, ExpiresAt: startedAt + gomokuUndoWindow.Milliseconds(),
+	}
+	s.scheduleGomokuUndoTimeout(room)
+	return true, ""
+}
+
+func (s *Server) scheduleGomokuUndoTimeout(room *RoomState) {
+	s.clearGomokuUndoTimer(room.ID)
+	if room.Gomoku == nil || room.Gomoku.UndoRequest == nil {
+		return
+	}
+	request := *room.Gomoku.UndoRequest
+	roomID := room.ID
+	timer := timeAfterFunc(gomokuUndoWindow, func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		delete(s.gomokuUndoTimers, roomID)
+		current := s.rooms[roomID]
+		if current == nil || current.Gomoku == nil || current.Gomoku.UndoRequest == nil {
+			return
+		}
+		if current.Gomoku.UndoRequest.CreatedAt != request.CreatedAt {
+			return
+		}
+		current.Gomoku.UndoRequest = nil
+		s.roomNotice(current, fmt.Sprintf("%s 未在 30 秒内回应悔棋请求，已自动拒绝。", occupantName(current.Seats[request.ToSeat])))
+		s.broadcastRoom(current.ID, true)
+	})
+	s.gomokuUndoTimers[room.ID] = timer
+}
+
+// respondGomokuUndo：accept 时回退最后 2 手（请求方自己的上一手 + 对方紧接着的应手），
+// 落子权回到请求方；轮次校验依赖 undo 只能在请求方回合发起，回退 2 手后奇偶不变，轮次天然保持一致。
+func (s *Server) respondGomokuUndo(room *RoomState, seat types.SeatKey, accept bool) (bool, string) {
+	if room.Gomoku == nil || room.Gomoku.UndoRequest == nil {
+		return false, "当前没有悔棋请求"
+	}
+	request := room.Gomoku.UndoRequest
+	if request.ToSeat != seat {
+		return false, "这个悔棋请求不是发给你的"
+	}
+	s.clearGomokuUndoTimer(room.ID)
+	fromSeat := request.FromSeat
+	room.Gomoku.UndoRequest = nil
+	if !accept {
+		s.roomNotice(room, occupantName(room.Seats[seat])+" 拒绝悔棋，对局继续。")
+		return true, ""
+	}
+	moves := room.Gomoku.Moves
+	if len(moves) < 2 {
+		return false, "当前棋局状态不支持悔棋"
+	}
+	board := cloneGomokuBoard(room.Gomoku.Board)
+	for i := 0; i < 2; i++ {
+		last := moves[len(moves)-1]
+		moves = moves[:len(moves)-1]
+		board[last.Row][last.Col] = nil
+	}
+	room.Gomoku.Board = board
+	room.Gomoku.Moves = moves
+	room.Gomoku.MoveCount = len(moves)
+	room.Gomoku.Turn = fromSeat
+	room.Gomoku.UndoCount[fromSeat]++
+	s.roomNotice(room, occupantName(room.Seats[seat])+" 同意悔棋，棋局回退 2 手。")
+	return true, ""
+}
+
+// requestGomokuResign / respondGomokuResign：认输需要对方确认才结束对局（与黑白棋认输一致）。
+func (s *Server) requestGomokuResign(room *RoomState, seat types.SeatKey) (bool, string) {
+	if room.Gomoku == nil || room.Phase != types.PhaseChoosing || room.Gomoku.Ended {
+		return false, "当前不能申请认输"
+	}
+	if room.Gomoku.UndoRequest != nil {
+		return false, "悔棋请求处理完成前不能申请认输"
+	}
+	toSeat := oppositeSeat(seat)
+	if room.Seats[toSeat] == nil {
+		return false, "对手不在战斗席，不能申请认输"
+	}
+	if room.Gomoku.ResignRequest != nil && room.Gomoku.ResignRequest.FromSeat == seat {
+		return false, "你已经申请认输，正在等待对方确认"
+	}
+	if room.Gomoku.ResignRequest != nil {
+		return false, "当前已有认输请求，请先处理"
+	}
+	room.Gomoku.ResignRequest = &types.GomokuResignRequest{FromSeat: seat, ToSeat: toSeat, CreatedAt: nowMs()}
+	return true, ""
+}
+
+func (s *Server) respondGomokuResign(room *RoomState, seat types.SeatKey, accept bool) (bool, string) {
+	if room.Gomoku == nil || room.Gomoku.ResignRequest == nil {
+		return false, "当前没有认输请求"
+	}
+	request := room.Gomoku.ResignRequest
+	if request.ToSeat != seat {
+		return false, "这个认输请求不是发给你的"
+	}
+	loserSeat := request.FromSeat
+	winnerSeat := request.ToSeat
+	loserName := occupantName(room.Seats[loserSeat])
+	winnerName := occupantName(room.Seats[winnerSeat])
+	if !accept {
+		room.Gomoku.ResignRequest = nil
+		s.roomNotice(room, winnerName+" 拒绝认输，对局继续。")
+		return true, ""
+	}
+	s.roomNotice(room, fmt.Sprintf("%s 同意 %s 认输，本局结束。", winnerName, loserName))
+	s.finishGomokuGame(room, types.RoundResult(winnerSeat), nil, "认输")
+	return true, ""
+}
+
+func (s *Server) applyGomokuDisconnectForfeit(room *RoomState, forfeit DisconnectForfeit) bool {
+	if room.Phase == types.PhaseResult || (room.Gomoku != nil && room.Gomoku.Ended) {
+		return true
+	}
+	winner := s.players[forfeit.WinnerID]
+	loser := s.players[forfeit.LoserID]
+	rankedDelta := map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}
+	if room.Gomoku != nil && room.Gomoku.RankedDelta != nil {
+		rankedDelta = room.Gomoku.RankedDelta
+	}
+	rankedText := ""
+	streakText := ""
+	if room.Settings.EnableRanked {
+		wD, lD := s.applyRankedStake(winner, loser, forfeit.Stake)
+		rankedDelta[forfeit.WinnerSeat] += wD
+		rankedDelta[forfeit.LoserSeat] += lD
+		resetExtremeWinStreak(loser)
+		streakText = s.applyExtremeWinStreakRisk(room, winner)
+		rankedText = fmt.Sprintf("，排位 %d 分已结算（%s %s，%s %d）", forfeit.Stake, forfeit.WinnerName, formatSigned(wD), forfeit.LoserName, lD)
+	}
+	recordGameOutcome(winner, types.GameGomoku, "win")
+	recordGameOutcome(loser, types.GameGomoku, "loss")
+	room.Score[forfeit.WinnerSeat]++
+	room.SeatedScore[forfeit.WinnerSeat]++
+	ssW := room.SeatStats[forfeit.WinnerSeat]
+	ssW.Wins++
+	room.SeatStats[forfeit.WinnerSeat] = ssW
+	ssL := room.SeatStats[forfeit.LoserSeat]
+	ssL.Losses++
+	room.SeatStats[forfeit.LoserSeat] = ssL
+	room.Phase = types.PhaseResult
+	room.Status = "playing"
+	if room.Gomoku != nil {
+		s.clearGomokuUndoTimer(room.ID)
+		room.Gomoku.UndoRequest = nil
+		room.Gomoku.ResignRequest = nil
+		room.Gomoku.RankedDelta = rankedDelta
+		room.Gomoku.Ended = true
+		room.Gomoku.Winner = types.RoundResult(forfeit.WinnerSeat)
+	}
+	room.ResultText = fmt.Sprintf("%s 断线超时判负，%s 五子棋胜利%s%s", forfeit.LoserName, forfeit.WinnerName, rankedText, streakText)
+	punishedPlayers := s.punishmentPlayersForResult(room, types.RoundResult(forfeit.WinnerSeat))
+	punishedNames := make([]string, len(punishedPlayers))
+	for i, p := range punishedPlayers {
+		punishedNames[i] = playerShortName(p)
+	}
+	punishment := s.currentPunishment(room)
+	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, types.RoundResult(forfeit.WinnerSeat), punishment)
+	if winner != nil {
+		s.refreshPlayerSnapshots(winner)
+	}
+	if loser != nil {
+		s.refreshPlayerSnapshots(loser)
+	}
+	playerAName, playerBName := forfeit.WinnerName, forfeit.LoserName
+	moveA, moveB := types.MoveNoMove, types.MoveNoMove
+	if forfeit.LoserSeat == types.SeatA {
+		playerAName, playerBName = forfeit.LoserName, forfeit.WinnerName
+		moveA = types.MoveForfeit
+	} else {
+		moveB = types.MoveForfeit
+	}
+	item := types.RoundHistoryItem{
+		ID: randomID(), Round: len(room.RoundHistory) + 1, At: nowMs(),
+		PlayerA: playerAName, PlayerB: playerBName, MoveA: moveA, MoveB: moveB,
+		Result: types.RoundResult(forfeit.WinnerSeat), ResultLabel: forfeit.WinnerName + "胜利",
+		ResultText: room.ResultText + "（断线判负）", GameID: types.GameGomoku,
+		Ranked: room.Settings.EnableRanked, ExtremeRanked: room.Settings.EnableExtremeRanked,
+		PunishmentTasks: punishmentTasks, PunishedNames: punishedNames, Proofs: []types.HistoryProof{},
+	}
+	if room.Gomoku != nil {
+		item.GomokuBlackSeat = room.Gomoku.BlackSeat
+	}
+	if room.Settings.EnableRanked {
+		st := forfeit.BaseStake
+		item.Stake = &st
+		rm := forfeit.RankMultiplier
+		item.RankMultiplier = &rm
+		es := forfeit.Stake
+		item.EffectiveStake = &es
+	}
+	if len(punishedNames) > 0 {
+		item.PunishmentName = s.punishmentNameForRoom(room, punishment)
+		if room.Settings.PunishmentSource != "player" && punishment != nil {
+			item.PunishmentDescription = punishment.Description
+		}
+	}
+	s.addRoundHistory(room, item)
+	s.roomNotice(room, room.ResultText)
+	s.setupPunishmentOrNext(room, types.RoundResult(forfeit.WinnerSeat))
+	return true
+}

@@ -42,8 +42,8 @@ func liarsDiceNextTurn(order []string, current string) string {
 	return order[(idx+1)%len(order)]
 }
 
-// liarsDicePredecessor：入席顺序里的"上家"，掉线判负规则用——固定座位关系，
-// 与"谁最后叫过点"无关，任何时刻都有明确定义（只要还在名单里）。
+// liarsDicePredecessor：当前叫点顺序里的"上家"（开局会随机重排 ParticipantIDs），
+// 掉线判负规则用；与"谁最后叫过点"无关，任何时刻都有明确定义（只要还在名单里）。
 func liarsDicePredecessor(order []string, playerID string) string {
 	idx := indexOfString(order, playerID)
 	if idx < 0 || len(order) < 2 {
@@ -114,7 +114,7 @@ func (s *Server) scheduleLiarsDiceReadyStart(room *RoomState) {
 			return
 		}
 		s.startLiarsDiceRound(current)
-		s.roomNotice(current, "大话骰开局，已为每位参战玩家摇好骰子。")
+		s.roomNotice(current, "大话骰开局，已随机叫点顺序并为每位参战玩家摇好骰子。")
 		s.broadcastRoom(current.ID, true)
 	})
 	s.liarsDiceStartTimers[room.ID] = timer
@@ -132,12 +132,22 @@ func allLiarsDiceReady(state *types.LiarsDiceState) bool {
 	return true
 }
 
-// startLiarsDiceRound：重新摇骰（每局独立，不延续上局骰子数量/不淘汰），随机选首个叫点者。
+// shuffleStrings 返回 list 的随机排列副本（不改动入参）。
+func shuffleStrings(list []string) []string {
+	out := append([]string{}, list...)
+	rand.Shuffle(len(out), func(i, j int) { out[i], out[j] = out[j], out[i] })
+	return out
+}
+
+// startLiarsDiceRound：重新摇骰（每局独立，不延续上局骰子数量/不淘汰）；
+// 开局随机重排参战名单作为叫点顺序（防止固定上下家 / 按入席顺序操纵），并随机选首个叫点者。
 func (s *Server) startLiarsDiceRound(room *RoomState) {
 	if room.LiarsDice == nil || len(room.LiarsDice.ParticipantIDs) < 2 {
 		return
 	}
-	participants := room.LiarsDice.ParticipantIDs
+	// 随机叫点顺序，并写回 ParticipantIDs，前后端上下家关系一致。
+	participants := shuffleStrings(room.LiarsDice.ParticipantIDs)
+	room.LiarsDice.ParticipantIDs = participants
 	room.LiarsDiceHands = map[string][]int{}
 	diceCounts := map[string]int{}
 	for _, id := range participants {
@@ -406,12 +416,8 @@ func (s *Server) resolveLiarsDiceChallenge(room *RoomState, challengerID string)
 
 	rankedText := ""
 	streakText := ""
-	if winner != nil {
-		winner.Stats.Wins++
-	}
-	if loser != nil {
-		loser.Stats.Losses++
-	}
+	recordGameOutcome(winner, types.GameLiarsDice, "win")
+	recordGameOutcome(loser, types.GameLiarsDice, "loss")
 	if room.Settings.EnableRanked {
 		wD, lD := s.applyRankedStake(winner, loser, effectiveRankedStake(room.Settings))
 		resetExtremeWinStreak(loser)
@@ -506,7 +512,8 @@ func (s *Server) buildLiarsDicePunishmentTasks(room *RoomState, punishedPlayers 
 				task.BackgroundOpacity = systemTask.BackgroundOpacity
 			}
 			if s.eventDB != nil {
-				if err := s.eventDB.insertPunishmentEvent(nowMs(), "task", "system", room.ID, "", "", player.ID, task.TaskText, "", "", ""); err != nil {
+				task.EventID = randomID()
+				if err := s.eventDB.insertPunishmentTask(task.EventID, nowMs(), "system", room.ID, "", "", player.ID, task.PlayerName, task.TaskText); err != nil {
 					s.errorLog("punishment_event_insert_failed", err.Error())
 				}
 			}
@@ -573,7 +580,7 @@ func (s *Server) liarsDicePunishmentReviewer(room *RoomState, punishedID string)
 	return s.players[latest.LiarsDiceWinnerID]
 }
 
-// onLiarsDiceNextRound：本局结算展示（Result）后，任一参战玩家点"下一局"把房间收回 Ready。
+// onLiarsDiceNextRound：本局结算展示（Result）后，任一参战玩家点"再来一局"把房间收回 Ready。
 // 惩罚模式下走的是 Punishment→惩罚完成→resetForNextRound 自动回 Ready，不经过这里。
 func (s *Server) onLiarsDiceNextRound(client *Client, env wsEnvelope) {
 	player, room, ok := s.requireRoomPlayer(client, env)
@@ -589,11 +596,11 @@ func (s *Server) onLiarsDiceNextRound(client *Client, env wsEnvelope) {
 		return
 	}
 	if !containsString(room.LiarsDice.ParticipantIDs, player.ID) {
-		client.reply(env.ID, nil, "只有参战玩家可以开始下一局")
+		client.reply(env.ID, nil, "只有参战玩家可以再来一局")
 		return
 	}
 	s.returnLiarsDiceToReady(room)
-	s.roomNotice(room, playerShortName(player)+" 结束了本局，准备下一局。")
+	s.roomNotice(room, playerShortName(player)+" 结束了本局，准备再来一局。")
 	s.broadcastRoom(room.ID, true)
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
@@ -639,12 +646,8 @@ func (s *Server) applyLiarsDiceDisconnectForfeit(room *RoomState, player *Player
 	loser := s.players[forfeit.LoserID]
 	rankedText := ""
 	streakText := ""
-	if winner != nil {
-		winner.Stats.Wins++
-	}
-	if loser != nil {
-		loser.Stats.Losses++
-	}
+	recordGameOutcome(winner, types.GameLiarsDice, "win")
+	recordGameOutcome(loser, types.GameLiarsDice, "loss")
 	if room.Settings.EnableRanked {
 		wD, lD := s.applyRankedStake(winner, loser, forfeit.Stake)
 		resetExtremeWinStreak(loser)

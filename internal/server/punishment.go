@@ -98,7 +98,8 @@ func (s *Server) buildPunishmentTasks(room *RoomState, punishedPlayers []*Player
 				task.BackgroundOpacity = systemTask.BackgroundOpacity
 			}
 			if s.eventDB != nil {
-				if err := s.eventDB.insertPunishmentEvent(nowMs(), "task", "system", room.ID, "", "", player.ID, task.TaskText, "", "", ""); err != nil {
+				task.EventID = randomID()
+				if err := s.eventDB.insertPunishmentTask(task.EventID, nowMs(), "system", room.ID, "", "", player.ID, task.PlayerName, task.TaskText); err != nil {
 					s.errorLog("punishment_event_insert_failed", err.Error())
 				}
 			}
@@ -110,6 +111,20 @@ func (s *Server) buildPunishmentTasks(room *RoomState, punishedPlayers []*Player
 		out = append(out, task)
 	}
 	return out
+}
+
+// latestPunishmentTask 返回 room.RoundHistory[0] 中某玩家当前的惩罚任务（指针，可原地改写）。
+func latestPunishmentTask(room *RoomState, playerID string) *types.PunishmentTask {
+	if len(room.RoundHistory) == 0 {
+		return nil
+	}
+	latest := &room.RoundHistory[0]
+	for i := range latest.PunishmentTasks {
+		if latest.PunishmentTasks[i].PlayerID == playerID {
+			return &latest.PunishmentTasks[i]
+		}
+	}
+	return nil
 }
 
 func (s *Server) taskAssigner(room *RoomState, punishedPlayerID string) *PlayerState {

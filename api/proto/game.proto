@@ -53,13 +53,18 @@ message LobbyStats {
   string title = 6;
 }
 
-message OthelloStats {
+message GameWLD {
   int32 wins = 1;
   int32 losses = 2;
   int32 draws = 3;
-  int32 games = 4;
-  int32 captured = 5;
-  int32 lost = 6;
+}
+
+message GameStats {
+  GameWLD rps = 1;
+  GameWLD othello = 2;
+  GameWLD tictactoe = 3;
+  GameWLD gomoku = 4;
+  GameWLD liarsdice = 5;
 }
 
 // 完整玩家（房间 / me / player:get）
@@ -69,90 +74,58 @@ message PublicPlayer {
   string gender_id = 3;
   string gender_label = 4;
   string faction_id = 5;
+  string avatar_url = 86;
   string faction_label = 6;
   GenderColors faction_colors = 7;
   string display_name = 8;
   bool connected = 9;
   int64 disconnected_at = 10;
-  bool has_disconnected_at = 11;
   int64 disconnect_expires_at = 12;
-  bool has_disconnect_expires_at = 13;
   int64 profile_updated_at = 14;
-  bool has_profile_updated_at = 15;
 
   bool name_war_enabled = 16;
-  bool has_name_war_enabled = 17;
   int64 name_war_toggled_at = 18;
-  bool has_name_war_toggled_at = 19;
   string name_war_original_name = 20;
   string name_war_penalty_name = 21;
   bool name_war_punished = 22;
-  bool has_name_war_punished = 23;
   bool name_war_allow_rename = 24;
-  bool has_name_war_allow_rename = 25;
   int64 name_war_rename_protected_until = 26;
-  bool has_name_war_rename_protected_until = 27;
   string name_war_renamed_by = 28;
   string name_war_renamed_by_name = 29;
   int64 name_war_rename_window_started_at = 30;
-  bool has_name_war_rename_window_started_at = 31;
   int32 name_war_rename_count = 32;
-  bool has_name_war_rename_count = 33;
 
   bool giveaway_enabled = 34;
-  bool has_giveaway_enabled = 35;
   double giveaway_value = 36;
-  bool has_giveaway_value = 37;
   int32 giveaway_clicks = 38;
-  bool has_giveaway_clicks = 39;
   string giveaway_board_text = 40;
   int64 giveaway_board_submitted_at = 41;
-  bool has_giveaway_board_submitted_at = 42;
   int64 giveaway_board_expires_at = 43;
-  bool has_giveaway_board_expires_at = 44;
   int32 giveaway_board_likes = 45;
-  bool has_giveaway_board_likes = 46;
   int32 giveaway_board_dislikes = 47;
-  bool has_giveaway_board_dislikes = 48;
   int32 giveaway_board_likes_this_hour = 49;
-  bool has_giveaway_board_likes_this_hour = 50;
   int64 giveaway_board_like_window_started_at = 51;
-  bool has_giveaway_board_like_window_started_at = 52;
   int64 giveaway_vote_window_started_at = 53;
-  bool has_giveaway_vote_window_started_at = 54;
   int32 giveaway_vote_count = 55;
-  bool has_giveaway_vote_count = 56;
   int32 giveaway_vote_likes_this_hour = 57;
-  bool has_giveaway_vote_likes_this_hour = 58;
   int32 giveaway_vote_dislikes_this_hour = 59;
-  bool has_giveaway_vote_dislikes_this_hour = 60;
 
   bool rank_multiplier_unlocked = 61;
-  bool has_rank_multiplier_unlocked = 62;
   bool extreme_mode_enabled = 63;
-  bool has_extreme_mode_enabled = 64;
   int64 extreme_mode_toggled_at = 65;
-  bool has_extreme_mode_toggled_at = 66;
   int64 extreme_mode_cooldown_until = 67;
-  bool has_extreme_mode_cooldown_until = 68;
   int32 extreme_win_streak = 69;
-  bool has_extreme_win_streak = 70;
   int64 extreme_last_decay_hour = 71;
-  bool has_extreme_last_decay_hour = 72;
   bool extreme_force_closed = 73;
-  bool has_extreme_force_closed = 74;
   int64 extreme_force_closed_at = 75;
-  bool has_extreme_force_closed_at = 76;
   int64 extreme_rename_protected_until = 77;
-  bool has_extreme_rename_protected_until = 78;
   string extreme_renamed_by = 79;
   string extreme_renamed_by_name = 80;
 
   string room_id = 81;
   bool is_admin = 82;
-  bool has_is_admin = 83;
   PublicStats stats = 84;
-  OthelloStats othello_stats = 85;
+  GameStats game_stats = 85;
 }
 
 // 大厅精简玩家
@@ -167,50 +140,34 @@ message LobbyPlayer {
   string display_name = 8;
   bool connected = 9;
   int64 disconnected_at = 10;
-  bool has_disconnected_at = 11;
   int64 disconnect_expires_at = 12;
-  bool has_disconnect_expires_at = 13;
 
   bool name_war_enabled = 14;
-  bool has_name_war_enabled = 15;
   string name_war_penalty_name = 16;
   bool name_war_punished = 17;
-  bool has_name_war_punished = 18;
   bool name_war_allow_rename = 19;
-  bool has_name_war_allow_rename = 20;
   int64 name_war_rename_protected_until = 21;
-  bool has_name_war_rename_protected_until = 22;
   string name_war_renamed_by_name = 23;
 
   bool giveaway_enabled = 24;
-  bool has_giveaway_enabled = 25;
   double giveaway_value = 26;
-  bool has_giveaway_value = 27;
   string giveaway_board_text = 28;
   int64 giveaway_board_expires_at = 29;
-  bool has_giveaway_board_expires_at = 30;
   int32 giveaway_board_likes = 31;
-  bool has_giveaway_board_likes = 32;
   int32 giveaway_board_dislikes = 33;
-  bool has_giveaway_board_dislikes = 34;
 
   bool rank_multiplier_unlocked = 35;
-  bool has_rank_multiplier_unlocked = 36;
   bool extreme_mode_enabled = 37;
-  bool has_extreme_mode_enabled = 38;
   int32 extreme_win_streak = 39;
-  bool has_extreme_win_streak = 40;
   bool extreme_force_closed = 41;
-  bool has_extreme_force_closed = 42;
   int64 extreme_force_closed_at = 43;
-  bool has_extreme_force_closed_at = 44;
   int64 extreme_rename_protected_until = 45;
-  bool has_extreme_rename_protected_until = 46;
   string extreme_renamed_by_name = 47;
 
   string room_id = 48;
   LobbyStats stats = 49;
-  OthelloStats othello_stats = 50;
+  GameStats game_stats = 50;
+  string avatar_url = 51;
 }
 
 message BotPlayer {
@@ -239,7 +196,6 @@ message ChatMessage {
   bool system = 9;
   bool transient = 10;
   int64 expires_at = 11;
-  bool has_expires_at = 12;
 }
 
 message Suggestion {
@@ -265,7 +221,6 @@ message RoomSettings {
   bool enable_tags = 11;
   repeated string tags = 12;
   bool allow_proof_image = 13;
-  bool has_allow_proof_image = 14;
   bool tie_double_punish = 15;
   bool require_opponent_confirm = 16;
   bool enable_ranked = 17;
@@ -277,6 +232,35 @@ message RoomSettings {
   string tictactoe_board_theme = 23;
   int32 liars_dice_min_players = 24;
   int32 liars_dice_max_players = 25;
+  string gomoku_board_theme = 26;
+}
+
+message GomokuUndoRequest {
+  string from_seat = 1;
+  string to_seat = 2;
+  int64 created_at = 3;
+  int64 expires_at = 4;
+}
+
+message GomokuResignRequest {
+  string from_seat = 1;
+  string to_seat = 2;
+  int64 created_at = 3;
+}
+
+message GomokuState {
+  repeated BoardRow board = 1;
+  string turn = 2;
+  string black_seat = 3;
+  int32 move_count = 4;
+  repeated Pos moves = 5;
+  repeated Pos winning_line = 6;
+  repeated IntPair ranked_delta = 7;
+  repeated IntPair undo_count = 8;
+  GomokuUndoRequest undo_request = 9;
+  GomokuResignRequest resign_request = 10;
+  bool ended = 11;
+  string winner = 12;
 }
 
 message PunishmentProof {
@@ -288,7 +272,6 @@ message PunishmentProof {
   string confirmed_by = 6;
   string reviewed_by = 7;
   int64 reviewed_at = 8;
-  bool has_reviewed_at = 9;
   string reject_reason = 10;
   string redo_task_text = 11;
   int64 submitted_at = 12;
@@ -314,7 +297,6 @@ message PunishmentTask {
   string task_text = 5;
   string background_image = 6;
   double background_opacity = 7;
-  bool has_background_opacity = 8;
   string assigned_by = 9;
   string assigned_by_name = 10;
 }
@@ -328,7 +310,6 @@ message HistoryProof {
   string status = 6;
   string reviewed_by = 7;
   int64 reviewed_at = 8;
-  bool has_reviewed_at = 9;
   string reject_reason = 10;
   string redo_task_text = 11;
   int64 submitted_at = 12;
@@ -352,11 +333,8 @@ message RoundHistoryItem {
   repeated Pos tictactoe_line = 15;
   bool ranked = 16;
   int32 stake = 17;
-  bool has_stake = 18;
   int32 rank_multiplier = 19;
-  bool has_rank_multiplier = 20;
   int32 effective_stake = 21;
-  bool has_effective_stake = 22;
   bool extreme_ranked = 23;
   string punishment_name = 24;
   string punishment_description = 25;
@@ -371,6 +349,8 @@ message RoundHistoryItem {
   repeated LiarsDiceHandsPair liars_dice_hands = 34;
   repeated string liars_dice_hand_order = 35;
   repeated StringPair liars_dice_names = 36;
+  string gomoku_black_seat = 37;
+  repeated Pos gomoku_line = 38;
 }
 
 message Int32List {
@@ -506,6 +486,7 @@ message RoomSnapshot {
   OthelloState othello = 12;
   TicTacToeState tictactoe = 13;
   LiarsDiceState liars_dice = 23;
+  GomokuState gomoku = 24;
   string result_text = 14;
   repeated string punished_player_ids = 15;
   repeated PunishmentProof proofs = 16;
@@ -515,6 +496,8 @@ message RoomSnapshot {
   repeated RoundHistoryItem round_history = 20;
   int32 round_history_total = 21;
   repeated ChatMessage chat = 22;
+  string forgive_advantage_target_id = 25;
+  string forgive_advantage_beneficiary_id = 26;
 }
 
 message ServerStats {
@@ -659,12 +642,14 @@ message GameConfig {
   string description = 3;
 }
 
-message DailyAnnouncement {
+message AnnouncementBoard {
   bool enabled = 1;
   string title = 2;
   string content = 3;
-  string button_text = 4;
-  string version = 5;
+}
+
+message SecurityDisclaimerConfig {
+  bool enabled = 1;
 }
 
 message DoublePair {
@@ -724,7 +709,7 @@ message BotsConfig {
 
 message AppConfig {
   SiteConfig site = 1;
-  DailyAnnouncement daily_announcement = 2;
+  AnnouncementBoard announcement_board = 2;
   repeated GenderOption genders = 3;
   repeated GenderFaction gender_factions = 4;
   repeated TitleSegment titles = 5;
@@ -739,6 +724,7 @@ message AppConfig {
   BotsConfig bots = 14;
   repeated GameConfig games = 15;
   repeated StringPair messages = 16;
+  SecurityDisclaimerConfig security_disclaimer = 17;
 }
 
 // 状态通道 FULL 载荷

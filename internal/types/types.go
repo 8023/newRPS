@@ -65,6 +65,7 @@ const (
 	GameOthello   GameID = "othello"
 	GameTicTacToe GameID = "tictactoe"
 	GameLiarsDice GameID = "liarsdice"
+	GameGomoku    GameID = "gomoku"
 )
 
 type RankStake int
@@ -92,6 +93,7 @@ type PunishmentTaskConfig struct {
 }
 
 type PublicStats struct {
+	// Wins/Losses/Draws 为五游戏合计（由 GameStats 汇总），排行总榜直接读这里。
 	Wins           int    `json:"wins"`
 	Losses         int    `json:"losses"`
 	Draws          int    `json:"draws"`
@@ -101,13 +103,55 @@ type PublicStats struct {
 	TitleSegmentID string `json:"titleSegmentId,omitempty"`
 }
 
-type OthelloStats struct {
-	Wins     int `json:"wins"`
-	Losses   int `json:"losses"`
-	Draws    int `json:"draws"`
-	Games    int `json:"games"`
-	Captured int `json:"captured"`
-	Lost     int `json:"lost"`
+// GameWLD 单游戏胜/负/平。
+type GameWLD struct {
+	Wins   int `json:"wins"`
+	Losses int `json:"losses"`
+	Draws  int `json:"draws"`
+}
+
+// GameStats 五个游戏各自的胜负平（不再单独维护黑白棋吃子等字段）。
+type GameStats struct {
+	RPS       GameWLD `json:"rps"`
+	Othello   GameWLD `json:"othello"`
+	TicTacToe GameWLD `json:"tictactoe"`
+	Gomoku    GameWLD `json:"gomoku"`
+	LiarsDice GameWLD `json:"liarsdice"`
+}
+
+// Total 汇总五游戏胜负平。
+func (g GameStats) Total() (wins, losses, draws int) {
+	for _, w := range []GameWLD{g.RPS, g.Othello, g.TicTacToe, g.Gomoku, g.LiarsDice} {
+		wins += w.Wins
+		losses += w.Losses
+		draws += w.Draws
+	}
+	return
+}
+
+// WLDFor 按 GameID 取对应分项（未知 id 回落 rps 指针语义由调用方处理）。
+func (g *GameStats) WLDFor(gameID GameID) *GameWLD {
+	if g == nil {
+		return nil
+	}
+	switch gameID {
+	case GameOthello:
+		return &g.Othello
+	case GameTicTacToe:
+		return &g.TicTacToe
+	case GameGomoku:
+		return &g.Gomoku
+	case GameLiarsDice:
+		return &g.LiarsDice
+	default:
+		return &g.RPS
+	}
+}
+
+// SyncTotals 用分项合计写回 PublicStats 的 wins/losses/draws。
+func (p *PublicPlayer) SyncTotalsFromGameStats() {
+	w, l, d := p.GameStats.Total()
+	p.Stats.Wins, p.Stats.Losses, p.Stats.Draws = w, l, d
 }
 
 type PublicPlayer struct {
@@ -119,6 +163,7 @@ type PublicPlayer struct {
 	FactionLabel                     string       `json:"factionLabel"`
 	FactionColors                    GenderColors `json:"factionColors"`
 	DisplayName                      string       `json:"displayName"`
+	AvatarURL                        string       `json:"avatarUrl,omitempty"`
 	Connected                        bool         `json:"connected"`
 	DisconnectedAt                   *int64       `json:"disconnectedAt,omitempty"`
 	DisconnectExpiresAt              *int64       `json:"disconnectExpiresAt,omitempty"`
@@ -162,7 +207,7 @@ type PublicPlayer struct {
 	RoomID                           string       `json:"roomId,omitempty"`
 	IsAdmin                          *bool        `json:"isAdmin,omitempty"`
 	Stats                            PublicStats  `json:"stats"`
-	OthelloStats                     OthelloStats `json:"othelloStats"`
+	GameStats                        GameStats    `json:"gameStats"`
 }
 
 type BotPlayer struct {
@@ -226,6 +271,7 @@ type RoomSettings struct {
 	EnableExtremeRanked    bool           `json:"enableExtremeRanked,omitempty"`
 	OthelloBoardTheme      string         `json:"othelloBoardTheme,omitempty"`
 	TicTacToeBoardTheme    string         `json:"tictactoeBoardTheme,omitempty"`
+	GomokuBoardTheme       string         `json:"gomokuBoardTheme,omitempty"`
 	LiarsDiceMinPlayers    int            `json:"liarsDiceMinPlayers,omitempty"`
 	LiarsDiceMaxPlayers    int            `json:"liarsDiceMaxPlayers,omitempty"`
 }
@@ -272,6 +318,8 @@ type RoundHistoryItem struct {
 	OthelloBlackSeat      SeatKey          `json:"othelloBlackSeat,omitempty"`
 	TicTacToeXSeat        SeatKey          `json:"tictactoeXSeat,omitempty"`
 	TicTacToeLine         []Pos            `json:"tictactoeLine,omitempty"`
+	GomokuBlackSeat       SeatKey          `json:"gomokuBlackSeat,omitempty"`
+	GomokuLine            []Pos            `json:"gomokuLine,omitempty"`
 	Ranked                bool             `json:"ranked"`
 	Stake                 *RankStake       `json:"stake,omitempty"`
 	RankMultiplier        *RankMultiplier  `json:"rankMultiplier,omitempty"`
@@ -309,6 +357,8 @@ type PunishmentTask struct {
 	BackgroundOpacity *float64 `json:"backgroundOpacity,omitempty"`
 	AssignedBy        string   `json:"assignedBy,omitempty"`
 	AssignedByName    string   `json:"assignedByName,omitempty"`
+	// EventID：punishment_events 表里对应行的 id，仅服务端用于后续 update，不下发前端。
+	EventID string `json:"-"`
 }
 
 type HistoryProof struct {
@@ -393,6 +443,41 @@ type TicTacToeState struct {
 	Winner         RoundResult              `json:"winner,omitempty"`
 }
 
+type GomokuCell string
+
+const (
+	GomokuBlack GomokuCell = "black"
+	GomokuWhite GomokuCell = "white"
+)
+
+type GomokuUndoRequest struct {
+	FromSeat  SeatKey `json:"fromSeat"`
+	ToSeat    SeatKey `json:"toSeat"`
+	CreatedAt int64   `json:"createdAt"`
+	ExpiresAt int64   `json:"expiresAt"`
+}
+
+type GomokuResignRequest struct {
+	FromSeat  SeatKey `json:"fromSeat"`
+	ToSeat    SeatKey `json:"toSeat"`
+	CreatedAt int64   `json:"createdAt"`
+}
+
+type GomokuState struct {
+	Board         [][]*GomokuCell      `json:"board"`
+	Turn          SeatKey              `json:"turn"`
+	BlackSeat     SeatKey              `json:"blackSeat"`
+	MoveCount     int                  `json:"moveCount"`
+	Moves         []Pos                `json:"moves"`
+	WinningLine   []Pos                `json:"winningLine"`
+	RankedDelta   map[SeatKey]int      `json:"rankedDelta"`
+	UndoCount     map[SeatKey]int      `json:"undoCount"`
+	UndoRequest   *GomokuUndoRequest   `json:"undoRequest,omitempty"`
+	ResignRequest *GomokuResignRequest `json:"resignRequest,omitempty"`
+	Ended         bool                 `json:"ended,omitempty"`
+	Winner        RoundResult          `json:"winner,omitempty"`
+}
+
 type LiarsDiceBid struct {
 	PlayerID string `json:"playerId"`
 	Count    int    `json:"count"`
@@ -433,6 +518,7 @@ type RoomSnapshot struct {
 	Othello           *OthelloState         `json:"othello,omitempty"`
 	TicTacToe         *TicTacToeState       `json:"tictactoe,omitempty"`
 	LiarsDice         *LiarsDiceState       `json:"liarsDice,omitempty"`
+	Gomoku            *GomokuState          `json:"gomoku,omitempty"`
 	ResultText        string                `json:"resultText,omitempty"`
 	PunishedPlayerIDs []string              `json:"punishedPlayerIds"`
 	Proofs            []PunishmentProof     `json:"proofs"`
@@ -442,6 +528,9 @@ type RoomSnapshot struct {
 	RoundHistory      []RoundHistoryItem    `json:"roundHistory"`
 	RoundHistoryTotal int                   `json:"roundHistoryTotal"`
 	Chat              []ChatMessage         `json:"chat"`
+	// 仅在"放过对方"生效后、下一局结算前有意义，用于出拳阶段提示；结算时会被清空。
+	ForgiveAdvantageTargetID      string `json:"forgiveAdvantageTargetId,omitempty"`
+	ForgiveAdvantageBeneficiaryID string `json:"forgiveAdvantageBeneficiaryId,omitempty"`
 }
 
 type ServerStats struct {
@@ -534,12 +623,14 @@ type GameConfig struct {
 	Description string `json:"description"`
 }
 
-type DailyAnnouncement struct {
-	Enabled    bool   `json:"enabled"`
-	Title      string `json:"title"`
-	Content    string `json:"content"`
-	ButtonText string `json:"buttonText"`
-	Version    string `json:"version"`
+type AnnouncementBoard struct {
+	Enabled bool   `json:"enabled"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
+}
+
+type SecurityDisclaimerConfig struct {
+	Enabled bool `json:"enabled"`
 }
 
 type ExtremeModeConfig struct {
@@ -563,7 +654,8 @@ type AppConfig struct {
 		Description   string `json:"description"`
 		AdminPassword string `json:"adminPassword"`
 	} `json:"site"`
-	DailyAnnouncement            DailyAnnouncement           `json:"dailyAnnouncement"`
+	AnnouncementBoard            AnnouncementBoard           `json:"announcementBoard"`
+	SecurityDisclaimer           SecurityDisclaimerConfig    `json:"securityDisclaimer"`
 	Genders                      []GenderOption              `json:"genders"`
 	GenderFactions               []GenderFaction             `json:"genderFactions"`
 	Titles                       []TitleSegment              `json:"titles"`

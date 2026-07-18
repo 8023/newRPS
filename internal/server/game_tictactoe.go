@@ -408,12 +408,8 @@ func (s *Server) applyTicTacToeDisconnectForfeit(room *RoomState, forfeit Discon
 		streakText = s.applyExtremeWinStreakRisk(room, winner)
 		rankedText = fmt.Sprintf("，排位 %d 分已结算（%s %s，%s %d）", forfeit.Stake, forfeit.WinnerName, formatSigned(wD), forfeit.LoserName, lD)
 	}
-	if winner != nil {
-		winner.Stats.Wins++
-	}
-	if loser != nil {
-		loser.Stats.Losses++
-	}
+	recordGameOutcome(winner, types.GameTicTacToe, "win")
+	recordGameOutcome(loser, types.GameTicTacToe, "loss")
 	room.Score[forfeit.WinnerSeat]++
 	room.SeatedScore[forfeit.WinnerSeat]++
 	ssW := room.SeatStats[forfeit.WinnerSeat]

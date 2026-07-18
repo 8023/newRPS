@@ -9,11 +9,12 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// 应用共享 SQLite 数据库：聊天记录、房间生命周期、惩罚任务/证明事件共用同一份文件/连接
-// （单连接，写已在各 store 内部用 mutex 串行化，符合 SQLite 单写者限制）。
+// 应用共享 SQLite 数据库：聊天、房间/惩罚事件、Web Push、玩家档案（players + player_secrets）
+// 共用同一份文件/连接（单连接，写已在各 store 内部用 mutex 串行化，符合 SQLite 单写者限制）。
 //
-// 早期版本文件名为 chat.db，只存聊天；现在改名 database.db 并入房间/惩罚事件表。
+// 早期版本文件名为 chat.db，只存聊天；现在改名 database.db 并入房间/惩罚事件/玩家表。
 // 首次启动时若 database.db 不存在但旧的 chat.db 存在，会自动重命名迁移，不丢历史聊天记录。
+// 旧版玩家档案 players.json：启动时 loadPlayersFromDisk 会幂等导入后改名为 players.json.migrated。
 // WAL 模式下未 checkpoint 的最新数据在 -wal 边车文件里，必须连 -shm/-wal 一起搬，
 // 否则只搬主文件会把最近一批还没落盘的聊天记录留在旧文件名下，等于丢数据。
 func openDatabase(dataDir string) (*sql.DB, error) {
@@ -36,7 +37,7 @@ func openDatabase(dataDir string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := db.Exec(chatSchema + roomEventSchema + punishmentEventSchema + pushSubscriptionSchema); err != nil {
+	if _, err := db.Exec(chatSchema + roomEventSchema + punishmentEventSchema + pushSubscriptionSchema + playerSchema); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("database schema: %w", err)
 	}

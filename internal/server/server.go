@@ -27,9 +27,11 @@ func New() (*Server, error) {
 	uploadsDir := filepath.Join(root, "work", "uploads")
 	proofDir := filepath.Join(uploadsDir, "proofs")
 	adminDir := filepath.Join(uploadsDir, "admin")
+	avatarDir := filepath.Join(uploadsDir, "avatars")
 	dataDir := filepath.Join(root, "data")
 	_ = os.MkdirAll(proofDir, 0o755)
 	_ = os.MkdirAll(adminDir, 0o755)
+	_ = os.MkdirAll(avatarDir, 0o755)
 	_ = os.MkdirAll(dataDir, 0o755)
 
 	// 会话密钥：优先环境变量；否则落盘 work/session.secret，避免每次重启使浏览器 token 全部失效。
@@ -113,6 +115,7 @@ func New() (*Server, error) {
 		othelloSettlementTimers: map[string]*time.Timer{},
 		ticTacToeGiveawayTimers: map[string]*time.Timer{},
 		liarsDiceStartTimers:    map[string]*time.Timer{},
+		gomokuUndoTimers:        map[string]*time.Timer{},
 		deviceCreateAttempts:    map[string][]int64{},
 		adminClientIDs:          map[string]struct{}{},
 		sidToClientID:           map[string]string{},
@@ -133,13 +136,14 @@ func New() (*Server, error) {
 		uploadsDir:              uploadsDir,
 		proofUploadsDir:         proofDir,
 		adminUploadsDir:         adminDir,
+		avatarUploadsDir:        avatarDir,
 		dataDir:                 dataDir,
 		playersFile:             filepath.Join(dataDir, "players.json"),
 		distDir:                 distDir,
 		logCh:                   make(chan activityLogEntry, 1024),
 		startedAt:               nowMs(),
 	}
-	// SQLite 持久化（聊天/房间事件/惩罚事件共用一个连接）：失败不阻断启动，仅记录
+	// SQLite 持久化（聊天/房间事件/惩罚事件/玩家档案共用一个连接）：失败不阻断启动，仅记录
 	// （内存降级为不落盘，功能仍可用）。
 	if db, err := openDatabase(dataDir); err != nil {
 		s.errorLog("database_open_failed", err.Error())
@@ -148,6 +152,7 @@ func New() (*Server, error) {
 		s.chatDB = newChatStore(db)
 		s.eventDB = newEventStore(db)
 		s.pushDB = newPushStore(db)
+		s.playerDB = newPlayerStore(db)
 	}
 	// VAPID 密钥：失败不阻断启动，Web Push 功能会静默不可用（sendPush 会因 vapid.PublicKey=="" 直接跳过）。
 	if keys, err := loadOrGenerateVAPIDKeys(root); err != nil {

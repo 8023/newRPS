@@ -31,7 +31,7 @@
 │   └── vite.config.ts   # 构建输出到仓库根 dist/
 ├── dist/                # 前端构建产物（gitignore；Go 静态托管）
 ├── bin/server           # Go 可执行文件（gitignore；Linux amd64）
-├── data/                # players.json 等（gitignore）
+├── data/                # database.db（玩家/聊天/事件）等（gitignore）
 ├── work/                # uploads、session.secret（gitignore）
 ├── go.mod
 ├── package.json         # 根脚本（并发 dev / 一键 build）
@@ -113,13 +113,15 @@ docker compose logs -f gamehouse
 
 | 路径 | 内容 | 说明 |
 |------|------|------|
-| `data/players.json` | 玩家档案、积分、战绩等 | **核心存档** |
+| `data/database.db`（及 `-wal`/`-shm`） | 玩家档案、聊天、房间/惩罚事件、Web Push | **核心存档**；旧 `players.json` 启动时会自动迁入库并改名为 `players.json.migrated` |
 | `work/uploads/` | 证明图、后台上传图 | 丢了历史图片链会 404 |
 | `work/session.secret` | 会话 HMAC（未设 `SESSION_SECRET` 时） | 丢了则旧浏览器 token 全部失效 |
 | `config/*.json` | 后台改过的运行时配置（按功能拆分） | **整目录备份**；升级勿用空包覆盖已改配置 |
 | `.env` | `SESSION_SECRET`、`ADMIN_PASSWORD` 等 | **`SESSION_SECRET` 不要换**，否则等同全员掉登录 |
 
 可用新版本覆盖的：`bin/`、`dist/`、`docker-compose.yml`。配置仅在确认需要重置时再覆盖 `config/`。
+
+⚠️ **`data/players.json` → SQLite 迁移代码，与 `PlayerSecretHash` 兼容分支同属临时桥接，等老部署基本迁完后应删除**：v2.1.28 起玩家档案改存 `data/database.db`（`internal/server/playerstore.go`），旧 `players.json` 由 `internal/server/persist.go` 的 `migratePlayersJSONIfNeeded` 在每次启动时幂等扫描导入，成功后整体改名为 `players.json.migrated` 避免下次重复扫描；`ingestPersistedPlayer`/`loadPlayersFromSQLite` 是正常加载也要用的常驻逻辑，不在此列。待确认所有仍在运营的部署都已完成一次这个迁移（即 `players.json` 已普遍变成 `players.json.migrated`）后，应删除：`migratePlayersJSONIfNeeded` 本体及其在 `loadPlayersFromDisk` 里的调用、`persistedPlayer.LegacyOthelloStats` 字段、`migrateGameStats` 里从旧版合计战绩反推分游戏战绩的兜底分支（`hasNew` 为假时的逻辑）。
 
 ```bash
 # 备份数据（推荐）
@@ -224,7 +226,8 @@ docker compose up -d
 | 文件 | 内容 |
 |------|------|
 | `site.json` | 站点名、简介、管理员口令 |
-| `daily-announcement.json` | 每日公告 |
+| `announcement-board.json` | 公告板（展示于顶栏「关于」面板，不再是弹窗） |
+| `security-disclaimer.json` | 安全与免责声明开关（内容固定写在前端，仅一个 `enabled`） |
 | `gender-factions.json` | 性别阵营（genders 由阵营展开） |
 | `titles.json` | 称号段 |
 | `punishments.json` | 系统惩罚池 |
@@ -276,6 +279,21 @@ npm run test           # go test + 前端 build
 ```
 
 ## 最近更新记录
+
+### v2.1.28（2026-07-18）
+
+- **新增五子棋（Gomoku）**：与黑白棋/井字棋同级的第五种玩法，15x15 棋盘，双人回合制，五子连线（横/竖/斜均可）判胜；支持悔棋请求（只能在自己回合发起，一次悔回请求方与应手方各一步，双方各限 3 次/局，30 秒无响应自动拒绝）与认输请求（需对方确认才结束对局）；断线判负、排位结算、惩罚任务与其余座位制玩法走同一套逻辑。
+- **头像上传**：个人资料页可上传头像，前端本地压缩裁切成正方形 WebP（≤20KB）后上传，服务端校验真实格式；可清空恢复默认的"首字头像"。头像会同步显示在大厅列表、房间座位、聊天等所有展示玩家的地方。
+- **玩家档案迁移到 SQLite**：`data/players.json` 改存进 `data/database.db`（与聊天/房间事件共用同一连接），旧文件启动时幂等自动导入后改名为 `players.json.migrated`；SQLite 不可用时自动降级回写 JSON，不影响功能。
+- **战绩统计模型泛化**：原来只有黑白棋单独维护一套"胜/负/平/局数/吃子/被吃"统计，现在改成锤子剪刀布/黑白棋/井字棋/五子棋/大话骰五个玩法各自独立的胜/负/平计数（不再单独记吃子数等黑白棋专属字段），个人资料页的战绩明细相应更新。
+- **每日公告弹窗 → 平台用户安全与免责声明**：新增一个先于连接完成展示的强制声明页（文案固定写在前端，不可在后台自定义，仅保留 `security-disclaimer.json` 的整体开关）。声明页至少停留 3 秒（3 秒内选完两道单选题也不会点亮「确定」），只有「清楚」+「能」都选中且满 3 秒才能进入网站；声明页在 WS 连接建立之前就展示，连接过程与这 3 秒强制停留并行，不再叠加等待。每天每个浏览器只需确认一次，建角色前也会展示。
+- **顶栏「赞助」→「关于」**：原「每日公告弹窗」的内容（标题+正文，后台可编辑）搬到「关于」面板里，展示为一块常驻的公告板，不再是弹窗，也不再需要按钮文字/版本标识两个字段。
+- **锤子剪刀布"放过对方"机制微调**：平局不再消耗待生效的命运安排名额（此前只有双白给不消耗）；白给回合的结果与出拳无关，命中白给时会直接清空待生效的名额而不是拖到未来某局才生效；命中"命运的干预"时结算文案会说明原因。
+- **配置文件迁移健壮性修复**：本版本把 `daily-announcement.json` 改名为 `announcement-board.json` 并新增 `security-disclaimer.json`；补上了对应的自动迁移/兜底创建逻辑，避免已在跑的部署按官方升级流程（保留旧 `config/` 目录）升级后因缺文件启动失败。
+- **大厅房间列表排序修复**：Go 的 map 遍历顺序本身是随机的，之前每次广播大厅快照时房间顺序会跟着抖动，现按房间 id 稳定排序。
+- **wire 协议清理**：删掉了几十个手工维护的 `has_XXX` 占位字段（原本用来在 protobuf 里模拟"字段是否被显式设置过"），改成前后端一致的"按字段名单统一补零"机制，减少协议体积和后续新增字段时的样板代码。
+- 惩罚任务事件日志表结构调整：一次任务从发布到完成算一行（按 id 更新），而不是发布/提交/驳回各开一行，审计记录更容易按任务串起来看。
+- 新增/补充了一批后端单测（玩家 SQLite 存取、头像上传、战绩统计、配置迁移、大话骰惩罚事件等）。
 
 ### v2.1.27（2026-07-16）
 
@@ -366,3 +384,7 @@ npm run test           # go test + 前端 build
 - **对局记录**：展示任务完成证明（状态/文字/图片/审核备注）；前端按 id 合并 history，避免覆盖丢失。
 - **黑白棋终局文案**：白给/上贡改为统计摘要，不再把每一手明细拼进结果句。
 - **Docker 部署**：Release 独立部署包（含 compose / config / env 模板 + bin/dist）；也可源码本机构建后挂载。
+
+## 致谢
+
+本项目部分代码由 [Claude Code](https://claude.com/claude-code)（Anthropic）辅助编写与审计。

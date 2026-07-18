@@ -206,6 +206,7 @@ type RoomState struct {
 	Othello         *types.OthelloState
 	TicTacToe       *types.TicTacToeState
 	LiarsDice       *types.LiarsDiceState
+	Gomoku          *types.GomokuState
 	// LiarsDiceHands：私有骰子，playerId -> 点数列表；绝不进 roomSnapshot/广播，
 	// 只通过 emitToClient 单播给玩家自己（保密性来自"只发给这一个 socket"，不需要加密）。
 	LiarsDiceHands              map[string][]int
@@ -285,6 +286,7 @@ type Server struct {
 	othelloSettlementTimers map[string]*time.Timer
 	ticTacToeGiveawayTimers map[string]*time.Timer
 	liarsDiceStartTimers    map[string]*time.Timer
+	gomokuUndoTimers        map[string]*time.Timer
 
 	// deviceCreateAttempts：按 deviceKey 记录 10 分钟内新建玩家时间戳
 	deviceCreateAttempts map[string][]int64
@@ -296,6 +298,7 @@ type Server struct {
 	eventDB *eventStore
 	// pushDB：Web Push 订阅存储；vapid：VAPID 密钥对（work/vapid.json 或环境变量）
 	pushDB         *pushStore
+	playerDB       *playerStore
 	vapid          vapidKeys
 	adminClientIDs map[string]struct{}
 	sidToClientID  map[string]string
@@ -328,12 +331,13 @@ type Server struct {
 	host string
 	port int
 
-	uploadsDir      string
-	proofUploadsDir string
-	adminUploadsDir string
-	dataDir         string
-	playersFile     string
-	distDir         string
+	uploadsDir       string
+	proofUploadsDir  string
+	adminUploadsDir  string
+	avatarUploadsDir string
+	dataDir          string
+	playersFile      string // 旧 players.json 路径，仅用于一次性迁移
+	distDir          string
 
 	persistMu          sync.Mutex
 	persistDirty       bool

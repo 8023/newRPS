@@ -9,6 +9,7 @@ export function playerSyncKey(player: PublicPlayer) {
   return [
     player.name,
     player.displayName,
+    player.avatarUrl || "",
     player.genderId,
     player.genderLabel,
     player.factionId,
@@ -21,6 +22,21 @@ export function playerSyncKey(player: PublicPlayer) {
     player.stats.punishments,
     player.stats.rankedPoints,
     player.stats.title,
+    player.gameStats?.rps?.wins || 0,
+    player.gameStats?.rps?.losses || 0,
+    player.gameStats?.rps?.draws || 0,
+    player.gameStats?.othello?.wins || 0,
+    player.gameStats?.othello?.losses || 0,
+    player.gameStats?.othello?.draws || 0,
+    player.gameStats?.tictactoe?.wins || 0,
+    player.gameStats?.tictactoe?.losses || 0,
+    player.gameStats?.tictactoe?.draws || 0,
+    player.gameStats?.gomoku?.wins || 0,
+    player.gameStats?.gomoku?.losses || 0,
+    player.gameStats?.gomoku?.draws || 0,
+    player.gameStats?.liarsdice?.wins || 0,
+    player.gameStats?.liarsdice?.losses || 0,
+    player.gameStats?.liarsdice?.draws || 0,
     player.nameWarEnabled ? "1" : "0",
     player.nameWarPunished ? "1" : "0",
     player.nameWarPenaltyName || "",
@@ -84,24 +100,46 @@ export function normalizePublicStats(stats: PublicPlayer["stats"] | null | undef
   };
 }
 
-export function normalizeOthelloStats(stats: PublicPlayer["othelloStats"] | null | undefined): PublicPlayer["othelloStats"] {
-  const s = stats || ({} as PublicPlayer["othelloStats"]);
+export function emptyGameWLD(): PublicPlayer["gameStats"]["rps"] {
+  return { wins: 0, losses: 0, draws: 0 };
+}
+
+export function normalizeGameWLD(stats: PublicPlayer["gameStats"]["rps"] | null | undefined) {
+  const s = stats || emptyGameWLD();
+  return { wins: statNum(s.wins), losses: statNum(s.losses), draws: statNum(s.draws) };
+}
+
+export function normalizeGameStats(stats: PublicPlayer["gameStats"] | null | undefined): PublicPlayer["gameStats"] {
+  const s = stats || ({} as PublicPlayer["gameStats"]);
   return {
-    wins: statNum(s.wins),
-    losses: statNum(s.losses),
-    draws: statNum(s.draws),
-    games: statNum(s.games),
-    captured: statNum(s.captured),
-    lost: statNum(s.lost)
+    rps: normalizeGameWLD(s.rps),
+    othello: normalizeGameWLD(s.othello),
+    tictactoe: normalizeGameWLD(s.tictactoe),
+    gomoku: normalizeGameWLD(s.gomoku),
+    liarsdice: normalizeGameWLD(s.liarsdice)
+  };
+}
+
+export function totalFromGameStats(gs: PublicPlayer["gameStats"] | null | undefined) {
+  const g = normalizeGameStats(gs);
+  const parts = [g.rps, g.othello, g.tictactoe, g.gomoku, g.liarsdice];
+  return {
+    wins: parts.reduce((n, p) => n + p.wins, 0),
+    losses: parts.reduce((n, p) => n + p.losses, 0),
+    draws: parts.reduce((n, p) => n + p.draws, 0)
   };
 }
 
 export function normalizePublicPlayer(player: PublicPlayer): PublicPlayer {
   if (!player) return player;
+  const gameStats = normalizeGameStats(player.gameStats);
+  const totals = totalFromGameStats(gameStats);
+  const stats = normalizePublicStats(player.stats);
+  // 展示用总榜优先用分项相加，避免旧数据/广播缺字段时与分项不一致
   return {
     ...player,
-    stats: normalizePublicStats(player.stats),
-    othelloStats: normalizeOthelloStats(player.othelloStats)
+    gameStats,
+    stats: { ...stats, wins: totals.wins, losses: totals.losses, draws: totals.draws }
   };
 }
 
@@ -228,7 +266,8 @@ export function normalizeRoundHistoryItem(item: RoomSnapshot["roundHistory"][num
     punishmentTasks: item.punishmentTasks || [],
     punishedNames: item.punishedNames || [],
     proofs: item.proofs || [],
-    tictactoeLine: item.tictactoeLine || undefined
+    tictactoeLine: item.tictactoeLine || undefined,
+    gomokuLine: item.gomokuLine || undefined
   };
 }
 
@@ -294,6 +333,19 @@ export function normalizeTicTacToe(state: RoomSnapshot["tictactoe"]): RoomSnapsh
   };
 }
 
+export function normalizeGomoku(state: RoomSnapshot["gomoku"]): RoomSnapshot["gomoku"] {
+  if (!state) return state;
+  return {
+    ...state,
+    moves: fixPosList(state.moves),
+    winningLine: state.winningLine?.length ? fixPosList(state.winningLine) : undefined,
+    rankedDelta: state.rankedDelta || { A: 0, B: 0 },
+    undoCount: state.undoCount || { A: 0, B: 0 },
+    moveCount: Number(state.moveCount) || 0,
+    board: padBoard(state.board, 15)
+  };
+}
+
 export function normalizeLiarsDice(state: RoomSnapshot["liarsDice"]): RoomSnapshot["liarsDice"] {
   if (!state) return state;
   return {
@@ -333,7 +385,8 @@ export function normalizeRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
     seats: { A: seats.A ?? null, B: seats.B ?? null },
     othello: normalizeOthello(room.othello),
     tictactoe: normalizeTicTacToe(room.tictactoe),
-    liarsDice: normalizeLiarsDice(room.liarsDice)
+    liarsDice: normalizeLiarsDice(room.liarsDice),
+    gomoku: normalizeGomoku(room.gomoku)
   };
 }
 

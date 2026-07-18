@@ -84,7 +84,7 @@ func cleanText(value string, max int) string {
 }
 
 // randomID 使用 RawURLEncoding，可能含 '_' 与 '-'
-var safeUploadRe = regexp.MustCompile(`(?i)^/uploads/(?:proofs|admin)/[0-9a-z._-]+\.(?:jpg|png|webp)$`)
+var safeUploadRe = regexp.MustCompile(`(?i)^/uploads/(?:proofs|admin|avatars)/[0-9a-z._-]+\.(?:jpg|png|webp)$`)
 
 func safeUploadURL(value string) string {
 	if safeUploadRe.MatchString(value) {
@@ -168,8 +168,33 @@ func emptySeatStats() types.SeatStats {
 	return types.SeatStats{}
 }
 
-func freshOthelloStats() types.OthelloStats {
-	return types.OthelloStats{}
+func freshGameStats() types.GameStats {
+	return types.GameStats{}
+}
+
+// recordGameOutcome 记一局某游戏的胜/负/平，并同步合计到 Stats.Wins/Losses/Draws。
+func recordGameOutcome(player *PlayerState, gameID types.GameID, outcome string) {
+	if player == nil {
+		return
+	}
+	if gameID == "" {
+		gameID = types.GameRPS
+	}
+	wld := player.GameStats.WLDFor(gameID)
+	if wld == nil {
+		return
+	}
+	switch outcome {
+	case "win":
+		wld.Wins++
+	case "loss":
+		wld.Losses++
+	case "draw":
+		wld.Draws++
+	default:
+		return
+	}
+	player.SyncTotalsFromGameStats()
 }
 
 func formatSigned(n int) string {

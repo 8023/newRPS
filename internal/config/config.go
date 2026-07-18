@@ -3,8 +3,8 @@
 //
 // 文件一览（相对 config/）：
 //
-//	site.json, daily-announcement.json, gender-factions.json, titles.json,
-//	punishments.json, player-punishment-room-name-pool.json, room-tags.json,
+//	site.json, announcement-board.json, security-disclaimer.json, gender-factions.json,
+//	titles.json, punishments.json, player-punishment-room-name-pool.json, room-tags.json,
 //	room-info-tags.json, access-control.json, name-war.json, giveaway.json,
 //	extreme-mode.json, bots.json, games.json, messages.json
 package config
@@ -27,7 +27,8 @@ const configFileMode = 0o600
 // 拆分后的功能配置文件名（缺一即加载失败，除非仍存在旧单体文件可迁移）。
 var splitConfigFiles = []string{
 	"site.json",
-	"daily-announcement.json",
+	"announcement-board.json",
+	"security-disclaimer.json",
 	"gender-factions.json",
 	"titles.json",
 	"punishments.json",
@@ -315,15 +316,13 @@ func normalizeConfig(input types.AppConfig) types.AppConfig {
 		adminPass = env
 	}
 
-	da := input.DailyAnnouncement
-	da.Title = sliceRunes(da.Title, 32)
-	da.Content = sliceRunes(da.Content, 800)
-	da.ButtonText = sliceRunes(da.ButtonText, 16)
-	da.Version = sliceRunes(da.Version, 32)
+	ab := input.AnnouncementBoard
+	ab.Title = sliceRunes(ab.Title, 32)
+	ab.Content = sliceRunes(ab.Content, 800)
 
 	games := make([]types.GameConfig, 0, len(input.Games))
 	for _, g := range input.Games {
-		if g.ID != "rps" && g.ID != "othello" && g.ID != "tictactoe" && g.ID != "liarsdice" {
+		if g.ID != "rps" && g.ID != "othello" && g.ID != "tictactoe" && g.ID != "liarsdice" && g.ID != "gomoku" {
 			continue
 		}
 		g.Name = sliceRunes(g.Name, 18)
@@ -384,7 +383,7 @@ func normalizeConfig(input types.AppConfig) types.AppConfig {
 	out.Site.Name = strings.TrimSpace(input.Site.Name)
 	out.Site.Description = strings.TrimSpace(input.Site.Description)
 	out.Site.AdminPassword = adminPass
-	out.DailyAnnouncement = da
+	out.AnnouncementBoard = ab
 	out.GenderFactions = genderFactions
 	out.Genders = flattenGenders(genderFactions)
 	out.Titles = titles
@@ -442,15 +441,12 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 	if strings.TrimSpace(input.Site.Name) == "" {
 		return input, fmt.Errorf("网站名称不能为空")
 	}
-	if input.DailyAnnouncement.Enabled {
-		if strings.TrimSpace(input.DailyAnnouncement.Title) == "" {
-			return input, fmt.Errorf("每日公告标题不能为空")
+	if input.AnnouncementBoard.Enabled {
+		if strings.TrimSpace(input.AnnouncementBoard.Title) == "" {
+			return input, fmt.Errorf("公告板标题不能为空")
 		}
-		if strings.TrimSpace(input.DailyAnnouncement.Content) == "" {
-			return input, fmt.Errorf("每日公告内容不能为空")
-		}
-		if strings.TrimSpace(input.DailyAnnouncement.ButtonText) == "" {
-			return input, fmt.Errorf("每日公告按钮文字不能为空")
+		if strings.TrimSpace(input.AnnouncementBoard.Content) == "" {
+			return input, fmt.Errorf("公告板内容不能为空")
 		}
 	}
 	if len(input.Genders) == 0 {
@@ -663,16 +659,73 @@ func LoadConfig() (types.AppConfig, error) {
 	if err := ensureSplitConfig(); err != nil {
 		return types.AppConfig{}, err
 	}
+	// 官方升级流程明确要求整目录保留旧 config/（见 README「升级服务器且不丢玩家数据」），
+	// 不会被新版本覆盖；本版本新增/改名的拆分文件必须能从旧目录状态自愈，否则所有已部署
+	// 实例升级后会因缺文件直接启动失败。
+	if err := migrateAnnouncementBoardFile(); err != nil {
+		return types.AppConfig{}, err
+	}
+	if err := ensureSecurityDisclaimerFile(); err != nil {
+		return types.AppConfig{}, err
+	}
 	cfg, err := readSplitConfig()
 	if err != nil {
 		return types.AppConfig{}, err
 	}
-	cfg = fixDailyAnnouncementEnabled(configPath("daily-announcement.json"), cfg)
+	cfg = fixAnnouncementBoardEnabled(configPath("announcement-board.json"), cfg)
 	valid, err := ValidateConfig(cfg)
 	if err != nil {
 		return types.AppConfig{}, fmt.Errorf("配置校验失败: %w", err)
 	}
 	return valid, nil
+}
+
+// migrateAnnouncementBoardFile：v2.1.28 把 daily-announcement.json 改名为
+// announcement-board.json（并丢弃了 buttonText/version 字段）。announcement-board.json
+// 缺失但旧文件还在时，从旧文件迁出 enabled/title/content，旧文件改名为 .bak；
+// 两个文件都不存在则什么也不做，交给 readSplitConfig 报出清晰的缺文件错误。
+func migrateAnnouncementBoardFile() error {
+	newPath := configPath("announcement-board.json")
+	if _, err := os.Stat(newPath); err == nil {
+		return nil
+	}
+	oldPath := configPath("daily-announcement.json")
+	data, err := os.ReadFile(oldPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("解析旧配置失败 %s: %w", oldPath, err)
+	}
+	board := types.AnnouncementBoard{Enabled: true}
+	if v, ok := raw["enabled"]; ok {
+		_ = json.Unmarshal(v, &board.Enabled)
+	}
+	if v, ok := raw["title"]; ok {
+		_ = json.Unmarshal(v, &board.Title)
+	}
+	if v, ok := raw["content"]; ok {
+		_ = json.Unmarshal(v, &board.Content)
+	}
+	if err := writeJSONFile(newPath, board); err != nil {
+		return fmt.Errorf("迁移公告板配置失败: %w", err)
+	}
+	_ = os.Rename(oldPath, oldPath+".bak")
+	return nil
+}
+
+// ensureSecurityDisclaimerFile：v2.1.28 新增的配置项，旧部署的 config/ 目录里没有对应
+// 文件、也没有旧格式可迁移；缺失时按默认开启写入，避免升级后因缺文件启动失败。
+func ensureSecurityDisclaimerFile() error {
+	path := configPath("security-disclaimer.json")
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+	return writeJSONFile(path, types.SecurityDisclaimerConfig{Enabled: true})
 }
 
 func ensureSplitConfig() error {
@@ -712,7 +765,8 @@ func readSplitConfig() (types.AppConfig, error) {
 	}
 	parts := []part{
 		{"site.json", &cfg.Site},
-		{"daily-announcement.json", &cfg.DailyAnnouncement},
+		{"announcement-board.json", &cfg.AnnouncementBoard},
+		{"security-disclaimer.json", &cfg.SecurityDisclaimer},
 		{"gender-factions.json", &cfg.GenderFactions},
 		{"titles.json", &cfg.Titles},
 		{"punishments.json", &cfg.Punishments},
@@ -748,7 +802,8 @@ func writeSplitConfig(cfg types.AppConfig) error {
 		value any
 	}{
 		{"site.json", cfg.Site},
-		{"daily-announcement.json", cfg.DailyAnnouncement},
+		{"announcement-board.json", cfg.AnnouncementBoard},
+		{"security-disclaimer.json", cfg.SecurityDisclaimer},
 		{"gender-factions.json", cfg.GenderFactions},
 		{"titles.json", cfg.Titles},
 		{"punishments.json", cfg.Punishments},
@@ -771,33 +826,33 @@ func writeSplitConfig(cfg types.AppConfig) error {
 	return nil
 }
 
-// fixDailyAnnouncementEnabled：JSON 缺省 bool 在 Go 为 false；缺 enabled 字段时视为 true。
-// path 可为 daily-announcement.json 或旧单体整文件。
-func fixDailyAnnouncementEnabled(path string, cfg types.AppConfig) types.AppConfig {
+// fixAnnouncementBoardEnabled：JSON 缺省 bool 在 Go 为 false；缺 enabled 字段时视为 true。
+// path 可为 announcement-board.json 或旧单体整文件（历史字段名 dailyAnnouncement）。
+func fixAnnouncementBoardEnabled(path string, cfg types.AppConfig) types.AppConfig {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return cfg
 	}
-	// 拆分文件：整文件即 dailyAnnouncement
-	var da map[string]json.RawMessage
-	if err := json.Unmarshal(data, &da); err != nil {
+	// 拆分文件：整文件即 announcementBoard
+	var ab map[string]json.RawMessage
+	if err := json.Unmarshal(data, &ab); err != nil {
 		return cfg
 	}
-	if _, hasDaily := da["dailyAnnouncement"]; hasDaily {
+	if _, hasLegacy := ab["dailyAnnouncement"]; hasLegacy {
 		// 旧单体：再挖一层
 		var nested map[string]json.RawMessage
-		if err := json.Unmarshal(da["dailyAnnouncement"], &nested); err != nil {
+		if err := json.Unmarshal(ab["dailyAnnouncement"], &nested); err != nil {
 			return cfg
 		}
 		if _, has := nested["enabled"]; !has {
-			cfg.DailyAnnouncement.Enabled = true
+			cfg.AnnouncementBoard.Enabled = true
 		}
 		return cfg
 	}
-	if _, has := da["enabled"]; !has {
+	if _, has := ab["enabled"]; !has {
 		// 若像 site 一样不是公告文件，有 title/content 才认定
-		if _, ok := da["title"]; ok {
-			cfg.DailyAnnouncement.Enabled = true
+		if _, ok := ab["title"]; ok {
+			cfg.AnnouncementBoard.Enabled = true
 		}
 	}
 	return cfg

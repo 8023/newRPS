@@ -33,24 +33,27 @@ func judge(a, b RpsMove) types.RoundResult {
 	return types.ResultB
 }
 
-func (s *Server) applyForgiveAdvantage(room *RoomState, result types.RoundResult) types.RoundResult {
+// applyForgiveAdvantage 处理"放过对方"后的命运安排：非平局/非双白给时，
+// 有 66% 概率无视双方实际出拳，直接判恩惠方获胜。第二个返回值仅在真正
+// 改写了结果时非空，供结算文案说明原因。
+func (s *Server) applyForgiveAdvantage(room *RoomState, result types.RoundResult) (types.RoundResult, *forgiveAdvantage) {
 	advantage := room.ForgiveAdvantage
 	if advantage == nil {
-		return result
+		return result, nil
 	}
 	room.ForgiveAdvantage = nil
-	if result == types.ResultDoubleLoss {
-		return result
+	if result == types.ResultDoubleLoss || result == types.ResultDraw {
+		return result, nil
 	}
 	beneficiarySeat, ok1 := s.seatOf(room, advantage.BeneficiaryID)
 	targetSeat, ok2 := s.seatOf(room, advantage.TargetID)
 	if !ok1 || !ok2 || beneficiarySeat == targetSeat {
-		return result
+		return result, nil
 	}
 	if rand.Float64() < 0.66 {
-		return types.RoundResult(beneficiarySeat)
+		return types.RoundResult(beneficiarySeat), advantage
 	}
-	return result
+	return result, nil
 }
 
 func (s *Server) giveawayForcedSeats(room *RoomState) []types.SeatKey {
@@ -79,7 +82,7 @@ func (s *Server) shouldTriggerGiveaway(player *PlayerState) bool {
 		rand.Float64()*100 < ptrFloat(player.GiveawayValue)
 }
 
-func (s *Server) resultWithGiveaway(room *RoomState, baseResult types.RoundResult, finalChoices map[types.SeatKey]types.Move) types.RoundResult {
+func (s *Server) resultWithGiveaway(room *RoomState, baseResult types.RoundResult, finalChoices map[types.SeatKey]types.Move) (types.RoundResult, *forgiveAdvantage) {
 	var giveawaySeats []types.SeatKey
 	for _, seat := range []types.SeatKey{types.SeatA, types.SeatB} {
 		if finalChoices[seat] == types.MoveGiveaway {
@@ -87,13 +90,16 @@ func (s *Server) resultWithGiveaway(room *RoomState, baseResult types.RoundResul
 		}
 	}
 	if len(giveawaySeats) == 1 {
+		// 白给回合的结果与出拳无关，命运安排的名额不应因此被延后到未来某局生效。
+		room.ForgiveAdvantage = nil
 		if giveawaySeats[0] == types.SeatA {
-			return types.ResultB
+			return types.ResultB, nil
 		}
-		return types.ResultA
+		return types.ResultA, nil
 	}
 	if len(giveawaySeats) >= 2 {
-		return types.ResultDoubleLoss
+		room.ForgiveAdvantage = nil
+		return types.ResultDoubleLoss, nil
 	}
 	return s.applyForgiveAdvantage(room, baseResult)
 }
@@ -227,6 +233,15 @@ func (s *Server) maybeStartChoosing(room *RoomState) {
 		}
 		return
 	}
+	if room.Settings.GameID == types.GameGomoku {
+		if room.Phase == types.PhaseReady || room.Phase == types.PhaseChoosing {
+			return
+		}
+		if room.Seats[types.SeatA] != nil && room.Seats[types.SeatB] != nil {
+			s.resetGomokuRoom(room)
+		}
+		return
+	}
 	if room.Phase == types.PhaseChoosing && (room.Choices[types.SeatA] != "" || room.Choices[types.SeatB] != "") {
 		return
 	}
@@ -253,6 +268,10 @@ func (s *Server) prepareNextChoice(room *RoomState) {
 	}
 	if room.Settings.GameID == types.GameLiarsDice {
 		s.prepareNextLiarsDiceRound(room)
+		return
+	}
+	if room.Settings.GameID == types.GameGomoku {
+		s.resetGomokuRoom(room)
 		return
 	}
 	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
@@ -333,7 +352,7 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 	} else {
 		baseResult = judge(RpsMove(finalChoices[types.SeatA]), RpsMove(finalChoices[types.SeatB]))
 	}
-	result := s.resultWithGiveaway(room, baseResult, finalChoices)
+	result, forgiveOutcome := s.resultWithGiveaway(room, baseResult, finalChoices)
 	punishedPlayers := s.punishmentPlayersForResult(room, result)
 	punishedNames := make([]string, 0, len(punishedPlayers))
 	for _, p := range punishedPlayers {
@@ -379,12 +398,8 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 	}
 
 	if result == types.ResultDoubleLoss {
-		if playerA != nil {
-			playerA.Stats.Losses++
-		}
-		if playerB != nil {
-			playerB.Stats.Losses++
-		}
+		recordGameOutcome(playerA, types.GameRPS, "loss")
+		recordGameOutcome(playerB, types.GameRPS, "loss")
 		ssA := room.SeatStats[types.SeatA]
 		ssA.Losses++
 		room.SeatStats[types.SeatA] = ssA
@@ -400,12 +415,8 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 			room.ResultText = "双方白给，双输"
 		}
 	} else if result == types.ResultDraw {
-		if playerA != nil {
-			playerA.Stats.Draws++
-		}
-		if playerB != nil {
-			playerB.Stats.Draws++
-		}
+		recordGameOutcome(playerA, types.GameRPS, "draw")
+		recordGameOutcome(playerB, types.GameRPS, "draw")
 		ssA := room.SeatStats[types.SeatA]
 		ssA.Draws++
 		room.SeatStats[types.SeatA] = ssA
@@ -432,12 +443,8 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 		} else {
 			winner, loser = playerB, playerA
 		}
-		if winner != nil {
-			winner.Stats.Wins++
-		}
-		if loser != nil {
-			loser.Stats.Losses++
-		}
+		recordGameOutcome(winner, types.GameRPS, "win")
+		recordGameOutcome(loser, types.GameRPS, "loss")
 		room.Score[winnerSeat]++
 		room.SeatedScore[winnerSeat]++
 		ssW := room.SeatStats[winnerSeat]
@@ -460,6 +467,11 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 			room.ResultText = fmt.Sprintf("%s，%s胜利%s%s", giveawayText, occupantName(room.Seats[winnerSeat]), rankedText, streakText)
 		} else {
 			room.ResultText = fmt.Sprintf("%s胜利%s%s", occupantName(room.Seats[winnerSeat]), rankedText, streakText)
+		}
+		if forgiveOutcome != nil {
+			// 命中命运安排时 winnerSeat 必是 forgiveOutcome 的受益方座位，loserSeat 是被放过方座位。
+			room.ResultText += fmt.Sprintf("（%s 上局放过了 %s，本局已受到「命运的干预」）",
+				occupantName(room.Seats[winnerSeat]), occupantName(room.Seats[loserSeat]))
 		}
 	}
 
@@ -513,15 +525,14 @@ func (s *Server) applyDisconnectForfeit(room *RoomState, player *PlayerState) bo
 	if room.Settings.GameID == types.GameTicTacToe {
 		return s.applyTicTacToeDisconnectForfeit(room, forfeit)
 	}
+	if room.Settings.GameID == types.GameGomoku {
+		return s.applyGomokuDisconnectForfeit(room, forfeit)
+	}
 	winner := s.players[forfeit.WinnerID]
 	loser := s.players[forfeit.LoserID]
 	wD, lD := s.applyRankedStake(winner, loser, forfeit.Stake)
-	if winner != nil {
-		winner.Stats.Wins++
-	}
-	if loser != nil {
-		loser.Stats.Losses++
-	}
+	recordGameOutcome(winner, types.GameRPS, "win")
+	recordGameOutcome(loser, types.GameRPS, "loss")
 	resetExtremeWinStreak(loser)
 	streakText := s.applyExtremeWinStreakRisk(room, winner)
 	room.Score[forfeit.WinnerSeat]++

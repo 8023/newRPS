@@ -140,6 +140,7 @@ func sanitizeRoundHistoryItem(item types.RoundHistoryItem) types.RoundHistoryIte
 	item.PunishedNames = emptyStrings(item.PunishedNames)
 	item.Proofs = emptyHistoryProofs(item.Proofs)
 	item.TicTacToeLine = emptyPos(item.TicTacToeLine)
+	item.GomokuLine = emptyPos(item.GomokuLine)
 	if item.LiarsDiceHands == nil {
 		item.LiarsDiceHands = map[string][]int{}
 	}
@@ -185,6 +186,28 @@ func sanitizeTicTacToe(state *types.TicTacToeState) *types.TicTacToeState {
 		out.Board = make([][]*types.TicTacToeCell, 3)
 		for i := range out.Board {
 			out.Board[i] = make([]*types.TicTacToeCell, 3)
+		}
+	}
+	return &out
+}
+
+func sanitizeGomoku(state *types.GomokuState) *types.GomokuState {
+	if state == nil {
+		return nil
+	}
+	out := *state
+	out.Moves = emptyPos(out.Moves)
+	out.WinningLine = emptyPos(out.WinningLine)
+	if out.RankedDelta == nil {
+		out.RankedDelta = map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}
+	}
+	if out.UndoCount == nil {
+		out.UndoCount = map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}
+	}
+	if out.Board == nil {
+		out.Board = make([][]*types.GomokuCell, gomokuBoardSize)
+		for i := range out.Board {
+			out.Board[i] = make([]*types.GomokuCell, gomokuBoardSize)
 		}
 	}
 	return &out
@@ -239,6 +262,7 @@ func sanitizeRoomSnapshot(snap types.RoomSnapshot) types.RoomSnapshot {
 	snap.Othello = sanitizeOthello(snap.Othello)
 	snap.TicTacToe = sanitizeTicTacToe(snap.TicTacToe)
 	snap.LiarsDice = sanitizeLiarsDice(snap.LiarsDice)
+	snap.Gomoku = sanitizeGomoku(snap.Gomoku)
 	return snap
 }
 

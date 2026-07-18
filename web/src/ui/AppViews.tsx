@@ -1,14 +1,15 @@
 import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type UIEvent as ReactUIEvent, useEffect, useRef, useState } from "react";
-import { Coffee, Crown, DoorOpen, Download, ExternalLink, Eye, HeartHandshake, MessageCircle, Moon, Pencil, RefreshCcw, Save, Send, Settings, Shield, Sun, Swords, Upload, UserRound, Users } from "lucide-react";
+import { Coffee, Crown, DoorOpen, Download, ExternalLink, Eye, HeartHandshake, Info, MessageCircle, Moon, Pencil, RefreshCcw, Save, Send, Settings, Shield, Sun, Swords, Upload, UserRound, Users } from "lucide-react";
 import type { AppConfig, BotDifficulty, ChatMessage, GenderFaction, LobbySnapshot, Move, PublicPlayer, PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant } from "../shared/types";
 import {
-  defaultLiarsDiceRoomName, defaultOthelloRoomName, defaultRoomName, defaultTicTacToeRoomName,
-  othelloBoardThemes, sponsorLinks, tictactoeBoardThemes, tokenKey
+  defaultGomokuRoomName, defaultLiarsDiceRoomName, defaultOthelloRoomName, defaultRoomName, defaultTicTacToeRoomName,
+  gomokuBoardThemes, othelloBoardThemes, sponsorLinks, tictactoeBoardThemes, tokenKey
 } from "../lib/constants";
 import { ask } from "../lib/rpc";
 import { claimIdentity, encodeClaimCode, fetchClaimKey, joinIdentityPayload, logout, refreshClaimKey } from "../lib/session";
 import { appendHistoryPage, normalizeRoomSnapshot, normalizeRoundHistoryItem } from "../lib/normalize";
 import { prepareProofImageForUpload, compressAdminImageForUpload } from "../lib/proofImage";
+import { prepareAvatarImageForUpload } from "../lib/avatarImage";
 import { isNearScrollBottom, scrollToBottomSoon, stickChatToBottom } from "../lib/uiHelpers";
 import { appendMentionText, loadChat, loadOlderChat, useChat } from "../lib/chatStore";
 import {
@@ -17,6 +18,7 @@ import {
 } from "../lib/pushNotify";
 import type { MeState } from "../lib/types";
 import { LiarsDicePanel } from "./LiarsDicePanel";
+import { GomokuPanel, GomokuScore } from "./GomokuPanel";
 
 import { formatBytes, formatDuration } from "../lib/format";
 export function Login({ config, onDone, onError }: { config: AppConfig; onDone: (me: MeState) => void; onError: (message: string) => void }) {
@@ -169,6 +171,26 @@ export function ClaimKeyPanel({ onError }: { onError: (message: string) => void 
         <button type="button" disabled={loading} onClick={load}>{loading ? "获取中…" : "显示认领密钥"}</button>
       )}
     </div>
+  );
+}
+
+// PlayerAvatar：房间参战席、个人设置等处展示的圆形头像；未设置头像时退回姓名首字。
+export function PlayerAvatar({ player, size = 28, className = "" }: { player?: PublicPlayer; size?: number; className?: string }) {
+  const label = mentionLabel(player) || player?.name || "";
+  const ch = label.slice(0, 1) || "?";
+  const style = {
+    width: size,
+    height: size,
+    fontSize: Math.max(10, Math.round(size * 0.42)),
+    lineHeight: 1
+  };
+  if (player?.avatarUrl) {
+    return <img className={`player-avatar ${className}`} style={style} src={player.avatarUrl} alt="" />;
+  }
+  return (
+    <span className={`player-avatar player-avatar-fallback ${className}`} style={style} aria-hidden="true">
+      <span className="player-avatar-char">{ch}</span>
+    </span>
   );
 }
 
@@ -343,7 +365,7 @@ export function Lobby({ config, lobby, me, onError, onGoRoom }: { config: AppCon
                 <h3>{room.name} <ExtremeRankedBadge enabled={room.enableExtremeRanked} /> <RankMultiplierBadge multiplier={room.rankMultiplier} /></h3>
                 {room.tags?.length ? <RoomTagList tags={room.tags} /> : null}
                 <RoomVersusLine room={room} />
-                <p>{room.status} · {room.gameId === "liarsdice" ? `${room.players} 人参战` : `${room.players}/2 战斗席`} · {room.spectators} 观战</p>
+                <p>{roomStatusText(room.status)} · {room.gameId === "liarsdice" ? `${room.players} 人参战` : `${room.players}/2 战斗席`} · {room.spectators} 观战</p>
                 <RoomInfoTagList tags={lobbyRoomInfoTags(config, room)} />
               </div>
               <div className="join-box">
@@ -401,6 +423,7 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
     enableExtremeRanked: false,
     othelloBoardTheme: "classic",
     tictactoeBoardTheme: "paper",
+    gomokuBoardTheme: "wood",
     liarsDiceMinPlayers: 3,
     liarsDiceMaxPlayers: 3
   });
@@ -435,8 +458,9 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
       if (!customRoomName && next.gameId) {
         merged.name = next.gameId === "othello" ? defaultOthelloRoomName
           : next.gameId === "tictactoe" ? defaultTicTacToeRoomName
-          : next.gameId === "liarsdice" ? defaultLiarsDiceRoomName
-          : defaultRoomName;
+            : next.gameId === "liarsdice" ? defaultLiarsDiceRoomName
+              : next.gameId === "gomoku" ? defaultGomokuRoomName
+                : defaultRoomName;
       }
       if (next.gameId === "othello" || merged.gameId === "othello") {
         merged.othelloBoardTheme = merged.othelloBoardTheme || "classic";
@@ -444,6 +468,10 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
       }
       if (next.gameId === "tictactoe" || merged.gameId === "tictactoe") {
         merged.tictactoeBoardTheme = merged.tictactoeBoardTheme || "paper";
+        merged.enableBot = false;
+      }
+      if (next.gameId === "gomoku" || merged.gameId === "gomoku") {
+        merged.gomokuBoardTheme = merged.gomokuBoardTheme || "wood";
         merged.enableBot = false;
       }
       if (next.gameId === "liarsdice" || merged.gameId === "liarsdice") {
@@ -507,6 +535,9 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
         if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) merged.stake = 5;
         merged.enableBot = false;
       } else if (merged.gameId === "liarsdice") {
+        if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) merged.stake = 5;
+        merged.enableBot = false;
+      } else if (merged.gameId === "gomoku") {
         if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) merged.stake = 5;
         merged.enableBot = false;
       } else if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) {
@@ -595,6 +626,7 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
               {settings.gameId === "othello" && <p className="hint">黑白棋支持真人 1v1、观战、聊天、排位和惩罚；Bot 不开放，排位房会支持白给/上贡结算。</p>}
               {settings.gameId === "tictactoe" && <p className="hint">井字棋支持真人 1v1、观战、聊天、排位和惩罚；双方准备后随机 X/O 先手，Bot 暂不开放。</p>}
               {settings.gameId === "liarsdice" && <p className="hint">大话骰支持 2-8 人参战，进房默认观战，可自由加入/离开参战席；全员准备且名单 5 秒无变动后自动开局，Bot 暂不开放。</p>}
+              {settings.gameId === "gomoku" && <p className="hint">五子棋支持真人 1v1、观战、聊天、排位和惩罚；15x15 棋盘先连成五子者胜，可向对方请求悔棋或认输，Bot 暂不开放。</p>}
               {settings.gameId === "liarsdice" && (
                 <div className="liarsdice-roster-settings">
                   <label>
@@ -686,6 +718,37 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
                   ))}
                 </div>
               )}
+              {settings.gameId === "gomoku" && (
+                <div className="othello-theme-grid">
+                  {gomokuBoardThemes.map((theme) => (
+                    <button
+                      type="button"
+                      className={`othello-theme-card ${settings.gomokuBoardTheme === theme.id ? "active" : ""}`}
+                      key={theme.id}
+                      onClick={() => patch({ gomokuBoardTheme: theme.id })}
+                      style={{
+                        "--theme-board": theme.board,
+                        "--theme-cell": theme.cell,
+                        "--theme-line": theme.line,
+                        "--theme-border": theme.border,
+                        "--theme-black-disc": theme.blackDisc,
+                        "--theme-white-disc": theme.whiteDisc,
+                        "--theme-black-ring": theme.blackRing,
+                        "--theme-white-ring": theme.whiteRing
+                      } as CSSProperties}
+                    >
+                      <span className="othello-theme-preview">
+                        <i><b className="preview-disc black" /></i>
+                        <i />
+                        <i />
+                        <i><b className="preview-disc white" /></i>
+                      </span>
+                      <strong>{theme.name}</strong>
+                      <small>{theme.description}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="create-section">
               <h3>基础</h3>
@@ -702,9 +765,10 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
             </div>
             <div className="create-section">
               <h3>对手</h3>
-              <Toggle label="开启 Bot" value={settings.enableBot} disabled={settings.gameId === "othello" || settings.gameId === "tictactoe" || settings.gameId === "liarsdice" || (settings.enablePunishment && settings.punishmentSource === "player") || settings.enableRanked} onChange={(value) => patch({ enableBot: value })} />
+              <Toggle label="开启 Bot" value={settings.enableBot} disabled={settings.gameId === "othello" || settings.gameId === "tictactoe" || settings.gameId === "liarsdice" || settings.gameId === "gomoku" || (settings.enablePunishment && settings.punishmentSource === "player") || settings.enableRanked} onChange={(value) => patch({ enableBot: value })} />
               {settings.gameId === "othello" && <p className="hint">黑白棋暂不支持 Bot。</p>}
               {settings.gameId === "tictactoe" && <p className="hint">井字棋暂不支持 Bot。</p>}
+              {settings.gameId === "gomoku" && <p className="hint">五子棋暂不支持 Bot。</p>}
               {settings.enablePunishment && settings.punishmentSource === "player" && <p className="hint">玩家发布任务模式需要真人对战，不能开启 Bot。</p>}
               {settings.enableRanked && <p className="hint">排位战需要真人对战，不能开启 Bot。</p>}
               {settings.enableBot && (
@@ -736,13 +800,14 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
                 </button>
                 {(settings.gameId === "othello" ? ([1, 2, 5, 10] as const) : ([5, 10, 20] as const)).map((stake) => (
                   <button type="button" className={`ranked-choice-card ${settings.enableRanked && settings.stake === stake ? "active" : ""}`} key={stake} onClick={() => patch({ enableRanked: true, stake, enableExtremeRanked: Boolean(me.extremeModeEnabled) })}>
-                    <span>{settings.gameId === "othello" ? "🏆 黑白棋排位" : settings.gameId === "tictactoe" ? "🏆 井字棋排位" : me.extremeModeEnabled ? "⚡ 极限排位" : "🏆 排位"} {stake}{settings.gameId === "othello" ? " 分/子" : " 分"}</span>
+                    <span>{settings.gameId === "othello" ? "🏆 黑白棋排位" : settings.gameId === "tictactoe" ? "🏆 井字棋排位" : settings.gameId === "gomoku" ? "🏆 五子棋排位" : me.extremeModeEnabled ? "⚡ 极限排位" : "🏆 排位"} {stake}{settings.gameId === "othello" ? " 分/子" : " 分"}</span>
                     <small>{settings.gameId === "othello" ? `每翻掉对方 1 子立即结算 ${stake} 分，终局不重复结算。` : me.extremeModeEnabled ? "只能创建极限排位房；非极限玩家无法进入。" : `胜利 +${stake}，失败 -${stake}；普通平局不扣分，平局双罚时双方 -${stake}。`}</small>
                   </button>
                 ))}
               </div>
               {settings.gameId === "othello" && <p className="hint">黑白棋排位按实时翻子结算，可选 1/2/5/10 分/子；支持倍率和极限模式，但两者不能同时开启。</p>}
               {settings.gameId === "tictactoe" && <p className="hint">井字棋排位按胜负固定分结算，可选 5/10/20 分；支持倍率和极限模式。</p>}
+              {settings.gameId === "gomoku" && <p className="hint">五子棋排位按胜负固定分结算，可选 5/10/20 分；支持倍率和极限模式。</p>}
               {settings.enableBot && <p className="hint">开启 Bot 时不能选择排位战。</p>}
               {settings.enableRanked && me.extremeModeEnabled && (
                 <div className="multiplier-box extreme-mode-box">
@@ -796,6 +861,7 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
               <Toggle label="惩罚模式" value={settings.enablePunishment} onChange={(value) => patch({ enablePunishment: value })} />
               {settings.gameId === "othello" && <p className="hint">黑白棋惩罚会在终局、认输、逃跑或断线判负后触发；平局双罚开启时黑白棋平局双方都要惩罚。</p>}
               {settings.gameId === "tictactoe" && <p className="hint">井字棋惩罚会在终局或断线判负后触发；平局双罚开启时井字棋平局双方都要惩罚。</p>}
+              {settings.gameId === "gomoku" && <p className="hint">五子棋惩罚会在终局、认输或断线判负后触发；平局双罚开启时五子棋平局双方都要惩罚。</p>}
               {settings.enablePunishment && (
                 <>
                   <Select value={settings.punishmentSource || "system"} onChange={(value) => patch({ punishmentSource: value as RoomSettings["punishmentSource"] })} options={[
@@ -902,6 +968,7 @@ export function RankMultiplierBadge({ multiplier }: { multiplier?: number }) {
 export function gameIcon(gameId: RoomSettings["gameId"]) {
   if (gameId === "othello") return "⚫⚪";
   if (gameId === "tictactoe") return "❌⭕";
+  if (gameId === "gomoku") return "●○";
   if (gameId === "liarsdice") return "🎲";
   return "✊✌️🖐️";
 }
@@ -1006,7 +1073,7 @@ export function Room({ config, room, me, onBack, onError }: { config: AppConfig;
   const canChoose = Boolean(mySeat && room.phase !== "punishment" && (room.phase === "choosing" || room.phase === "result") && seats.A && seats.B);
   const roomHasBot = Boolean((seats.A && "isBot" in seats.A) || (seats.B && "isBot" in seats.B));
   const canShowGiveawayButton = Boolean(mySeat && me.giveawayEnabled && !roomHasBot && seats.A && seats.B);
-  const canGoSpectate = Boolean(mySeat && room.phase !== "punishment" && !choices[mySeat] && !(room.settings.gameId === "tictactoe" && room.phase === "choosing"));
+  const canGoSpectate = Boolean(mySeat && room.phase !== "punishment" && !choices[mySeat] && !((room.settings.gameId === "tictactoe" || room.settings.gameId === "gomoku") && room.phase === "choosing"));
   const roomPlayers = roomPlayerList(room);
   const punishedNames = punishedPlayerNames(room);
   const punishedIds = room.punishedPlayerIds || [];
@@ -1021,7 +1088,9 @@ export function Room({ config, room, me, onBack, onError }: { config: AppConfig;
       : "离开后，服务器会自动处理你负责的审核或任务"
     : room.settings.gameId === "tictactoe" && room.phase === "choosing" && mySeat
       ? "井字棋对局进行中不能离开战斗席"
-      : "离开房间";
+      : room.settings.gameId === "gomoku" && room.phase === "choosing" && mySeat
+        ? "五子棋对局进行中不能离开战斗席"
+        : "离开房间";
 
   useEffect(() => {
     if (!mySeat || room.phase === "choosing" && !choices[mySeat]) setLocalChoice(null);
@@ -1296,7 +1365,7 @@ export function Room({ config, room, me, onBack, onError }: { config: AppConfig;
           <div className="versus">
             <span className="versus-label">⚔️ 对战比分</span>
             <strong className="score-number">{room.score.A} : {room.score.B}</strong>
-            {room.settings.gameId === "othello" ? <OthelloScore room={room} /> : room.settings.gameId === "tictactoe" ? <TicTacToeScore room={room} /> : <Settlement room={room} />}
+            {room.settings.gameId === "othello" ? <OthelloScore room={room} /> : room.settings.gameId === "tictactoe" ? <TicTacToeScore room={room} /> : room.settings.gameId === "gomoku" ? <GomokuScore room={room} /> : <Settlement room={room} />}
           </div>
           <SeatView seat="B" room={room} me={me} now={now} onSit={() => act("room:sit", { seat: "B" })} />
         </div>
@@ -1309,11 +1378,19 @@ export function Room({ config, room, me, onBack, onError }: { config: AppConfig;
             <TicTacToePanel room={room} me={me} now={now} onMove={playTicTacToe} onReady={readyTicTacToe} onRestart={restartTicTacToe} onGiveawayChoice={chooseTicTacToeGiveaway} />
           ) : room.settings.gameId === "liarsdice" ? (
             <LiarsDicePanel room={room} me={me} onError={onError} />
+          ) : room.settings.gameId === "gomoku" ? (
+            <GomokuPanel room={room} me={me} now={now} onError={onError} />
           ) : mySeat && (
             <div className="move-panel">
               <div>
                 <h3>请选择出拳</h3>
                 <p className="hint">{room.phase === "punishment" ? "惩罚完成前不能出拳。" : myChoice ? `你已锁定：${choiceText(myChoice)}` : resultChoice ? `上一局：${choiceText(resultChoice)}，可直接开始下一局。` : canChoose ? "坐下不算出拳，点一个 emoji 才会锁定。" : "等待另一位玩家坐下。"}</p>
+                {room.forgiveAdvantageTargetId === me.id && (
+                  <p className="hint forgive-advantage-hint">上局对方放过了你，本局你将受到"命运的安排"</p>
+                )}
+                {room.forgiveAdvantageBeneficiaryId === me.id && (
+                  <p className="hint forgive-advantage-hint">上局你放过了对方，本局你将受到"命运的安排"</p>
+                )}
               </div>
               <div className="move-row emoji-row">
                 <button disabled={!canChoose || Boolean(myChoice)} onClick={() => choose("rock")}>✊<span>锤子</span></button>
@@ -1896,6 +1973,7 @@ export function RoundHistoryCard({ item, onOpenImage }: { item: RoomSnapshot["ro
         <div className="history-tags">
           {safe.gameId === "othello" && <em>⚫⚪ 黑白棋</em>}
           {safe.gameId === "tictactoe" && <em>❌⭕ 井字棋</em>}
+          {safe.gameId === "gomoku" && <em>●○ 五子棋</em>}
           {safe.gameId === "liarsdice" && <em>🎲 大话骰</em>}
           {safe.ranked && <em>🏆 {safe.gameId === "othello" ? `${safe.stake}分/子${safe.rankMultiplier && safe.rankMultiplier > 1 ? ` ×${safe.rankMultiplier}` : ""}` : `${safe.stake}分${safe.rankMultiplier && safe.rankMultiplier > 1 ? ` ×${safe.rankMultiplier}` : ""}`}</em>}
           {safe.extremeRanked && <em>⚡ 极限</em>}
@@ -1908,7 +1986,7 @@ export function RoundHistoryCard({ item, onOpenImage }: { item: RoomSnapshot["ro
           <strong>{historySeatLabel(safe, "A")}</strong>
         </div>
         <div className="history-result">
-          <small>{safe.gameId === "othello" && safe.othelloScore ? `${safe.othelloScore.black} : ${safe.othelloScore.white}` : safe.gameId === "tictactoe" ? "3 × 3" : "VS"}</small>
+          <small>{safe.gameId === "othello" && safe.othelloScore ? `${safe.othelloScore.black} : ${safe.othelloScore.white}` : safe.gameId === "tictactoe" ? "3 × 3" : safe.gameId === "gomoku" ? "15 × 15" : "VS"}</small>
           <b>{safe.resultLabel || historyResultText(safe.result)}</b>
         </div>
         <div className="history-side">
@@ -1982,6 +2060,9 @@ export function historySeatLabel(item: RoomSnapshot["roundHistory"][number], sea
   if (item.gameId === "tictactoe") {
     return item.tictactoeXSeat === seat ? "❌ X" : "⭕ O";
   }
+  if (item.gameId === "gomoku") {
+    return item.gomokuBlackSeat === seat ? "⚫ 黑棋" : "⚪ 白棋";
+  }
   if (item.gameId === "liarsdice") {
     // 大话骰对局记录里 playerA 固定是本局赢家、playerB 固定是输家（见后端 game_liarsdice.go）。
     return seat === "A" ? "🏆 胜" : "💤 负";
@@ -2029,7 +2110,10 @@ export function RoomPlayerRow({ player, role, now }: { player: PublicPlayer; rol
   return (
     <div className="room-player-row">
       <div className="room-player-main">
-        <PlayerBadge player={player} />
+        <div className="room-player-identity">
+          <PlayerAvatar player={player} size={28} />
+          <PlayerBadge player={player} />
+        </div>
         <div className="room-player-tags">
           <em>{role}</em>
           <OfflineBadge player={player} now={now} />
@@ -2302,10 +2386,11 @@ export function ChatBubble({ message, me, onMention }: { message: ChatMessage; m
 export function ChatAvatar({ player, onMention }: { player?: PublicPlayer; onMention?: () => void }) {
   const label = mentionLabel(player) || player?.name;
   const ch = label?.slice(0, 1) || "?";
+  const content = player?.avatarUrl ? <img className="chat-avatar-image" src={player.avatarUrl} alt="" /> : ch;
   if (onMention) {
-    return <button type="button" className="chat-avatar chat-avatar-button" title={`@ ${label}`} onClick={onMention}>{ch}</button>;
+    return <button type="button" className="chat-avatar chat-avatar-button" title={`@ ${label}`} onClick={onMention}>{content}</button>;
   }
-  return <span className="chat-avatar">{ch}</span>;
+  return <span className="chat-avatar">{content}</span>;
 }
 
 export function ChatName({ player }: { player: PublicPlayer }) {
@@ -2363,11 +2448,24 @@ export function SeatView({ seat, room, me, now, onSit }: { seat: SeatKey; room: 
   const tictactoeMarkLabel = room.settings.gameId === "tictactoe" && room.tictactoe
     ? room.tictactoe.xSeat === seat ? "❌ X" : "⭕ O"
     : "随机后显示 X/O";
+  const gomokuTurn = room.settings.gameId === "gomoku" && room.gomoku?.turn === seat && room.phase === "choosing" && !room.gomoku.ended;
+  const gomokuMarkLabel = room.settings.gameId === "gomoku" && room.gomoku
+    ? room.gomoku.blackSeat === seat ? "⚫ 黑棋" : "⚪ 白棋"
+    : "随机后显示黑/白";
   return (
     <div className={`seat-card seat-${seat.toLowerCase()}`}>
       <div className="seat-identity">
         <span className="seat-label">玩家 {seat}</span>
-        {occupant ? <strong>{"isBot" in occupant ? `🤖 ${occupant.name}` : <PlayerBadge player={occupant} compact />}</strong> : <button disabled={battleSeatBlocked} title={battleSeatBlocked ? "当前排位类型不匹配，只能观战" : "坐到战斗席"} onClick={onSit}>{battleSeatBlocked ? "👀 只能观战" : "🪑 坐下"}</button>}
+        {occupant ? (
+          <strong className="seat-occupant-row">
+            {"isBot" in occupant ? `🤖 ${occupant.name}` : (
+              <>
+                <PlayerAvatar player={occupant} size={24} />
+                <PlayerBadge player={occupant} compact />
+              </>
+            )}
+          </strong>
+        ) : <button disabled={battleSeatBlocked} title={battleSeatBlocked ? "当前排位类型不匹配，只能观战" : "坐到战斗席"} onClick={onSit}>{battleSeatBlocked ? "👀 只能观战" : "🪑 坐下"}</button>}
       </div>
       {occupant && !("isBot" in occupant) && <OfflineBadge player={occupant} now={now} />}
       <p className="choice-badge">
@@ -2375,7 +2473,9 @@ export function SeatView({ seat, room, me, now, onSit }: { seat: SeatKey; room: 
           ? othelloTurn ? `${othelloColorLabel}落子中` : othelloColorLabel
           : room.settings.gameId === "tictactoe"
             ? tictactoeTurn ? `${tictactoeMarkLabel}落子中` : tictactoeMarkLabel
-            : choice ? choiceText(choice) : room.seats.A && room.seats.B ? "🤔 等待出拳" : "⏳ 等人"}
+            : room.settings.gameId === "gomoku"
+              ? gomokuTurn ? `${gomokuMarkLabel}落子中` : gomokuMarkLabel
+              : choice ? choiceText(choice) : room.seats.A && room.seats.B ? "🤔 等待出拳" : "⏳ 等人"}
       </p>
       {occupant && !("isBot" in occupant) && <SeatStatsView stats={stats} />}
     </div>
@@ -2436,9 +2536,9 @@ export function rankedInfoExtra(stake: number, multiplier = 1, gameId: RoomSetti
 export function roomInfoTags(config: AppConfig, room: RoomSnapshot) {
   const phaseKey = room.phase === "ready" ? "phaseReady"
     : room.phase === "choosing" ? (room.settings.gameId === "liarsdice" ? "phaseChoosingLiarsDice" : "phaseChoosing")
-    : room.phase === "result" ? "phaseResult"
-    : room.phase === "punishment" ? "phasePunishment"
-    : "phaseReady";
+      : room.phase === "result" ? "phaseResult"
+        : room.phase === "punishment" ? "phasePunishment"
+          : "phaseReady";
   const multiplier = rankMultiplierForSettings(room.settings);
   const tags: RoomInfoTagView[] = [
     gameInfoTag(config, room.settings.gameId),
@@ -2482,7 +2582,9 @@ export function gameInfoTag(config: AppConfig, gameId: RoomSettings["gameId"]) {
       ? roomInfoTag(config, "gameTicTacToe", "", "❌⭕ ")
       : gameId === "liarsdice"
         ? roomInfoTag(config, "gameLiarsDice", "", "🎲 ")
-        : roomInfoTag(config, "gameRps");
+        : gameId === "gomoku"
+          ? roomInfoTag(config, "gameGomoku", "", "●○ ")
+          : roomInfoTag(config, "gameRps");
 }
 
 export function punishmentSelectionText(config: AppConfig, settings: Pick<RoomSettings, "punishmentId" | "punishmentIds">) {
@@ -2520,6 +2622,12 @@ export function phaseText(phase: RoomSnapshot["phase"], gameId?: RoomSettings["g
   return "⏳ 等待中";
 }
 
+export function roomStatusText(status: RoomSnapshot["status"]) {
+  if (status === "playing") return "对战中";
+  if (status === "punishment") return "惩罚中";
+  return "等待中";
+}
+
 export function connectionStateText(state: "connected" | "connecting" | "disconnected") {
   if (state === "connected") return "已连接";
   if (state === "connecting") return "连接中";
@@ -2535,7 +2643,7 @@ export function Leaderboard({ title, players }: { title: string; players: Public
           const stats = safePlayerStats(player);
           return (
             <p className="rank-row rich" key={player.id}>
-              <span>{index + 1}. <PlayerBadge player={player} compact /></span>
+              <span>{index + 1}. <PlayerAvatar player={player} size={22} /> <PlayerBadge player={player} compact /></span>
               <small>{stats.wins}胜 {stats.losses}负 {stats.draws}平 · {stats.punishments}惩罚</small>
               <b>{winRateText(player)} · {stats.rankedPoints}分</b>
             </p>
@@ -2547,19 +2655,52 @@ export function Leaderboard({ title, players }: { title: string; players: Public
   );
 }
 
-export type GlobalLeaderboardTab = "positive" | "negative" | "extremePositive" | "extremeNegative" | "nameWar" | "giveaway" | "othelloWins" | "othelloCaptured" | "othelloLost";
+export type GlobalLeaderboardTab =
+  | "positive" | "negative" | "extremePositive" | "extremeNegative" | "nameWar" | "giveaway"
+  | "rps" | "othello" | "tictactoe" | "gomoku" | "liarsdice";
 
-export function SponsorPanel({ onClose }: { onClose: () => void }) {
+const GAME_LEADERBOARD_TABS: Array<{ id: GlobalLeaderboardTab; label: string; title: string }> = [
+  { id: "rps", label: "猜拳", title: "锤子剪刀布胜场榜" },
+  { id: "othello", label: "黑白", title: "黑白棋胜场榜" },
+  { id: "tictactoe", label: "井字", title: "井字棋胜场榜" },
+  { id: "gomoku", label: "五子", title: "五子棋胜场榜" },
+  { id: "liarsdice", label: "大话骰", title: "大话骰胜场榜" }
+];
+
+function gameWLDOf(player: PublicPlayer, tab: GlobalLeaderboardTab) {
+  const gs = player.gameStats || { rps: {}, othello: {}, tictactoe: {}, gomoku: {}, liarsdice: {} } as PublicPlayer["gameStats"];
+  const raw = tab === "rps" ? gs.rps
+    : tab === "othello" ? gs.othello
+      : tab === "tictactoe" ? gs.tictactoe
+        : tab === "gomoku" ? gs.gomoku
+          : tab === "liarsdice" ? gs.liarsdice
+            : undefined;
+  return {
+    wins: Number(raw?.wins) || 0,
+    losses: Number(raw?.losses) || 0,
+    draws: Number(raw?.draws) || 0
+  };
+}
+
+export function AboutPanel({ config, onClose }: { config: AppConfig; onClose: () => void }) {
+  const board = config.announcementBoard;
+  const showBoard = board.enabled && (board.title.trim() || board.content.trim());
   return (
     <div className="modal-backdrop sponsor-backdrop" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="sponsor-modal" onClick={(event) => event.stopPropagation()}>
         <div className="modal-title sponsor-title">
           <div>
-            <h2><HeartHandshake size={20} /> 赞助支持</h2>
+            <h2><Info size={20} /> 关于</h2>
             <p className="hint">喜欢这个小站的话，可以在这里关注、进群或请作者喝杯咖啡。</p>
           </div>
           <button type="button" className="icon-button" onClick={onClose}>×</button>
         </div>
+        {showBoard && (
+          <div className="announcement-board">
+            <span className="announcement-board-kicker">📢 {board.title}</span>
+            <p className="announcement-board-content">{board.content}</p>
+          </div>
+        )}
         <div className="sponsor-hero">
           <div className="sponsor-hero-icon"><Coffee size={30} /></div>
           <div>
@@ -2591,6 +2732,47 @@ export function SponsorPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
+const SECURITY_DISCLAIMER_MIN_WAIT_MS = 3000;
+
+export function SecurityDisclaimer({ onConfirm }: { onConfirm: () => void }) {
+  const [understand, setUnderstand] = useState<"yes" | "no" | null>(null);
+  const [canComply, setCanComply] = useState<"yes" | "no" | null>(null);
+  const [waited, setWaited] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setWaited(true), SECURITY_DISCLAIMER_MIN_WAIT_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const canConfirm = waited && understand === "yes" && canComply === "yes";
+
+  return (
+    <div className="security-disclaimer-backdrop" role="dialog" aria-modal="true" aria-labelledby="security-disclaimer-title">
+      <section className="security-disclaimer-card">
+        <h2 id="security-disclaimer-title"><Shield size={20} /> 平台用户安全与免责声明</h2>
+        <p>
+          欢迎来到抖喵游戏屋。本站仅供年满 18 岁的成年人休闲娱乐与文化交流，严禁任何形式的赌博、金钱交易、诈骗及泄露个人隐私的行为。游玩过程中请规范自身言行、尊重其他玩家，确保互动基于双方自愿，禁止利用游戏机制强迫或诱导他人。
+        </p>
+        <p>
+          作为技术提供方，本站不对惩罚任务、线下接触等游戏玩法之外的任何个人行为或约定承担任何责任。因用户个人行为导致的财产损失、隐私泄露或人身安全问题，均由用户自行承担，本站概不负责。
+        </p>
+        <div className="security-disclaimer-question">
+          <span>你是否清楚上述风险与规定？</span>
+          <label><input type="radio" name="sd-understand" checked={understand === "yes"} onChange={() => setUnderstand("yes")} /> 清楚</label>
+          <label><input type="radio" name="sd-understand" checked={understand === "no"} onChange={() => setUnderstand("no")} /> 不清楚</label>
+        </div>
+        <div className="security-disclaimer-question">
+          <span>你能否做到遵守上述平台规则？</span>
+          <label><input type="radio" name="sd-comply" checked={canComply === "yes"} onChange={() => setCanComply("yes")} /> 能</label>
+          <label><input type="radio" name="sd-comply" checked={canComply === "no"} onChange={() => setCanComply("no")} /> 不能</label>
+        </div>
+        <div className="security-disclaimer-question"></div>
+        <button className="primary" type="button" disabled={!canConfirm} onClick={onConfirm}>确定</button>
+      </section>
+    </div>
+  );
+}
+
 export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPlayer[]; onClose: () => void }) {
   const [tab, setTab] = useState<GlobalLeaderboardTab>("positive");
   const [now, setNow] = useState(Date.now());
@@ -2606,6 +2788,7 @@ export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPl
   }, [players]);
 
   const ranked = leaderboardPlayers(players, tab).slice(0, 50);
+  const gameTabMeta = GAME_LEADERBOARD_TABS.find((item) => item.id === tab);
   const title = tab === "positive"
     ? "正分榜"
     : tab === "negative"
@@ -2618,18 +2801,14 @@ export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPl
             ? "名字争夺战榜"
             : tab === "giveaway"
               ? "白给榜"
-              : tab === "othelloWins"
-                ? "黑白棋胜场榜"
-                : tab === "othelloCaptured"
-                  ? "黑白棋吃子榜"
-                  : "黑白棋被吃榜";
+              : gameTabMeta?.title || "排行榜";
   return (
     <div className="modal-backdrop leaderboard-backdrop" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="leaderboard-modal">
         <div className="modal-title">
           <div>
             <h2><Crown size={20} /> 排行榜</h2>
-            <p className="hint">排行榜每 10 分钟刷新一次，每类最多显示 50 名。</p>
+            <p className="hint">排行榜每 10 分钟刷新一次，每类最多显示 50 名。总榜胜负平为五游戏合计。</p>
           </div>
           <button type="button" className="icon-button" onClick={onClose}>×</button>
         </div>
@@ -2640,34 +2819,31 @@ export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPl
           <button className={tab === "extremeNegative" ? "active" : ""} onClick={() => setTab("extremeNegative")}>极限负</button>
           <button className={tab === "nameWar" ? "active" : ""} onClick={() => setTab("nameWar")}>名争</button>
           <button className={tab === "giveaway" ? "active" : ""} onClick={() => setTab("giveaway")}>白给</button>
-          <button className={tab === "othelloWins" ? "active" : ""} onClick={() => setTab("othelloWins")}>黑白胜</button>
-          <button className={tab === "othelloCaptured" ? "active" : ""} onClick={() => setTab("othelloCaptured")}>吃子</button>
-          <button className={tab === "othelloLost" ? "active" : ""} onClick={() => setTab("othelloLost")}>被吃</button>
+          {GAME_LEADERBOARD_TABS.map((item) => (
+            <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>{item.label}</button>
+          ))}
         </div>
         <div className="global-leaderboard-list">
           <h3>{title}</h3>
           {ranked.map((player, index) => {
             const stats = safePlayerStats(player);
-            const ot = player.othelloStats || { wins: 0, losses: 0, draws: 0, games: 0, captured: 0, lost: 0 };
-            const oWins = Number(ot.wins) || 0;
-            const oLosses = Number(ot.losses) || 0;
-            const oDraws = Number(ot.draws) || 0;
-            const oCap = Number(ot.captured) || 0;
-            const oLost = Number(ot.lost) || 0;
+            const game = isGameLeaderboardTab(tab) ? gameWLDOf(player, tab) : null;
+            const decisive = game ? game.wins + game.losses : stats.wins + stats.losses;
+            const rate = decisive === 0 ? 0 : Math.round(((game ? game.wins : stats.wins) / decisive) * 100);
             return (
               <article className="global-rank-card" key={`${tab}-${player.id}`}>
                 <div className="global-rank-main">
                   <span className="rank-index">#{index + 1}</span>
+                  <PlayerAvatar player={player} size={24} />
                   <PlayerBadge player={player} compact />
                   <span className={`online-dot ${player.connected ? "online" : "offline"}`}>{player.connected ? "在线" : "离线"}</span>
                 </div>
                 <div className="global-rank-stats">
-                  {isOthelloLeaderboardTab(tab) ? (
+                  {game ? (
                     <>
-                      <span>{oWins}胜 {oLosses}负 {oDraws}平</span>
-                      <span>吃 {oCap}</span>
-                      <span>被吃 {oLost}</span>
-                      <span>净值 {oCap - oLost}</span>
+                      <span>{game.wins}胜 {game.losses}负 {game.draws}平</span>
+                      <span>总局 {game.wins + game.losses + game.draws}</span>
+                      <span>胜率 {rate}%</span>
                     </>
                   ) : (
                     <>
@@ -2700,35 +2876,34 @@ export function leaderboardPlayers(players: PublicPlayer[], tab: GlobalLeaderboa
       .filter((player) => player.nameWarEnabled || player.nameWarPunished)
       .sort((a, b) => Number(Boolean(b.nameWarPunished)) - Number(Boolean(a.nameWarPunished)) || a.stats.rankedPoints - b.stats.rankedPoints);
   }
-  if (tab === "othelloWins") {
+  if (isGameLeaderboardTab(tab)) {
     return copy
-      .filter((player) => player.othelloStats.games > 0)
-      .sort((a, b) => b.othelloStats.wins - a.othelloStats.wins || b.othelloStats.captured - a.othelloStats.captured);
-  }
-  if (tab === "othelloCaptured") {
-    return copy
-      .filter((player) => player.othelloStats.captured > 0 || player.othelloStats.games > 0)
-      .sort((a, b) => b.othelloStats.captured - a.othelloStats.captured || b.othelloStats.wins - a.othelloStats.wins);
-  }
-  if (tab === "othelloLost") {
-    return copy
-      .filter((player) => player.othelloStats.lost > 0 || player.othelloStats.games > 0)
-      .sort((a, b) => b.othelloStats.lost - a.othelloStats.lost || b.othelloStats.losses - a.othelloStats.losses);
+      .filter((player) => {
+        const g = gameWLDOf(player, tab);
+        return g.wins + g.losses + g.draws > 0;
+      })
+      .sort((a, b) => {
+        const ga = gameWLDOf(a, tab);
+        const gb = gameWLDOf(b, tab);
+        return gb.wins - ga.wins || ga.losses - gb.losses || gb.draws - ga.draws;
+      });
   }
   return copy
     .filter((player) => player.giveawayEnabled || (player.giveawayValue || 0) > 0)
     .sort((a, b) => (b.giveawayValue || 0) - (a.giveawayValue || 0) || b.stats.rankedPoints - a.stats.rankedPoints);
 }
 
-export function isOthelloLeaderboardTab(tab: GlobalLeaderboardTab) {
-  return tab === "othelloWins" || tab === "othelloCaptured" || tab === "othelloLost";
+export function isGameLeaderboardTab(tab: GlobalLeaderboardTab) {
+  return tab === "rps" || tab === "othello" || tab === "tictactoe" || tab === "gomoku" || tab === "liarsdice";
 }
 
 export function LeaderboardExtra({ player, tab, now }: { player: PublicPlayer; tab: GlobalLeaderboardTab; now: number }) {
-  if (isOthelloLeaderboardTab(tab)) {
+  if (isGameLeaderboardTab(tab)) {
+    const g = gameWLDOf(player, tab);
+    const label = GAME_LEADERBOARD_TABS.find((item) => item.id === tab)?.label || "该游戏";
     return (
       <p className="global-rank-extra">
-        ⚫⚪ 黑白棋 {player.othelloStats.games} 局 · 净吃子 {player.othelloStats.captured - player.othelloStats.lost}
+        {label} 胜场优先 · 总局 {g.wins + g.losses + g.draws}
       </p>
     );
   }
@@ -2917,15 +3092,22 @@ export function GiveawayPanel({ config, players, me, onError }: { config: AppCon
         <h2>🫴 {config.giveaway.panelTitle}</h2>
         <span>{activeBoards.length} 条</span>
       </div>
-      <p className="hint">{config.giveaway.panelDescription}</p>
+      <div className="giveaway-hints">
+        <p className="hint">{config.giveaway.panelDescription}</p>
+        {myActiveBoard && <p className="hint">你已经上板，过期后才能重新提交。当前剩余 {formatDuration((myActiveBoard.giveawayBoardExpiresAt || now) - now)}。</p>}
+        {!canSubmit && me.giveawayEnabled && <p className="hint">你的白给值已经是 {formatGiveawayValue(me.giveawayValue || 0)}%，归零后可以在个人设置关闭模式。</p>}
+      </div>
       {canSubmit && (
         <div className="giveaway-submit">
           <textarea value={text} maxLength={300} onChange={(event) => setText(event.target.value)} placeholder={config.giveaway.submitPlaceholder} />
           <button className="primary small" onClick={submitBoard}>上板 12 小时</button>
         </div>
       )}
-      {myActiveBoard && <p className="hint">你已经上板，过期后才能重新提交。当前剩余 {formatDuration((myActiveBoard.giveawayBoardExpiresAt || now) - now)}。</p>}
-      {!canSubmit && me.giveawayEnabled && <p className="hint">你的白给值已经是 {formatGiveawayValue(me.giveawayValue || 0)}%，归零后可以在个人设置关闭模式。</p>}
+      {activeBoards.length > 0 && (
+        <div className="giveaway-quota-line">
+          <span>👍 还可 {voteQuota.likesLeft}/3 · 👎 还可 {voteQuota.dislikesLeft}/10 · {voteQuota.refreshText}</span>
+        </div>
+      )}
       <div className="giveaway-board-list">
         {activeBoards.map((player) => {
           const isSelf = player.id === me.id;
@@ -2939,10 +3121,6 @@ export function GiveawayPanel({ config, players, me, onError }: { config: AppCon
               <div className="giveaway-card-meta">
                 <span>剩余 {expiresText}</span>
                 <span>👍 {player.giveawayBoardLikes || 0} · 👎 {player.giveawayBoardDislikes || 0}</span>
-              </div>
-              <div className="giveaway-quota-line">
-                <span>我的额度：👍 还可 {voteQuota.likesLeft}/3 · 👎 还可 {voteQuota.dislikesLeft}/10</span>
-                <span>{voteQuota.refreshText}</span>
               </div>
               <div className="giveaway-actions">
                 <button disabled={isSelf || voteQuota.likesLeft <= 0} onClick={() => vote(player.id, "like")}>👍 -1%</button>
@@ -2963,10 +3141,12 @@ export function giveawayVoteQuota(player: PublicPlayer, now: number) {
   const expired = !startedAt || now - startedAt >= windowMs;
   const likesUsed = expired ? 0 : player.giveawayVoteLikesThisHour || 0;
   const dislikesUsed = expired ? 0 : player.giveawayVoteDislikesThisHour || 0;
+  // 刷新文案统一用「分钟」单位（向下取整），例如 2 小时 → 120 分钟；不足 1 分钟 → 0 分钟
+  const remainMinutes = expired ? 60 : Math.floor(Math.max(0, startedAt + windowMs - now) / 60_000);
   return {
     likesLeft: Math.max(0, 3 - likesUsed),
     dislikesLeft: Math.max(0, 10 - dislikesUsed),
-    refreshText: expired ? "额度可用" : `额度 ${formatDuration(startedAt + windowMs - now)}后刷新`
+    refreshText: `${remainMinutes} 分钟后刷新`
   };
 }
 
@@ -3011,6 +3191,8 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
     () => (typeof Notification === "undefined" ? "denied" : Notification.permission)
   );
   const [pushBusy, setPushBusy] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!cooldownMs && !nameWarCooldownMs && !extremeCooldownMs) return;
@@ -3116,6 +3298,57 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
     }
   }
 
+  async function uploadAvatar(file: File) {
+    setAvatarBusy(true);
+    try {
+      const uploadFile = await prepareAvatarImageForUpload(file);
+      const form = new FormData();
+      form.append("token", localStorage.getItem(tokenKey) || "");
+      form.append("image", uploadFile, "avatar.webp");
+      const response = await fetch("/api/avatar-image", { method: "POST", body: form });
+      let data: { message?: string; player?: PublicPlayer } = {};
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error(response.ok ? "服务器响应无效" : `上传失败（${response.status}）`);
+      }
+      if (!response.ok) throw new Error(data.message || "上传失败");
+      if (!data.player) throw new Error("服务器未返回玩家资料");
+      onUpdated(data.player);
+      onError("头像已更新");
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "头像上传失败");
+    } finally {
+      setAvatarBusy(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+    }
+  }
+
+  async function clearAvatar() {
+    setAvatarBusy(true);
+    try {
+      const form = new FormData();
+      form.append("token", localStorage.getItem(tokenKey) || "");
+      form.append("clear", "1");
+      const response = await fetch("/api/avatar-image", { method: "POST", body: form });
+      let data: { message?: string; player?: PublicPlayer } = {};
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error(response.ok ? "服务器响应无效" : `清空失败（${response.status}）`);
+      }
+      if (!response.ok) throw new Error(data.message || "清空失败");
+      if (!data.player) throw new Error("服务器未返回玩家资料");
+      onUpdated(data.player);
+      onError("已恢复默认头像");
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "清空头像失败");
+    } finally {
+      setAvatarBusy(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+    }
+  }
+
   async function forceCloseExtremeMode() {
     const ok = window.confirm(config.extremeMode.forceCloseWarning || "强行关闭极限模式后，你会进入通用改名处，可被符合条件的极限玩家改名。确认继续？");
     if (!ok) return;
@@ -3133,7 +3366,7 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
     <div className="modal-backdrop" onClick={onClose}>
       <section className="profile-panel" onClick={(event) => event.stopPropagation()}>
         <div className="profile-hero">
-          <div className="avatar-ring"><UserRound size={34} /></div>
+          <div className="avatar-ring">{me.avatarUrl ? <PlayerAvatar player={me} size={56} /> : <UserRound size={34} />}</div>
           <div>
             <h2><PlayerBadge player={me} /></h2>
             <p>{me.nameWarPunished ? "名字争夺战惩罚名生效中" : `${stats.title} · ${stats.rankedPoints} 排位积分`}</p>
@@ -3143,13 +3376,24 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
 
         <div className="profile-stats">
           <Stat label="总局数" value={`${total}`} />
-          <Stat label="胜 / 负 / 平" value={`${stats.wins}/${stats.losses}/${stats.draws}`} />
-          <Stat label="胜率" value={`${winRate}%`} />
+          <Stat label="总胜 / 负 / 平" value={`${stats.wins}/${stats.losses}/${stats.draws}`} />
+          <Stat label="总胜率" value={`${winRate}%`} />
           <Stat label="惩罚次数" value={`${stats.punishments}`} />
           <Stat label="排位积分" value={`${stats.rankedPoints}`} />
           <Stat label="当前称号" value={me.nameWarPunished ? "已隐藏" : stats.title} />
           <Stat label="白给值" value={`${formatGiveawayValue(giveawayValue)}%`} />
           <Stat label="极限模式" value={me.extremeModeEnabled ? `连胜 ${me.extremeWinStreak || 0}` : "未开启"} />
+        </div>
+        <div className="profile-stats profile-game-stats">
+          {([
+            ["锤子剪刀布", me.gameStats?.rps],
+            ["黑白棋", me.gameStats?.othello],
+            ["井字棋", me.gameStats?.tictactoe],
+            ["五子棋", me.gameStats?.gomoku],
+            ["大话骰", me.gameStats?.liarsdice]
+          ] as const).map(([label, g]) => (
+            <Stat key={label} label={label} value={`${g?.wins || 0}/${g?.losses || 0}/${g?.draws || 0}`} />
+          ))}
         </div>
 
         <div className="profile-edit">
@@ -3159,6 +3403,25 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
               <span>名字</span>
               <input value={name} maxLength={12} disabled={nameLockedByWar} onChange={(event) => setName(event.target.value)} placeholder="新的名字" />
               <small>{nameLockedByWar ? "名字争夺战开启后不能修改名字" : nameChanged && cooldownMs > 0 ? `改名冷却：${nameCooldownSeconds} 秒` : "名字会显示在大厅、房间和聊天里"}</small>
+              <div className="profile-avatar-upload-row">
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="profile-avatar-upload-input"
+                  disabled={avatarBusy}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void uploadAvatar(file);
+                  }}
+                />
+                <button type="button" disabled={avatarBusy} onClick={() => avatarInputRef.current?.click()}>
+                  {avatarBusy ? "上传中…" : "上传头像"}
+                </button>
+                <button type="button" disabled={avatarBusy || !me.avatarUrl} onClick={() => void clearAvatar()}>
+                  清空头像
+                </button>
+              </div>
             </label>
             <div className="profile-gender-field">
               <span>性别</span>
@@ -3287,6 +3550,7 @@ export const roomInfoTagOrder = [
   { key: "gameRps", label: "锤子剪刀布" },
   { key: "gameOthello", label: "黑白棋" },
   { key: "gameTicTacToe", label: "井字棋" },
+  { key: "gameGomoku", label: "五子棋" },
   { key: "gameLiarsDice", label: "大话骰" },
   { key: "phaseReady", label: "等待坐满" },
   { key: "phaseChoosing", label: "出拳中" },
@@ -3901,14 +4165,14 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
           <div className="admin-preview-card">
             <span>预览</span>
             <strong>{extreme.emoji} {extreme.label}</strong>
-            <p>关闭后冷却 {extreme.cooldownHours} 小时；{extreme.winStreakThreshold} 连胜后 {Math.round(extreme.winStreakCrashChance * 100)}% 额外扣 {extreme.crashTargetPoints} 分。</p>
+            <p>关闭后冷却 {extreme.cooldownHours} 小时；{extreme.winStreakThreshold} 连胜后 {Math.round((extreme.winStreakCrashChance ?? 0) * 100)}% 额外扣 {extreme.crashTargetPoints} 分。</p>
           </div>
           <div className="config-row">
             <label className="field-label"><span>显示名称</span><input value={extreme.label} maxLength={16} onChange={(event) => patchExtreme({ ...extreme, label: event.target.value })} /></label>
             <label className="field-label"><span>标志 Emoji</span><input value={extreme.emoji} maxLength={4} onChange={(event) => patchExtreme({ ...extreme, emoji: event.target.value })} /></label>
             <label className="field-label"><span>关闭后冷却小时</span><input type="number" min={1} max={168} value={extreme.cooldownHours} onChange={(event) => patchExtreme({ ...extreme, cooldownHours: Number(event.target.value) })} /></label>
             <label className="field-label"><span>连胜阈值</span><input type="number" min={1} max={100} value={extreme.winStreakThreshold} onChange={(event) => patchExtreme({ ...extreme, winStreakThreshold: Number(event.target.value) })} /></label>
-            <label className="field-label"><span>连胜风险概率 0-1</span><input type="number" min={0} max={1} step={0.01} value={extreme.winStreakCrashChance} onChange={(event) => patchExtreme({ ...extreme, winStreakCrashChance: Number(event.target.value) })} /></label>
+            <label className="field-label"><span>连胜风险概率 0-1</span><input type="number" min={0} max={1} step={0.01} value={extreme.winStreakCrashChance ?? 0} onChange={(event) => patchExtreme({ ...extreme, winStreakCrashChance: Number(event.target.value) })} /></label>
             <label className="field-label"><span>连胜风险扣分</span><input type="number" min={1} max={1999} value={extreme.crashTargetPoints} onChange={(event) => patchExtreme({ ...extreme, crashTargetPoints: Number(event.target.value) })} /></label>
             <label className="field-label"><span>强关改名最低分</span><input type="number" min={1} max={999} value={extreme.forceRenameMinPoints || 1} onChange={(event) => patchExtreme({ ...extreme, forceRenameMinPoints: Number(event.target.value) })} /></label>
             <label className="field-label"><span>强关保护小时</span><input type="number" min={1} max={168} value={extreme.forceRenameProtectHours || 4} onChange={(event) => patchExtreme({ ...extreme, forceRenameProtectHours: Number(event.target.value) })} /></label>
@@ -4045,36 +4309,36 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
     if (activeSection === "messages") {
       return (
         <div className="config-section admin-section-card">
-          <AdminSectionHeader title="系统提示" subtitle="修改每日公告、密码错误、名字校验、保存提示等系统文案。" />
+          <AdminSectionHeader title="系统提示" subtitle="修改公告板、密码错误、名字校验、保存提示等系统文案。" />
           <div className="admin-announcement-card">
             <div className="admin-card-title">
-              <strong>每日公告弹窗</strong>
-              <small>每天每个浏览器显示一次，建角色前也会显示</small>
+              <strong>公告板</strong>
+              <small>展示在顶栏「关于」面板里，不再是弹窗</small>
             </div>
             <Toggle
-              label="开启每日公告"
-              value={draft.dailyAnnouncement.enabled}
-              onChange={(enabled) => patch({ dailyAnnouncement: { ...draft.dailyAnnouncement, enabled } })}
+              label="开启公告板"
+              value={draft.announcementBoard.enabled ?? false}
+              onChange={(enabled) => patch({ announcementBoard: { ...draft.announcementBoard, enabled } })}
             />
-            <div className="config-row">
-              <label className="field-label">
-                <span>公告标题</span>
-                <input value={draft.dailyAnnouncement.title} maxLength={32} onChange={(event) => patch({ dailyAnnouncement: { ...draft.dailyAnnouncement, title: event.target.value } })} placeholder="今日公告" />
-              </label>
-              <label className="field-label">
-                <span>按钮文字</span>
-                <input value={draft.dailyAnnouncement.buttonText} maxLength={16} onChange={(event) => patch({ dailyAnnouncement: { ...draft.dailyAnnouncement, buttonText: event.target.value } })} placeholder="知道了" />
-              </label>
-              <label className="field-label">
-                <span>版本标识</span>
-                <input value={draft.dailyAnnouncement.version} maxLength={32} onChange={(event) => patch({ dailyAnnouncement: { ...draft.dailyAnnouncement, version: event.target.value } })} placeholder="default" />
-              </label>
-            </div>
+            <label className="field-label">
+              <span>公告标题</span>
+              <input value={draft.announcementBoard.title} maxLength={32} onChange={(event) => patch({ announcementBoard: { ...draft.announcementBoard, title: event.target.value } })} placeholder="今日公告" />
+            </label>
             <label className="field-label">
               <span>公告内容</span>
-              <textarea value={draft.dailyAnnouncement.content} maxLength={800} onChange={(event) => patch({ dailyAnnouncement: { ...draft.dailyAnnouncement, content: event.target.value } })} placeholder="写下今天想提醒玩家的内容" />
+              <textarea value={draft.announcementBoard.content} maxLength={800} onChange={(event) => patch({ announcementBoard: { ...draft.announcementBoard, content: event.target.value } })} placeholder="写下想让玩家看到的内容" />
             </label>
-            <p className="hint">如果希望玩家今天再次看到公告，可以修改“版本标识”，例如改成 2026-06-14-a。</p>
+          </div>
+          <div className="admin-announcement-card">
+            <div className="admin-card-title">
+              <strong>安全与免责声明</strong>
+              <small>每天每个浏览器显示一次，建角色前也会显示；文案固定，仅可整体开关</small>
+            </div>
+            <Toggle
+              label="开启安全声明"
+              value={draft.securityDisclaimer.enabled ?? false}
+              onChange={(enabled) => patch({ securityDisclaimer: { enabled } })}
+            />
           </div>
           <div className="config-row">
             {Object.entries(draft.messages).map(([key, value]) => (
@@ -4183,7 +4447,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                 <div className="admin-room" key={room.id}>
                   <div className="admin-card-title">
                     <strong>{room.name}</strong>
-                    <small>{room.code} · {room.status} · {room.players}/2 战斗席 · {room.spectators} 观战</small>
+                    <small>{room.code} · {roomStatusText(room.status)} · {room.players}/2 战斗席 · {room.spectators} 观战</small>
                   </div>
                   <div className="admin-action-row">
                     <button className="danger-button" onClick={() => action("closeRoom", { roomId: room.id })}>关闭房间</button>
