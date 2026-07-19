@@ -43,6 +43,7 @@ type persistedPlayer struct {
 	ExtremeModeCooldownUntil      *int64   `json:"extremeModeCooldownUntil,omitempty"`
 	ExtremeWinStreak             *int     `json:"extremeWinStreak,omitempty"`
 	ExtremeLastDecayHour         *int64   `json:"extremeLastDecayHour,omitempty"`
+	RankedLastDecayDay           *int64   `json:"rankedLastDecayDay,omitempty"`
 	PushMentionEnabled           *bool    `json:"pushMentionEnabled,omitempty"`
 	PushTurnEnabled              *bool    `json:"pushTurnEnabled,omitempty"`
 	PushSeatEnabled              *bool    `json:"pushSeatEnabled,omitempty"`
@@ -84,6 +85,7 @@ func (s *Server) serializePlayers() []persistedPlayer {
 			ExtremeModeEnabled: p.ExtremeModeEnabled, ExtremeModeToggledAt: p.ExtremeModeToggledAt,
 			ExtremeModeCooldownUntil: p.ExtremeModeCooldownUntil, ExtremeWinStreak: p.ExtremeWinStreak,
 			ExtremeLastDecayHour: p.ExtremeLastDecayHour,
+			RankedLastDecayDay: p.RankedLastDecayDay,
 			PushMentionEnabled: p.PushMentionEnabled, PushTurnEnabled: p.PushTurnEnabled, PushSeatEnabled: p.PushSeatEnabled,
 			Stats: p.Stats, GameStats: p.GameStats,
 			CreatedAt: p.CreatedAt, LastSeenAt: p.LastSeenAt,
@@ -273,9 +275,11 @@ func (s *Server) ingestPersistedPlayer(item persistedPlayer) bool {
 			ExtremeModeCooldownUntil: item.ExtremeModeCooldownUntil,
 			ExtremeWinStreak: orInt(item.ExtremeWinStreak, 0),
 			ExtremeLastDecayHour: orInt64(item.ExtremeLastDecayHour, currentExtremeDecayHour(now)),
+			RankedLastDecayDay: orInt64(item.RankedLastDecayDay, currentRankedDecayDay(now)),
 			Stats: types.PublicStats{
 				Wins: totalW, Losses: totalL, Draws: totalD,
 				Punishments: item.Stats.Punishments, RankedPoints: item.Stats.RankedPoints,
+				HighestScore: item.Stats.HighestScore, LowestScore: item.Stats.LowestScore,
 				Title: title, TitleSegmentID: item.Stats.TitleSegmentID,
 			},
 			GameStats: gameStats,
@@ -296,6 +300,9 @@ func (s *Server) ingestPersistedPlayer(item persistedPlayer) bool {
 		player.ClaimKey = randomID()
 	}
 	player.DisplayName = formatDisplayName(player)
+	// 旧版 players.json 迁移进库时没有历史最高/最低分字段：以当前排位分兜底，
+	// 保证展示上"历史最高"不会低于"当前"（SQLite 直接加载的行已在迁移 SQL 里回填过，这里是幂等的）。
+	recordRankedExtremes(player)
 	s.players[player.ID] = player
 	s.playerIdToID[player.PlayerID] = player.ID
 	s.tokenToPlayer[player.Token] = player.ID

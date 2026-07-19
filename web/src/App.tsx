@@ -494,7 +494,7 @@ export function App() {
         if (next.room?.phase === "punishment") setNotice("已恢复到未完成的惩罚房间。");
       }} onError={setNotice} />}
       {view === "lobby" && me && lobby && <Lobby config={config} lobby={lobby} me={me.player} onError={setNotice} onGoRoom={(nextRoom) => { if (nextRoom) setRoom(nextRoom); setView("room"); }} />}
-      {view === "room" && me && room && <Room config={config} room={room} me={me.player} onBack={() => setView("lobby")} onError={setNotice} />}
+      {view === "room" && me && room && <Room config={config} room={room} me={me.player} lobby={lobby} onBack={() => setView("lobby")} onError={setNotice} />}
       {view === "admin" && lobby && <AdminPanel config={config} lobby={lobby} onBack={() => { if (window.location.hash === "#admin") window.location.hash = ""; setView(me ? "lobby" : "login"); }} onError={setNotice} />}
       {view === "room" && !room && <section className="panel">你暂时不在房间里。</section>}
       {aboutOpen && <AboutPanel config={config} onClose={() => setAboutOpen(false)} />}

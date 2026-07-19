@@ -113,7 +113,13 @@ export type PublicStats = {
   losses: number;
   draws: number;
   punishments: number;
+  // 展示值（服务端已按 rankedScore 封顶）；排序请用 sort* 真实分。
   rankedPoints: number;
+  highestScore: number;
+  lowestScore: number;
+  sortRankedPoints: number;
+  sortHighestScore: number;
+  sortLowestScore: number;
   title: string;
   titleSegmentId?: string;
 };
@@ -202,7 +208,6 @@ export type ChatMessage = {
   roomId?: string;
   playerId: string;
   author: string;
-  authorPlayer?: PublicPlayer;
   authorRole?: string;
   text: string;
   at: number;
@@ -248,6 +253,7 @@ export type RoomSettings = {
   othelloBoardTheme?: "classic" | "pastel" | "midnight" | "wood" | "neon";
   tictactoeBoardTheme?: "paper" | "mint" | "midnight" | "candy" | "arcade";
   gomokuBoardTheme?: "classic" | "pastel" | "midnight" | "wood" | "neon";
+  gomokuUndoLimit?: 0 | 1 | 3 | 10;
   liarsDiceMinPlayers?: number;
   liarsDiceMaxPlayers?: number;
 };
@@ -360,7 +366,6 @@ export type RoundHistoryItem = {
 
 export type RoomSnapshot = {
   id: string;
-  code: string;
   updatedAt: number;
   settings: RoomSettings;
   status: "waiting" | "playing" | "punishment";
@@ -408,7 +413,6 @@ export type LobbySnapshot = {
   rooms: Array<{
     id: string;
     gameId: GameId;
-    code: string;
     name: string;
     hasPassword: boolean;
     players: number;
@@ -458,8 +462,8 @@ export type AppConfig = {
   genderFactions: GenderFaction[];
   titles: Array<{
     id: string;
-    min: number;
-    max: number;
+    minPercent: number;
+    maxPercent: number;
     names: string[];
     factionNames?: Record<string, string[]>;
   }>;
@@ -480,6 +484,14 @@ export type AppConfig = {
   accessControl: {
     maxOnlinePerIp: number;
     maxCreatesPer10Min: number;
+    ipBackstopMultiplier: number;
+    ipBackstopMinLimit: number;
+    maxSessionIssuePerIp: number;
+    maxOnlinePerIpTotal: number;
+    maxCreatesPerIp: number;
+    maxActiveRoomsPerOwner: number;
+    maxProofUploadsPerPlayer: number;
+    registrationDisabled: boolean;
   };
   nameWar: {
     penaltyPrefix: string;
@@ -488,6 +500,8 @@ export type AppConfig = {
     renamePanelTitle?: string;
     nameWarLoserLabel?: string;
     extremeForceClosedLabel?: string;
+    /** 真实排位分 ≤ 此值时名争失格（默认 -4999） */
+    penaltyThreshold: number;
   };
   giveaway: {
     panelTitle: string;
@@ -508,6 +522,14 @@ export type AppConfig = {
     forceCloseWarning?: string;
     forceRenameMinPoints?: number;
     forceRenameProtectHours?: number;
+  };
+  // rankedScore：排位分「展示」上下限与每日衰减比例。存储分数本身不设限，
+  // 仅在下发给客户端时按这里的 max/min/nameWarMin 封顶展示。
+  rankedScore: {
+    max: number;
+    min: number;
+    nameWarMin: number;
+    dailyDecayRatio: number;
   };
   bots: {
     names: string[];

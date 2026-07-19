@@ -117,6 +117,7 @@ func New() (*Server, error) {
 		liarsDiceStartTimers:    map[string]*time.Timer{},
 		gomokuUndoTimers:        map[string]*time.Timer{},
 		deviceCreateAttempts:    map[string][]int64{},
+		ipCreateAttempts:        map[string][]int64{},
 		adminClientIDs:          map[string]struct{}{},
 		sidToClientID:           map[string]string{},
 		clientIDToSID:           map[string]string{},
@@ -153,6 +154,7 @@ func New() (*Server, error) {
 		s.eventDB = newEventStore(db)
 		s.pushDB = newPushStore(db)
 		s.playerDB = newPlayerStore(db)
+		s.activityDB = newActivityStore(db)
 	}
 	// VAPID 密钥：失败不阻断启动，Web Push 功能会静默不可用（sendPush 会因 vapid.PublicKey=="" 直接跳过）。
 	if keys, err := loadOrGenerateVAPIDKeys(root); err != nil {
@@ -168,6 +170,7 @@ func New() (*Server, error) {
 func (s *Server) Run() error {
 	s.loadPlayersFromDisk()
 	s.scheduleExtremeHourlyDecay()
+	s.scheduleRankedDailyDecay()
 	go s.runActivityLogConsumer()
 	go func() {
 		ticker := time.NewTicker(60 * time.Second)
@@ -206,6 +209,11 @@ func (s *Server) Run() error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = httpServer.Shutdown(shutdownCtx)
+		// httpServer.Shutdown 不会主动断开已升级的 WebSocket 连接，也不会触发正常的房间关闭
+		// 流程；不补这一步的话，这些连接/房间这次的生命周期就完全没有落盘记录（见
+		// closeLiveStateOnShutdown）。真正的进程被杀（kill -9/OOM）仍然覆盖不到，属于已知的、
+		// 影响有限的边界情况。
+		s.closeLiveStateOnShutdown()
 		if s.db != nil {
 			_ = s.db.Close()
 		}
@@ -215,5 +223,93 @@ func (s *Server) Run() error {
 			return nil
 		}
 		return err
+	}
+}
+
+// closeLiveStateOnShutdown 在优雅关停（SIGINT/SIGTERM）时，把内存里仍处于"存活"状态的
+// 连接（s.clients）和房间（s.rooms）各写一条收尾记录——它们的 connection_events/rooms 行只在
+// 结束时一次性 insert（见 activitystore.go/eventstore.go），正常情况下分别由 onClientDisconnect
+// 和 cleanupRoomIfEmpty/admin 关房触发；但 httpServer.Shutdown 不会主动断开已升级的 WebSocket，
+// 进程直接退出时也不会有玩家主动关闭房间，这些连接/房间这次的生命周期就不会经过那两条路径，
+// 需要在这里补写。
+//
+// 字段读取与"摘出存活集合"必须整段放在 s.mu 内完成：房间会在 empty_cleanup/admin_close 路径下
+// 被并发关闭并 delete(s.rooms, id)，若在这里只是复制指针、解锁后才读字段/判断是否已关闭，会与
+// 那两条路径产生竞争——既可能读到理论上会变化的字段，也可能出现同一房间被两条路径各写一行
+// close 记录（rooms.room_id 主键冲突，只有先写入的一行生效，另一次会被当作错误记进日志）。这里
+// 把需要的字段值复制出来，并且把 delete(s.rooms, id) 一起放进同一段临界区：谁先拿到锁，谁就
+// 独占了"关闭这个房间"的资格，之后任何路径按 s.rooms[id]==nil 都会直接跳过，不会重复处理。
+// 真正的 SQLite 写入不做 I/O 前不涉及共享状态，放到锁外执行。
+func (s *Server) closeLiveStateOnShutdown() {
+	now := nowMs()
+
+	type openConn struct {
+		id          string
+		connectedAt int64
+		sid         string
+		ipAddress   string
+		deviceKey   string
+		fingerprint string
+		userAgent   string
+		compression string
+		playerID    string
+	}
+	type closedRoom struct {
+		id          string
+		name        string
+		gameID      string
+		ownerID     string
+		creatorName string
+		createdAt   int64
+	}
+
+	s.mu.Lock()
+	conns := make([]openConn, 0, len(s.clients))
+	for _, c := range s.clients {
+		// 先打标，防止随后 WS 拆线触发 onClientDisconnect 再写一条 disconnect。
+		if c.connectionLogged {
+			continue
+		}
+		c.connectionLogged = true
+		playerID := ""
+		if p := s.getPlayerByClientID(c.id); p != nil {
+			playerID = p.ID
+		}
+		conns = append(conns, openConn{
+			id: c.id, connectedAt: c.connectedAt, sid: c.sid, ipAddress: c.ipAddress,
+			deviceKey: c.deviceKey, fingerprint: c.fingerprint, userAgent: c.userAgent,
+			compression: c.compression, playerID: playerID,
+		})
+	}
+	rooms := make([]closedRoom, 0, len(s.rooms))
+	for id, r := range s.rooms {
+		rooms = append(rooms, closedRoom{
+			id: id, name: r.Settings.Name, gameID: string(r.Settings.GameID),
+			ownerID: r.OwnerID, creatorName: r.CreatorName, createdAt: r.CreatedAt,
+		})
+		delete(s.rooms, id)
+	}
+	s.mu.Unlock()
+
+	if s.activityDB != nil {
+		for _, c := range conns {
+			if err := s.activityDB.insertConnectionEvent(
+				c.id, c.connectedAt, now, c.sid, c.ipAddress,
+				c.deviceKey, c.fingerprint, c.userAgent, c.compression,
+				c.playerID, "server_shutdown",
+			); err != nil {
+				s.errorLog("connection_event_persist_failed", err.Error())
+			}
+		}
+	}
+	if s.eventDB != nil {
+		for _, r := range rooms {
+			if err := s.eventDB.insertClosedRoom(
+				r.id, r.name, r.gameID, r.ownerID, r.creatorName,
+				r.createdAt, now, "server_shutdown",
+			); err != nil {
+				s.errorLog("room_event_close_failed", err.Error())
+			}
+		}
 	}
 }

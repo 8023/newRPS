@@ -2670,6 +2670,8 @@ main {
   display: block;
   width: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
   border: none;
   border-radius: 0;
   background: color-mix(in srgb, var(--gomoku-cell, transparent) 28%, transparent);
@@ -2677,10 +2679,16 @@ main {
   box-shadow:
     inset 1px 0 0 var(--gomoku-line, rgba(78, 46, 20, 0.45)),
     inset 0 1px 0 var(--gomoku-line, rgba(78, 46, 20, 0.45));
+  transform: none;
 }
 
 .gomoku-cell:not(:disabled):hover {
   background: color-mix(in srgb, var(--gomoku-hover, #ffffff) 34%, transparent);
+  transform: none;
+}
+
+.gomoku-cell:disabled {
+  transform: none;
 }
 
 .gomoku-cell.winning {
@@ -2717,6 +2725,37 @@ main {
 
 .gomoku-stone.last-move.white {
   box-shadow: 0 0 0 2px #ff6f91, inset 0 3px 4px rgba(255, 255, 255, 0.5), inset 0 -3px 5px rgba(0, 0, 0, 0.14), 0 2px 3px rgba(0, 0, 0, 0.2);
+}
+
+.gomoku-crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 60%;
+  height: 60%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.gomoku-crosshair::before,
+.gomoku-crosshair::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: #ff3b30;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+
+.gomoku-crosshair::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.gomoku-crosshair::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
 }
 
 .gomoku-legend {
@@ -4282,6 +4321,11 @@ main {
 .admin-preview-card p {
   margin: 0;
   color: var(--muted);
+}
+
+.admin-preview-card-warning {
+  background: var(--notice-bg);
+  border-color: var(--notice-border);
 }
 
 .admin-preview-strip,

@@ -10,7 +10,6 @@ import (
 const (
 	gomokuBoardSize  = 15
 	gomokuWinLength  = 5
-	gomokuUndoLimit  = 3
 	gomokuUndoWindow = 30 * time.Second
 )
 
@@ -294,7 +293,7 @@ func cloneGomokuBoard(board [][]*types.GomokuCell) [][]*types.GomokuCell {
 }
 
 // requestGomokuUndo：只能由「当前轮到落子的一方」发起，悔回自己上一手 + 对方紧接着的应手，
-// 双方各限 3 次/局，30 秒无响应自动拒绝。
+// 每局的悔棋次数上限由 room.Settings.GomokuUndoLimit 决定（建房时校验为 0/1/3/10），30 秒无响应自动拒绝。
 func (s *Server) requestGomokuUndo(room *RoomState, seat types.SeatKey) (bool, string) {
 	if room.Gomoku == nil || room.Phase != types.PhaseChoosing || room.Gomoku.Ended {
 		return false, "当前不能悔棋"
@@ -311,7 +310,7 @@ func (s *Server) requestGomokuUndo(room *RoomState, seat types.SeatKey) (bool, s
 	if room.Gomoku.ResignRequest != nil {
 		return false, "认输请求处理完成前不能悔棋"
 	}
-	if room.Gomoku.UndoCount[seat] >= gomokuUndoLimit {
+	if room.Gomoku.UndoCount[seat] >= room.Settings.GomokuUndoLimit {
 		return false, "你本局的悔棋次数已经用完"
 	}
 	toSeat := oppositeSeat(seat)

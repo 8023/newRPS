@@ -287,8 +287,14 @@ type PublicStats struct {
 	RankedPoints   int32                  `protobuf:"varint,5,opt,name=ranked_points,json=rankedPoints,proto3" json:"ranked_points,omitempty"`
 	Title          string                 `protobuf:"bytes,6,opt,name=title,proto3" json:"title,omitempty"`
 	TitleSegmentId string                 `protobuf:"bytes,7,opt,name=title_segment_id,json=titleSegmentId,proto3" json:"title_segment_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	HighestScore   int32                  `protobuf:"varint,8,opt,name=highest_score,json=highestScore,proto3" json:"highest_score,omitempty"`
+	LowestScore    int32                  `protobuf:"varint,9,opt,name=lowest_score,json=lowestScore,proto3" json:"lowest_score,omitempty"`
+	// 真实分（未封顶），仅供排行榜排序；展示用 ranked_points/highest_score/lowest_score。
+	SortRankedPoints int32 `protobuf:"varint,10,opt,name=sort_ranked_points,json=sortRankedPoints,proto3" json:"sort_ranked_points,omitempty"`
+	SortHighestScore int32 `protobuf:"varint,11,opt,name=sort_highest_score,json=sortHighestScore,proto3" json:"sort_highest_score,omitempty"`
+	SortLowestScore  int32 `protobuf:"varint,12,opt,name=sort_lowest_score,json=sortLowestScore,proto3" json:"sort_lowest_score,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *PublicStats) Reset() {
@@ -370,16 +376,56 @@ func (x *PublicStats) GetTitleSegmentId() string {
 	return ""
 }
 
+func (x *PublicStats) GetHighestScore() int32 {
+	if x != nil {
+		return x.HighestScore
+	}
+	return 0
+}
+
+func (x *PublicStats) GetLowestScore() int32 {
+	if x != nil {
+		return x.LowestScore
+	}
+	return 0
+}
+
+func (x *PublicStats) GetSortRankedPoints() int32 {
+	if x != nil {
+		return x.SortRankedPoints
+	}
+	return 0
+}
+
+func (x *PublicStats) GetSortHighestScore() int32 {
+	if x != nil {
+		return x.SortHighestScore
+	}
+	return 0
+}
+
+func (x *PublicStats) GetSortLowestScore() int32 {
+	if x != nil {
+		return x.SortLowestScore
+	}
+	return 0
+}
+
 type LobbyStats struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Wins          int32                  `protobuf:"varint,1,opt,name=wins,proto3" json:"wins,omitempty"`
-	Losses        int32                  `protobuf:"varint,2,opt,name=losses,proto3" json:"losses,omitempty"`
-	Draws         int32                  `protobuf:"varint,3,opt,name=draws,proto3" json:"draws,omitempty"`
-	Punishments   int32                  `protobuf:"varint,4,opt,name=punishments,proto3" json:"punishments,omitempty"`
-	RankedPoints  int32                  `protobuf:"varint,5,opt,name=ranked_points,json=rankedPoints,proto3" json:"ranked_points,omitempty"`
-	Title         string                 `protobuf:"bytes,6,opt,name=title,proto3" json:"title,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Wins             int32                  `protobuf:"varint,1,opt,name=wins,proto3" json:"wins,omitempty"`
+	Losses           int32                  `protobuf:"varint,2,opt,name=losses,proto3" json:"losses,omitempty"`
+	Draws            int32                  `protobuf:"varint,3,opt,name=draws,proto3" json:"draws,omitempty"`
+	Punishments      int32                  `protobuf:"varint,4,opt,name=punishments,proto3" json:"punishments,omitempty"`
+	RankedPoints     int32                  `protobuf:"varint,5,opt,name=ranked_points,json=rankedPoints,proto3" json:"ranked_points,omitempty"`
+	Title            string                 `protobuf:"bytes,6,opt,name=title,proto3" json:"title,omitempty"`
+	HighestScore     int32                  `protobuf:"varint,7,opt,name=highest_score,json=highestScore,proto3" json:"highest_score,omitempty"`
+	LowestScore      int32                  `protobuf:"varint,8,opt,name=lowest_score,json=lowestScore,proto3" json:"lowest_score,omitempty"`
+	SortRankedPoints int32                  `protobuf:"varint,9,opt,name=sort_ranked_points,json=sortRankedPoints,proto3" json:"sort_ranked_points,omitempty"`
+	SortHighestScore int32                  `protobuf:"varint,10,opt,name=sort_highest_score,json=sortHighestScore,proto3" json:"sort_highest_score,omitempty"`
+	SortLowestScore  int32                  `protobuf:"varint,11,opt,name=sort_lowest_score,json=sortLowestScore,proto3" json:"sort_lowest_score,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *LobbyStats) Reset() {
@@ -452,6 +498,41 @@ func (x *LobbyStats) GetTitle() string {
 		return x.Title
 	}
 	return ""
+}
+
+func (x *LobbyStats) GetHighestScore() int32 {
+	if x != nil {
+		return x.HighestScore
+	}
+	return 0
+}
+
+func (x *LobbyStats) GetLowestScore() int32 {
+	if x != nil {
+		return x.LowestScore
+	}
+	return 0
+}
+
+func (x *LobbyStats) GetSortRankedPoints() int32 {
+	if x != nil {
+		return x.SortRankedPoints
+	}
+	return 0
+}
+
+func (x *LobbyStats) GetSortHighestScore() int32 {
+	if x != nil {
+		return x.SortHighestScore
+	}
+	return 0
+}
+
+func (x *LobbyStats) GetSortLowestScore() int32 {
+	if x != nil {
+		return x.SortLowestScore
+	}
+	return 0
 }
 
 type GameWLD struct {
@@ -1516,7 +1597,6 @@ type ChatMessage struct {
 	RoomId        string                 `protobuf:"bytes,2,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
 	PlayerId      string                 `protobuf:"bytes,3,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	Author        string                 `protobuf:"bytes,4,opt,name=author,proto3" json:"author,omitempty"`
-	AuthorPlayer  *PublicPlayer          `protobuf:"bytes,5,opt,name=author_player,json=authorPlayer,proto3" json:"author_player,omitempty"`
 	AuthorRole    string                 `protobuf:"bytes,6,opt,name=author_role,json=authorRole,proto3" json:"author_role,omitempty"`
 	Text          string                 `protobuf:"bytes,7,opt,name=text,proto3" json:"text,omitempty"`
 	At            int64                  `protobuf:"varint,8,opt,name=at,proto3" json:"at,omitempty"`
@@ -1583,13 +1663,6 @@ func (x *ChatMessage) GetAuthor() string {
 		return x.Author
 	}
 	return ""
-}
-
-func (x *ChatMessage) GetAuthorPlayer() *PublicPlayer {
-	if x != nil {
-		return x.AuthorPlayer
-	}
-	return nil
 }
 
 func (x *ChatMessage) GetAuthorRole() string {
@@ -1745,6 +1818,7 @@ type RoomSettings struct {
 	LiarsDiceMinPlayers    int32                  `protobuf:"varint,24,opt,name=liars_dice_min_players,json=liarsDiceMinPlayers,proto3" json:"liars_dice_min_players,omitempty"`
 	LiarsDiceMaxPlayers    int32                  `protobuf:"varint,25,opt,name=liars_dice_max_players,json=liarsDiceMaxPlayers,proto3" json:"liars_dice_max_players,omitempty"`
 	GomokuBoardTheme       string                 `protobuf:"bytes,26,opt,name=gomoku_board_theme,json=gomokuBoardTheme,proto3" json:"gomoku_board_theme,omitempty"`
+	GomokuUndoLimit        int32                  `protobuf:"varint,27,opt,name=gomoku_undo_limit,json=gomokuUndoLimit,proto3" json:"gomoku_undo_limit,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -1952,6 +2026,13 @@ func (x *RoomSettings) GetGomokuBoardTheme() string {
 		return x.GomokuBoardTheme
 	}
 	return ""
+}
+
+func (x *RoomSettings) GetGomokuUndoLimit() int32 {
+	if x != nil {
+		return x.GomokuUndoLimit
+	}
+	return 0
 }
 
 type GomokuUndoRequest struct {
@@ -4118,7 +4199,6 @@ func (x *SeatStatsPair) GetValue() *SeatStats {
 type RoomSnapshot struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	Id         string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Code       string                 `protobuf:"bytes,2,opt,name=code,proto3" json:"code,omitempty"`
 	UpdatedAt  int64                  `protobuf:"varint,3,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	Settings   *RoomSettings          `protobuf:"bytes,4,opt,name=settings,proto3" json:"settings,omitempty"`
 	Status     string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
@@ -4181,13 +4261,6 @@ func (*RoomSnapshot) Descriptor() ([]byte, []int) {
 func (x *RoomSnapshot) GetId() string {
 	if x != nil {
 		return x.Id
-	}
-	return ""
-}
-
-func (x *RoomSnapshot) GetCode() string {
-	if x != nil {
-		return x.Code
 	}
 	return ""
 }
@@ -4593,7 +4666,6 @@ type LobbyRoomInfo struct {
 	state                  protoimpl.MessageState `protogen:"open.v1"`
 	Id                     string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	GameId                 string                 `protobuf:"bytes,2,opt,name=game_id,json=gameId,proto3" json:"game_id,omitempty"`
-	Code                   string                 `protobuf:"bytes,3,opt,name=code,proto3" json:"code,omitempty"`
 	Name                   string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
 	HasPassword            bool                   `protobuf:"varint,5,opt,name=has_password,json=hasPassword,proto3" json:"has_password,omitempty"`
 	Players                int32                  `protobuf:"varint,6,opt,name=players,proto3" json:"players,omitempty"`
@@ -4658,13 +4730,6 @@ func (x *LobbyRoomInfo) GetId() string {
 func (x *LobbyRoomInfo) GetGameId() string {
 	if x != nil {
 		return x.GameId
-	}
-	return ""
-}
-
-func (x *LobbyRoomInfo) GetCode() string {
-	if x != nil {
-		return x.Code
 	}
 	return ""
 }
@@ -5278,10 +5343,11 @@ func (x *PunishmentTaskConfig) GetBackgroundOpacity() float64 {
 }
 
 type TitleSegment struct {
-	state         protoimpl.MessageState       `protogen:"open.v1"`
-	Id            string                       `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Min           int32                        `protobuf:"varint,2,opt,name=min,proto3" json:"min,omitempty"`
-	Max           int32                        `protobuf:"varint,3,opt,name=max,proto3" json:"max,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// 相对 RankedScore 展示上下限的百分比分段（-100～100）；见服务端 rankedScorePercent。
+	MinPercent    float64                      `protobuf:"fixed64,2,opt,name=min_percent,json=minPercent,proto3" json:"min_percent,omitempty"`
+	MaxPercent    float64                      `protobuf:"fixed64,3,opt,name=max_percent,json=maxPercent,proto3" json:"max_percent,omitempty"`
 	Names         []string                     `protobuf:"bytes,4,rep,name=names,proto3" json:"names,omitempty"`
 	FactionNames  []*TitleSegment_FactionNames `protobuf:"bytes,5,rep,name=faction_names,json=factionNames,proto3" json:"faction_names,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -5325,16 +5391,16 @@ func (x *TitleSegment) GetId() string {
 	return ""
 }
 
-func (x *TitleSegment) GetMin() int32 {
+func (x *TitleSegment) GetMinPercent() float64 {
 	if x != nil {
-		return x.Min
+		return x.MinPercent
 	}
 	return 0
 }
 
-func (x *TitleSegment) GetMax() int32 {
+func (x *TitleSegment) GetMaxPercent() float64 {
 	if x != nil {
-		return x.Max
+		return x.MaxPercent
 	}
 	return 0
 }
@@ -5968,8 +6034,19 @@ type AccessControlConfig struct {
 	// 注意：protobufjs 会把本字段编成 maxCreatesPer_10Min（数字前插下划线），
 	// 业务侧字段名为 maxCreatesPer10Min；前端 materializeConfig 会做归一化。
 	MaxCreatesPer_10Min int32 `protobuf:"varint,2,opt,name=max_creates_per_10_min,json=maxCreatesPer10Min,proto3" json:"max_creates_per_10_min,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// 以下字段是纯 IP 维度（不依赖客户端可伪造的浏览器指纹）的兜底上限；
+	// 字段名刻意不含裸数字片段，避免重蹈 max_creates_per_10_min 的 protobufjs 命名坑。
+	IpBackstopMultiplier     int32 `protobuf:"varint,3,opt,name=ip_backstop_multiplier,json=ipBackstopMultiplier,proto3" json:"ip_backstop_multiplier,omitempty"`
+	IpBackstopMinLimit       int32 `protobuf:"varint,4,opt,name=ip_backstop_min_limit,json=ipBackstopMinLimit,proto3" json:"ip_backstop_min_limit,omitempty"`
+	MaxSessionIssuePerIp     int32 `protobuf:"varint,5,opt,name=max_session_issue_per_ip,json=maxSessionIssuePerIp,proto3" json:"max_session_issue_per_ip,omitempty"`
+	MaxOnlinePerIpTotal      int32 `protobuf:"varint,6,opt,name=max_online_per_ip_total,json=maxOnlinePerIpTotal,proto3" json:"max_online_per_ip_total,omitempty"`
+	MaxCreatesPerIp          int32 `protobuf:"varint,7,opt,name=max_creates_per_ip,json=maxCreatesPerIp,proto3" json:"max_creates_per_ip,omitempty"`
+	MaxActiveRoomsPerOwner   int32 `protobuf:"varint,8,opt,name=max_active_rooms_per_owner,json=maxActiveRoomsPerOwner,proto3" json:"max_active_rooms_per_owner,omitempty"`
+	MaxProofUploadsPerPlayer int32 `protobuf:"varint,9,opt,name=max_proof_uploads_per_player,json=maxProofUploadsPerPlayer,proto3" json:"max_proof_uploads_per_player,omitempty"`
+	// 勾选后拒绝一切新建玩家，老用户凭已有身份仍可正常登录。
+	RegistrationDisabled bool `protobuf:"varint,10,opt,name=registration_disabled,json=registrationDisabled,proto3" json:"registration_disabled,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *AccessControlConfig) Reset() {
@@ -6016,6 +6093,62 @@ func (x *AccessControlConfig) GetMaxCreatesPer_10Min() int32 {
 	return 0
 }
 
+func (x *AccessControlConfig) GetIpBackstopMultiplier() int32 {
+	if x != nil {
+		return x.IpBackstopMultiplier
+	}
+	return 0
+}
+
+func (x *AccessControlConfig) GetIpBackstopMinLimit() int32 {
+	if x != nil {
+		return x.IpBackstopMinLimit
+	}
+	return 0
+}
+
+func (x *AccessControlConfig) GetMaxSessionIssuePerIp() int32 {
+	if x != nil {
+		return x.MaxSessionIssuePerIp
+	}
+	return 0
+}
+
+func (x *AccessControlConfig) GetMaxOnlinePerIpTotal() int32 {
+	if x != nil {
+		return x.MaxOnlinePerIpTotal
+	}
+	return 0
+}
+
+func (x *AccessControlConfig) GetMaxCreatesPerIp() int32 {
+	if x != nil {
+		return x.MaxCreatesPerIp
+	}
+	return 0
+}
+
+func (x *AccessControlConfig) GetMaxActiveRoomsPerOwner() int32 {
+	if x != nil {
+		return x.MaxActiveRoomsPerOwner
+	}
+	return 0
+}
+
+func (x *AccessControlConfig) GetMaxProofUploadsPerPlayer() int32 {
+	if x != nil {
+		return x.MaxProofUploadsPerPlayer
+	}
+	return 0
+}
+
+func (x *AccessControlConfig) GetRegistrationDisabled() bool {
+	if x != nil {
+		return x.RegistrationDisabled
+	}
+	return false
+}
+
 type NameWarConfig struct {
 	state                   protoimpl.MessageState `protogen:"open.v1"`
 	PenaltyPrefix           string                 `protobuf:"bytes,1,opt,name=penalty_prefix,json=penaltyPrefix,proto3" json:"penalty_prefix,omitempty"`
@@ -6024,8 +6157,10 @@ type NameWarConfig struct {
 	RenamePanelTitle        string                 `protobuf:"bytes,4,opt,name=rename_panel_title,json=renamePanelTitle,proto3" json:"rename_panel_title,omitempty"`
 	NameWarLoserLabel       string                 `protobuf:"bytes,5,opt,name=name_war_loser_label,json=nameWarLoserLabel,proto3" json:"name_war_loser_label,omitempty"`
 	ExtremeForceClosedLabel string                 `protobuf:"bytes,6,opt,name=extreme_force_closed_label,json=extremeForceClosedLabel,proto3" json:"extreme_force_closed_label,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	// 真实排位分 ≤ 此值时进入名争失格（默认 -4999）。
+	PenaltyThreshold int32 `protobuf:"varint,7,opt,name=penalty_threshold,json=penaltyThreshold,proto3" json:"penalty_threshold,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *NameWarConfig) Reset() {
@@ -6098,6 +6233,13 @@ func (x *NameWarConfig) GetExtremeForceClosedLabel() string {
 		return x.ExtremeForceClosedLabel
 	}
 	return ""
+}
+
+func (x *NameWarConfig) GetPenaltyThreshold() int32 {
+	if x != nil {
+		return x.PenaltyThreshold
+	}
+	return 0
 }
 
 type GiveawayConfig struct {
@@ -6239,6 +6381,7 @@ type AppConfig struct {
 	Games                        []*GameConfig             `protobuf:"bytes,15,rep,name=games,proto3" json:"games,omitempty"`
 	Messages                     []*StringPair             `protobuf:"bytes,16,rep,name=messages,proto3" json:"messages,omitempty"`
 	SecurityDisclaimer           *SecurityDisclaimerConfig `protobuf:"bytes,17,opt,name=security_disclaimer,json=securityDisclaimer,proto3" json:"security_disclaimer,omitempty"`
+	RankedScore                  *RankedScoreConfig        `protobuf:"bytes,18,opt,name=ranked_score,json=rankedScore,proto3" json:"ranked_score,omitempty"`
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
 }
@@ -6392,6 +6535,81 @@ func (x *AppConfig) GetSecurityDisclaimer() *SecurityDisclaimerConfig {
 	return nil
 }
 
+func (x *AppConfig) GetRankedScore() *RankedScoreConfig {
+	if x != nil {
+		return x.RankedScore
+	}
+	return nil
+}
+
+type RankedScoreConfig struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Max             int32                  `protobuf:"varint,1,opt,name=max,proto3" json:"max,omitempty"`
+	Min             int32                  `protobuf:"varint,2,opt,name=min,proto3" json:"min,omitempty"`
+	NameWarMin      int32                  `protobuf:"varint,3,opt,name=name_war_min,json=nameWarMin,proto3" json:"name_war_min,omitempty"`
+	DailyDecayRatio float64                `protobuf:"fixed64,4,opt,name=daily_decay_ratio,json=dailyDecayRatio,proto3" json:"daily_decay_ratio,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *RankedScoreConfig) Reset() {
+	*x = RankedScoreConfig{}
+	mi := &file_api_proto_game_proto_msgTypes[65]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RankedScoreConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RankedScoreConfig) ProtoMessage() {}
+
+func (x *RankedScoreConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_game_proto_msgTypes[65]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RankedScoreConfig.ProtoReflect.Descriptor instead.
+func (*RankedScoreConfig) Descriptor() ([]byte, []int) {
+	return file_api_proto_game_proto_rawDescGZIP(), []int{65}
+}
+
+func (x *RankedScoreConfig) GetMax() int32 {
+	if x != nil {
+		return x.Max
+	}
+	return 0
+}
+
+func (x *RankedScoreConfig) GetMin() int32 {
+	if x != nil {
+		return x.Min
+	}
+	return 0
+}
+
+func (x *RankedScoreConfig) GetNameWarMin() int32 {
+	if x != nil {
+		return x.NameWarMin
+	}
+	return 0
+}
+
+func (x *RankedScoreConfig) GetDailyDecayRatio() float64 {
+	if x != nil {
+		return x.DailyDecayRatio
+	}
+	return 0
+}
+
 // 状态通道 FULL 载荷
 type StateDocument struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -6407,7 +6625,7 @@ type StateDocument struct {
 
 func (x *StateDocument) Reset() {
 	*x = StateDocument{}
-	mi := &file_api_proto_game_proto_msgTypes[65]
+	mi := &file_api_proto_game_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6419,7 +6637,7 @@ func (x *StateDocument) String() string {
 func (*StateDocument) ProtoMessage() {}
 
 func (x *StateDocument) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_game_proto_msgTypes[65]
+	mi := &file_api_proto_game_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6432,7 +6650,7 @@ func (x *StateDocument) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StateDocument.ProtoReflect.Descriptor instead.
 func (*StateDocument) Descriptor() ([]byte, []int) {
-	return file_api_proto_game_proto_rawDescGZIP(), []int{65}
+	return file_api_proto_game_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *StateDocument) GetDoc() isStateDocument_Doc {
@@ -6501,7 +6719,7 @@ type PlayerBatch struct {
 
 func (x *PlayerBatch) Reset() {
 	*x = PlayerBatch{}
-	mi := &file_api_proto_game_proto_msgTypes[66]
+	mi := &file_api_proto_game_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6513,7 +6731,7 @@ func (x *PlayerBatch) String() string {
 func (*PlayerBatch) ProtoMessage() {}
 
 func (x *PlayerBatch) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_game_proto_msgTypes[66]
+	mi := &file_api_proto_game_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6526,7 +6744,7 @@ func (x *PlayerBatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerBatch.ProtoReflect.Descriptor instead.
 func (*PlayerBatch) Descriptor() ([]byte, []int) {
-	return file_api_proto_game_proto_rawDescGZIP(), []int{66}
+	return file_api_proto_game_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *PlayerBatch) GetPlayers() []*PublicPlayer {
@@ -6549,7 +6767,7 @@ type MeState struct {
 
 func (x *MeState) Reset() {
 	*x = MeState{}
-	mi := &file_api_proto_game_proto_msgTypes[67]
+	mi := &file_api_proto_game_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6561,7 +6779,7 @@ func (x *MeState) String() string {
 func (*MeState) ProtoMessage() {}
 
 func (x *MeState) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_game_proto_msgTypes[67]
+	mi := &file_api_proto_game_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6574,7 +6792,7 @@ func (x *MeState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MeState.ProtoReflect.Descriptor instead.
 func (*MeState) Descriptor() ([]byte, []int) {
-	return file_api_proto_game_proto_rawDescGZIP(), []int{67}
+	return file_api_proto_game_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *MeState) GetPlayer() *PublicPlayer {
@@ -6617,7 +6835,7 @@ type AnnouncementPayload struct {
 
 func (x *AnnouncementPayload) Reset() {
 	*x = AnnouncementPayload{}
-	mi := &file_api_proto_game_proto_msgTypes[68]
+	mi := &file_api_proto_game_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6629,7 +6847,7 @@ func (x *AnnouncementPayload) String() string {
 func (*AnnouncementPayload) ProtoMessage() {}
 
 func (x *AnnouncementPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_game_proto_msgTypes[68]
+	mi := &file_api_proto_game_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6642,7 +6860,7 @@ func (x *AnnouncementPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnnouncementPayload.ProtoReflect.Descriptor instead.
 func (*AnnouncementPayload) Descriptor() ([]byte, []int) {
-	return file_api_proto_game_proto_rawDescGZIP(), []int{68}
+	return file_api_proto_game_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *AnnouncementPayload) GetId() string {
@@ -6682,7 +6900,7 @@ type RoomClosed struct {
 
 func (x *RoomClosed) Reset() {
 	*x = RoomClosed{}
-	mi := &file_api_proto_game_proto_msgTypes[69]
+	mi := &file_api_proto_game_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6694,7 +6912,7 @@ func (x *RoomClosed) String() string {
 func (*RoomClosed) ProtoMessage() {}
 
 func (x *RoomClosed) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_game_proto_msgTypes[69]
+	mi := &file_api_proto_game_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6707,7 +6925,7 @@ func (x *RoomClosed) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoomClosed.ProtoReflect.Descriptor instead.
 func (*RoomClosed) Descriptor() ([]byte, []int) {
-	return file_api_proto_game_proto_rawDescGZIP(), []int{69}
+	return file_api_proto_game_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *RoomClosed) GetMessage() string {
@@ -6728,7 +6946,7 @@ type HistoryPage struct {
 
 func (x *HistoryPage) Reset() {
 	*x = HistoryPage{}
-	mi := &file_api_proto_game_proto_msgTypes[70]
+	mi := &file_api_proto_game_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6740,7 +6958,7 @@ func (x *HistoryPage) String() string {
 func (*HistoryPage) ProtoMessage() {}
 
 func (x *HistoryPage) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_game_proto_msgTypes[70]
+	mi := &file_api_proto_game_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6753,7 +6971,7 @@ func (x *HistoryPage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HistoryPage.ProtoReflect.Descriptor instead.
 func (*HistoryPage) Descriptor() ([]byte, []int) {
-	return file_api_proto_game_proto_rawDescGZIP(), []int{70}
+	return file_api_proto_game_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *HistoryPage) GetRoomId() string {
@@ -6786,7 +7004,7 @@ type OkResult struct {
 
 func (x *OkResult) Reset() {
 	*x = OkResult{}
-	mi := &file_api_proto_game_proto_msgTypes[71]
+	mi := &file_api_proto_game_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6798,7 +7016,7 @@ func (x *OkResult) String() string {
 func (*OkResult) ProtoMessage() {}
 
 func (x *OkResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_game_proto_msgTypes[71]
+	mi := &file_api_proto_game_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6811,7 +7029,7 @@ func (x *OkResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OkResult.ProtoReflect.Descriptor instead.
 func (*OkResult) Descriptor() ([]byte, []int) {
-	return file_api_proto_game_proto_rawDescGZIP(), []int{71}
+	return file_api_proto_game_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *OkResult) GetOk() bool {
@@ -6830,7 +7048,7 @@ type PlayerResult struct {
 
 func (x *PlayerResult) Reset() {
 	*x = PlayerResult{}
-	mi := &file_api_proto_game_proto_msgTypes[72]
+	mi := &file_api_proto_game_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6842,7 +7060,7 @@ func (x *PlayerResult) String() string {
 func (*PlayerResult) ProtoMessage() {}
 
 func (x *PlayerResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_game_proto_msgTypes[72]
+	mi := &file_api_proto_game_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6855,7 +7073,7 @@ func (x *PlayerResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerResult.ProtoReflect.Descriptor instead.
 func (*PlayerResult) Descriptor() ([]byte, []int) {
-	return file_api_proto_game_proto_rawDescGZIP(), []int{72}
+	return file_api_proto_game_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *PlayerResult) GetPlayer() *PublicPlayer {
@@ -6874,7 +7092,7 @@ type SuggestionsResult struct {
 
 func (x *SuggestionsResult) Reset() {
 	*x = SuggestionsResult{}
-	mi := &file_api_proto_game_proto_msgTypes[73]
+	mi := &file_api_proto_game_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6886,7 +7104,7 @@ func (x *SuggestionsResult) String() string {
 func (*SuggestionsResult) ProtoMessage() {}
 
 func (x *SuggestionsResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_game_proto_msgTypes[73]
+	mi := &file_api_proto_game_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6899,7 +7117,7 @@ func (x *SuggestionsResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuggestionsResult.ProtoReflect.Descriptor instead.
 func (*SuggestionsResult) Descriptor() ([]byte, []int) {
-	return file_api_proto_game_proto_rawDescGZIP(), []int{73}
+	return file_api_proto_game_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *SuggestionsResult) GetSuggestions() []*Suggestion {
@@ -6936,7 +7154,7 @@ type RawBody struct {
 
 func (x *RawBody) Reset() {
 	*x = RawBody{}
-	mi := &file_api_proto_game_proto_msgTypes[74]
+	mi := &file_api_proto_game_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6948,7 +7166,7 @@ func (x *RawBody) String() string {
 func (*RawBody) ProtoMessage() {}
 
 func (x *RawBody) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_game_proto_msgTypes[74]
+	mi := &file_api_proto_game_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6961,7 +7179,7 @@ func (x *RawBody) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RawBody.ProtoReflect.Descriptor instead.
 func (*RawBody) Descriptor() ([]byte, []int) {
-	return file_api_proto_game_proto_rawDescGZIP(), []int{74}
+	return file_api_proto_game_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *RawBody) GetBody() isRawBody_Body {
@@ -7211,7 +7429,7 @@ type TitleSegment_FactionNames struct {
 
 func (x *TitleSegment_FactionNames) Reset() {
 	*x = TitleSegment_FactionNames{}
-	mi := &file_api_proto_game_proto_msgTypes[75]
+	mi := &file_api_proto_game_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7223,7 +7441,7 @@ func (x *TitleSegment_FactionNames) String() string {
 func (*TitleSegment_FactionNames) ProtoMessage() {}
 
 func (x *TitleSegment_FactionNames) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_game_proto_msgTypes[75]
+	mi := &file_api_proto_game_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7278,7 +7496,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\agenders\x18\x06 \x03(\v2\x12.game.GenderOptionR\agenders\")\n" +
 	"\x03Pos\x12\x10\n" +
 	"\x03row\x18\x01 \x01(\x05R\x03row\x12\x10\n" +
-	"\x03col\x18\x02 \x01(\x05R\x03col\"\xd6\x01\n" +
+	"\x03col\x18\x02 \x01(\x05R\x03col\"\xa6\x03\n" +
 	"\vPublicStats\x12\x12\n" +
 	"\x04wins\x18\x01 \x01(\x05R\x04wins\x12\x16\n" +
 	"\x06losses\x18\x02 \x01(\x05R\x06losses\x12\x14\n" +
@@ -7286,7 +7504,13 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\vpunishments\x18\x04 \x01(\x05R\vpunishments\x12#\n" +
 	"\rranked_points\x18\x05 \x01(\x05R\frankedPoints\x12\x14\n" +
 	"\x05title\x18\x06 \x01(\tR\x05title\x12(\n" +
-	"\x10title_segment_id\x18\a \x01(\tR\x0etitleSegmentId\"\xab\x01\n" +
+	"\x10title_segment_id\x18\a \x01(\tR\x0etitleSegmentId\x12#\n" +
+	"\rhighest_score\x18\b \x01(\x05R\fhighestScore\x12!\n" +
+	"\flowest_score\x18\t \x01(\x05R\vlowestScore\x12,\n" +
+	"\x12sort_ranked_points\x18\n" +
+	" \x01(\x05R\x10sortRankedPoints\x12,\n" +
+	"\x12sort_highest_score\x18\v \x01(\x05R\x10sortHighestScore\x12*\n" +
+	"\x11sort_lowest_score\x18\f \x01(\x05R\x0fsortLowestScore\"\xfb\x02\n" +
 	"\n" +
 	"LobbyStats\x12\x12\n" +
 	"\x04wins\x18\x01 \x01(\x05R\x04wins\x12\x16\n" +
@@ -7294,7 +7518,13 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x05draws\x18\x03 \x01(\x05R\x05draws\x12 \n" +
 	"\vpunishments\x18\x04 \x01(\x05R\vpunishments\x12#\n" +
 	"\rranked_points\x18\x05 \x01(\x05R\frankedPoints\x12\x14\n" +
-	"\x05title\x18\x06 \x01(\tR\x05title\"K\n" +
+	"\x05title\x18\x06 \x01(\tR\x05title\x12#\n" +
+	"\rhighest_score\x18\a \x01(\x05R\fhighestScore\x12!\n" +
+	"\flowest_score\x18\b \x01(\x05R\vlowestScore\x12,\n" +
+	"\x12sort_ranked_points\x18\t \x01(\x05R\x10sortRankedPoints\x12,\n" +
+	"\x12sort_highest_score\x18\n" +
+	" \x01(\x05R\x10sortHighestScore\x12*\n" +
+	"\x11sort_lowest_score\x18\v \x01(\x05R\x0fsortLowestScore\"K\n" +
 	"\aGameWLD\x12\x12\n" +
 	"\x04wins\x18\x01 \x01(\x05R\x04wins\x12\x16\n" +
 	"\x06losses\x18\x02 \x01(\x05R\x06losses\x12\x14\n" +
@@ -7412,13 +7642,12 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\fSeatOccupant\x12,\n" +
 	"\x06player\x18\x01 \x01(\v2\x12.game.PublicPlayerH\x00R\x06player\x12#\n" +
 	"\x03bot\x18\x02 \x01(\v2\x0f.game.BotPlayerH\x00R\x03botB\x06\n" +
-	"\x04kind\"\xbe\x02\n" +
+	"\x04kind\"\x8b\x02\n" +
 	"\vChatMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\aroom_id\x18\x02 \x01(\tR\x06roomId\x12\x1b\n" +
 	"\tplayer_id\x18\x03 \x01(\tR\bplayerId\x12\x16\n" +
-	"\x06author\x18\x04 \x01(\tR\x06author\x127\n" +
-	"\rauthor_player\x18\x05 \x01(\v2\x12.game.PublicPlayerR\fauthorPlayer\x12\x1f\n" +
+	"\x06author\x18\x04 \x01(\tR\x06author\x12\x1f\n" +
 	"\vauthor_role\x18\x06 \x01(\tR\n" +
 	"authorRole\x12\x12\n" +
 	"\x04text\x18\a \x01(\tR\x04text\x12\x0e\n" +
@@ -7427,7 +7656,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\ttransient\x18\n" +
 	" \x01(\bR\ttransient\x12\x1d\n" +
 	"\n" +
-	"expires_at\x18\v \x01(\x03R\texpiresAt\"\xae\x01\n" +
+	"expires_at\x18\v \x01(\x03R\texpiresAtJ\x04\b\x05\x10\x06\"\xae\x01\n" +
 	"\n" +
 	"Suggestion\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
@@ -7435,7 +7664,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x06author\x18\x03 \x01(\tR\x06author\x127\n" +
 	"\rauthor_player\x18\x04 \x01(\v2\x12.game.PublicPlayerR\fauthorPlayer\x12\x12\n" +
 	"\x04text\x18\x05 \x01(\tR\x04text\x12\x0e\n" +
-	"\x02at\x18\x06 \x01(\x03R\x02at\"\x88\b\n" +
+	"\x02at\x18\x06 \x01(\x03R\x02at\"\xb4\b\n" +
 	"\fRoomSettings\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x17\n" +
@@ -7464,7 +7693,8 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x15tictactoe_board_theme\x18\x17 \x01(\tR\x13tictactoeBoardTheme\x123\n" +
 	"\x16liars_dice_min_players\x18\x18 \x01(\x05R\x13liarsDiceMinPlayers\x123\n" +
 	"\x16liars_dice_max_players\x18\x19 \x01(\x05R\x13liarsDiceMaxPlayers\x12,\n" +
-	"\x12gomoku_board_theme\x18\x1a \x01(\tR\x10gomokuBoardTheme\"\x87\x01\n" +
+	"\x12gomoku_board_theme\x18\x1a \x01(\tR\x10gomokuBoardTheme\x12*\n" +
+	"\x11gomoku_undo_limit\x18\x1b \x01(\x05R\x0fgomokuUndoLimit\"\x87\x01\n" +
 	"\x11GomokuUndoRequest\x12\x1b\n" +
 	"\tfrom_seat\x18\x01 \x01(\tR\bfromSeat\x12\x17\n" +
 	"\ato_seat\x18\x02 \x01(\tR\x06toSeat\x12\x1d\n" +
@@ -7690,10 +7920,9 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\v2\x12.game.SeatOccupantR\x05value\"H\n" +
 	"\rSeatStatsPair\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12%\n" +
-	"\x05value\x18\x02 \x01(\v2\x0f.game.SeatStatsR\x05value\"\x89\t\n" +
+	"\x05value\x18\x02 \x01(\v2\x0f.game.SeatStatsR\x05value\"\xfb\b\n" +
 	"\fRoomSnapshot\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04code\x18\x02 \x01(\tR\x04code\x12\x1d\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
 	"updated_at\x18\x03 \x01(\x03R\tupdatedAt\x12.\n" +
 	"\bsettings\x18\x04 \x01(\v2\x12.game.RoomSettingsR\bsettings\x12\x16\n" +
@@ -7724,7 +7953,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x13round_history_total\x18\x15 \x01(\x05R\x11roundHistoryTotal\x12%\n" +
 	"\x04chat\x18\x16 \x03(\v2\x11.game.ChatMessageR\x04chat\x12=\n" +
 	"\x1bforgive_advantage_target_id\x18\x19 \x01(\tR\x18forgiveAdvantageTargetId\x12G\n" +
-	" forgive_advantage_beneficiary_id\x18\x1a \x01(\tR\x1dforgiveAdvantageBeneficiaryId\"\xa4\x04\n" +
+	" forgive_advantage_beneficiary_id\x18\x1a \x01(\tR\x1dforgiveAdvantageBeneficiaryIdJ\x04\b\x02\x10\x03\"\xa4\x04\n" +
 	"\vServerStats\x12\x1d\n" +
 	"\n" +
 	"started_at\x18\x01 \x01(\x03R\tstartedAt\x12'\n" +
@@ -7748,11 +7977,10 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\n" +
 	"VersusPair\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12&\n" +
-	"\x05value\x18\x02 \x01(\v2\x10.game.VersusSeatR\x05value\"\xba\x06\n" +
+	"\x05value\x18\x02 \x01(\v2\x10.game.VersusSeatR\x05value\"\xac\x06\n" +
 	"\rLobbyRoomInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\agame_id\x18\x02 \x01(\tR\x06gameId\x12\x12\n" +
-	"\x04code\x18\x03 \x01(\tR\x04code\x12\x12\n" +
 	"\x04name\x18\x04 \x01(\tR\x04name\x12!\n" +
 	"\fhas_password\x18\x05 \x01(\bR\vhasPassword\x12\x18\n" +
 	"\aplayers\x18\x06 \x01(\x05R\aplayers\x12\x1e\n" +
@@ -7776,7 +8004,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x16enable_rank_multiplier\x18\x14 \x01(\bR\x14enableRankMultiplier\x12'\n" +
 	"\x0frank_multiplier\x18\x15 \x01(\x05R\x0erankMultiplier\x122\n" +
 	"\x15enable_extreme_ranked\x18\x16 \x01(\bR\x13enableExtremeRanked\x12\x12\n" +
-	"\x04tags\x18\x17 \x03(\tR\x04tags\"M\n" +
+	"\x04tags\x18\x17 \x03(\tR\x04tagsJ\x04\b\x03\x10\x04\"M\n" +
 	"\x10LobbyPlayerEntry\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12)\n" +
 	"\x06player\x18\x02 \x01(\v2\x11.game.LobbyPlayerR\x06player\"I\n" +
@@ -7815,11 +8043,13 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12,\n" +
 	"\bvariants\x18\x03 \x03(\v2\x10.game.StringPairR\bvariants\x12+\n" +
 	"\x11background_images\x18\x04 \x03(\tR\x10backgroundImages\x12-\n" +
-	"\x12background_opacity\x18\x05 \x01(\x01R\x11backgroundOpacity\"\xe3\x01\n" +
+	"\x12background_opacity\x18\x05 \x01(\x01R\x11backgroundOpacity\"\x81\x02\n" +
 	"\fTitleSegment\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
-	"\x03min\x18\x02 \x01(\x05R\x03min\x12\x10\n" +
-	"\x03max\x18\x03 \x01(\x05R\x03max\x12\x14\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1f\n" +
+	"\vmin_percent\x18\x02 \x01(\x01R\n" +
+	"minPercent\x12\x1f\n" +
+	"\vmax_percent\x18\x03 \x01(\x01R\n" +
+	"maxPercent\x12\x14\n" +
 	"\x05names\x18\x04 \x03(\tR\x05names\x12D\n" +
 	"\rfaction_names\x18\x05 \x03(\v2\x1f.game.TitleSegment.FactionNamesR\ffactionNames\x1aC\n" +
 	"\fFactionNames\x12\x1d\n" +
@@ -7878,17 +8108,27 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"SiteConfig\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12%\n" +
-	"\x0eadmin_password\x18\x03 \x01(\tR\radminPassword\"t\n" +
+	"\x0eadmin_password\x18\x03 \x01(\tR\radminPassword\"\xa9\x04\n" +
 	"\x13AccessControlConfig\x12)\n" +
 	"\x11max_online_per_ip\x18\x01 \x01(\x05R\x0emaxOnlinePerIp\x122\n" +
-	"\x16max_creates_per_10_min\x18\x02 \x01(\x05R\x12maxCreatesPer10Min\"\xa1\x02\n" +
+	"\x16max_creates_per_10_min\x18\x02 \x01(\x05R\x12maxCreatesPer10Min\x124\n" +
+	"\x16ip_backstop_multiplier\x18\x03 \x01(\x05R\x14ipBackstopMultiplier\x121\n" +
+	"\x15ip_backstop_min_limit\x18\x04 \x01(\x05R\x12ipBackstopMinLimit\x126\n" +
+	"\x18max_session_issue_per_ip\x18\x05 \x01(\x05R\x14maxSessionIssuePerIp\x124\n" +
+	"\x17max_online_per_ip_total\x18\x06 \x01(\x05R\x13maxOnlinePerIpTotal\x12+\n" +
+	"\x12max_creates_per_ip\x18\a \x01(\x05R\x0fmaxCreatesPerIp\x12:\n" +
+	"\x1amax_active_rooms_per_owner\x18\b \x01(\x05R\x16maxActiveRoomsPerOwner\x12>\n" +
+	"\x1cmax_proof_uploads_per_player\x18\t \x01(\x05R\x18maxProofUploadsPerPlayer\x123\n" +
+	"\x15registration_disabled\x18\n" +
+	" \x01(\bR\x14registrationDisabled\"\xce\x02\n" +
 	"\rNameWarConfig\x12%\n" +
 	"\x0epenalty_prefix\x18\x01 \x01(\tR\rpenaltyPrefix\x12*\n" +
 	"\x11loser_panel_title\x18\x02 \x01(\tR\x0floserPanelTitle\x12!\n" +
 	"\fescape_title\x18\x03 \x01(\tR\vescapeTitle\x12,\n" +
 	"\x12rename_panel_title\x18\x04 \x01(\tR\x10renamePanelTitle\x12/\n" +
 	"\x14name_war_loser_label\x18\x05 \x01(\tR\x11nameWarLoserLabel\x12;\n" +
-	"\x1aextreme_force_closed_label\x18\x06 \x01(\tR\x17extremeForceClosedLabel\"\xac\x01\n" +
+	"\x1aextreme_force_closed_label\x18\x06 \x01(\tR\x17extremeForceClosedLabel\x12+\n" +
+	"\x11penalty_threshold\x18\a \x01(\x05R\x10penaltyThreshold\"\xac\x01\n" +
 	"\x0eGiveawayConfig\x12\x1f\n" +
 	"\vpanel_title\x18\x01 \x01(\tR\n" +
 	"panelTitle\x12+\n" +
@@ -7899,7 +8139,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\n" +
 	"BotsConfig\x12\x14\n" +
 	"\x05names\x18\x01 \x03(\tR\x05names\x12=\n" +
-	"\fdifficulties\x18\x02 \x03(\v2\x19.game.BotDifficultyConfigR\fdifficulties\"\xaf\a\n" +
+	"\fdifficulties\x18\x02 \x03(\v2\x19.game.BotDifficultyConfigR\fdifficulties\"\xeb\a\n" +
 	"\tAppConfig\x12$\n" +
 	"\x04site\x18\x01 \x01(\v2\x10.game.SiteConfigR\x04site\x12F\n" +
 	"\x12announcement_board\x18\x02 \x01(\v2\x17.game.AnnouncementBoardR\x11announcementBoard\x12,\n" +
@@ -7918,7 +8158,14 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x04bots\x18\x0e \x01(\v2\x10.game.BotsConfigR\x04bots\x12&\n" +
 	"\x05games\x18\x0f \x03(\v2\x10.game.GameConfigR\x05games\x12,\n" +
 	"\bmessages\x18\x10 \x03(\v2\x10.game.StringPairR\bmessages\x12O\n" +
-	"\x13security_disclaimer\x18\x11 \x01(\v2\x1e.game.SecurityDisclaimerConfigR\x12securityDisclaimer\"\x98\x01\n" +
+	"\x13security_disclaimer\x18\x11 \x01(\v2\x1e.game.SecurityDisclaimerConfigR\x12securityDisclaimer\x12:\n" +
+	"\franked_score\x18\x12 \x01(\v2\x17.game.RankedScoreConfigR\vrankedScore\"\x85\x01\n" +
+	"\x11RankedScoreConfig\x12\x10\n" +
+	"\x03max\x18\x01 \x01(\x05R\x03max\x12\x10\n" +
+	"\x03min\x18\x02 \x01(\x05R\x03min\x12 \n" +
+	"\fname_war_min\x18\x03 \x01(\x05R\n" +
+	"nameWarMin\x12*\n" +
+	"\x11daily_decay_ratio\x18\x04 \x01(\x01R\x0fdailyDecayRatio\"\x98\x01\n" +
 	"\rStateDocument\x12+\n" +
 	"\x05lobby\x18\x01 \x01(\v2\x13.game.LobbySnapshotH\x00R\x05lobby\x12(\n" +
 	"\x04room\x18\x02 \x01(\v2\x12.game.RoomSnapshotH\x00R\x04room\x12)\n" +
@@ -7985,7 +8232,7 @@ func file_api_proto_game_proto_rawDescGZIP() []byte {
 	return file_api_proto_game_proto_rawDescData
 }
 
-var file_api_proto_game_proto_msgTypes = make([]protoimpl.MessageInfo, 76)
+var file_api_proto_game_proto_msgTypes = make([]protoimpl.MessageInfo, 77)
 var file_api_proto_game_proto_goTypes = []any{
 	(*GenderColors)(nil),              // 0: game.GenderColors
 	(*GenderOption)(nil),              // 1: game.GenderOption
@@ -8052,18 +8299,19 @@ var file_api_proto_game_proto_goTypes = []any{
 	(*GiveawayConfig)(nil),            // 62: game.GiveawayConfig
 	(*BotsConfig)(nil),                // 63: game.BotsConfig
 	(*AppConfig)(nil),                 // 64: game.AppConfig
-	(*StateDocument)(nil),             // 65: game.StateDocument
-	(*PlayerBatch)(nil),               // 66: game.PlayerBatch
-	(*MeState)(nil),                   // 67: game.MeState
-	(*AnnouncementPayload)(nil),       // 68: game.AnnouncementPayload
-	(*RoomClosed)(nil),                // 69: game.RoomClosed
-	(*HistoryPage)(nil),               // 70: game.HistoryPage
-	(*OkResult)(nil),                  // 71: game.OkResult
-	(*PlayerResult)(nil),              // 72: game.PlayerResult
-	(*SuggestionsResult)(nil),         // 73: game.SuggestionsResult
-	(*RawBody)(nil),                   // 74: game.RawBody
-	(*TitleSegment_FactionNames)(nil), // 75: game.TitleSegment.FactionNames
-	(*structpb.Struct)(nil),           // 76: google.protobuf.Struct
+	(*RankedScoreConfig)(nil),         // 65: game.RankedScoreConfig
+	(*StateDocument)(nil),             // 66: game.StateDocument
+	(*PlayerBatch)(nil),               // 67: game.PlayerBatch
+	(*MeState)(nil),                   // 68: game.MeState
+	(*AnnouncementPayload)(nil),       // 69: game.AnnouncementPayload
+	(*RoomClosed)(nil),                // 70: game.RoomClosed
+	(*HistoryPage)(nil),               // 71: game.HistoryPage
+	(*OkResult)(nil),                  // 72: game.OkResult
+	(*PlayerResult)(nil),              // 73: game.PlayerResult
+	(*SuggestionsResult)(nil),         // 74: game.SuggestionsResult
+	(*RawBody)(nil),                   // 75: game.RawBody
+	(*TitleSegment_FactionNames)(nil), // 76: game.TitleSegment.FactionNames
+	(*structpb.Struct)(nil),           // 77: google.protobuf.Struct
 }
 var file_api_proto_game_proto_depIdxs = []int32{
 	1,   // 0: game.GenderFaction.genders:type_name -> game.GenderOption
@@ -8080,94 +8328,94 @@ var file_api_proto_game_proto_depIdxs = []int32{
 	7,   // 11: game.LobbyPlayer.game_stats:type_name -> game.GameStats
 	8,   // 12: game.SeatOccupant.player:type_name -> game.PublicPlayer
 	10,  // 13: game.SeatOccupant.bot:type_name -> game.BotPlayer
-	8,   // 14: game.ChatMessage.author_player:type_name -> game.PublicPlayer
-	8,   // 15: game.Suggestion.author_player:type_name -> game.PublicPlayer
-	30,  // 16: game.GomokuState.board:type_name -> game.BoardRow
-	3,   // 17: game.GomokuState.moves:type_name -> game.Pos
-	3,   // 18: game.GomokuState.winning_line:type_name -> game.Pos
-	31,  // 19: game.GomokuState.ranked_delta:type_name -> game.IntPair
-	31,  // 20: game.GomokuState.undo_count:type_name -> game.IntPair
-	15,  // 21: game.GomokuState.undo_request:type_name -> game.GomokuUndoRequest
-	16,  // 22: game.GomokuState.resign_request:type_name -> game.GomokuResignRequest
-	20,  // 23: game.RoundHistoryItem.othello_score:type_name -> game.OthelloScore
-	3,   // 24: game.RoundHistoryItem.tictactoe_line:type_name -> game.Pos
-	21,  // 25: game.RoundHistoryItem.punishment_tasks:type_name -> game.PunishmentTask
-	22,  // 26: game.RoundHistoryItem.proofs:type_name -> game.HistoryProof
-	25,  // 27: game.RoundHistoryItem.liars_dice_hands:type_name -> game.LiarsDiceHandsPair
-	36,  // 28: game.RoundHistoryItem.liars_dice_names:type_name -> game.StringPair
-	3,   // 29: game.RoundHistoryItem.gomoku_line:type_name -> game.Pos
-	24,  // 30: game.LiarsDiceHandsPair.value:type_name -> game.Int32List
-	31,  // 31: game.LiarsDiceState.dice_counts:type_name -> game.IntPair
-	26,  // 32: game.LiarsDiceState.current_bid:type_name -> game.LiarsDiceBid
-	26,  // 33: game.LiarsDiceState.bid_history:type_name -> game.LiarsDiceBid
-	25,  // 34: game.LiarsDiceState.revealed_hands:type_name -> game.LiarsDiceHandsPair
-	30,  // 35: game.OthelloState.board:type_name -> game.BoardRow
-	3,   // 36: game.OthelloState.legal_moves:type_name -> game.Pos
-	31,  // 37: game.OthelloState.ranked_delta:type_name -> game.IntPair
-	28,  // 38: game.OthelloState.pending_settlement:type_name -> game.OthelloPendingSettlement
-	29,  // 39: game.OthelloState.surrender_request:type_name -> game.OthelloSurrenderRequest
-	30,  // 40: game.TicTacToeState.board:type_name -> game.BoardRow
-	33,  // 41: game.TicTacToeState.giveaway_prompt:type_name -> game.TicTacToeGiveawayPrompt
-	3,   // 42: game.TicTacToeState.winning_line:type_name -> game.Pos
-	31,  // 43: game.TicTacToeState.ranked_delta:type_name -> game.IntPair
-	11,  // 44: game.SeatOccupantPair.value:type_name -> game.SeatOccupant
-	19,  // 45: game.SeatStatsPair.value:type_name -> game.SeatStats
-	14,  // 46: game.RoomSnapshot.settings:type_name -> game.RoomSettings
-	37,  // 47: game.RoomSnapshot.seats:type_name -> game.SeatOccupantPair
-	8,   // 48: game.RoomSnapshot.spectators:type_name -> game.PublicPlayer
-	35,  // 49: game.RoomSnapshot.ready:type_name -> game.BoolPair
-	36,  // 50: game.RoomSnapshot.choices:type_name -> game.StringPair
-	36,  // 51: game.RoomSnapshot.revealed_choices:type_name -> game.StringPair
-	32,  // 52: game.RoomSnapshot.othello:type_name -> game.OthelloState
-	34,  // 53: game.RoomSnapshot.tictactoe:type_name -> game.TicTacToeState
-	27,  // 54: game.RoomSnapshot.liars_dice:type_name -> game.LiarsDiceState
-	17,  // 55: game.RoomSnapshot.gomoku:type_name -> game.GomokuState
-	18,  // 56: game.RoomSnapshot.proofs:type_name -> game.PunishmentProof
-	31,  // 57: game.RoomSnapshot.score:type_name -> game.IntPair
-	31,  // 58: game.RoomSnapshot.seated_score:type_name -> game.IntPair
-	38,  // 59: game.RoomSnapshot.seat_stats:type_name -> game.SeatStatsPair
-	23,  // 60: game.RoomSnapshot.round_history:type_name -> game.RoundHistoryItem
-	12,  // 61: game.RoomSnapshot.chat:type_name -> game.ChatMessage
-	8,   // 62: game.VersusSeat.player:type_name -> game.PublicPlayer
-	10,  // 63: game.VersusSeat.bot:type_name -> game.BotPlayer
-	41,  // 64: game.VersusPair.value:type_name -> game.VersusSeat
-	42,  // 65: game.LobbyRoomInfo.versus:type_name -> game.VersusPair
-	9,   // 66: game.LobbyPlayerEntry.player:type_name -> game.LobbyPlayer
-	43,  // 67: game.LobbyRoomEntry.room:type_name -> game.LobbyRoomInfo
-	64,  // 68: game.LobbySnapshot.config:type_name -> game.AppConfig
-	44,  // 69: game.LobbySnapshot.players:type_name -> game.LobbyPlayerEntry
-	45,  // 70: game.LobbySnapshot.rooms:type_name -> game.LobbyRoomEntry
-	9,   // 71: game.LobbySnapshot.normal_leaderboard:type_name -> game.LobbyPlayer
-	9,   // 72: game.LobbySnapshot.ranked_leaderboard:type_name -> game.LobbyPlayer
-	13,  // 73: game.LobbySnapshot.suggestions:type_name -> game.Suggestion
-	12,  // 74: game.LobbySnapshot.lobby_chat:type_name -> game.ChatMessage
-	40,  // 75: game.LobbySnapshot.server_stats:type_name -> game.ServerStats
-	48,  // 76: game.RoomInfoTagEntry.style:type_name -> game.RoomInfoTagStyle
-	36,  // 77: game.PunishmentTaskConfig.variants:type_name -> game.StringPair
-	75,  // 78: game.TitleSegment.faction_names:type_name -> game.TitleSegment.FactionNames
-	36,  // 79: game.PunishmentConfig.variants:type_name -> game.StringPair
-	50,  // 80: game.PunishmentConfig.tasks:type_name -> game.PunishmentTaskConfig
-	47,  // 81: game.PunishmentConfig.room_name_pool:type_name -> game.RoomNamePool
-	57,  // 82: game.ExtremeModeConfig.positive_loss_rates:type_name -> game.DoublePair
-	57,  // 83: game.ExtremeModeConfig.negative_win_rates:type_name -> game.DoublePair
-	57,  // 84: game.ExtremeModeConfig.hourly_decay:type_name -> game.DoublePair
-	53,  // 85: game.BotsConfig.difficulties:type_name -> game.BotDifficultyConfig
-	59,  // 86: game.AppConfig.site:type_name -> game.SiteConfig
-	55,  // 87: game.AppConfig.announcement_board:type_name -> game.AnnouncementBoard
-	1,   // 88: game.AppConfig.genders:type_name -> game.GenderOption
-	2,   // 89: game.AppConfig.gender_factions:type_name -> game.GenderFaction
-	51,  // 90: game.AppConfig.titles:type_name -> game.TitleSegment
-	52,  // 91: game.AppConfig.punishments:type_name -> game.PunishmentConfig
-	47,  // 92: game.AppConfig.player_punishment_room_name_pool:type_name -> game.RoomNamePool
-	49,  // 93: game.AppConfig.room_info_tags:type_name -> game.RoomInfoTagEntry
-	60,  // 94: game.AppConfig.access_control:type_name -> game.AccessControlConfig
-	61,  // 95: game.AppConfig.name_war:type_name -> game.NameWarConfig
-	62,  // 96: game.AppConfig.giveaway:type_name -> game.GiveawayConfig
-	58,  // 97: game.AppConfig.extreme_mode:type_name -> game.ExtremeModeConfig
-	63,  // 98: game.AppConfig.bots:type_name -> game.BotsConfig
-	54,  // 99: game.AppConfig.games:type_name -> game.GameConfig
-	36,  // 100: game.AppConfig.messages:type_name -> game.StringPair
-	56,  // 101: game.AppConfig.security_disclaimer:type_name -> game.SecurityDisclaimerConfig
+	8,   // 14: game.Suggestion.author_player:type_name -> game.PublicPlayer
+	30,  // 15: game.GomokuState.board:type_name -> game.BoardRow
+	3,   // 16: game.GomokuState.moves:type_name -> game.Pos
+	3,   // 17: game.GomokuState.winning_line:type_name -> game.Pos
+	31,  // 18: game.GomokuState.ranked_delta:type_name -> game.IntPair
+	31,  // 19: game.GomokuState.undo_count:type_name -> game.IntPair
+	15,  // 20: game.GomokuState.undo_request:type_name -> game.GomokuUndoRequest
+	16,  // 21: game.GomokuState.resign_request:type_name -> game.GomokuResignRequest
+	20,  // 22: game.RoundHistoryItem.othello_score:type_name -> game.OthelloScore
+	3,   // 23: game.RoundHistoryItem.tictactoe_line:type_name -> game.Pos
+	21,  // 24: game.RoundHistoryItem.punishment_tasks:type_name -> game.PunishmentTask
+	22,  // 25: game.RoundHistoryItem.proofs:type_name -> game.HistoryProof
+	25,  // 26: game.RoundHistoryItem.liars_dice_hands:type_name -> game.LiarsDiceHandsPair
+	36,  // 27: game.RoundHistoryItem.liars_dice_names:type_name -> game.StringPair
+	3,   // 28: game.RoundHistoryItem.gomoku_line:type_name -> game.Pos
+	24,  // 29: game.LiarsDiceHandsPair.value:type_name -> game.Int32List
+	31,  // 30: game.LiarsDiceState.dice_counts:type_name -> game.IntPair
+	26,  // 31: game.LiarsDiceState.current_bid:type_name -> game.LiarsDiceBid
+	26,  // 32: game.LiarsDiceState.bid_history:type_name -> game.LiarsDiceBid
+	25,  // 33: game.LiarsDiceState.revealed_hands:type_name -> game.LiarsDiceHandsPair
+	30,  // 34: game.OthelloState.board:type_name -> game.BoardRow
+	3,   // 35: game.OthelloState.legal_moves:type_name -> game.Pos
+	31,  // 36: game.OthelloState.ranked_delta:type_name -> game.IntPair
+	28,  // 37: game.OthelloState.pending_settlement:type_name -> game.OthelloPendingSettlement
+	29,  // 38: game.OthelloState.surrender_request:type_name -> game.OthelloSurrenderRequest
+	30,  // 39: game.TicTacToeState.board:type_name -> game.BoardRow
+	33,  // 40: game.TicTacToeState.giveaway_prompt:type_name -> game.TicTacToeGiveawayPrompt
+	3,   // 41: game.TicTacToeState.winning_line:type_name -> game.Pos
+	31,  // 42: game.TicTacToeState.ranked_delta:type_name -> game.IntPair
+	11,  // 43: game.SeatOccupantPair.value:type_name -> game.SeatOccupant
+	19,  // 44: game.SeatStatsPair.value:type_name -> game.SeatStats
+	14,  // 45: game.RoomSnapshot.settings:type_name -> game.RoomSettings
+	37,  // 46: game.RoomSnapshot.seats:type_name -> game.SeatOccupantPair
+	8,   // 47: game.RoomSnapshot.spectators:type_name -> game.PublicPlayer
+	35,  // 48: game.RoomSnapshot.ready:type_name -> game.BoolPair
+	36,  // 49: game.RoomSnapshot.choices:type_name -> game.StringPair
+	36,  // 50: game.RoomSnapshot.revealed_choices:type_name -> game.StringPair
+	32,  // 51: game.RoomSnapshot.othello:type_name -> game.OthelloState
+	34,  // 52: game.RoomSnapshot.tictactoe:type_name -> game.TicTacToeState
+	27,  // 53: game.RoomSnapshot.liars_dice:type_name -> game.LiarsDiceState
+	17,  // 54: game.RoomSnapshot.gomoku:type_name -> game.GomokuState
+	18,  // 55: game.RoomSnapshot.proofs:type_name -> game.PunishmentProof
+	31,  // 56: game.RoomSnapshot.score:type_name -> game.IntPair
+	31,  // 57: game.RoomSnapshot.seated_score:type_name -> game.IntPair
+	38,  // 58: game.RoomSnapshot.seat_stats:type_name -> game.SeatStatsPair
+	23,  // 59: game.RoomSnapshot.round_history:type_name -> game.RoundHistoryItem
+	12,  // 60: game.RoomSnapshot.chat:type_name -> game.ChatMessage
+	8,   // 61: game.VersusSeat.player:type_name -> game.PublicPlayer
+	10,  // 62: game.VersusSeat.bot:type_name -> game.BotPlayer
+	41,  // 63: game.VersusPair.value:type_name -> game.VersusSeat
+	42,  // 64: game.LobbyRoomInfo.versus:type_name -> game.VersusPair
+	9,   // 65: game.LobbyPlayerEntry.player:type_name -> game.LobbyPlayer
+	43,  // 66: game.LobbyRoomEntry.room:type_name -> game.LobbyRoomInfo
+	64,  // 67: game.LobbySnapshot.config:type_name -> game.AppConfig
+	44,  // 68: game.LobbySnapshot.players:type_name -> game.LobbyPlayerEntry
+	45,  // 69: game.LobbySnapshot.rooms:type_name -> game.LobbyRoomEntry
+	9,   // 70: game.LobbySnapshot.normal_leaderboard:type_name -> game.LobbyPlayer
+	9,   // 71: game.LobbySnapshot.ranked_leaderboard:type_name -> game.LobbyPlayer
+	13,  // 72: game.LobbySnapshot.suggestions:type_name -> game.Suggestion
+	12,  // 73: game.LobbySnapshot.lobby_chat:type_name -> game.ChatMessage
+	40,  // 74: game.LobbySnapshot.server_stats:type_name -> game.ServerStats
+	48,  // 75: game.RoomInfoTagEntry.style:type_name -> game.RoomInfoTagStyle
+	36,  // 76: game.PunishmentTaskConfig.variants:type_name -> game.StringPair
+	76,  // 77: game.TitleSegment.faction_names:type_name -> game.TitleSegment.FactionNames
+	36,  // 78: game.PunishmentConfig.variants:type_name -> game.StringPair
+	50,  // 79: game.PunishmentConfig.tasks:type_name -> game.PunishmentTaskConfig
+	47,  // 80: game.PunishmentConfig.room_name_pool:type_name -> game.RoomNamePool
+	57,  // 81: game.ExtremeModeConfig.positive_loss_rates:type_name -> game.DoublePair
+	57,  // 82: game.ExtremeModeConfig.negative_win_rates:type_name -> game.DoublePair
+	57,  // 83: game.ExtremeModeConfig.hourly_decay:type_name -> game.DoublePair
+	53,  // 84: game.BotsConfig.difficulties:type_name -> game.BotDifficultyConfig
+	59,  // 85: game.AppConfig.site:type_name -> game.SiteConfig
+	55,  // 86: game.AppConfig.announcement_board:type_name -> game.AnnouncementBoard
+	1,   // 87: game.AppConfig.genders:type_name -> game.GenderOption
+	2,   // 88: game.AppConfig.gender_factions:type_name -> game.GenderFaction
+	51,  // 89: game.AppConfig.titles:type_name -> game.TitleSegment
+	52,  // 90: game.AppConfig.punishments:type_name -> game.PunishmentConfig
+	47,  // 91: game.AppConfig.player_punishment_room_name_pool:type_name -> game.RoomNamePool
+	49,  // 92: game.AppConfig.room_info_tags:type_name -> game.RoomInfoTagEntry
+	60,  // 93: game.AppConfig.access_control:type_name -> game.AccessControlConfig
+	61,  // 94: game.AppConfig.name_war:type_name -> game.NameWarConfig
+	62,  // 95: game.AppConfig.giveaway:type_name -> game.GiveawayConfig
+	58,  // 96: game.AppConfig.extreme_mode:type_name -> game.ExtremeModeConfig
+	63,  // 97: game.AppConfig.bots:type_name -> game.BotsConfig
+	54,  // 98: game.AppConfig.games:type_name -> game.GameConfig
+	36,  // 99: game.AppConfig.messages:type_name -> game.StringPair
+	56,  // 100: game.AppConfig.security_disclaimer:type_name -> game.SecurityDisclaimerConfig
+	65,  // 101: game.AppConfig.ranked_score:type_name -> game.RankedScoreConfig
 	46,  // 102: game.StateDocument.lobby:type_name -> game.LobbySnapshot
 	39,  // 103: game.StateDocument.room:type_name -> game.RoomSnapshot
 	64,  // 104: game.StateDocument.config:type_name -> game.AppConfig
@@ -8177,18 +8425,18 @@ var file_api_proto_game_proto_depIdxs = []int32{
 	23,  // 108: game.HistoryPage.item:type_name -> game.RoundHistoryItem
 	8,   // 109: game.PlayerResult.player:type_name -> game.PublicPlayer
 	13,  // 110: game.SuggestionsResult.suggestions:type_name -> game.Suggestion
-	76,  // 111: game.RawBody.dynamic:type_name -> google.protobuf.Struct
-	66,  // 112: game.RawBody.player_batch:type_name -> game.PlayerBatch
+	77,  // 111: game.RawBody.dynamic:type_name -> google.protobuf.Struct
+	67,  // 112: game.RawBody.player_batch:type_name -> game.PlayerBatch
 	12,  // 113: game.RawBody.chat:type_name -> game.ChatMessage
 	13,  // 114: game.RawBody.suggestion:type_name -> game.Suggestion
 	8,   // 115: game.RawBody.player:type_name -> game.PublicPlayer
-	67,  // 116: game.RawBody.me:type_name -> game.MeState
-	68,  // 117: game.RawBody.announcement:type_name -> game.AnnouncementPayload
-	69,  // 118: game.RawBody.room_closed:type_name -> game.RoomClosed
-	70,  // 119: game.RawBody.history_page:type_name -> game.HistoryPage
-	71,  // 120: game.RawBody.ok:type_name -> game.OkResult
-	72,  // 121: game.RawBody.player_result:type_name -> game.PlayerResult
-	73,  // 122: game.RawBody.suggestions:type_name -> game.SuggestionsResult
+	68,  // 116: game.RawBody.me:type_name -> game.MeState
+	69,  // 117: game.RawBody.announcement:type_name -> game.AnnouncementPayload
+	70,  // 118: game.RawBody.room_closed:type_name -> game.RoomClosed
+	71,  // 119: game.RawBody.history_page:type_name -> game.HistoryPage
+	72,  // 120: game.RawBody.ok:type_name -> game.OkResult
+	73,  // 121: game.RawBody.player_result:type_name -> game.PlayerResult
+	74,  // 122: game.RawBody.suggestions:type_name -> game.SuggestionsResult
 	39,  // 123: game.RawBody.room:type_name -> game.RoomSnapshot
 	64,  // 124: game.RawBody.config:type_name -> game.AppConfig
 	46,  // 125: game.RawBody.lobby:type_name -> game.LobbySnapshot
@@ -8208,12 +8456,12 @@ func file_api_proto_game_proto_init() {
 		(*SeatOccupant_Player)(nil),
 		(*SeatOccupant_Bot)(nil),
 	}
-	file_api_proto_game_proto_msgTypes[65].OneofWrappers = []any{
+	file_api_proto_game_proto_msgTypes[66].OneofWrappers = []any{
 		(*StateDocument_Lobby)(nil),
 		(*StateDocument_Room)(nil),
 		(*StateDocument_Config)(nil),
 	}
-	file_api_proto_game_proto_msgTypes[74].OneofWrappers = []any{
+	file_api_proto_game_proto_msgTypes[75].OneofWrappers = []any{
 		(*RawBody_Dynamic)(nil),
 		(*RawBody_PlayerBatch)(nil),
 		(*RawBody_Chat)(nil),
@@ -8236,7 +8484,7 @@ func file_api_proto_game_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_game_proto_rawDesc), len(file_api_proto_game_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   76,
+			NumMessages:   77,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

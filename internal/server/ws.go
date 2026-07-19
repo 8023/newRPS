@@ -99,7 +99,6 @@ func (c *Client) reply(id int64, data any, errMsg string) {
 	_ = c.writeBinary(out)
 }
 
-
 func (c *Client) joinRoom(room string) {
 	if c.rooms == nil {
 		c.rooms = map[string]struct{}{}
@@ -220,6 +219,9 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		ipAddress: ipAddress, fingerprint: fingerprint, deviceKey: devKey,
 		rooms: map[string]struct{}{}, userAgent: userAgent, host: host, origin: origin,
 		sendCh: make(chan []byte, 256), done: make(chan struct{}),
+		// connectedAt/compression 只是快照在内存里，断连时才和其余字段一起写进
+		// connection_events 一行（见 activitylog.go），connect 时不落盘。
+		connectedAt: nowMs(), compression: compressionModeName(compMode),
 	}
 	go client.writeLoop()
 
@@ -229,13 +231,6 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	s.clientIDToSID[client.id] = session.SID
 	// Accept 期间旧连接 onClientDisconnect 可能删掉预创建的空 device map，这里必须再 ensure
 	s.ensureDeviceSocketSet(devKey)[client.id] = struct{}{}
-	// 连接明细已完整落盘 connections.csv（见下方 activityLog），不再重复打到 stdout。
-	s.activityLog("connections", []string{
-		"time", "action", "sid", "ip", "device", "fingerprint", "socketId", "userAgent", "compression",
-	}, []string{
-		time.Now().Format(time.RFC3339), "connect", session.SID, ipAddress, devKey, fingerprint,
-		client.id, userAgent, compressionModeName(compMode),
-	})
 	client.joinRoom(lobbyChannel)
 	cfg := s.publicConfig()
 	lobby := s.lobbySnapshot(false, true)
@@ -406,7 +401,9 @@ func (s *Server) handleWSEvent(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "unknown event")
 		return
 	}
-	if !s.checkRateLimit(rateLimitKey(env.E, client.ipAddress, client.sid), opts) {
+	sidOK := s.checkRateLimit(rateLimitKey(env.E, client.ipAddress, client.sid), opts)
+	ipOK := s.checkIPEventBackstop(env.E, client.ipAddress, opts)
+	if !sidOK || !ipOK {
 		s.securityLog("rate_limit", map[string]any{"sid": client.sid, "ip": client.ipAddress, "event": env.E, "userAgent": client.userAgent})
 		client.reply(env.ID, nil, "操作过于频繁，请稍后再试")
 		return
@@ -461,21 +458,29 @@ func (s *Server) onClientDisconnect(client *Client) {
 	delete(s.clients, client.id)
 
 	player := s.getPlayerByClientID(client.id)
+	playerID := ""
+	if player != nil {
+		playerID = player.ID
+	}
+	// 一次性写完整一条 connection_events 行（见 activitylog.go），不再重复打到 stdout；
+	// 即使这条连接从没关联到玩家（playerID 为空，比如连上就断的游客）也照样记一行。
+	// 优雅关停时 closeLiveStateOnShutdown 可能已经写过并置 connectionLogged，这里跳过避免重复。
+	if !client.connectionLogged {
+		client.connectionLogged = true
+		s.logConnectionEvent(connectionEventPayload{
+			socketID: client.id, connectedAt: client.connectedAt, disconnectedAt: nowMs(),
+			sessionSID: client.sid, ip: client.ipAddress, device: client.deviceKey,
+			fingerprint: client.fingerprint, userAgent: client.userAgent, compression: client.compression,
+			playerID: playerID, closeReason: "disconnect",
+		})
+	}
 	if player == nil {
 		return
 	}
-	// 连接明细已完整落盘 connections.csv（见下方 activityLog），不再重复打到 stdout。
-	s.activityLog("connections", []string{
-		"time", "action", "sid", "ip", "device", "fingerprint", "socketId", "userAgent", "compression",
-	}, []string{
-		time.Now().Format(time.RFC3339), "disconnect", player.ID, ipAddress, client.deviceKey, client.fingerprint,
-		client.id, client.userAgent, "",
-	})
 	s.serverStats.Disconnects++
 	s.clearDisconnectHold(player)
 	player.SocketID = ""
 
-	playerID := player.ID
 	player.graceGen++
 	gen := player.graceGen
 	player.graceTimer = timeAfterFunc(30*time.Second, func() {

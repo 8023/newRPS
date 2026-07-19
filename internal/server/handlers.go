@@ -5,16 +5,24 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"time"
 
 	"github.com/doumiao/newRPS/internal/config"
 	"github.com/doumiao/newRPS/internal/types"
 )
 
-// playersLogHeader 是 players.csv 的固定表头：同一张表的所有写入点必须用同一份
-// header（列数/顺序一致），否则不同 action 写出的行会错位。
-// oldName 只有 rename 会填；text 只有 giveaway_board_submit 会填（自救板内容）。
-var playersLogHeader = []string{"time", "action", "playerId", "name", "oldName", "ip", "device", "fingerprint", "text"}
+// logPlayerActivity 记录一条玩家审计事件到 player_activity_events（改名/头像/性别阵营/
+// 大话骰名战/送礼/极限模式开关等）。oldValue 只有 rename/avatar_change/avatar_clear/
+// gender_change 这类"有旧值可对比"的 action 会填；text 只有 giveaway_board_submit 会填
+// （自救板内容）。调用点都在 s.mu 持锁期间，同步写库是有意为之——这类事件低频、
+// user-initiated，和 eventStore 的房间/惩罚事件同一量级，可以复用同一个已验证过的权衡。
+func (s *Server) logPlayerActivity(action, playerID, newValue, oldValue, ip, device, fingerprint, text string) {
+	if s.activityDB == nil {
+		return
+	}
+	if err := s.activityDB.insertPlayerActivityEvent(nowMs(), action, playerID, newValue, oldValue, ip, device, fingerprint, text); err != nil {
+		s.errorLog("player_activity_insert_failed", err.Error())
+	}
+}
 
 func decodeD[T any](env wsEnvelope, out *T) error {
 	if env.D == nil || len(env.D) == 0 {
@@ -217,18 +225,28 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 		}
 	}
 	if player == nil {
+		if s.cfg.AccessControl.RegistrationDisabled {
+			client.reply(env.ID, nil, "当前暂停新用户注册，请使用已有账号登录")
+			return
+		}
 		if s.onlinePlayersFromDevice(device, "") >= s.cfg.AccessControl.MaxOnlinePerIP {
 			client.reply(env.ID, nil, fmt.Sprintf("当前设备同时在线人数过多，最多允许 %d 人同时在线", s.cfg.AccessControl.MaxOnlinePerIP))
+			return
+		}
+		if s.onlinePlayersFromIP(ipAddress, "") >= s.cfg.AccessControl.MaxOnlinePerIPTotal {
+			client.reply(env.ID, nil, "当前网络环境同时在线人数过多，请稍后再试")
 			return
 		}
 		if !s.canCreateFromDevice(device) {
 			client.reply(env.ID, nil, fmt.Sprintf("当前设备 10 分钟内新建玩家过多，最多允许 %d 次", s.cfg.AccessControl.MaxCreatesPer10Min))
 			return
 		}
+		if !s.canCreateFromIP(ipAddress) {
+			client.reply(env.ID, nil, "当前网络环境 10 分钟内新建玩家过多，请稍后再试")
+			return
+		}
 		player = s.createPlayer(cleanName, p.GenderID, client.token, p.PlayerID, p.PlayerSecret)
-		s.activityLog("players", playersLogHeader, []string{
-			time.Now().Format(time.RFC3339), "create", player.ID, cleanName, "", ipAddress, device, client.fingerprint, "",
-		})
+		s.logPlayerActivity("create", player.ID, cleanName, "", ipAddress, device, client.fingerprint, "")
 	}
 	wasDisconnected := !player.Connected
 	hadDisconnectHold := player.DisconnectExpiresAt != nil
@@ -462,10 +480,7 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 	if nameChanged {
 		player.Name = cleanName
 		player.NameWarOriginalName = cleanName
-		s.activityLog("players", playersLogHeader, []string{
-			time.Now().Format(time.RFC3339), "rename", player.ID, cleanName, oldName,
-			client.ipAddress, client.deviceKey, client.fingerprint, "",
-		})
+		s.logPlayerActivity("rename", player.ID, cleanName, oldName, client.ipAddress, client.deviceKey, client.fingerprint, "")
 	}
 	exitedHardMode := ptrBool(player.NameWarAllowRename) && !nextAllowRename
 	if nameWarChanged || allowRenameChanged {
@@ -473,7 +488,6 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 		player.NameWarAllowRename = boolPtr(nextAllowRename)
 		player.NameWarToggledAt = int64Ptr(now)
 		if !nextNameWarEnabled {
-			player.Stats.RankedPoints = clamp(player.Stats.RankedPoints, -999, 999)
 			s.syncTitleForRankSegment(player, false)
 		}
 		if nameWarChanged {
@@ -481,13 +495,14 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 			if nextNameWarEnabled {
 				action = "nameWar_enable"
 			}
-			s.activityLog("players", playersLogHeader, []string{
-				time.Now().Format(time.RFC3339), action, player.ID, player.Name, "",
-				client.ipAddress, client.deviceKey, client.fingerprint, "",
-			})
+			s.logPlayerActivity(action, player.ID, player.Name, "", client.ipAddress, client.deviceKey, client.fingerprint, "")
 		}
 	}
+	oldGenderID := player.GenderID
 	s.applyGender(player, p.GenderID)
+	if player.GenderID != oldGenderID {
+		s.logPlayerActivity("gender_change", player.ID, player.GenderID, oldGenderID, client.ipAddress, client.deviceKey, client.fingerprint, "")
+	}
 	s.refreshNameWarState(player, now)
 	if exitedHardMode {
 		player.Stats.Title = s.cfg.NameWar.EscapeTitle
@@ -501,10 +516,7 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 		if nextGiveawayEnabled {
 			action = "giveaway_enable"
 		}
-		s.activityLog("players", playersLogHeader, []string{
-			time.Now().Format(time.RFC3339), action, player.ID, player.Name, "",
-			client.ipAddress, client.deviceKey, client.fingerprint, "",
-		})
+		s.logPlayerActivity(action, player.ID, player.Name, "", client.ipAddress, client.deviceKey, client.fingerprint, "")
 	}
 	if !ptrBool(player.GiveawayEnabled) && ptrFloat(player.GiveawayValue) <= 0 {
 		player.GiveawayValue = floatPtr(0)
@@ -527,10 +539,7 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 		if nextExtremeModeEnabled {
 			extremeAction = "extreme_enable"
 		}
-		s.activityLog("players", playersLogHeader, []string{
-			time.Now().Format(time.RFC3339), extremeAction, player.ID, player.Name, "",
-			client.ipAddress, client.deviceKey, client.fingerprint, "",
-		})
+		s.logPlayerActivity(extremeAction, player.ID, player.Name, "", client.ipAddress, client.deviceKey, client.fingerprint, "")
 	}
 	if nameChanged {
 		player.ProfileUpdatedAt = int64Ptr(now)
@@ -603,10 +612,7 @@ func (s *Server) onGiveawaySubmitBoard(client *Client, env wsEnvelope) {
 	player.GiveawayBoardDislikes = intPtr(0)
 	player.GiveawayBoardLikeWindowStartedAt = int64Ptr(now)
 	player.GiveawayBoardLikesThisHour = intPtr(0)
-	s.activityLog("players", playersLogHeader, []string{
-		time.Now().Format(time.RFC3339), "giveaway_board_submit", player.ID, player.Name, "",
-		client.ipAddress, client.deviceKey, client.fingerprint, cleanBoardText,
-	})
+	s.logPlayerActivity("giveaway_board_submit", player.ID, player.Name, "", client.ipAddress, client.deviceKey, client.fingerprint, cleanBoardText)
 	s.refreshPlayerSnapshots(player)
 	s.broadcastPlayerUpdate(player)
 	client.reply(env.ID, map[string]any{"player": s.publicPlayer(player)}, "")
@@ -765,7 +771,7 @@ func (s *Server) onNameWarRenameTarget(client *Client, env wsEnvelope) {
 	}
 	renameKind := p.Kind
 	if renameKind == "" {
-		if isNameWarRenameTarget(s.publicPlayer(target)) {
+		if s.isNameWarRenameTarget(s.publicPlayer(target)) {
 			renameKind = "nameWar"
 		} else if ptrBool(target.ExtremeForceClosed) {
 			renameKind = "extreme"
@@ -821,7 +827,7 @@ func (s *Server) onNameWarRenameTarget(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "需要 500 分以上才能修改失格者名字")
 		return
 	}
-	if !isNameWarRenameTarget(s.publicPlayer(target)) {
+	if !s.isNameWarRenameTarget(s.publicPlayer(target)) {
 		client.reply(env.ID, nil, "对方当前不是可改名失格者")
 		return
 	}

@@ -1,11 +1,14 @@
 // 聊天 store：按 scope（"" = 大厅，roomId = 房间）维护消息、分页游标与加载态。
 // 首屏 / 历史走 chat:load / chat:loadOlder RPC（读 SQLite）；增量走 chat:new 推送。
 // 组件用 useChat(scope) 订阅。
+//
+// authors：按 playerId 索引的**当前**玩家公开资料（服务端从内存 s.players 组装，
+// 含离线玩家）。渲染时优先用调用方传入的在线名单（更实时），找不到再退回本 map。
 
 import { useSyncExternalStore } from "react";
 import { socket } from "../ws";
 import { ask } from "./rpc";
-import type { ChatMessage } from "../shared/types";
+import type { ChatMessage, PublicPlayer } from "../shared/types";
 
 export type ChatScope = string; // "" 表示大厅
 
@@ -14,9 +17,11 @@ export type ChatState = {
   hasMore: boolean; // 是否还有更早历史
   loading: boolean;
   loadedOnce: boolean;
+  /** playerId → 当前资料（加载历史时服务端附带；与在线名单合并使用） */
+  authors: Record<string, PublicPlayer>;
 };
 
-const EMPTY: ChatState = { messages: [], hasMore: false, loading: false, loadedOnce: false };
+const EMPTY: ChatState = { messages: [], hasMore: false, loading: false, loadedOnce: false, authors: {} };
 // 内存最多保留的条数：防止长会话无限增长（更早的历史仍可从 DB 翻回）。
 const MAX_LIVE = 400;
 
@@ -53,6 +58,11 @@ function oldestSeq(messages: ChatMessage[]): number | undefined {
   return min;
 }
 
+function mergeAuthors(base: Record<string, PublicPlayer>, extra?: Record<string, PublicPlayer> | null) {
+  if (!extra) return base;
+  return { ...base, ...extra };
+}
+
 function appendLive(scope: ChatScope, msg: ChatMessage) {
   const st = getState(scope);
   if (st.messages.some((m) => m.id === msg.id)) return;
@@ -80,16 +90,23 @@ export function refreshActiveChats() {
   }
 }
 
+type ChatLoadResult = {
+  messages: ChatMessage[];
+  hasMore: boolean;
+  authors?: Record<string, PublicPlayer>;
+};
+
 /** 拉取最近一页（100 条）。 */
 export async function loadChat(scope: ChatScope): Promise<void> {
   setState(scope, { ...getState(scope), loading: true });
   try {
-    const res = await ask<{ messages: ChatMessage[]; hasMore: boolean }>("chat:load", { roomId: scope });
+    const res = await ask<ChatLoadResult>("chat:load", { roomId: scope });
     setState(scope, {
       messages: res.messages || [],
       hasMore: !!res.hasMore,
       loading: false,
-      loadedOnce: true
+      loadedOnce: true,
+      authors: res.authors || {}
     });
   } catch {
     setState(scope, { ...getState(scope), loading: false, loadedOnce: true });
@@ -104,7 +121,7 @@ export async function loadOlderChat(scope: ChatScope): Promise<number> {
   if (!beforeSeq) return 0;
   setState(scope, { ...st, loading: true });
   try {
-    const res = await ask<{ messages: ChatMessage[]; hasMore: boolean }>("chat:loadOlder", {
+    const res = await ask<ChatLoadResult>("chat:loadOlder", {
       roomId: scope,
       beforeSeq
     });
@@ -112,7 +129,13 @@ export async function loadOlderChat(scope: ChatScope): Promise<number> {
     const cur = getState(scope);
     const existing = new Set(cur.messages.map((m) => m.id));
     const merged = [...older.filter((m) => !existing.has(m.id)), ...cur.messages];
-    setState(scope, { messages: merged, hasMore: !!res.hasMore, loading: false, loadedOnce: true });
+    setState(scope, {
+      messages: merged,
+      hasMore: !!res.hasMore,
+      loading: false,
+      loadedOnce: true,
+      authors: mergeAuthors(cur.authors, res.authors)
+    });
     return older.filter((m) => !existing.has(m.id)).length;
   } catch {
     setState(scope, { ...getState(scope), loading: false });
@@ -122,8 +145,9 @@ export async function loadOlderChat(scope: ChatScope): Promise<number> {
 
 export function useChat(scope: ChatScope): ChatState {
   return useSyncExternalStore(
-    (cb) => subscribe(scope, cb),
-    () => getState(scope)
+    (fn) => subscribe(scope, fn),
+    () => getState(scope),
+    () => EMPTY
   );
 }
 

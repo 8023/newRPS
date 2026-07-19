@@ -11,6 +11,11 @@ import (
 	"github.com/doumiao/newRPS/internal/types"
 )
 
+// defaultNameWarPenaltyThreshold 与 config/name-war.json 的 penaltyThreshold 默认值一致，
+// 供 nameWarPenaltyThreshold 在配置异常（非负）时兜底；ValidateConfig 已在启动/保存时拒绝
+// 非负值，正常运行时这条分支理论上走不到。
+const defaultNameWarPenaltyThreshold = -4999
+
 func (s *Server) publicConfig() types.AppConfig {
 	cfg := s.cfg
 	cfg.Site.AdminPassword = ""
@@ -26,17 +31,51 @@ func (s *Server) adminPasswordMatches(password string) bool {
 	return subtle.ConstantTimeCompare([]byte(password), []byte(expected)) == 1
 }
 
+// rankedScorePercent 把真实排位分映射到相对展示上下限的百分比（可超出 ±100）。
+// 正分：points/Max*100；负分：points/|Min|*100；0 → 0。
+func (s *Server) rankedScorePercent(points int) float64 {
+	if points == 0 {
+		return 0
+	}
+	if points > 0 {
+		max := s.cfg.RankedScore.Max
+		if max <= 0 {
+			return 0
+		}
+		return float64(points) / float64(max) * 100
+	}
+	min := s.cfg.RankedScore.Min
+	if min >= 0 {
+		return 0
+	}
+	return float64(points) / float64(-min) * 100
+}
+
 func (s *Server) titleSegmentFor(points int) *types.TitleSegment {
+	if len(s.cfg.Titles) == 0 {
+		return nil
+	}
+	percent := s.rankedScorePercent(points)
+	var nearest *types.TitleSegment
+	nearestDist := math.MaxFloat64
 	for i := range s.cfg.Titles {
 		item := &s.cfg.Titles[i]
-		if points >= item.Min && points <= item.Max {
+		if percent >= item.MinPercent && percent <= item.MaxPercent {
 			return item
 		}
+		// 落在这一段之外（含分段之间的空隙、或超出首尾边界）：记录到该段最近边界的距离，
+		// 最终夹到距离最近的分段，而不是无条件夹到最高档——分段表若配置成中间留空隙，
+		// 落在空隙里的百分比应该就近取邻近段，不能因为循环顺序只跟最高档比较。
+		dist := item.MinPercent - percent
+		if percent > item.MaxPercent {
+			dist = percent - item.MaxPercent
+		}
+		if dist < nearestDist {
+			nearestDist = dist
+			nearest = item
+		}
 	}
-	if len(s.cfg.Titles) > 0 {
-		return &s.cfg.Titles[0]
-	}
-	return nil
+	return nearest
 }
 
 func (s *Server) titleNamesForSegment(segment *types.TitleSegment, factionID string) []string {
@@ -63,12 +102,7 @@ func (s *Server) randomTitleFromSegment(segment *types.TitleSegment, factionID s
 }
 
 func (s *Server) syncTitleForRankSegment(player *PlayerState, force bool) {
-	// Match TS: Math.max(player.stats.rankedPoints, -999)
-	ep := player.Stats.RankedPoints
-	if ep < -999 {
-		ep = -999
-	}
-	segment := s.titleSegmentFor(ep)
+	segment := s.titleSegmentFor(player.Stats.RankedPoints)
 	if segment == nil {
 		return
 	}
@@ -205,7 +239,7 @@ func (s *Server) refreshNameWarState(player *PlayerState, now int64) bool {
 		protectedActive := player.NameWarRenameProtectedUntil != nil && *player.NameWarRenameProtectedUntil > now
 		if protectedActive && player.NameWarPenaltyName != "" {
 			player.NameWarPunished = boolPtr(true)
-		} else if player.Stats.RankedPoints <= -1000 {
+		} else if player.Stats.RankedPoints <= s.nameWarPenaltyThreshold() {
 			player.NameWarPunished = boolPtr(true)
 			if player.NameWarPenaltyName == "" {
 				player.NameWarPenaltyName = s.generateNameWarPenaltyName()
@@ -247,7 +281,24 @@ func (s *Server) applyGender(player *PlayerState, genderID string) {
 func (s *Server) publicPlayer(player *PlayerState) types.PublicPlayer {
 	p := player.PublicPlayer
 	p.SyncTotalsFromGameStats()
+	// 真实分留给排序；展示字段按后台配置封顶（含历史最高/最低）。
+	p.Stats.SortRankedPoints = player.Stats.RankedPoints
+	p.Stats.SortHighestScore = player.Stats.HighestScore
+	p.Stats.SortLowestScore = player.Stats.LowestScore
+	p.Stats.RankedPoints = s.displayClampScore(player, player.Stats.RankedPoints)
+	p.Stats.HighestScore = s.displayClampScore(player, player.Stats.HighestScore)
+	p.Stats.LowestScore = s.displayClampScore(player, player.Stats.LowestScore)
 	return p
+}
+
+// displayClampScore 仅用于下发展示：真实存储永不改动；按 RankedScore 的 max/min
+// （名争玩家用 nameWarMin）夹紧后的副本。排位分、历史最高、历史最低共用。
+func (s *Server) displayClampScore(player *PlayerState, score int) int {
+	min := s.cfg.RankedScore.Min
+	if ptrBool(player.NameWarEnabled) {
+		min = s.cfg.RankedScore.NameWarMin
+	}
+	return clamp(score, min, s.cfg.RankedScore.Max)
 }
 
 func (s *Server) refreshPlayerSnapshots(player *PlayerState) {
@@ -278,13 +329,7 @@ func (s *Server) onlinePlayersFromDevice(deviceKey string, exceptPlayerID string
 	if deviceKey == "" {
 		return 0
 	}
-	n := 0
-	for _, player := range s.players {
-		if player.Connected && player.DeviceKey == deviceKey && player.ID != exceptPlayerID {
-			n++
-		}
-	}
-	return n
+	return s.onlinePlayersMatching(exceptPlayerID, func(p *PlayerState) bool { return p.DeviceKey == deviceKey })
 }
 
 // canCreateFromDevice 同 deviceKey 在 10 分钟内新建玩家次数上限。
@@ -292,21 +337,55 @@ func (s *Server) canCreateFromDevice(deviceKey string) bool {
 	if deviceKey == "" {
 		deviceKey = "unknown"
 	}
+	return s.canCreateFromKey(s.deviceCreateAttempts, deviceKey, s.cfg.AccessControl.MaxCreatesPer10Min)
+}
+
+// onlinePlayersFromIP 统计同一出口 IP（不看指纹）下已连接玩家数，是
+// onlinePlayersFromDevice 的兜底——指纹由客户端上报、未做真实性校验，
+// 攻击脚本每次随机化指纹即可让 deviceKey 各不相同，绕过按设备计算的限制。
+func (s *Server) onlinePlayersFromIP(ipAddress string, exceptPlayerID string) int {
+	if ipAddress == "" {
+		return 0
+	}
+	return s.onlinePlayersMatching(exceptPlayerID, func(p *PlayerState) bool { return p.IPAddress == ipAddress })
+}
+
+// onlinePlayersMatching 是 onlinePlayersFromDevice/onlinePlayersFromIP 共用的计数逻辑：
+// 统计满足 match 的已连接玩家数（exceptPlayerID 排除自身，用于"算上我自己以外还有几个"）。
+func (s *Server) onlinePlayersMatching(exceptPlayerID string, match func(*PlayerState) bool) int {
+	n := 0
+	for _, player := range s.players {
+		if player.Connected && player.ID != exceptPlayerID && match(player) {
+			n++
+		}
+	}
+	return n
+}
+
+// canCreateFromIP 同 canCreateFromDevice，但按纯 IP 维度计算，用作兜底。
+func (s *Server) canCreateFromIP(ipAddress string) bool {
+	if ipAddress == "" {
+		ipAddress = "unknown-ip"
+	}
+	return s.canCreateFromKey(s.ipCreateAttempts, ipAddress, s.cfg.AccessControl.MaxCreatesPerIP)
+}
+
+// canCreateFromKey 是 canCreateFromDevice/canCreateFromIP 共用的滑动窗口计数器：
+// key 在 10 分钟窗口内的新建次数达到 limit 后拒绝，否则记一次并放行。
+func (s *Server) canCreateFromKey(attempts map[string][]int64, key string, limit int) bool {
 	now := nowMs()
 	windowMs := int64(10 * 60 * 1000)
-	attempts := s.deviceCreateAttempts[deviceKey]
-	filtered := attempts[:0]
-	for _, t := range attempts {
+	filtered := attempts[key][:0]
+	for _, t := range attempts[key] {
 		if now-t < windowMs {
 			filtered = append(filtered, t)
 		}
 	}
-	if len(filtered) >= s.cfg.AccessControl.MaxCreatesPer10Min {
-		s.deviceCreateAttempts[deviceKey] = filtered
+	if len(filtered) >= limit {
+		attempts[key] = filtered
 		return false
 	}
-	filtered = append(filtered, now)
-	s.deviceCreateAttempts[deviceKey] = filtered
+	attempts[key] = append(filtered, now)
 	return true
 }
 
@@ -412,12 +491,21 @@ func (s *Server) clearDisconnectHold(player *PlayerState) {
 	player.DisconnectExpiresAt = nil
 }
 
-func (s *Server) updateRankedPoints(player *PlayerState, delta int) {
-	minPoints := -999
-	if ptrBool(player.NameWarEnabled) {
-		minPoints = -1999
+// recordRankedExtremes 更新历史最高/最低排位分记录；这两个字段永不设上下限、永不回退。
+func recordRankedExtremes(player *PlayerState) {
+	if player.Stats.RankedPoints > player.Stats.HighestScore {
+		player.Stats.HighestScore = player.Stats.RankedPoints
 	}
-	player.Stats.RankedPoints = clamp(player.Stats.RankedPoints+delta, minPoints, 999)
+	if player.Stats.RankedPoints < player.Stats.LowestScore {
+		player.Stats.LowestScore = player.Stats.RankedPoints
+	}
+}
+
+// updateRankedPoints 按增量结算排位分。真实存储值不设上下限——RankedScore 配置的
+// 上下限只在 publicPlayer()/displayRankedPoints() 下发展示时生效。
+func (s *Server) updateRankedPoints(player *PlayerState, delta int) {
+	player.Stats.RankedPoints += delta
+	recordRankedExtremes(player)
 	s.refreshNameWarState(player, nowMs())
 	s.refreshPlayerSnapshots(player)
 	s.broadcastPlayerUpdate(player)
@@ -427,40 +515,40 @@ func (s *Server) updateRankedPoints(player *PlayerState, delta int) {
 }
 
 func (s *Server) setRankedPointsByAdmin(player *PlayerState, points int) {
-	minPoints := -999
-	if ptrBool(player.NameWarEnabled) {
-		minPoints = -1999
-	}
-	player.Stats.RankedPoints = clamp(int(math.Round(float64(points))), minPoints, 999)
+	player.Stats.RankedPoints = int(math.Round(float64(points)))
+	recordRankedExtremes(player)
 	s.refreshNameWarState(player, nowMs())
 	if player.Persistent {
 		s.requestPersist("important")
 	}
 }
 
+// extremeSegmentID 与称号分段同一套百分比刻度（相对 RankedScore.Max/|Min|），
+// 供极限模式的正分输分/负分赢分/整点扣分表按 pos1~4 / neg1~4 取系数。
 func (s *Server) extremeSegmentID(points int) string {
-	if points >= 750 {
+	percent := s.rankedScorePercent(points)
+	if percent >= 75 {
 		return "pos4"
 	}
-	if points >= 500 {
+	if percent >= 50 {
 		return "pos3"
 	}
-	if points >= 250 {
+	if percent >= 25 {
 		return "pos2"
 	}
-	if points >= 1 {
+	if percent > 0 {
 		return "pos1"
 	}
-	if points <= -750 {
+	if percent <= -75 {
 		return "neg4"
 	}
-	if points <= -500 {
+	if percent <= -50 {
 		return "neg3"
 	}
-	if points <= -250 {
+	if percent <= -25 {
 		return "neg2"
 	}
-	if points <= -1 {
+	if percent < 0 {
 		return "neg1"
 	}
 	return "pos0"
@@ -584,25 +672,80 @@ func (s *Server) applyExtremeHourlyDecay() {
 }
 
 func (s *Server) scheduleExtremeHourlyDecay() {
+	s.scheduleBoundaryAlignedDecay(3_600_000, currentExtremeDecayHour, time.Hour, s.applyExtremeHourlyDecay)
+}
+
+// scheduleBoundaryAlignedDecay 是 scheduleExtremeHourlyDecay/scheduleRankedDailyDecay 共用的
+// 调度逻辑：先精确对齐到下一个周期边界（整点/每日零点）触发一次，之后按 period 周期性触发；
+// 每次触发都在 s.mu 内跑 apply，与其它状态变更保持串行。periodIndex 把毫秒时间戳换算成
+// "第几个周期"（如 currentExtremeDecayHour/currentRankedDecayDay），periodMs 是一个周期的
+// 毫秒数（用来算下一个边界），period 是等间隔 ticker 的间隔，应与 periodMs 一致。
+func (s *Server) scheduleBoundaryAlignedDecay(periodMs int64, periodIndex func(nowMs int64) int64, period time.Duration, apply func()) {
 	now := nowMs()
-	nextHour := (currentExtremeDecayHour(now) + 1) * 3_600_000
-	delay := nextHour - now + 500
+	nextBoundary := (periodIndex(now) + 1) * periodMs
+	delay := nextBoundary - now + 500
 	if delay < 1000 {
 		delay = 1000
 	}
 	timeAfterFunc(time.Duration(delay)*time.Millisecond, func() {
 		s.mu.Lock()
-		s.applyExtremeHourlyDecay()
+		apply()
 		s.mu.Unlock()
-		ticker := time.NewTicker(time.Hour)
+		ticker := time.NewTicker(period)
 		go func() {
 			for range ticker.C {
 				s.mu.Lock()
-				s.applyExtremeHourlyDecay()
+				apply()
 				s.mu.Unlock()
 			}
 		}()
 	})
+}
+
+// rankedDailyDecayAmount 按配置的比例算出衰减后的目标分值（向 0 截断小数部分）。
+// 与极限模式的整点衰减是两套独立机制：这里对所有玩家生效，不要求开启极限模式。
+func (s *Server) rankedDailyDecayAmount(player *PlayerState) int {
+	ratio := s.cfg.RankedScore.DailyDecayRatio
+	if ratio <= 0 || ratio > 1 {
+		ratio = 1
+	}
+	return int(float64(player.Stats.RankedPoints) * ratio)
+}
+
+func (s *Server) applyRankedDailyDecay() {
+	now := nowMs()
+	day := currentRankedDecayDay(now)
+	changedRoomIDs := map[string]struct{}{}
+	changed := false
+	for _, player := range s.players {
+		if player.RankedLastDecayDay != nil && *player.RankedLastDecayDay == day {
+			continue
+		}
+		player.RankedLastDecayDay = int64Ptr(day)
+		if player.Stats.RankedPoints == 0 {
+			continue
+		}
+		next := s.rankedDailyDecayAmount(player)
+		delta := next - player.Stats.RankedPoints
+		if delta == 0 {
+			continue
+		}
+		s.updateRankedPoints(player, delta)
+		changed = true
+		if player.RoomID != "" {
+			changedRoomIDs[player.RoomID] = struct{}{}
+		}
+	}
+	if !changed {
+		return
+	}
+	for roomID := range changedRoomIDs {
+		s.broadcastRoom(roomID, false)
+	}
+}
+
+func (s *Server) scheduleRankedDailyDecay() {
+	s.scheduleBoundaryAlignedDecay(86_400_000, currentRankedDecayDay, 24*time.Hour, s.applyRankedDailyDecay)
 }
 
 func resetExtremeWinStreak(player *PlayerState) {
@@ -641,7 +784,17 @@ func (s *Server) nameWarRenameQuota(player *PlayerState, now int64) int {
 	return 3 - ptrInt(player.NameWarRenameCount)
 }
 
-func isNameWarRenameTarget(player types.PublicPlayer) bool {
+func (s *Server) nameWarPenaltyThreshold() int {
+	th := s.cfg.NameWar.PenaltyThreshold
+	if th >= 0 {
+		// 配置异常时的安全兜底：名争失格必须是负分线。
+		return defaultNameWarPenaltyThreshold
+	}
+	return th
+}
+
+func (s *Server) isNameWarRenameTarget(player types.PublicPlayer) bool {
+	// 用真实分（SortRankedPoints）判定，不用展示封顶后的 RankedPoints。
 	return ptrBool(player.NameWarEnabled) && ptrBool(player.NameWarAllowRename) &&
-		ptrBool(player.NameWarPunished) && player.Stats.RankedPoints <= -1000
+		ptrBool(player.NameWarPunished) && player.Stats.SortRankedPoints <= s.nameWarPenaltyThreshold()
 }

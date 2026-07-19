@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS players (
 	extreme_mode_cooldown_until INTEGER,
 	extreme_win_streak INTEGER,
 	extreme_last_decay_hour INTEGER,
+	ranked_last_decay_day INTEGER,
 	push_mention_enabled INTEGER,
 	push_turn_enabled INTEGER,
 	push_seat_enabled INTEGER,
@@ -54,6 +55,8 @@ CREATE TABLE IF NOT EXISTS players (
 	ranked_points INTEGER NOT NULL DEFAULT 0,
 	title TEXT NOT NULL DEFAULT '',
 	title_segment_id TEXT NOT NULL DEFAULT '',
+	highest_score INTEGER NOT NULL DEFAULT 0,
+	lowest_score INTEGER NOT NULL DEFAULT 0,
 	rps_wins INTEGER NOT NULL DEFAULT 0,
 	rps_losses INTEGER NOT NULL DEFAULT 0,
 	rps_draws INTEGER NOT NULL DEFAULT 0,
@@ -114,9 +117,9 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 			giveaway_enabled, giveaway_value, giveaway_clicks,
 			rank_multiplier_unlocked,
 			extreme_mode_enabled, extreme_mode_toggled_at, extreme_mode_cooldown_until,
-			extreme_win_streak, extreme_last_decay_hour,
+			extreme_win_streak, extreme_last_decay_hour, ranked_last_decay_day,
 			push_mention_enabled, push_turn_enabled, push_seat_enabled,
-			wins, losses, draws, punishments, ranked_points, title, title_segment_id,
+			wins, losses, draws, punishments, ranked_points, highest_score, lowest_score, title, title_segment_id,
 			rps_wins, rps_losses, rps_draws,
 			othello_wins, othello_losses, othello_draws,
 			tictactoe_wins, tictactoe_losses, tictactoe_draws,
@@ -139,6 +142,7 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 			pushM, pushT, pushS                     sql.NullInt64
 			gaValue                                 sql.NullFloat64
 			gaClicks                                sql.NullInt64
+			rankedDecay                             sql.NullInt64
 		)
 		err := rows.Scan(
 			&item.ID, &item.PlayerID, &item.ClaimKey, &item.PlayerSecretHash, &item.Name, &item.GenderID, &item.AvatarURL,
@@ -148,9 +152,9 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 			&gaEnabled, &gaValue, &gaClicks,
 			&rankUnlock,
 			&exEnabled, &exToggled, &exCool,
-			&exStreak, &exDecay,
+			&exStreak, &exDecay, &rankedDecay,
 			&pushM, &pushT, &pushS,
-			&item.Stats.Wins, &item.Stats.Losses, &item.Stats.Draws, &item.Stats.Punishments, &item.Stats.RankedPoints, &item.Stats.Title, &item.Stats.TitleSegmentID,
+			&item.Stats.Wins, &item.Stats.Losses, &item.Stats.Draws, &item.Stats.Punishments, &item.Stats.RankedPoints, &item.Stats.HighestScore, &item.Stats.LowestScore, &item.Stats.Title, &item.Stats.TitleSegmentID,
 			&item.GameStats.RPS.Wins, &item.GameStats.RPS.Losses, &item.GameStats.RPS.Draws,
 			&item.GameStats.Othello.Wins, &item.GameStats.Othello.Losses, &item.GameStats.Othello.Draws,
 			&item.GameStats.TicTacToe.Wins, &item.GameStats.TicTacToe.Losses, &item.GameStats.TicTacToe.Draws,
@@ -181,6 +185,7 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 		item.ExtremeModeCooldownUntil = nullIntToInt64Ptr(exCool)
 		item.ExtremeWinStreak = nullIntToIntPtr(exStreak)
 		item.ExtremeLastDecayHour = nullIntToInt64Ptr(exDecay)
+		item.RankedLastDecayDay = nullIntToInt64Ptr(rankedDecay)
 		item.PushMentionEnabled = nullIntToBoolPtr(pushM)
 		item.PushTurnEnabled = nullIntToBoolPtr(pushT)
 		item.PushSeatEnabled = nullIntToBoolPtr(pushS)
@@ -279,9 +284,9 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			giveaway_enabled, giveaway_value, giveaway_clicks,
 			rank_multiplier_unlocked,
 			extreme_mode_enabled, extreme_mode_toggled_at, extreme_mode_cooldown_until,
-			extreme_win_streak, extreme_last_decay_hour,
+			extreme_win_streak, extreme_last_decay_hour, ranked_last_decay_day,
 			push_mention_enabled, push_turn_enabled, push_seat_enabled,
-			wins, losses, draws, punishments, ranked_points, title, title_segment_id,
+			wins, losses, draws, punishments, ranked_points, highest_score, lowest_score, title, title_segment_id,
 			rps_wins, rps_losses, rps_draws,
 			othello_wins, othello_losses, othello_draws,
 			tictactoe_wins, tictactoe_losses, tictactoe_draws,
@@ -293,9 +298,9 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			?,?,?,?,?,?,?,?,?,?,?,
 			?,?,?,
 			?,
-			?,?,?,?,?,
+			?,?,?,?,?,?,
 			?,?,?,
-			?,?,?,?,?,?,?,
+			?,?,?,?,?,?,?,?,?,
 			?,?,?,
 			?,?,?,
 			?,?,?,
@@ -330,11 +335,13 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			extreme_mode_cooldown_until=excluded.extreme_mode_cooldown_until,
 			extreme_win_streak=excluded.extreme_win_streak,
 			extreme_last_decay_hour=excluded.extreme_last_decay_hour,
+			ranked_last_decay_day=excluded.ranked_last_decay_day,
 			push_mention_enabled=excluded.push_mention_enabled,
 			push_turn_enabled=excluded.push_turn_enabled,
 			push_seat_enabled=excluded.push_seat_enabled,
 			wins=excluded.wins, losses=excluded.losses, draws=excluded.draws,
 			punishments=excluded.punishments, ranked_points=excluded.ranked_points,
+			highest_score=excluded.highest_score, lowest_score=excluded.lowest_score,
 			title=excluded.title, title_segment_id=excluded.title_segment_id,
 			rps_wins=excluded.rps_wins, rps_losses=excluded.rps_losses, rps_draws=excluded.rps_draws,
 			othello_wins=excluded.othello_wins, othello_losses=excluded.othello_losses, othello_draws=excluded.othello_draws,
@@ -351,8 +358,9 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 		boolPtrToSQL(item.RankMultiplierUnlocked),
 		boolPtrToSQL(item.ExtremeModeEnabled), int64PtrToSQL(item.ExtremeModeToggledAt), int64PtrToSQL(item.ExtremeModeCooldownUntil),
 		intPtrToSQL(item.ExtremeWinStreak), int64PtrToSQL(item.ExtremeLastDecayHour),
+		int64PtrToSQL(item.RankedLastDecayDay),
 		boolPtrToSQL(item.PushMentionEnabled), boolPtrToSQL(item.PushTurnEnabled), boolPtrToSQL(item.PushSeatEnabled),
-		item.Stats.Wins, item.Stats.Losses, item.Stats.Draws, item.Stats.Punishments, item.Stats.RankedPoints, item.Stats.Title, item.Stats.TitleSegmentID,
+		item.Stats.Wins, item.Stats.Losses, item.Stats.Draws, item.Stats.Punishments, item.Stats.RankedPoints, item.Stats.HighestScore, item.Stats.LowestScore, item.Stats.Title, item.Stats.TitleSegmentID,
 		gs.RPS.Wins, gs.RPS.Losses, gs.RPS.Draws,
 		gs.Othello.Wins, gs.Othello.Losses, gs.Othello.Draws,
 		gs.TicTacToe.Wins, gs.TicTacToe.Losses, gs.TicTacToe.Draws,

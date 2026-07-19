@@ -95,6 +95,11 @@ export function normalizePublicStats(stats: PublicPlayer["stats"] | null | undef
     draws: statNum(s.draws),
     punishments: statNum(s.punishments),
     rankedPoints: statNum(s.rankedPoints),
+    highestScore: statNum(s.highestScore),
+    lowestScore: statNum(s.lowestScore),
+    sortRankedPoints: statNum(s.sortRankedPoints, statNum(s.rankedPoints)),
+    sortHighestScore: statNum(s.sortHighestScore, statNum(s.highestScore)),
+    sortLowestScore: statNum(s.sortLowestScore, statNum(s.lowestScore)),
     title: title || "暂无称号",
     ...(s.titleSegmentId ? { titleSegmentId: s.titleSegmentId } : {})
   };
@@ -390,6 +395,45 @@ export function normalizeRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
   };
 }
 
+/** 与 config/ranked-score.json 默认值一致；proto 漏字段 / 旧包时补齐，避免 config.rankedScore 为 undefined。 */
+export const DEFAULT_RANKED_SCORE: AppConfig["rankedScore"] = {
+  max: 4999,
+  min: -4999,
+  nameWarMin: -9999,
+  dailyDecayRatio: 0.98
+};
+
+/** 与 config/name-war.json 的 penaltyThreshold 默认一致。 */
+export const DEFAULT_NAME_WAR_PENALTY_THRESHOLD = -4999;
+
+/** 与 config/access-control.json 默认值一致（后台编辑时也用同一份兜底）。 */
+export const DEFAULT_ACCESS_CONTROL: AppConfig["accessControl"] = {
+  maxOnlinePerIp: 3,
+  maxCreatesPer10Min: 5,
+  ipBackstopMultiplier: 6,
+  ipBackstopMinLimit: 30,
+  maxSessionIssuePerIp: 30,
+  maxOnlinePerIpTotal: 10,
+  maxCreatesPerIp: 15,
+  maxActiveRoomsPerOwner: 3,
+  maxProofUploadsPerPlayer: 8,
+  registrationDisabled: false
+};
+
+/** 合并排位分展示配置；缺对象或子字段时用默认值（负分用 ?? 不能用 ||）。 */
+export function withRankedScoreDefaults(rs?: Partial<AppConfig["rankedScore"]> | null): AppConfig["rankedScore"] {
+  return {
+    max: rs?.max ?? DEFAULT_RANKED_SCORE.max,
+    min: rs?.min ?? DEFAULT_RANKED_SCORE.min,
+    nameWarMin: rs?.nameWarMin ?? DEFAULT_RANKED_SCORE.nameWarMin,
+    dailyDecayRatio: rs?.dailyDecayRatio ?? DEFAULT_RANKED_SCORE.dailyDecayRatio
+  };
+}
+
+export function withAccessControlDefaults(ac?: Partial<AppConfig["accessControl"]> | null): AppConfig["accessControl"] {
+  return { ...DEFAULT_ACCESS_CONTROL, ...ac };
+}
+
 export function normalizeConfig(config: AppConfig): AppConfig {
   return {
     ...config,
@@ -400,6 +444,9 @@ export function normalizeConfig(config: AppConfig): AppConfig {
     })),
     titles: (config.titles || []).map((segment) => ({
       ...segment,
+      // 百分比分段：旧绝对分字段或漏字段时至少保证数字存在，避免后台/展示读 undefined。
+      minPercent: segment.minPercent ?? 0,
+      maxPercent: segment.maxPercent ?? 0,
       names: segment.names || [],
       factionNames: segment.factionNames || {}
     })),
@@ -415,17 +462,24 @@ export function normalizeConfig(config: AppConfig): AppConfig {
     })),
     roomTags: config.roomTags || [],
     roomInfoTags: config.roomInfoTags || {},
+    accessControl: withAccessControlDefaults(config.accessControl),
+    nameWar: {
+      ...config.nameWar,
+      penaltyThreshold: config.nameWar?.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD
+    },
     bots: {
       names: config.bots?.names || [],
       difficulties: config.bots?.difficulties || []
     },
     games: config.games || [],
     messages: config.messages || {},
+    // 与 extremeMode 同模式：整段对象 + 内部 map 缺省，保证业务代码可直接点字段。
     extremeMode: {
       ...config.extremeMode,
       positiveLossRates: config.extremeMode?.positiveLossRates || {},
       negativeWinRates: config.extremeMode?.negativeWinRates || {},
       hourlyDecay: config.extremeMode?.hourlyDecay || {}
-    }
+    },
+    rankedScore: withRankedScoreDefaults(config.rankedScore)
   };
 }

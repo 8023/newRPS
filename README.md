@@ -123,6 +123,10 @@ docker compose logs -f gamehouse
 
 ⚠️ **`data/players.json` → SQLite 迁移代码，与 `PlayerSecretHash` 兼容分支同属临时桥接，等老部署基本迁完后应删除**：v2.1.28 起玩家档案改存 `data/database.db`（`internal/server/playerstore.go`），旧 `players.json` 由 `internal/server/persist.go` 的 `migratePlayersJSONIfNeeded` 在每次启动时幂等扫描导入，成功后整体改名为 `players.json.migrated` 避免下次重复扫描；`ingestPersistedPlayer`/`loadPlayersFromSQLite` 是正常加载也要用的常驻逻辑，不在此列。待确认所有仍在运营的部署都已完成一次这个迁移（即 `players.json` 已普遍变成 `players.json.migrated`）后，应删除：`migratePlayersJSONIfNeeded` 本体及其在 `loadPlayersFromDisk` 里的调用、`persistedPlayer.LegacyOthelloStats` 字段、`migrateGameStats` 里从旧版合计战绩反推分游戏战绩的兜底分支（`hasNew` 为假时的逻辑）。
 
+⚠️ **`writePlayersJSONFallback`（`internal/server/persist.go`）是 SQLite 不可用/写失败时的保底路径，和上面那条"迁移代码"方向相反**：上面那条是"把旧 `players.json` 导入库"，这条是"库写不进去时兜底写回 `players.json`"，两者独立，删除其中一个不影响另一个。SQLite 持久化（`playerDB.upsertMany`）稳定运行一段时间、确认生产环境没有再触发过这个降级路径后，可以评估是否精简/删除 `writeSnapshot`/`writePlayersJSONFallback` 里的这条兜底分支，改为只记 `errorLog` 不再写 JSON。
+
+⚠️ **改 SQLite 表结构必须同步 bump `internal/server/schema_migrations.go` 的 `currentSchemaVersion`，否则线上旧库不会迁移，读写会用错列**：`data/database.db` 里有张 `schema_version` 表记录当前结构版本，`openDatabase` 每次启动都会跟代码里的 `currentSchemaVersion` 比对——一致就跳过，不一致就依次执行 `migrations` 里对应版本号的显式迁移（`ALTER TABLE ADD/RENAME COLUMN`、建新表倒数据等）。改动流程：① 把 `internal/server/*.go` 里对应的 `xxxSchema` 常量改成目标结构；② 在 `migrations` 追加一条 `{version: currentSchemaVersion+1, migrate: ...}`，用真正的 SQL 把旧数据搬到新结构；③ 把 `currentSchemaVersion` 加一。只改①不做②③，等于新代码按新结构读写字段，但已经建过表的旧库还停在旧结构，轻则报错重则悄悄错位。`version==0`（全新库，或本机制引入之前就存在、结构在代码里已无法追溯的历史遗留库）时有一次性的"某条 `CREATE INDEX` 因为列不存在报错 → 把该表整体改名隔离为 `<表名>_legacy`"兜底，只用于应付"完全够不到历史"的场景（比如 `punishment_events` 曾经用过 `kind`/`source`/`player_id`/`at` 这套更早的列名），**不能**当成常规迁移手段来偷懒——它只能处理"缺列导致建索引失败"，处理不了删列/改列名（旧列会悄悄留在表里没人管）。
+
 ```bash
 # 备份数据（推荐）
 tar czf backup-$(date +%F).tgz data work config .env
@@ -218,6 +222,18 @@ docker compose up -d
   - `accessControl.maxCreatesPer10Min` → **同指纹 10 分钟内新建玩家上限**
 - 上报路径：`POST /api/session`（Header/Body）、`/ws?fp=`、`player:join.fingerprint`
 
+**纯 IP 兜底（防批量脚本攻击）**：`fingerprint` 是客户端上报的字符串，服务端不校验真实性——攻击脚本只要每次请求都随机换一个指纹，就能让上面按 `deviceKey` 计算的限制失效；`sid` 同理，每调一次 `/api/session` 就能免费换发一个新的，导致所有按 `event:ip:sid` 维度的 WS 事件限流也能被"换 sid"重置。因此在按指纹/按会话限流之外，又加了一层完全不看指纹、只看出口 IP 的兜底限制（同样可在 `/admin` → 防多开页面调整）：
+
+- `accessControl.ipBackstopMultiplier` / `ipBackstopMinLimit` —— 每个 WS 事件（`room:create`、`room:move`、`punishment:submit` 等）除了原有的 `event:ip:sid` 限流桶，还并行检查一个 `event:ip` 粗粒度桶，阈值为 `max(该事件 per-sid 阈值 × 倍数, 最低下限)`；不管客户端怎么换 sid，同一 IP 在同一窗口内的总请求量都会被这层桶钉住
+- `accessControl.maxSessionIssuePerIp` —— `POST /api/session` 纯 IP 维度的 10 分钟签发上限（在原有按 `devKey` 的限流之外并行生效）
+- `accessControl.maxOnlinePerIpTotal` / `maxCreatesPerIp` —— `player:join` 纯 IP 维度的同时在线人数 / 10 分钟新建人数上限（并行于原有按 `deviceKey` 的检查）
+- `accessControl.maxActiveRoomsPerOwner` —— 单个玩家同时开着（未关闭）的房间数量上限，堵住"创建频率虽被限流、但攒着不关"的房间数量爆炸
+- `accessControl.maxProofUploadsPerPlayer` —— 惩罚任务证明图片按玩家维度的 10 分钟上传上限（并行于路由层已有的纯 IP 限流）
+
+以上这层"纯 IP"防护的前提是 `TRUSTED_PROXY_COUNT` 与实际部署拓扑一致——直连公网必须设为 `0`，否则 `X-Forwarded-For` 可被伪造，所有基于 IP 的限制都形同虚设。
+
+**一键止血开关**：`accessControl.registrationDisabled`（`/admin` → 防多开 → 「新用户注册开关」）勾选后，`player:join` 里 `player == nil`（即将新建身份）的分支会直接拒绝，提示"当前暂停新用户注册，请使用已有账号登录"；已持有 `playerId`+`playerSecret` 的老用户走的是 `player != nil` 分支，不受影响，仍可正常登录游玩。用于遭遇批量注册攻击时先整体止血，再人工排查、用后台单独封禁具体的恶意老账号。
+
 ## 后台与配置文件
 
 - 入口：`/admin` 或 `#admin`，或 `Ctrl/Cmd+Shift+A`
@@ -235,6 +251,7 @@ docker compose up -d
 | `room-tags.json` / `room-info-tags.json` | 房间 Tag 与信息标签样式 |
 | `access-control.json` | 防多开 |
 | `name-war.json` / `giveaway.json` / `extreme-mode.json` | 名争 / 白给 / 极限模式文案与参数 |
+| `ranked-score.json` | 排位分「展示」上下限（含名字争夺战下限）与每日衰减比例；存储分数本身不设上下限，仅展示时封顶，详见「排位积分」章节 |
 | `bots.json` / `games.json` / `messages.json` | Bot、游戏列表、提示文案 |
 
 后台「保存」会写回对应 JSON；服务启动时会把 `config/*.json` 权限收紧为 `0600`（仅运行用户可读写，防同机其他用户读取其中的管理员口令），`bin/server` 设为可执行。
@@ -267,6 +284,17 @@ docker compose up -d
 - **断线判负**：断线判负的规则是"上家"（入席顺序里的前一位，固定关系，与谁最后叫过点无关）胜——`createLiarsDiceDisconnectForfeit`/`applyLiarsDiceDisconnectForfeit`，与其它三个游戏的 `DisconnectForfeit` 走独立的 `LiarsDiceDisconnectForfeit`（字段是 playerID 而非 SeatKey）。
 - **惩罚**：`punishment.go` 的 `setupPunishmentForPlayers` 从原来 Seat/RoundResult 耦合的 `setupPunishmentOrNext` 里抽出通用尾段（按 playerID 列表工作），大话骰和其它三个游戏共用这一段；`buildLiarsDicePunishmentTasks` 单独实现（赢家直接作为"玩家发布任务"模式下的任务发布人，不走 Seat 反查）。
 
+## 排位积分
+
+`PlayerState.Stats.RankedPoints`（`internal/server/player.go`）在数据库/内存中**永远不设上下限**——胜负结算（`updateRankedPoints`）、管理员手动改分（`setRankedPointsByAdmin`）、以及下面的每日衰减，全部直接对存储值做加减，从不 clamp。`config/ranked-score.json`（`types.RankedScoreConfig`：`max`/`min`/`nameWarMin`/`dailyDecayRatio`，后台「排位分设置」可调）只在**下发展示**时生效：`internal/server/player.go` 的 `publicPlayer()` 是所有出站玩家快照（大厅、房间座位、`player:get`、观战列表等）唯一的组装入口，会把真实分数的一份副本按 `max`/`min`（开启「名字争夺战」的玩家用 `nameWarMin` 代替 `min`）夹紧后再下发，真实存储值不受影响。
+
+- **后台调低上/下限**：已经"超范围"的老用户分数在数据库里原样保留，只在前端展示时被新的上/下限封顶；之后正常输赢分或每日衰减，仍然直接对真实（可能超范围的）存储值结算，不会被这次展示层的调整拖拽。
+- **称号分段**：`titleSegmentFor`（`internal/server/player.go`）在真实分数落在所有称号分段范围之外时，会夹到最近的边界分段（而不是固定回退到最低档），因此称号池（`config/titles.json`）不需要跟着 `ranked-score.json` 的范围同步扩大。
+- **每日衰减**：`scheduleRankedDailyDecay`/`applyRankedDailyDecay`（`internal/server/player.go`）每 24 小时（对齐到 UTC 天边界，`time.AfterFunc` 定位到下一个边界后切换为 `time.Ticker`，与「极限模式」整点衰减是完全独立的两套机制）把每个玩家的真实 `RankedPoints` 乘以 `dailyDecayRatio`（默认 `0.98`）并向 0 截断小数——正负分都会朝 0 方向收缩。每个玩家用 `RankedLastDecayDay` 记录已衰减到的"天桶"，防止服务重启后重复衰减。
+- **历史最高/最低分**：`recordRankedExtremes` 持续记录真实极值（存储永不回退）；下发展示时与当前分一样按 `max`/`min`/`nameWarMin` 封顶。排行榜排序使用 `sortRankedPoints`/`sortHighestScore`/`sortLowestScore` 真实分，避免一堆人显示 4999 时名次乱序。
+- **称号分段用百分比**：`config/titles.json` 的 `minPercent`/`maxPercent`（-100～100）相对 `ranked-score.json` 的展示上下限换算真实分所属段；改展示上下限无需改称号绝对分。极限模式的 pos/neg 系数表与同一百分比刻度对齐。
+- 「名字争夺战」失格线：`config/name-war.json` 的 `penaltyThreshold`（默认 `-4999`，后台可调），按**真实存储分**判定，与展示封顶无关。
+
 ## 构建与测试
 
 ```bash
@@ -280,9 +308,27 @@ npm run test           # go test + 前端 build
 
 ## 最近更新记录
 
+### v2.2.0（2026-07-19）
+
+- **排位积分不再设上下限，展示改为可配置封顶**：数据库/内存里的真实积分永久无上下限（胜负结算、管理员改分、每日衰减均不 clamp）；`config/ranked-score.json`（后台「排位分设置」）配置的展示上限/下限/名字争夺战下限只影响大厅、房间、个人资料、排行榜等下发展示时的封顶值，默认 `+4999` / `-4999` / `-9999`。后台调低上下限不会清零/拉低老用户的真实分数，只是展示层跟着新范围封顶。
+- **新增每日积分衰减**：每 24 小时把每位玩家的真实排位分乘以可配置比例（默认 `0.98`）并向 0 截断，正负分都朝 0 收缩，避免头部玩家躺分不再游玩、也让新人更容易追上——与「极限模式」原有的整点扣分是两套独立机制。
+- **新增历史最高/最低分记录**：个人资料页与全局排行榜新增"历史最高分"/"历史最低分"，永久记录真实分数触及过的极值，不受每日衰减和展示封顶影响，用于在积分被封顶展示后仍保留"刷榜"成就感。
+- **新增「暂停注册」开关**：`config/access-control.json` 的 `registrationDisabled` 打开后，拒绝一切新建玩家（已有账号仍可正常登录游玩），用于临时限流或维护期间控制新增用户。
+- **新增纯 IP 维度的兜底限流**：浏览器指纹由客户端上报、脚本可随意伪造来绕过按设备的限制，现在同一出口 IP 的同时在线人数（`maxOnlinePerIpTotal`）、10 分钟新建玩家次数（`maxCreatesPerIp`）、session 签发次数（`maxSessionIssuePerIp`）、WS 事件频率（`ipBackstopMultiplier`/`ipBackstopMinLimit`）都叠加了一层与设备指纹无关的硬上限。
+- **新增按玩家维度的证明图片上传限流**（`maxProofUploadsPerPlayer`），在原有按 IP 限流之外再防"多账号分散上传"绕过。
+- **新增单个房主可同时持有的活跃房间数上限**（`maxActiveRoomsPerOwner`，默认 3），超过上限需先关闭其他房间才能再开新房。
+- 修复：管理员在玩家管理面板编辑资料时，若压根没有改动积分栏，不会再把该玩家已超出展示上限/下限的真实存储分数误覆盖为封顶值。
+- 修复：`RankedScoreConfig` 当初只加进了 Go/TS 的类型定义，没有同步加进 `api/proto/game.proto` 的 `AppConfig` 消息（以及重新生成 `internal/wire/game.pb.go` / `web/src/gen/proto.js`），导致前端拿到的 `config.rankedScore` 恒为 `undefined`，个人资料页读取 `config.rankedScore.nameWarMin` 时抛异常、直接白屏。现已补上 proto 字段并重新生成两端代码；前端 `materializeConfig` 再补一层默认值兜底。
+- 排行榜补齐"历史正"/"历史负"两个榜单页签；排序用真实分（`sortRankedPoints` 等），展示仍按配置封顶；历史最高/最低展示同样封顶。
+- 称号分段改为相对展示上下限的百分比（`minPercent`/`maxPercent`）；名争失格线改为可配置 `nameWar.penaltyThreshold`（默认 -4999）。
+- 修复：称号分段表中间若留有空隙（未覆盖到的百分比区间），落在空隙里的分数此前会被无条件夹到最高档称号，现改为就近夹到距离最近的分段。
+- 修复：`schema_version==0` 的旧库会跳过加列迁移却标成最新版本，导致 `highest_score` 等列缺失、玩家加载失败——迁移改为幂等且 version=0 也会执行。
+- 修复：服务优雅关停时给仍存活的连接/房间补写审计记录（`closeLiveStateOnShutdown`）存在与正常关闭路径并发写同一房间审计行的窗口，现改为把"摘出待关闭房间"和关闭动作放进同一段临界区，消除该重复写入窗口。
+- 聊天历史加载附带 `authors`（按 playerId 从内存玩家表取当前资料，含离线），前端与在线名单合并后渲染，不再依赖发送时快照。
+
 ### v2.1.28（2026-07-18）
 
-- **新增五子棋（Gomoku）**：与黑白棋/井字棋同级的第五种玩法，15x15 棋盘，双人回合制，五子连线（横/竖/斜均可）判胜；支持悔棋请求（只能在自己回合发起，一次悔回请求方与应手方各一步，双方各限 3 次/局，30 秒无响应自动拒绝）与认输请求（需对方确认才结束对局）；断线判负、排位结算、惩罚任务与其余座位制玩法走同一套逻辑。
+- **新增五子棋（Gomoku）**：与黑白棋/井字棋同级的第五种玩法，15x15 棋盘，双人回合制，五子连线（横/竖/斜均可）判胜；建房可选悔棋次数 0/1/3/10（默认禁止悔棋），申请后对方 30 秒无响应自动拒绝；支持认输请求（需对方确认）；断线判负、排位结算、惩罚任务与其余座位制玩法走同一套逻辑。
 - **头像上传**：个人资料页可上传头像，前端本地压缩裁切成正方形 WebP（≤20KB）后上传，服务端校验真实格式；可清空恢复默认的"首字头像"。头像会同步显示在大厅列表、房间座位、聊天等所有展示玩家的地方。
 - **玩家档案迁移到 SQLite**：`data/players.json` 改存进 `data/database.db`（与聊天/房间事件共用同一连接），旧文件启动时幂等自动导入后改名为 `players.json.migrated`；SQLite 不可用时自动降级回写 JSON，不影响功能。
 - **战绩统计模型泛化**：原来只有黑白棋单独维护一套"胜/负/平/局数/吃子/被吃"统计，现在改成锤子剪刀布/黑白棋/井字棋/五子棋/大话骰五个玩法各自独立的胜/负/平计数（不再单独记吃子数等黑白棋专属字段），个人资料页的战绩明细相应更新。

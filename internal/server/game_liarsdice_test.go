@@ -31,7 +31,7 @@ func newLiarsDiceTestPlayer(id, name string) *PlayerState {
 
 func newLiarsDiceTestRoom(id string, minP, maxP int) *RoomState {
 	return &RoomState{
-		ID: id, Code: "T-" + id,
+		ID: id,
 		Settings: types.RoomSettings{GameID: types.GameLiarsDice, Stake: 5, LiarsDiceMinPlayers: minP, LiarsDiceMaxPlayers: maxP},
 		Phase:    types.PhaseReady, Status: "waiting",
 		Seats:              map[types.SeatKey]SeatOccupant{types.SeatA: nil, types.SeatB: nil},

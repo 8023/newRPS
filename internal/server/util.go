@@ -64,6 +64,10 @@ func currentExtremeDecayHour(now int64) int64 {
 	return now / 3_600_000
 }
 
+func currentRankedDecayDay(now int64) int64 {
+	return now / 86_400_000
+}
+
 func cleanText(value string, max int) string {
 	var b strings.Builder
 	for _, r := range value {

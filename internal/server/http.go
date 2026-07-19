@@ -162,8 +162,11 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.mu.Lock()
-	ok := s.checkRateLimit("session:"+devKey, RateLimitOptions{Limit: 10, WindowMs: 60_000, CooldownMs: 60_000})
-	if !ok {
+	// devKey（IP+指纹）可被客户端随意伪造指纹绕过；额外加一层纯 IP 兜底桶，
+	// 使得同一出口 IP 能换发的 session 总量有硬上限，不受指纹伪造影响。
+	devOK := s.checkRateLimit("session:"+devKey, RateLimitOptions{Limit: 10, WindowMs: 60_000, CooldownMs: 60_000})
+	ipOK := s.checkRateLimit("session:ip:"+ipAddress, RateLimitOptions{Limit: s.cfg.AccessControl.MaxSessionIssuePerIP, WindowMs: 600_000, CooldownMs: 600_000})
+	if !devOK || !ipOK {
 		s.mu.Unlock()
 		s.securityLog("token_issue_limited", map[string]any{"ip": ipAddress, "device": devKey, "userAgent": r.UserAgent()})
 		writeJSON(w, http.StatusTooManyRequests, map[string]string{"message": "请求过于频繁，请稍后再试"})
@@ -246,6 +249,14 @@ func (s *Server) handleProofImage(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"message": "请先进入游戏后再上传证明"})
 		return
 	}
+	// 路由层的 proof-image 限流是纯 IP 维度的，躲不开"分散在多个 IP 背后用同一批账号"的攻击；
+	// 这里再按玩家维度加一层限流。
+	if !s.checkRateLimit("proof-image:player:"+player.ID, RateLimitOptions{Limit: s.cfg.AccessControl.MaxProofUploadsPerPlayer, WindowMs: 600_000, CooldownMs: 600_000}) {
+		s.securityLog("upload_denied", map[string]any{"sid": session.SID, "ip": clientIP(r), "event": "proof-image", "reason": "player_rate_limit", "userAgent": r.UserAgent()})
+		s.mu.Unlock()
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{"message": "上传过于频繁，请稍后再试"})
+		return
+	}
 	s.mu.Unlock()
 
 	file, header, err := r.FormFile("image")
@@ -301,6 +312,9 @@ func (s *Server) handleAvatarImage(w http.ResponseWriter, r *http.Request) {
 	}
 	token := r.FormValue("token")
 	clearAvatar := r.FormValue("clear") == "1"
+	ipAddress := clientIP(r)
+	fingerprint := normalizeFingerprint(r.Header.Get("X-Browser-Fingerprint"))
+	devKey := deviceKey(ipAddress, fingerprint)
 	s.mu.Lock()
 	session := s.verifySessionToken(token)
 	var player *PlayerState
@@ -324,7 +338,11 @@ func (s *Server) handleAvatarImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if clearAvatar {
+		oldAvatarURL := player.AvatarURL
 		player.AvatarURL = ""
+		if oldAvatarURL != "" {
+			s.logPlayerActivity("avatar_clear", player.ID, "", oldAvatarURL, ipAddress, devKey, fingerprint, "")
+		}
 		s.refreshPlayerSnapshots(player)
 		s.broadcastPlayerUpdate(player)
 		shouldPersist := player.Persistent
@@ -370,7 +388,9 @@ func (s *Server) handleAvatarImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.mu.Lock()
+	oldAvatarURL := player.AvatarURL
 	player.AvatarURL = url
+	s.logPlayerActivity("avatar_change", player.ID, url, oldAvatarURL, ipAddress, devKey, fingerprint, "")
 	s.refreshPlayerSnapshots(player)
 	s.broadcastPlayerUpdate(player)
 	shouldPersist := player.Persistent

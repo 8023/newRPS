@@ -2,6 +2,7 @@
 // 依赖 protobufjs 静态模块：src/gen/proto.js
 
 import { game, wire as wireNs } from "./gen/proto.js";
+import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD } from "./lib/normalize";
 
 export type PayloadKind = 0 | 1 | 2; // RAW FULL DELTA
 
@@ -300,7 +301,9 @@ function fillRoomSettingsDefaults(settings: any): any {
   // allowProofImage 对应 Go *bool，但 handlers_room.go 建房时已把 nil 归一化成具体的
   // true/false，线上房间永远不会是"未设置"——false 是它的零值，缺省按 false 补齐即可
   // 无损还原（true 是非零值，永远不会被 protojson 丢掉）。
-  return { ...settings, allowProofImage: settings.allowProofImage ?? false };
+  // gomokuUndoLimit 同理：建房时已校验为 0/1/3/10 之一，键缺失只可能是真值 0（禁止悔棋）
+  // 被 defaults:false 连 key 一起丢掉，缺省按 0 补齐即可无损还原。
+  return { ...settings, allowProofImage: settings.allowProofImage ?? false, gomokuUndoLimit: numOr(settings.gomokuUndoLimit, 0) };
 }
 
 function fillReviewedAtDefault(proof: any): any {
@@ -342,6 +345,12 @@ function materializePublicStats(stats: any): any {
     draws: numOr(s.draws, 0),
     punishments: numOr(s.punishments, 0),
     rankedPoints: numOr(s.rankedPoints, 0),
+    highestScore: numOr(s.highestScore, 0),
+    lowestScore: numOr(s.lowestScore, 0),
+    // sort* 缺省回退到展示值，避免旧包没有这些字段时排序崩溃。
+    sortRankedPoints: numOr(s.sortRankedPoints, numOr(s.rankedPoints, 0)),
+    sortHighestScore: numOr(s.sortHighestScore, numOr(s.highestScore, 0)),
+    sortLowestScore: numOr(s.sortLowestScore, numOr(s.lowestScore, 0)),
     title: title || "暂无称号",
     ...(s.titleSegmentId != null && s.titleSegmentId !== ""
       ? { titleSegmentId: s.titleSegmentId }
@@ -377,9 +386,7 @@ function materializeSeatStats(stats: any): any {
 
 function materializeChat(chat: any): any {
   if (!chat) return chat;
-  const c = { ...chat, expiresAt: numOr(chat.expiresAt, 0) };
-  if (c.authorPlayer) c.authorPlayer = materializePlayer(c.authorPlayer);
-  return c;
+  return { ...chat, expiresAt: numOr(chat.expiresAt, 0) };
 }
 
 function materializeSuggestion(item: any): any {
@@ -516,6 +523,9 @@ function materializeConfig(cfg: any): any {
     if ("maxCreatesPer_10Min" in ac) delete ac.maxCreatesPer_10Min;
     if (ac.maxOnlinePerIp != null) ac.maxOnlinePerIp = Number(ac.maxOnlinePerIp);
     if (ac.maxCreatesPer10Min != null) ac.maxCreatesPer10Min = Number(ac.maxCreatesPer10Min);
+    for (const key of ["ipBackstopMultiplier", "ipBackstopMinLimit", "maxSessionIssuePerIp", "maxOnlinePerIpTotal", "maxCreatesPerIp", "maxActiveRoomsPerOwner", "maxProofUploadsPerPlayer"]) {
+      if (ac[key] != null) ac[key] = Number(ac[key]);
+    }
   }
   if (Array.isArray(c.roomInfoTags)) {
     const obj: any = {};
@@ -546,6 +556,11 @@ function materializeConfig(cfg: any): any {
   }
   if (Array.isArray(c.titles)) {
     for (const t of c.titles) {
+      if (t.minPercent != null) t.minPercent = Number(t.minPercent);
+      if (t.maxPercent != null) t.maxPercent = Number(t.maxPercent);
+      // 兼容旧配置字段名（绝对分）——已废弃，仅防后台空白。
+      if (t.minPercent == null && t.min != null) t.minPercent = Number(t.min);
+      if (t.maxPercent == null && t.max != null) t.maxPercent = Number(t.max);
       if (Array.isArray(t.factionNames)) {
         const obj: any = {};
         for (const item of t.factionNames) {
@@ -555,6 +570,21 @@ function materializeConfig(cfg: any): any {
       }
     }
   }
+  // rankedScore / nameWar.penaltyThreshold：proto 漏嵌套消息或 defaults:false 丢字段时，
+  // 在 wire 层先补齐；业务层 normalizeConfig 还会再兜一层（与 extremeMode/bots 同模式）。
+  // 负分必须用 Number.isFinite，不能 ||（0 合法时也不该误替换，这里 min 虽为负但保持一致）。
+  {
+    const rs = c.rankedScore && typeof c.rankedScore === "object" ? c.rankedScore : {};
+    c.rankedScore = {
+      max: numOr(rs.max, 4999),
+      min: numOr(rs.min, -4999),
+      nameWarMin: numOr(rs.nameWarMin, -9999),
+      dailyDecayRatio: numOr(rs.dailyDecayRatio, 0.98)
+    };
+  }
+  if (!c.nameWar || typeof c.nameWar !== "object") c.nameWar = {};
+  c.nameWar.penaltyThreshold = numOr(c.nameWar.penaltyThreshold, DEFAULT_NAME_WAR_PENALTY_THRESHOLD);
+  if (!c.accessControl || typeof c.accessControl !== "object") c.accessControl = {};
   if (Array.isArray(c.punishments)) {
     for (const p of c.punishments) {
       if (Array.isArray(p.variants)) {

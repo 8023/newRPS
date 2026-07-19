@@ -14,23 +14,26 @@ type eventStore struct {
 	mu sync.Mutex
 }
 
-// rooms：房间生命周期实体表，一房间一行；创建时 insertRoom，关闭时 closeRoom 补写
-// closed_at/close_reason。
+// rooms：房间生命周期实体表，一房间一行。房间数据在内存里的 RoomState 存活期间只字段
+// 更新，不落盘；直到房间关闭（清空自动回收 / 管理员关闭 / 进程优雅关停）才一次性
+// insertClosedRoom 写入完整一行（创建+关闭字段一起写），不再有"已创建但未关闭"的
+// 中间态行，也就不需要 UPDATE 去补写 closed_at——房间是否还存活，看内存里的 s.rooms
+// 即可，不需要通过这张表的"未关闭行"来判断。
 //
 // room_join_events：可重复发生的加入事件（战斗席/观战都会触发），一次进房一行，
 // 不适合塞进 rooms 单行。
 const roomEventSchema = `
 CREATE TABLE IF NOT EXISTS rooms (
 	room_id      TEXT PRIMARY KEY,
-	code         TEXT,
 	room_name    TEXT,
 	game_id      TEXT,
 	creator_id   TEXT,
 	creator_name TEXT,
 	created_at   INTEGER NOT NULL,
-	closed_at    INTEGER,
-	close_reason TEXT
+	closed_at    INTEGER NOT NULL,
+	close_reason TEXT NOT NULL
 );
+-- 兼容旧库：历史上有 code（DM-xxxx）列；新写入不再使用该列，表若已存在则保留旧列不删。
 CREATE TABLE IF NOT EXISTS room_join_events (
 	seq         INTEGER PRIMARY KEY AUTOINCREMENT,
 	at          INTEGER NOT NULL,
@@ -74,32 +77,21 @@ func newEventStore(db *sql.DB) *eventStore {
 	return &eventStore{db: db}
 }
 
-// insertRoom 在房间创建时写入一行；createdAt 为 unix 毫秒。
-func (e *eventStore) insertRoom(roomID, code, roomName, gameID, creatorID, creatorName string, createdAt int64) error {
+// insertClosedRoom 在房间关闭时一次性写入完整一行（创建时的信息由调用方从内存里的
+// RoomState 带过来，见 room.go/handlers_room.go 的调用点）；reason 如
+// "empty_cleanup"/"admin_close"/"server_shutdown"。
+func (e *eventStore) insertClosedRoom(roomID, roomName, gameID, creatorID, creatorName string, createdAt, closedAt int64, reason string) error {
 	if e == nil || e.db == nil {
 		return nil
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	// 新库无 code 列；若旧库仍有 code 列，用 INSERT 指定列列表即可不写该列（SQLite 对缺列会用 NULL/默认值）。
+	// 旧库若 code 无默认且 NOT NULL，几乎不会（原 schema 为可空 TEXT）。
 	_, err := e.db.Exec(
-		`INSERT INTO rooms (room_id, code, room_name, game_id, creator_id, creator_name, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		roomID, code, roomName, gameID, creatorID, creatorName, createdAt,
-	)
-	return err
-}
-
-// closeRoom 在房间关闭（自动清理空房 / 管理员关闭）时补写 closed_at/close_reason。
-// 只更新尚未关闭的行，避免同一房间被重复关闭时覆盖第一次的关闭原因。
-func (e *eventStore) closeRoom(roomID string, closedAt int64, reason string) error {
-	if e == nil || e.db == nil {
-		return nil
-	}
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	_, err := e.db.Exec(
-		`UPDATE rooms SET closed_at = ?, close_reason = ? WHERE room_id = ? AND closed_at IS NULL`,
-		closedAt, reason, roomID,
+		`INSERT INTO rooms (room_id, room_name, game_id, creator_id, creator_name, created_at, closed_at, close_reason)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		roomID, roomName, gameID, creatorID, creatorName, createdAt, closedAt, reason,
 	)
 	return err
 }

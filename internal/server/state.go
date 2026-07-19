@@ -193,7 +193,7 @@ func (b *BotSeat) IsBot() bool   { return true }
 
 type RoomState struct {
 	ID              string
-	Code            string
+
 	UpdatedAt       int64
 	Settings        types.RoomSettings
 	Status          string
@@ -219,10 +219,13 @@ type RoomState struct {
 	SeatStats                   map[types.SeatKey]types.SeatStats
 	RoundHistory                []types.RoundHistoryItem
 	OwnerID                     string
-	LockedSeatIDs               map[string]struct{}
-	ForgiveAdvantage            *forgiveAdvantage
-	DisconnectForfeits          map[string]DisconnectForfeit
-	CreatedAt                   int64
+	// CreatorName：创建者的展示名快照（创建时的 playerShortName），供房间关闭时写入
+	// rooms 表用；不能在关闭时现取，届时创建者可能已改名甚至不在房间里了。
+	CreatorName        string
+	LockedSeatIDs      map[string]struct{}
+	ForgiveAdvantage   *forgiveAdvantage
+	DisconnectForfeits map[string]DisconnectForfeit
+	CreatedAt          int64
 }
 
 type forgiveAdvantage struct {
@@ -266,6 +269,13 @@ type Client struct {
 	userAgent string
 	host      string
 	origin    string
+	// connectedAt/compression：连接建立时的快照，断连时一起写进 connection_events 一行
+	// （见 activitylog.go），不再在 connect 时单独落盘。
+	connectedAt int64
+	compression string
+	// connectionLogged：优雅关停路径已写过 connection_events 时置 true，
+	// 避免随后 onClientDisconnect 再插一条重复记录。
+	connectionLogged bool
 }
 
 // Server holds all game state.
@@ -290,6 +300,9 @@ type Server struct {
 
 	// deviceCreateAttempts：按 deviceKey 记录 10 分钟内新建玩家时间戳
 	deviceCreateAttempts map[string][]int64
+	// ipCreateAttempts：纯 IP 维度（不含指纹）记录 10 分钟内新建玩家时间戳，
+	// 作为 deviceCreateAttempts 的兜底——防止客户端伪造指纹绕过按设备计算的限制。
+	ipCreateAttempts map[string][]int64
 	// db：应用共享 SQLite 连接（database.db），chatDB/eventDB 都是它的薄封装
 	db *sql.DB
 	// chatDB：房间/大厅聊天的 SQLite 持久化存储（重启不丢）
@@ -297,8 +310,11 @@ type Server struct {
 	// eventDB：房间生命周期 + 惩罚任务/证明事件的 SQLite 持久化存储（重启不丢）
 	eventDB *eventStore
 	// pushDB：Web Push 订阅存储；vapid：VAPID 密钥对（work/vapid.json 或环境变量）
-	pushDB         *pushStore
-	playerDB       *playerStore
+	pushDB   *pushStore
+	playerDB *playerStore
+	// activityDB：玩家审计事件（改名/模式开关）+ 连接生命周期事件的 SQLite 持久化存储，
+	// system/error 两张活动日志表不在此列，仍走 work/logs/*.csv（见 activitylog.go）
+	activityDB     *activityStore
 	vapid          vapidKeys
 	adminClientIDs map[string]struct{}
 	sidToClientID  map[string]string

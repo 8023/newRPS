@@ -17,6 +17,10 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	if !ok {
 		return
 	}
+	if s.activeRoomsOwnedBy(player.ID) >= s.cfg.AccessControl.MaxActiveRoomsPerOwner {
+		client.reply(env.ID, nil, fmt.Sprintf("同时最多只能开 %d 个房间，请先关闭其他房间", s.cfg.AccessControl.MaxActiveRoomsPerOwner))
+		return
+	}
 	settings := p.Settings
 	gameID := settings.GameID
 	if gameID != types.GameOthello && gameID != types.GameTicTacToe && gameID != types.GameLiarsDice && gameID != types.GameGomoku {
@@ -87,6 +91,12 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		case "classic", "pastel", "midnight", "wood", "neon":
 		default:
 			settings.GomokuBoardTheme = "wood"
+		}
+		switch settings.GomokuUndoLimit {
+		case 0, 1, 3, 10:
+		default:
+			// 与建房表单默认一致：非法值回退为禁止悔棋。
+			settings.GomokuUndoLimit = 0
 		}
 		settings.EnableBot = false
 	} else {
@@ -164,7 +174,7 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		seats[types.SeatB] = s.makeBot(settings.BotDifficulty)
 	}
 	room := &RoomState{
-		ID: roomID, Code: s.roomCode(), OwnerID: player.ID, Settings: settings,
+		ID: roomID, OwnerID: player.ID, CreatorName: playerShortName(player), Settings: settings,
 		Status: status, UpdatedAt: nowMs(), Phase: phase, Seats: seats,
 		SpectatorIDs: []string{}, Ready: map[types.SeatKey]bool{types.SeatA: false, types.SeatB: false},
 		Choices: map[types.SeatKey]types.Move{}, PunishedPlayerIDs: []string{}, Proofs: []types.PunishmentProof{},
@@ -188,11 +198,8 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	player.RoomID = roomID
 	client.leaveRoom(lobbyChannel)
 	client.joinRoom(roomID)
-	if s.eventDB != nil {
-		if err := s.eventDB.insertRoom(roomID, room.Code, settings.Name, string(settings.GameID), player.ID, playerShortName(player), room.CreatedAt); err != nil {
-			s.errorLog("room_event_insert_failed", err.Error())
-		}
-	}
+	// 房间的 rooms 表记录改成关闭时一次性写入（见 room.go/handlers_room.go 的 closeRoom 调用点），
+	// 创建时不再落盘，房间存活期间的"当前在开的房间"直接看内存 s.rooms 即可。
 	if isLiarsDice {
 		s.roomNotice(room, playerShortName(player)+" 创建了大话骰房间，当前为观战。")
 	} else {
@@ -1429,10 +1436,9 @@ func (s *Server) onChatSend(client *Client, env wsEnvelope) {
 	}
 	s.refreshNameWarState(player, nowMs())
 	s.refreshPlayerSnapshots(player)
-	pub := s.publicPlayer(player)
 	message := types.ChatMessage{
 		ID: randomID(), RoomID: p.RoomID, PlayerID: player.ID,
-		Author: player.DisplayName, AuthorPlayer: &pub, Text: cleanMessageText, At: nowMs(),
+		Author: player.DisplayName, Text: cleanMessageText, At: nowMs(),
 		Mentions: normalizeMentions(p.Mentions),
 	}
 	if p.RoomID != "" {
@@ -1501,7 +1507,10 @@ func (s *Server) onChatLoad(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "聊天记录加载失败")
 		return
 	}
-	client.reply(env.ID, map[string]any{"roomId": p.RoomID, "messages": messages, "hasMore": hasMore}, "")
+	client.reply(env.ID, map[string]any{
+		"roomId": p.RoomID, "messages": messages, "hasMore": hasMore,
+		"authors": s.chatAuthorsFor(messages),
+	}, "")
 }
 
 // onChatLoadOlder 瀑布流：返回 seq < beforeSeq 的更早一页 + hasMore。
@@ -1527,7 +1536,10 @@ func (s *Server) onChatLoadOlder(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "聊天记录加载失败")
 		return
 	}
-	client.reply(env.ID, map[string]any{"roomId": p.RoomID, "messages": messages, "hasMore": hasMore}, "")
+	client.reply(env.ID, map[string]any{
+		"roomId": p.RoomID, "messages": messages, "hasMore": hasMore,
+		"authors": s.chatAuthorsFor(messages),
+	}, "")
 }
 
 func (s *Server) loadChatPage(roomID string, beforeSeq int64) ([]types.ChatMessage, bool, error) {
@@ -1535,6 +1547,25 @@ func (s *Server) loadChatPage(roomID string, beforeSeq int64) ([]types.ChatMessa
 		return []types.ChatMessage{}, false, nil
 	}
 	return s.chatDB.older(roomID, beforeSeq, chatPageSize)
+}
+
+// chatAuthorsFor 按消息里的 playerId 从内存 s.players 取**当前**公开资料（含离线玩家）。
+// 持久化玩家启动时全部 load 进内存，不依赖"是否在大厅/房间在线名单"。
+// 返回 map 便于前端按 id 索引；已删档/不存在的 id 不会出现在 map 里，前端退回 message.author 文本。
+func (s *Server) chatAuthorsFor(messages []types.ChatMessage) map[string]types.PublicPlayer {
+	out := make(map[string]types.PublicPlayer)
+	for _, m := range messages {
+		if m.PlayerID == "" {
+			continue
+		}
+		if _, ok := out[m.PlayerID]; ok {
+			continue
+		}
+		if p := s.players[m.PlayerID]; p != nil {
+			out[m.PlayerID] = s.publicPlayer(p)
+		}
+	}
+	return out
 }
 
 func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
@@ -1611,7 +1642,7 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 			s.dropSyncChannel(channelRoom(p.RoomID))
 			delete(s.rooms, p.RoomID)
 			if s.eventDB != nil {
-				if err := s.eventDB.closeRoom(p.RoomID, nowMs(), "admin_close"); err != nil {
+				if err := s.eventDB.insertClosedRoom(room.ID, room.Settings.Name, string(room.Settings.GameID), room.OwnerID, room.CreatorName, room.CreatedAt, nowMs(), "admin_close"); err != nil {
 					s.errorLog("room_event_close_failed", err.Error())
 				}
 			}
@@ -1710,13 +1741,13 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 			client.reply(env.ID, nil, "名字至少需要 2 个字")
 			return
 		}
-		if p.RankedPoints == nil {
-			client.reply(env.ID, nil, "积分格式不正确")
-			return
-		}
 		pl.Name = cleanName
 		pl.NameWarOriginalName = cleanName
-		s.setRankedPointsByAdmin(pl, int(*p.RankedPoints))
+		// RankedPoints 为 nil 表示管理员没有改动这一栏（前端展示的是按 RankedScore 配置
+		// 封顶后的值，真实存储分可能更高/更低）——不传就保持原值，避免把真实分数误砍到展示上限。
+		if p.RankedPoints != nil {
+			s.setRankedPointsByAdmin(pl, int(*p.RankedPoints))
+		}
 		if cleanTitle != "" {
 			pl.Stats.Title = cleanTitle
 		}

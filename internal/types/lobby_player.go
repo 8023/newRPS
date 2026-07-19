@@ -52,12 +52,17 @@ type LobbyPlayer struct {
 
 // LobbyStats 大厅展示所需战绩字段。
 type LobbyStats struct {
-	Wins         int    `json:"wins"`
-	Losses       int    `json:"losses"`
-	Draws        int    `json:"draws"`
-	Punishments  int    `json:"punishments"`
-	RankedPoints int    `json:"rankedPoints"`
-	Title        string `json:"title"`
+	Wins             int    `json:"wins"`
+	Losses           int    `json:"losses"`
+	Draws            int    `json:"draws"`
+	Punishments      int    `json:"punishments"`
+	RankedPoints     int    `json:"rankedPoints"`
+	HighestScore     int    `json:"highestScore"`
+	LowestScore      int    `json:"lowestScore"`
+	SortRankedPoints int    `json:"sortRankedPoints"`
+	SortHighestScore int    `json:"sortHighestScore"`
+	SortLowestScore  int    `json:"sortLowestScore"`
+	Title            string `json:"title"`
 }
 
 // ToLobbyPlayer 从完整公开资料裁剪。
@@ -101,6 +106,9 @@ func ToLobbyPlayer(p PublicPlayer) LobbyPlayer {
 		Stats: LobbyStats{
 			Wins: p.Stats.Wins, Losses: p.Stats.Losses, Draws: p.Stats.Draws,
 			Punishments: p.Stats.Punishments, RankedPoints: p.Stats.RankedPoints, Title: p.Stats.Title,
+			HighestScore: p.Stats.HighestScore, LowestScore: p.Stats.LowestScore,
+			SortRankedPoints: p.Stats.SortRankedPoints, SortHighestScore: p.Stats.SortHighestScore,
+			SortLowestScore: p.Stats.SortLowestScore,
 		},
 		GameStats: p.GameStats,
 	}
@@ -128,6 +136,9 @@ func (p LobbyPlayer) AsPublicPlayer() PublicPlayer {
 		Stats: PublicStats{
 			Wins: p.Stats.Wins, Losses: p.Stats.Losses, Draws: p.Stats.Draws,
 			Punishments: p.Stats.Punishments, RankedPoints: p.Stats.RankedPoints, Title: p.Stats.Title,
+			HighestScore: p.Stats.HighestScore, LowestScore: p.Stats.LowestScore,
+			SortRankedPoints: p.Stats.SortRankedPoints, SortHighestScore: p.Stats.SortHighestScore,
+			SortLowestScore: p.Stats.SortLowestScore,
 		},
 		GameStats: p.GameStats,
 	}

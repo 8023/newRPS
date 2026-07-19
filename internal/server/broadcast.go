@@ -81,7 +81,7 @@ func (s *Server) lobbySnapshot(includeConfig, includeSuggestions bool) types.Lob
 			}
 		}
 		info := types.LobbyRoomInfo{
-			ID: room.ID, GameID: room.Settings.GameID, Code: room.Code, Name: room.Settings.Name,
+			ID: room.ID, GameID: room.Settings.GameID, Name: room.Settings.Name,
 			HasPassword: room.Settings.Password != "", Players: playersCount, Spectators: spectatorCount,
 			Versus: map[types.SeatKey]any{
 				types.SeatA: s.lobbySeatSummary(room.Seats[types.SeatA]),

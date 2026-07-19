@@ -42,6 +42,12 @@ message PublicStats {
   int32 ranked_points = 5;
   string title = 6;
   string title_segment_id = 7;
+  int32 highest_score = 8;
+  int32 lowest_score = 9;
+  // 真实分（未封顶），仅供排行榜排序；展示用 ranked_points/highest_score/lowest_score。
+  int32 sort_ranked_points = 10;
+  int32 sort_highest_score = 11;
+  int32 sort_lowest_score = 12;
 }
 
 message LobbyStats {
@@ -51,6 +57,11 @@ message LobbyStats {
   int32 punishments = 4;
   int32 ranked_points = 5;
   string title = 6;
+  int32 highest_score = 7;
+  int32 lowest_score = 8;
+  int32 sort_ranked_points = 9;
+  int32 sort_highest_score = 10;
+  int32 sort_lowest_score = 11;
 }
 
 message GameWLD {
@@ -189,7 +200,7 @@ message ChatMessage {
   string room_id = 2;
   string player_id = 3;
   string author = 4;
-  PublicPlayer author_player = 5;
+  reserved 5; // 曾是 author_player（发送时刻的玩家快照）；前端现在按 player_id 实时查当前资料
   string author_role = 6;
   string text = 7;
   int64 at = 8;
@@ -233,6 +244,7 @@ message RoomSettings {
   int32 liars_dice_min_players = 24;
   int32 liars_dice_max_players = 25;
   string gomoku_board_theme = 26;
+  int32 gomoku_undo_limit = 27;
 }
 
 message GomokuUndoRequest {
@@ -472,7 +484,7 @@ message SeatStatsPair {
 
 message RoomSnapshot {
   string id = 1;
-  string code = 2;
+  reserved 2; // was code (DM-xxxx short room code); removed, use id
   int64 updated_at = 3;
   RoomSettings settings = 4;
   string status = 5;
@@ -528,7 +540,7 @@ message VersusPair {
 message LobbyRoomInfo {
   string id = 1;
   string game_id = 2;
-  string code = 3;
+  reserved 3; // was code (DM-xxxx); removed, use id
   string name = 4;
   bool has_password = 5;
   int32 players = 6;
@@ -603,8 +615,9 @@ message PunishmentTaskConfig {
 
 message TitleSegment {
   string id = 1;
-  int32 min = 2;
-  int32 max = 3;
+  // 相对 RankedScore 展示上下限的百分比分段（-100～100）；见服务端 rankedScorePercent。
+  double min_percent = 2;
+  double max_percent = 3;
   repeated string names = 4;
   // faction_id -> names joined; use nested
   message FactionNames {
@@ -684,6 +697,17 @@ message AccessControlConfig {
   // 注意：protobufjs 会把本字段编成 maxCreatesPer_10Min（数字前插下划线），
   // 业务侧字段名为 maxCreatesPer10Min；前端 materializeConfig 会做归一化。
   int32 max_creates_per_10_min = 2;
+  // 以下字段是纯 IP 维度（不依赖客户端可伪造的浏览器指纹）的兜底上限；
+  // 字段名刻意不含裸数字片段，避免重蹈 max_creates_per_10_min 的 protobufjs 命名坑。
+  int32 ip_backstop_multiplier = 3;
+  int32 ip_backstop_min_limit = 4;
+  int32 max_session_issue_per_ip = 5;
+  int32 max_online_per_ip_total = 6;
+  int32 max_creates_per_ip = 7;
+  int32 max_active_rooms_per_owner = 8;
+  int32 max_proof_uploads_per_player = 9;
+  // 勾选后拒绝一切新建玩家，老用户凭已有身份仍可正常登录。
+  bool registration_disabled = 10;
 }
 
 message NameWarConfig {
@@ -693,6 +717,8 @@ message NameWarConfig {
   string rename_panel_title = 4;
   string name_war_loser_label = 5;
   string extreme_force_closed_label = 6;
+  // 真实排位分 ≤ 此值时进入名争失格（默认 -4999）。
+  int32 penalty_threshold = 7;
 }
 
 message GiveawayConfig {
@@ -725,6 +751,14 @@ message AppConfig {
   repeated GameConfig games = 15;
   repeated StringPair messages = 16;
   SecurityDisclaimerConfig security_disclaimer = 17;
+  RankedScoreConfig ranked_score = 18;
+}
+
+message RankedScoreConfig {
+  int32 max = 1;
+  int32 min = 2;
+  int32 name_war_min = 3;
+  double daily_decay_ratio = 4;
 }
 
 // 状态通道 FULL 载荷

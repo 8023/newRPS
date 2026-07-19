@@ -11,9 +11,12 @@ func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	dir := t.TempDir()
 	return &Server{
-		players:     map[string]*PlayerState{},
-		dataDir:     dir,
-		playersFile: filepath.Join(dir, "players.json"),
+		players:              map[string]*PlayerState{},
+		dataDir:              dir,
+		playersFile:          filepath.Join(dir, "players.json"),
+		deviceCreateAttempts: map[string][]int64{},
+		ipCreateAttempts:     map[string][]int64{},
+		rateBuckets:          map[string]*rateBucket{},
 	}
 }
 

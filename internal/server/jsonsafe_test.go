@@ -10,7 +10,7 @@ import (
 func TestSanitizeRoomSnapshotNeverNullArrays(t *testing.T) {
 	snap := sanitizeRoomSnapshot(types.RoomSnapshot{
 		ID:   "r1",
-		Code: "DM-TEST",
+
 		Seats: map[types.SeatKey]any{
 			types.SeatA: nil,
 			// B missing on purpose

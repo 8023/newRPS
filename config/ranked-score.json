@@ -1,0 +1,6 @@
+{
+  "max": 4999,
+  "min": -4999,
+  "nameWarMin": -9999,
+  "dailyDecayRatio": 0.98
+}

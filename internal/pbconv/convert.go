@@ -285,13 +285,6 @@ func chatToProto(c types.ChatMessage) (*wire.ChatMessage, error) {
 	if err := JSONCamelToProto(c, m); err != nil {
 		return nil, err
 	}
-	if c.AuthorPlayer != nil {
-		ap, err := publicPlayerToProto(*c.AuthorPlayer)
-		if err != nil {
-			return nil, err
-		}
-		m.AuthorPlayer = ap
-	}
 	return m, nil
 }
 
@@ -328,7 +321,7 @@ func serverStatsToProto(s types.ServerStats) *wire.ServerStats {
 
 func lobbyRoomToProto(r types.LobbyRoomInfo) (*wire.LobbyRoomInfo, error) {
 	m := &wire.LobbyRoomInfo{
-		Id: r.ID, GameId: string(r.GameID), Code: r.Code, Name: r.Name,
+		Id: r.ID, GameId: string(r.GameID), Name: r.Name,
 		HasPassword: r.HasPassword, Players: int32(r.Players), Spectators: int32(r.Spectators),
 		Status: r.Status, RoomBackgroundImage: r.RoomBackgroundImage,
 		EnableBot: r.EnableBot, BotDifficulty: string(r.BotDifficulty),
@@ -381,7 +374,7 @@ func lobbyRoomToProto(r types.LobbyRoomInfo) (*wire.LobbyRoomInfo, error) {
 // RoomToProto 房间快照。
 func RoomToProto(snap types.RoomSnapshot) (*wire.RoomSnapshot, error) {
 	m := &wire.RoomSnapshot{
-		Id: snap.ID, Code: snap.Code, UpdatedAt: snap.UpdatedAt,
+		Id: snap.ID, UpdatedAt: snap.UpdatedAt,
 		Status: snap.Status, Phase: string(snap.Phase), ResultText: snap.ResultText,
 		PunishedPlayerIds: snap.PunishedPlayerIDs, RoundHistoryTotal: int32(snap.RoundHistoryTotal),
 		ForgiveAdvantageTargetId:      snap.ForgiveAdvantageTargetID,
@@ -919,6 +912,8 @@ func fillPlayerDefaults(p any) any {
 // allowProofImage 对应 *bool 指针，但 handlers_room.go 建房时已把 nil 归一化成
 // true/false 的具体值，线上真正存在的房间永远不会是"未设置"——false 就是它的零值，
 // 缺省按 false 补齐即可无损还原（true 是非零值，protojson 永远不会丢，不受影响）。
+// gomokuUndoLimit 同理：建房时已校验为 0/1/3/10 之一，键缺失只可能是真值 0（禁止悔棋）
+// 被 protojson EmitUnpopulated:false 连 key 一起丢掉，缺省按 0 补齐即可无损还原。
 func fillRoomSettingsDefaults(s any) any {
 	sm, ok := s.(map[string]any)
 	if !ok {
@@ -926,6 +921,9 @@ func fillRoomSettingsDefaults(s any) any {
 	}
 	if _, exists := sm["allowProofImage"]; !exists {
 		sm["allowProofImage"] = false
+	}
+	if _, exists := sm["gomokuUndoLimit"]; !exists {
+		sm["gomokuUndoLimit"] = float64(0)
 	}
 	return sm
 }
@@ -1136,9 +1134,6 @@ func RoomProtoToFront(pb *wire.RoomSnapshot) (map[string]any, error) {
 			}
 			if _, exists := cm["expiresAt"]; !exists {
 				cm["expiresAt"] = float64(0)
-			}
-			if ap, ok := cm["authorPlayer"]; ok {
-				cm["authorPlayer"] = fillPlayerDefaults(ap)
 			}
 			chat[i] = cm
 		}

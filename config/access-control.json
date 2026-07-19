@@ -1,4 +1,12 @@
 {
   "maxOnlinePerIp": 3,
-  "maxCreatesPer10Min": 5
+  "maxCreatesPer10Min": 5,
+  "ipBackstopMultiplier": 6,
+  "ipBackstopMinLimit": 30,
+  "maxSessionIssuePerIp": 30,
+  "maxOnlinePerIpTotal": 10,
+  "maxCreatesPerIp": 15,
+  "maxActiveRoomsPerOwner": 3,
+  "maxProofUploadsPerPlayer": 8,
+  "registrationDisabled": false
 }

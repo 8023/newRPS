@@ -1,6 +1,7 @@
-import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type UIEvent as ReactUIEvent, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type UIEvent as ReactUIEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Coffee, Crown, DoorOpen, Download, ExternalLink, Eye, HeartHandshake, Info, MessageCircle, Moon, Pencil, RefreshCcw, Save, Send, Settings, Shield, Sun, Swords, Upload, UserRound, Users } from "lucide-react";
 import type { AppConfig, BotDifficulty, ChatMessage, GenderFaction, LobbySnapshot, Move, PublicPlayer, PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant } from "../shared/types";
+import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, withAccessControlDefaults, withRankedScoreDefaults } from "../lib/normalize";
 import {
   defaultGomokuRoomName, defaultLiarsDiceRoomName, defaultOthelloRoomName, defaultRoomName, defaultTicTacToeRoomName,
   gomokuBoardThemes, othelloBoardThemes, sponsorLinks, tictactoeBoardThemes, tokenKey
@@ -293,15 +294,40 @@ export function titleClass(points: number) {
 }
 
 /** 展示用战绩：缺省/非数字按 0，称号空则「暂无称号」 */
+/** 排行榜排序用真实分（有 sort* 用 sort*，否则退回展示分）。 */
+export function sortRankedPointsOf(player: PublicPlayer) {
+  const s = player?.stats;
+  if (!s) return 0;
+  return Number.isFinite(Number(s.sortRankedPoints)) ? Number(s.sortRankedPoints) : Number(s.rankedPoints) || 0;
+}
+export function sortHighestScoreOf(player: PublicPlayer) {
+  const s = player?.stats;
+  if (!s) return 0;
+  return Number.isFinite(Number(s.sortHighestScore)) ? Number(s.sortHighestScore) : Number(s.highestScore) || 0;
+}
+export function sortLowestScoreOf(player: PublicPlayer) {
+  const s = player?.stats;
+  if (!s) return 0;
+  return Number.isFinite(Number(s.sortLowestScore)) ? Number(s.sortLowestScore) : Number(s.lowestScore) || 0;
+}
+
 export function safePlayerStats(player: PublicPlayer | null | undefined) {
   const s = player?.stats || ({} as PublicPlayer["stats"]);
   const title = typeof s.title === "string" ? s.title.trim() : "";
+  const rankedPoints = Number.isFinite(Number(s.rankedPoints)) ? Number(s.rankedPoints) : 0;
+  const highestScore = Number.isFinite(Number(s.highestScore)) ? Number(s.highestScore) : 0;
+  const lowestScore = Number.isFinite(Number(s.lowestScore)) ? Number(s.lowestScore) : 0;
   return {
     wins: Number.isFinite(Number(s.wins)) ? Number(s.wins) : 0,
     losses: Number.isFinite(Number(s.losses)) ? Number(s.losses) : 0,
     draws: Number.isFinite(Number(s.draws)) ? Number(s.draws) : 0,
     punishments: Number.isFinite(Number(s.punishments)) ? Number(s.punishments) : 0,
-    rankedPoints: Number.isFinite(Number(s.rankedPoints)) ? Number(s.rankedPoints) : 0,
+    rankedPoints,
+    highestScore,
+    lowestScore,
+    sortRankedPoints: Number.isFinite(Number(s.sortRankedPoints)) ? Number(s.sortRankedPoints) : rankedPoints,
+    sortHighestScore: Number.isFinite(Number(s.sortHighestScore)) ? Number(s.sortHighestScore) : highestScore,
+    sortLowestScore: Number.isFinite(Number(s.sortLowestScore)) ? Number(s.sortLowestScore) : lowestScore,
     title: title || "暂无称号"
   };
 }
@@ -388,6 +414,7 @@ export function Lobby({ config, lobby, me, onError, onGoRoom }: { config: AppCon
           <ChatPanel
             scope=""
             me={me}
+            players={lobby.players}
             onError={onError}
             placeholder="点击头像可 @ 人"
             emptyText="还没有留言"
@@ -424,6 +451,7 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
     othelloBoardTheme: "classic",
     tictactoeBoardTheme: "paper",
     gomokuBoardTheme: "wood",
+    gomokuUndoLimit: 0,
     liarsDiceMinPlayers: 3,
     liarsDiceMaxPlayers: 3
   });
@@ -472,6 +500,7 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
       }
       if (next.gameId === "gomoku" || merged.gameId === "gomoku") {
         merged.gomokuBoardTheme = merged.gomokuBoardTheme || "wood";
+        merged.gomokuUndoLimit = merged.gomokuUndoLimit ?? 0;
         merged.enableBot = false;
       }
       if (next.gameId === "liarsdice" || merged.gameId === "liarsdice") {
@@ -627,6 +656,21 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
               {settings.gameId === "tictactoe" && <p className="hint">井字棋支持真人 1v1、观战、聊天、排位和惩罚；双方准备后随机 X/O 先手，Bot 暂不开放。</p>}
               {settings.gameId === "liarsdice" && <p className="hint">大话骰支持 2-8 人参战，进房默认观战，可自由加入/离开参战席；全员准备且名单 5 秒无变动后自动开局，Bot 暂不开放。</p>}
               {settings.gameId === "gomoku" && <p className="hint">五子棋支持真人 1v1、观战、聊天、排位和惩罚；15x15 棋盘先连成五子者胜，可向对方请求悔棋或认输，Bot 暂不开放。</p>}
+              {settings.gameId === "gomoku" && (
+                <div className="multiplier-choice-grid">
+                  {([0, 1, 3, 10] as const).map((limit) => (
+                    <button
+                      type="button"
+                      className={`ranked-choice-card ${(settings.gomokuUndoLimit ?? 0) === limit ? "active" : ""}`}
+                      key={limit}
+                      onClick={() => patch({ gomokuUndoLimit: limit })}
+                    >
+                      <span>{limit === 0 ? "禁止悔棋" : `允许悔棋${limit}次`}</span>
+                      <small>{limit === 0 ? "本局任何一方都不能申请悔棋" : `每方本局最多可申请 ${limit} 次悔棋`}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
               {settings.gameId === "liarsdice" && (
                 <div className="liarsdice-roster-settings">
                   <label>
@@ -1049,7 +1093,7 @@ export function botStrategyText(strategy?: AppConfig["bots"]["difficulties"][num
   return "随机";
 }
 
-export function Room({ config, room, me, onBack, onError }: { config: AppConfig; room: RoomSnapshot; me: PublicPlayer; onBack: () => void; onError: (message: string) => void }) {
+export function Room({ config, room, me, lobby, onBack, onError }: { config: AppConfig; room: RoomSnapshot; me: PublicPlayer; lobby: LobbySnapshot | null; onBack: () => void; onError: (message: string) => void }) {
   const [chatTab, setChatTab] = useState<"room" | "lobby">("room");
   const [proofText, setProofText] = useState("");
   const [proofImage, setProofImage] = useState("");
@@ -1075,6 +1119,14 @@ export function Room({ config, room, me, onBack, onError }: { config: AppConfig;
   const canShowGiveawayButton = Boolean(mySeat && me.giveawayEnabled && !roomHasBot && seats.A && seats.B);
   const canGoSpectate = Boolean(mySeat && room.phase !== "punishment" && !choices[mySeat] && !((room.settings.gameId === "tictactoe" || room.settings.gameId === "gomoku") && room.phase === "choosing"));
   const roomPlayers = roomPlayerList(room);
+  // 聊天发言人查找源：房间名单优先（在房间内持续更新），叠加大厅名单兜底
+  // （进房后大厅频道会取消订阅，可能不是最新的，但依旧好过完全查不到）。
+  const chatPlayers = useMemo(() => {
+    const map = new Map<string, PublicPlayer>();
+    for (const player of lobby?.players || []) map.set(player.id, player);
+    for (const item of roomPlayers) map.set(item.player.id, item.player);
+    return Array.from(map.values());
+  }, [lobby, roomPlayers]);
   const punishedNames = punishedPlayerNames(room);
   const punishedIds = room.punishedPlayerIds || [];
   const iAmPunished = punishedIds.includes(me.id);
@@ -1548,6 +1600,7 @@ export function Room({ config, room, me, onBack, onError }: { config: AppConfig;
                 key={`room-${room.id}`}
                 scope={room.id}
                 me={me}
+                players={chatPlayers}
                 onError={onError}
                 placeholder="发一句话...（点头像 @ 人）"
                 emptyText="还没有房间聊天"
@@ -1558,6 +1611,7 @@ export function Room({ config, room, me, onBack, onError }: { config: AppConfig;
                 key="lobby-readonly"
                 scope=""
                 me={me}
+                players={chatPlayers}
                 onError={onError}
                 readOnly
                 readOnlyHint="大厅聊天室在房间内只能查看，回到大厅后可以发送。"
@@ -2231,10 +2285,13 @@ export function escapeRegExp(value: string) {
 // 首屏/历史走 chatStore（chat:load/loadOlder，读 SQLite），增量由 chatStore 监听 chat:new。
 // 滚到顶部瀑布流加载更早 100 条并保持滚动位置；点头像 @人；@到自己的气泡高亮。
 export function ChatPanel({
-  scope, me, onError, readOnly = false, readOnlyHint, placeholder, emptyText, subscribeLobbyChannel = false, messagesClass
+  scope, me, players, onError, readOnly = false, readOnlyHint, placeholder, emptyText, subscribeLobbyChannel = false, messagesClass
 }: {
   scope: string;
   me: PublicPlayer;
+  // 发言人当前资料：优先用调用方传入的在线/房间名单（更实时），再合并 chat:load 带回的
+  // authors（服务端按 playerId 从内存玩家表取的当前资料，含离线玩家）。
+  players: PublicPlayer[];
   onError: (message: string) => void;
   readOnly?: boolean;
   readOnlyHint?: string;
@@ -2243,7 +2300,14 @@ export function ChatPanel({
   subscribeLobbyChannel?: boolean;
   messagesClass?: string;
 }) {
-  const { messages, hasMore, loading } = useChat(scope);
+  const { messages, hasMore, loading, authors } = useChat(scope);
+  const playersById = useMemo(() => {
+    const map = new Map<string, PublicPlayer>();
+    // 先放历史加载的 authors，再用在线名单覆盖（同 id 以最新在线快照为准）。
+    for (const [id, player] of Object.entries(authors || {})) map.set(id, player);
+    for (const player of players) map.set(player.id, player);
+    return map;
+  }, [players, authors]);
   const [text, setText] = useState("");
   const pendingMentionsRef = useRef<Array<{ playerId: string; name: string }>>([]);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -2328,7 +2392,13 @@ export function ChatPanel({
         <div className={`messages ${messagesClass || ""}`} ref={listRef} onScroll={handleScroll}>
           {hasMore && <div className="chat-more-hint">{loading ? "加载中…" : "↑ 上滑加载更早消息"}</div>}
           {visible.map((item) => (
-            <ChatBubble key={item.id} message={item} me={me} onMention={readOnly ? undefined : insertMention} />
+            <ChatBubble
+              key={item.id}
+              message={item}
+              me={me}
+              author={item.playerId === me.id ? me : playersById.get(item.playerId)}
+              onMention={readOnly ? undefined : insertMention}
+            />
           ))}
           {visible.length === 0 && <p className="empty">{emptyText || "还没有消息"}</p>}
         </div>
@@ -2361,7 +2431,9 @@ export function mentionLabel(player?: PublicPlayer): string {
   return player.nameWarPunished && player.nameWarPenaltyName ? player.nameWarPenaltyName : player.name;
 }
 
-export function ChatBubble({ message, me, onMention }: { message: ChatMessage; me: PublicPlayer; onMention?: (player?: PublicPlayer) => void }) {
+// author：发言人当前资料，由 ChatPanel 按 message.playerId 实时查找传入（找不到则 undefined，
+// 退回 message.author 纯文本）——不再使用发送时刻冻结的快照，昵称/头像变更后历史消息也会跟着更新。
+export function ChatBubble({ message, me, author, onMention }: { message: ChatMessage; me: PublicPlayer; author?: PublicPlayer; onMention?: (player?: PublicPlayer) => void }) {
   if (message.system) return <p className="chat-system">{message.text}</p>;
   const mine = message.playerId === me.id;
   // 精确匹配：消息 @ 的 playerId 列表命中我时高亮气泡。
@@ -2370,15 +2442,15 @@ export function ChatBubble({ message, me, onMention }: { message: ChatMessage; m
   const canMention = Boolean(onMention) && !mine;
   return (
     <div className={`chat-bubble-row ${mine ? "mine" : ""} ${mentionsMe ? "mentioned" : ""}`}>
-      {!mine && <ChatAvatar player={message.authorPlayer} onMention={canMention && onMention ? () => onMention(message.authorPlayer) : undefined} />}
+      {!mine && <ChatAvatar player={author} onMention={canMention && onMention ? () => onMention(author) : undefined} />}
       <div className="chat-bubble">
         <div className="chat-meta">
-          {message.authorPlayer ? <ChatName player={message.authorPlayer} /> : <b>{message.author}</b>}
+          {author ? <ChatName player={author} /> : <b>{message.author}</b>}
           {message.authorRole && <em>{message.authorRole}</em>}
         </div>
         <p>{message.text}</p>
       </div>
-      {mine && <ChatAvatar player={message.authorPlayer} />}
+      {mine && <ChatAvatar player={author} />}
     </div>
   );
 }
@@ -2656,14 +2728,14 @@ export function Leaderboard({ title, players }: { title: string; players: Public
 }
 
 export type GlobalLeaderboardTab =
-  | "positive" | "negative" | "extremePositive" | "extremeNegative" | "nameWar" | "giveaway"
+  | "positive" | "negative" | "historyPositive" | "historyNegative" | "extremePositive" | "extremeNegative" | "nameWar" | "giveaway"
   | "rps" | "othello" | "tictactoe" | "gomoku" | "liarsdice";
 
 const GAME_LEADERBOARD_TABS: Array<{ id: GlobalLeaderboardTab; label: string; title: string }> = [
   { id: "rps", label: "猜拳", title: "锤子剪刀布胜场榜" },
-  { id: "othello", label: "黑白", title: "黑白棋胜场榜" },
-  { id: "tictactoe", label: "井字", title: "井字棋胜场榜" },
-  { id: "gomoku", label: "五子", title: "五子棋胜场榜" },
+  { id: "othello", label: "黑白棋", title: "黑白棋胜场榜" },
+  { id: "tictactoe", label: "井字棋", title: "井字棋胜场榜" },
+  { id: "gomoku", label: "五子棋", title: "五子棋胜场榜" },
   { id: "liarsdice", label: "大话骰", title: "大话骰胜场榜" }
 ];
 
@@ -2790,18 +2862,22 @@ export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPl
   const ranked = leaderboardPlayers(players, tab).slice(0, 50);
   const gameTabMeta = GAME_LEADERBOARD_TABS.find((item) => item.id === tab);
   const title = tab === "positive"
-    ? "正分榜"
+    ? "当前正分榜"
     : tab === "negative"
-      ? "负分榜"
-      : tab === "extremePositive"
-        ? "极限正分榜"
-        : tab === "extremeNegative"
-          ? "极限负分榜"
-          : tab === "nameWar"
-            ? "名字争夺战榜"
-            : tab === "giveaway"
-              ? "白给榜"
-              : gameTabMeta?.title || "排行榜";
+      ? "当前负分榜"
+      : tab === "historyPositive"
+        ? "历史最高分榜"
+        : tab === "historyNegative"
+          ? "历史最低分榜"
+          : tab === "extremePositive"
+            ? "极限正分榜"
+            : tab === "extremeNegative"
+              ? "极限负分榜"
+              : tab === "nameWar"
+                ? "名字争夺战榜"
+                : tab === "giveaway"
+                  ? "白给榜"
+                  : gameTabMeta?.title || "排行榜";
   return (
     <div className="modal-backdrop leaderboard-backdrop" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="leaderboard-modal">
@@ -2813,8 +2889,10 @@ export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPl
           <button type="button" className="icon-button" onClick={onClose}>×</button>
         </div>
         <div className="segmented leaderboard-tabs">
-          <button className={tab === "positive" ? "active" : ""} onClick={() => setTab("positive")}>正分</button>
-          <button className={tab === "negative" ? "active" : ""} onClick={() => setTab("negative")}>负分</button>
+          <button className={tab === "positive" ? "active" : ""} onClick={() => setTab("positive")}>当前正</button>
+          <button className={tab === "negative" ? "active" : ""} onClick={() => setTab("negative")}>当前负</button>
+          <button className={tab === "historyPositive" ? "active" : ""} onClick={() => setTab("historyPositive")}>历史正</button>
+          <button className={tab === "historyNegative" ? "active" : ""} onClick={() => setTab("historyNegative")}>历史负</button>
           <button className={tab === "extremePositive" ? "active" : ""} onClick={() => setTab("extremePositive")}>极限正</button>
           <button className={tab === "extremeNegative" ? "active" : ""} onClick={() => setTab("extremeNegative")}>极限负</button>
           <button className={tab === "nameWar" ? "active" : ""} onClick={() => setTab("nameWar")}>名争</button>
@@ -2848,6 +2926,8 @@ export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPl
                   ) : (
                     <>
                       <span>{stats.rankedPoints} 分</span>
+                      <span>历史最高 {stats.highestScore}</span>
+                      <span>历史最低 {stats.lowestScore}</span>
                       <span>{stats.wins}胜 {stats.losses}负 {stats.draws}平</span>
                       <span>{stats.punishments} 惩罚</span>
                       <span>胜率 {winRateText(player)}</span>
@@ -2867,14 +2947,17 @@ export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPl
 
 export function leaderboardPlayers(players: PublicPlayer[], tab: GlobalLeaderboardTab) {
   const copy = [...players];
-  if (tab === "positive") return copy.filter((player) => player.stats.rankedPoints > 0).sort((a, b) => b.stats.rankedPoints - a.stats.rankedPoints || b.stats.wins - a.stats.wins);
-  if (tab === "negative") return copy.filter((player) => player.stats.rankedPoints < 0).sort((a, b) => a.stats.rankedPoints - b.stats.rankedPoints || b.stats.losses - a.stats.losses);
-  if (tab === "extremePositive") return copy.filter((player) => player.extremeModeEnabled && player.stats.rankedPoints > 0).sort((a, b) => b.stats.rankedPoints - a.stats.rankedPoints || (b.extremeWinStreak || 0) - (a.extremeWinStreak || 0));
-  if (tab === "extremeNegative") return copy.filter((player) => player.extremeModeEnabled && player.stats.rankedPoints < 0).sort((a, b) => a.stats.rankedPoints - b.stats.rankedPoints || (b.extremeWinStreak || 0) - (a.extremeWinStreak || 0));
+  // 过滤可用展示分（已封顶）；排序一律用 sort* 真实分，避免封顶后同分乱序。
+  if (tab === "positive") return copy.filter((player) => sortRankedPointsOf(player) > 0).sort((a, b) => sortRankedPointsOf(b) - sortRankedPointsOf(a) || b.stats.wins - a.stats.wins);
+  if (tab === "negative") return copy.filter((player) => sortRankedPointsOf(player) < 0).sort((a, b) => sortRankedPointsOf(a) - sortRankedPointsOf(b) || b.stats.losses - a.stats.losses);
+  if (tab === "historyPositive") return copy.filter((player) => sortHighestScoreOf(player) > 0).sort((a, b) => sortHighestScoreOf(b) - sortHighestScoreOf(a) || b.stats.wins - a.stats.wins);
+  if (tab === "historyNegative") return copy.filter((player) => sortLowestScoreOf(player) < 0).sort((a, b) => sortLowestScoreOf(a) - sortLowestScoreOf(b) || b.stats.losses - a.stats.losses);
+  if (tab === "extremePositive") return copy.filter((player) => player.extremeModeEnabled && sortRankedPointsOf(player) > 0).sort((a, b) => sortRankedPointsOf(b) - sortRankedPointsOf(a) || (b.extremeWinStreak || 0) - (a.extremeWinStreak || 0));
+  if (tab === "extremeNegative") return copy.filter((player) => player.extremeModeEnabled && sortRankedPointsOf(player) < 0).sort((a, b) => sortRankedPointsOf(a) - sortRankedPointsOf(b) || (b.extremeWinStreak || 0) - (a.extremeWinStreak || 0));
   if (tab === "nameWar") {
     return copy
       .filter((player) => player.nameWarEnabled || player.nameWarPunished)
-      .sort((a, b) => Number(Boolean(b.nameWarPunished)) - Number(Boolean(a.nameWarPunished)) || a.stats.rankedPoints - b.stats.rankedPoints);
+      .sort((a, b) => Number(Boolean(b.nameWarPunished)) - Number(Boolean(a.nameWarPunished)) || sortRankedPointsOf(a) - sortRankedPointsOf(b));
   }
   if (isGameLeaderboardTab(tab)) {
     return copy
@@ -2890,7 +2973,7 @@ export function leaderboardPlayers(players: PublicPlayer[], tab: GlobalLeaderboa
   }
   return copy
     .filter((player) => player.giveawayEnabled || (player.giveawayValue || 0) > 0)
-    .sort((a, b) => (b.giveawayValue || 0) - (a.giveawayValue || 0) || b.stats.rankedPoints - a.stats.rankedPoints);
+    .sort((a, b) => (b.giveawayValue || 0) - (a.giveawayValue || 0) || sortRankedPointsOf(b) - sortRankedPointsOf(a));
 }
 
 export function isGameLeaderboardTab(tab: GlobalLeaderboardTab) {
@@ -2944,7 +3027,8 @@ export function winRateText(player: PublicPlayer) {
 }
 
 export function isNameWarLoser(player: PublicPlayer) {
-  return Boolean(player.nameWarEnabled && player.nameWarAllowRename && player.nameWarPunished && safePlayerStats(player).rankedPoints <= -1000);
+  // 失格目标以 nameWarPunished 为准；分值线由服务端按真实分 + penaltyThreshold 判定。
+  return Boolean(player.nameWarEnabled && player.nameWarAllowRename && player.nameWarPunished);
 }
 
 export function isNameWarLoserVisible(player: PublicPlayer, now = Date.now()) {
@@ -3380,6 +3464,8 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
           <Stat label="总胜率" value={`${winRate}%`} />
           <Stat label="惩罚次数" value={`${stats.punishments}`} />
           <Stat label="排位积分" value={`${stats.rankedPoints}`} />
+          <Stat label="历史最高分" value={`${stats.highestScore}`} />
+          <Stat label="历史最低分" value={`${stats.lowestScore}`} />
           <Stat label="当前称号" value={me.nameWarPunished ? "已隐藏" : stats.title} />
           <Stat label="白给值" value={`${formatGiveawayValue(giveawayValue)}%`} />
           <Stat label="极限模式" value={me.extremeModeEnabled ? `连胜 ${me.extremeWinStreak || 0}` : "未开启"} />
@@ -3438,13 +3524,12 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
             </div>
             <Toggle label="开启名字争夺战" value={nameWarEnabled} disabled={nameWarCooldownMs > 0} onChange={setNameWarEnabled} />
             <Toggle label="允许其他玩家改名" value={nameWarAllowRename} disabled={!nameWarEnabled || nameWarCooldownMs > 0} onChange={setNameWarAllowRename} />
-            <p className="hint">开启后排位负分下限变成 -1999；跌到 -1000 后，只显示系统惩罚名，不显示性别和称号。</p>
-            <p className="hint">允许其他玩家改名后，跌到 -1000 以下会出现在大厅失格者名单，500 分以上玩家可以抢先给你改名。</p>
-            <p className="hint">被其他玩家改名后，保护期内即使回到 -999 以上也不会提前恢复；保护期结束且积分达到 -999 以上才恢复。</p>
+            <p className="hint">开启后排位分展示下限变为 {withRankedScoreDefaults(config.rankedScore).nameWarMin}（真实存储的分数不受此限制）；真实分跌到 {config.nameWar?.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD} 及以下后，只显示系统惩罚名，不显示性别和称号。</p>
+            <p className="hint">允许其他玩家改名后，真实分跌到 {config.nameWar?.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD} 及以下会出现在大厅失格者名单，500 分以上玩家可以抢先给你改名。</p>
+            <p className="hint">被其他玩家改名后，保护期内即使真实分回到失格线以上也不会提前恢复；保护期结束且真实分高于失格线才恢复。</p>
             {me.nameWarRenameProtectedUntil && me.nameWarRenameProtectedUntil > now && <p className="hint">改名保护中：约 {Math.ceil((me.nameWarRenameProtectedUntil - now) / 3_600_000)} 小时。</p>}
             {me.nameWarPunished && me.nameWarPenaltyName && <p className="hint">当前惩罚名：{me.nameWarPenaltyName}。</p>}
             {nameWarCooldownMs > 0 && <p className="hint">开关冷却：{nameWarCooldownHours} 小时</p>}
-            {!nameWarEnabled && stats.rankedPoints < -999 && <p className="hint">保存关闭后，积分会拉回 -999。</p>}
           </div>
           <div className="name-war-card giveaway-profile-card">
             <div className="admin-card-title">
@@ -3543,7 +3628,7 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
   );
 }
 
-export type AdminSection = "site" | "factions" | "titles" | "punishments" | "roomTags" | "roomInfoTags" | "nameWar" | "giveaway" | "extremeMode" | "accessControl" | "bots" | "messages" | "actions" | "advanced";
+export type AdminSection = "site" | "factions" | "titles" | "punishments" | "roomTags" | "roomInfoTags" | "nameWar" | "giveaway" | "extremeMode" | "rankedScore" | "accessControl" | "bots" | "messages" | "actions" | "advanced";
 export type AdminActionTab = "online" | "offline" | "rooms" | "announcement";
 
 export const roomInfoTagOrder = [
@@ -3726,7 +3811,8 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
     { id: "nameWar", label: "名字争夺战", detail: draft.nameWar.penaltyPrefix },
     { id: "giveaway", label: "白给模式", detail: draft.giveaway.panelTitle },
     { id: "extremeMode", label: "极限模式", detail: `${draft.extremeMode.emoji} ${draft.extremeMode.label}` },
-    { id: "accessControl", label: "防多开", detail: `同指纹 ${draft.accessControl.maxOnlinePerIp} 在线 / ${draft.accessControl.maxCreatesPer10Min} 新建` },
+    { id: "rankedScore", label: "排位分设置", detail: (() => { const rs = withRankedScoreDefaults(draft.rankedScore); return `上限 ${rs.max} / 下限 ${rs.min} / 名争下限 ${rs.nameWarMin}`; })() },
+    { id: "accessControl", label: "防多开", detail: (() => { const ac = withAccessControlDefaults(draft.accessControl); return ac.registrationDisabled ? "已禁止新用户注册" : `同指纹 ${ac.maxOnlinePerIp} 在线 / ${ac.maxCreatesPer10Min} 新建`; })() },
     { id: "bots", label: "Bot 设置", detail: `${draft.bots.difficulties.length} 个难度` },
     { id: "messages", label: "系统提示", detail: `${Object.keys(draft.messages).length} 条文案` },
     { id: "actions", label: "管理操作", detail: `${lobby.rooms.length} 房间 / ${lobby.players.length} 玩家` },
@@ -3836,20 +3922,20 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
       const filteredTitles = draft.titles.filter((segment) => {
         const keyword = titleSearch.trim().toLowerCase();
         if (!keyword) return true;
-        return `${segment.id} ${segment.min} ${segment.max} ${segment.names.join(" ")}`.toLowerCase().includes(keyword);
+        return `${segment.id} ${segment.minPercent} ${segment.maxPercent} ${segment.names.join(" ")}`.toLowerCase().includes(keyword);
       });
       const selectedIndex = Math.max(0, draft.titles.findIndex((segment) => segment.id === activeTitleId));
       const segment = draft.titles[selectedIndex];
       return (
         <div className="config-section admin-section-card">
-          <AdminSectionHeader title="称号池" subtitle="积分进入某个范围后，会从对应称号池随机装备一个称号。" />
+          <AdminSectionHeader title="称号池" subtitle="按排位分相对展示上下限的百分比分段；真实分换算百分比后落入某段，再从该段称号池随机装备。" />
           <div className="punishment-manager title-manager">
             <aside className="punishment-index-panel">
-              <input value={titleSearch} onChange={(event) => setTitleSearch(event.target.value)} placeholder="搜索段位 ID / 分数 / 称号" />
+              <input value={titleSearch} onChange={(event) => setTitleSearch(event.target.value)} placeholder="搜索段位 ID / 百分比 / 称号" />
               <div className="punishment-index-list">
                 {filteredTitles.map((item) => (
                   <button className={item.id === segment?.id ? "active" : ""} key={item.id} onClick={() => setActiveTitleId(item.id)}>
-                    <span>{item.id} · {item.min} ~ {item.max}</span>
+                    <span>{item.id} · {item.minPercent}% ~ {item.maxPercent}%</span>
                     <small>通用 {item.names.length} 个 · {draft.genderFactions.length} 个阵营专属池</small>
                   </button>
                 ))}
@@ -3858,19 +3944,19 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
               <button onClick={() => {
                 const nextId = nextAdminId("title", draft.titles.map((item) => item.id));
                 setActiveTitleId(nextId);
-                patch({ titles: [...draft.titles, { id: nextId, min: 0, max: 0, names: ["新称号"], factionNames: Object.fromEntries(draft.genderFactions.map((faction) => [faction.id, ["新称号"]])) }] });
+                patch({ titles: [...draft.titles, { id: nextId, minPercent: 0, maxPercent: 0, names: ["新称号"], factionNames: Object.fromEntries(draft.genderFactions.map((faction) => [faction.id, ["新称号"]])) }] });
               }}>添加段位</button>
             </aside>
             {segment && (
               <div className="mini-card punishment-detail-panel">
                 <div className="admin-card-title">
-                  <strong>{segment.id} · {segment.min} ~ {segment.max}</strong>
-                  <small>{selectedIndex + 1} / {draft.titles.length} · 通用 {segment.names.length} 个</small>
+                  <strong>{segment.id} · {segment.minPercent}% ~ {segment.maxPercent}%</strong>
+                  <small>{selectedIndex + 1} / {draft.titles.length} · 通用 {segment.names.length} 个 · 相对展示上下限的百分比</small>
                 </div>
                 <div className="config-row compact">
                   <label className="field-label"><span>段位 ID（自动生成，一般不用改）</span><input value={segment.id} onChange={(event) => { setActiveTitleId(event.target.value); patch({ titles: draft.titles.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, id: event.target.value } : item) }); }} /></label>
-                  <label className="field-label"><span>最低分</span><input type="number" value={segment.min} onChange={(event) => patch({ titles: draft.titles.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, min: Number(event.target.value) } : item) })} /></label>
-                  <label className="field-label"><span>最高分</span><input type="number" value={segment.max} onChange={(event) => patch({ titles: draft.titles.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, max: Number(event.target.value) } : item) })} /></label>
+                  <label className="field-label"><span>最低百分比（-100～100）</span><input type="number" min={-100} max={100} step={0.01} value={segment.minPercent} onChange={(event) => patch({ titles: draft.titles.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, minPercent: Number(event.target.value) } : item) })} /></label>
+                  <label className="field-label"><span>最高百分比（-100～100）</span><input type="number" min={-100} max={100} step={0.01} value={segment.maxPercent} onChange={(event) => patch({ titles: draft.titles.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, maxPercent: Number(event.target.value) } : item) })} /></label>
                 </div>
                 <TagListEditor
                   label="通用称号（专属为空时兜底）"
@@ -4118,8 +4204,12 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
               <span>退出高难度称号</span>
               <input value={draft.nameWar.escapeTitle} maxLength={18} onChange={(event) => patch({ nameWar: { ...draft.nameWar, escapeTitle: event.target.value } })} placeholder="逃跑的人" />
             </label>
+            <label className="field-label">
+              <span>失格分阈值（真实分）</span>
+              <input type="number" max={-1} value={draft.nameWar.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD} onChange={(event) => patch({ nameWar: { ...draft.nameWar, penaltyThreshold: Number(event.target.value) } })} placeholder={String(DEFAULT_NAME_WAR_PENALTY_THRESHOLD)} />
+            </label>
           </div>
-          <p className="hint">随机码固定为 4 位大写字母/数字；已有惩罚名不会因为你改前缀立刻变化，新触发的玩家会使用新前缀。</p>
+          <p className="hint">随机码固定为 4 位大写字母/数字；已有惩罚名不会因为你改前缀立刻变化，新触发的玩家会使用新前缀。失格线按数据库真实排位分判定，与展示封顶无关。</p>
         </div>
       );
     }
@@ -4195,7 +4285,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
           <div className="admin-card">
             <div className="admin-card-title">
               <strong>负分赢分比例</strong>
-              <small>-1000 以下按 neg4</small>
+              <small>最负分段按 neg4</small>
             </div>
             <div className="config-row">
               {(["neg1", "neg2", "neg3", "neg4"] as const).map((key) => (
@@ -4218,15 +4308,43 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
       );
     }
 
-    if (activeSection === "accessControl") {
+    if (activeSection === "rankedScore") {
+      // 与防多开 accessControl 相同：缺对象时用默认合并，避免 draft.rankedScore 为 undefined 时白屏。
+      const rankedScore = withRankedScoreDefaults(draft.rankedScore);
+      const patchRankedScore = (next: Partial<AppConfig["rankedScore"]>) =>
+        patch({ rankedScore: withRankedScoreDefaults({ ...rankedScore, ...next }) });
       return (
         <div className="config-section admin-section-card">
-          <AdminSectionHeader title="防多开" subtitle="按「出口 IP + 浏览器指纹」组合限流：同一宿舍/公司共享公网 IP 时，不同浏览器互不影响；同一设备多开仍受限。长期身份 token 恢复不算新建。" />
+          <AdminSectionHeader title="排位分设置" subtitle="排位积分的存储值永远不设上下限；这里只控制排行榜/个人资料等展示时的封顶值，以及每日衰减比例。" />
           <div className="admin-preview-card">
-            <span>当前规则</span>
-            <strong>同指纹最多 {draft.accessControl.maxOnlinePerIp} 个在线玩家</strong>
-            <p>同指纹 10 分钟内最多新建 {draft.accessControl.maxCreatesPer10Min} 个玩家。</p>
+            <span>预览</span>
+            <p>展示上限 {rankedScore.max} 分，普通玩家展示下限 {rankedScore.min} 分，名字争夺战玩家展示下限 {rankedScore.nameWarMin} 分；每天衰减至 {Math.round(rankedScore.dailyDecayRatio * 100)}%。</p>
           </div>
+          <div className="config-row">
+            <label className="field-label"><span>展示上限</span><input type="number" min={1} value={rankedScore.max} onChange={(event) => patchRankedScore({ max: Number(event.target.value) })} /></label>
+            <label className="field-label"><span>普通玩家展示下限</span><input type="number" max={-1} value={rankedScore.min} onChange={(event) => patchRankedScore({ min: Number(event.target.value) })} /></label>
+            <label className="field-label"><span>名字争夺战展示下限</span><input type="number" value={rankedScore.nameWarMin} onChange={(event) => patchRankedScore({ nameWarMin: Number(event.target.value) })} /></label>
+            <label className="field-label"><span>每日衰减比例</span><input type="number" min={0.01} max={1} step={0.01} value={rankedScore.dailyDecayRatio} onChange={(event) => patchRankedScore({ dailyDecayRatio: Number(event.target.value) })} /></label>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeSection === "accessControl") {
+      const patchAccessControl = (next: Partial<AppConfig["accessControl"]>) =>
+        patch({ accessControl: withAccessControlDefaults({ ...draft.accessControl, ...next }) });
+      return (
+        <div className="config-section admin-section-card">
+          <AdminSectionHeader title="新用户注册开关" subtitle="禁止新用户注册，防止批量注册攻击" />
+          <div className={draft.accessControl?.registrationDisabled ? "admin-preview-card admin-preview-card-warning" : "admin-preview-card"}>
+            <Toggle
+              label="禁止新用户注册"
+              value={!!draft.accessControl?.registrationDisabled}
+              onChange={(value) => patchAccessControl({ registrationDisabled: value })}
+            />
+            {draft.accessControl?.registrationDisabled ? <p>当前已禁止新用户注册，新玩家会看到「暂停新用户注册」提示，无法进入游戏。</p> : null}
+          </div>
+          <AdminSectionHeader title="指纹 + IP 限制策略" subtitle="按「出口 IP + 浏览器指纹」组合限流，仅用于防止用户自己多开。" />
           <div className="config-row">
             <label className="field-label">
               <span>同指纹同时在线人数上限</span>
@@ -4235,7 +4353,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                 min={1}
                 max={100}
                 value={draft.accessControl?.maxOnlinePerIp ?? ""}
-                onChange={(event) => patch({ accessControl: { ...(draft.accessControl || { maxOnlinePerIp: 3, maxCreatesPer10Min: 5 }), maxOnlinePerIp: Number(event.target.value) || 1 } })}
+                onChange={(event) => patchAccessControl({ maxOnlinePerIp: Number(event.target.value) || 1 })}
               />
             </label>
             <label className="field-label">
@@ -4245,11 +4363,91 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                 min={1}
                 max={200}
                 value={draft.accessControl?.maxCreatesPer10Min ?? ""}
-                onChange={(event) => patch({ accessControl: { ...(draft.accessControl || { maxOnlinePerIp: 3, maxCreatesPer10Min: 5 }), maxCreatesPer10Min: Number(event.target.value) || 1 } })}
+                onChange={(event) => patchAccessControl({ maxCreatesPer10Min: Number(event.target.value) || 1 })}
               />
             </label>
           </div>
-          <p className="hint">指纹由 FingerprintJS 在浏览器生成，与 IP 一起哈希为设备键。清除站点数据会换指纹；配置字段名仍为 maxOnlinePerIp / maxCreatesPer10Min（兼容旧配置）。</p>
+          <p className="hint">指纹由 FingerprintJS 在浏览器生成，与 IP 一起哈希为设备键。</p>
+          <AdminSectionHeader title="IP 限制策略" subtitle="按请求者 IP 限流，用于防止攻击者伪造浏览器指纹批量攻击。" />
+          <div className="config-row">
+            <label className="field-label">
+              <span>同 IP 同时在线人数上限</span>
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={draft.accessControl?.maxOnlinePerIpTotal ?? ""}
+                onChange={(event) => patchAccessControl({ maxOnlinePerIpTotal: Number(event.target.value) || 1 })}
+              />
+            </label>
+            <label className="field-label">
+              <span>同 IP 10 分钟内新建玩家上限</span>
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={draft.accessControl?.maxCreatesPerIp ?? ""}
+                onChange={(event) => patchAccessControl({ maxCreatesPerIp: Number(event.target.value) || 1 })}
+              />
+            </label>
+            <label className="field-label">
+              <span>同 IP 10 分钟内签发会话上限</span>
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={draft.accessControl?.maxSessionIssuePerIp ?? ""}
+                onChange={(event) => patchAccessControl({ maxSessionIssuePerIp: Number(event.target.value) || 1 })}
+              />
+            </label>
+          </div>
+          <div className="config-row">
+            <label className="field-label">
+              <span>单个操作的 IP 兜底倍数</span>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={draft.accessControl?.ipBackstopMultiplier ?? ""}
+                onChange={(event) => patchAccessControl({ ipBackstopMultiplier: Number(event.target.value) || 1 })}
+              />
+            </label>
+            <label className="field-label">
+              <span>IP 兜底最低下限（次/窗口）</span>
+              <input
+                type="number"
+                min={1}
+                max={1000}
+                value={draft.accessControl?.ipBackstopMinLimit ?? ""}
+                onChange={(event) => patchAccessControl({ ipBackstopMinLimit: Number(event.target.value) || 1 })}
+              />
+            </label>
+          </div>
+          <p className="hint">建房、出招、提交惩罚证明等每种操作各自的频率上限，会按这个倍数换算出一个「同一 IP 总量」上限（不管换了多少个会话/指纹），并保证不低于最低下限——这样即使脚本不断重新登录换身份，同一出口 IP 的总请求量仍会被卡住。</p>
+
+          <AdminSectionHeader title="房间与证明图片" subtitle="限制单个玩家同时占用房间数量、上传证明图片速率，防止恶意消耗服务器资源。" />
+          <div className="config-row">
+            <label className="field-label">
+              <span>单玩家同时开房数量上限</span>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={draft.accessControl?.maxActiveRoomsPerOwner ?? ""}
+                onChange={(event) => patchAccessControl({ maxActiveRoomsPerOwner: Number(event.target.value) || 1 })}
+              />
+            </label>
+            <label className="field-label">
+              <span>单玩家 10 分钟内证明图上传上限</span>
+              <input
+                type="number"
+                min={1}
+                max={200}
+                value={draft.accessControl?.maxProofUploadsPerPlayer ?? ""}
+                onChange={(event) => patchAccessControl({ maxProofUploadsPerPlayer: Number(event.target.value) || 1 })}
+              />
+            </label>
+          </div>
         </div>
       );
     }
@@ -4447,7 +4645,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                 <div className="admin-room" key={room.id}>
                   <div className="admin-card-title">
                     <strong>{room.name}</strong>
-                    <small>{room.code} · {roomStatusText(room.status)} · {room.players}/2 战斗席 · {room.spectators} 观战</small>
+                    <small>{room.id} · {roomStatusText(room.status)} · {room.players}/2 战斗席 · {room.spectators} 观战</small>
                   </div>
                   <div className="admin-action-row">
                     <button className="danger-button" onClick={() => action("closeRoom", { roomId: room.id })}>关闭房间</button>
@@ -4588,12 +4786,14 @@ export function AdminSectionHeader({ title, subtitle }: { title: string; subtitl
 export function AdminPlayerEditor({ player, onSave, onKick }: { player: PublicPlayer; onSave: (payload: Record<string, unknown>) => void; onKick: () => void }) {
   const [name, setName] = useState(player.name);
   const [rankedPoints, setRankedPoints] = useState(String(safePlayerStats(player).rankedPoints));
+  const [rankedPointsTouched, setRankedPointsTouched] = useState(false);
   const [title, setTitle] = useState(safePlayerStats(player).title);
 
   useEffect(() => {
     const stats = safePlayerStats(player);
     setName(player.name);
     setRankedPoints(String(stats.rankedPoints));
+    setRankedPointsTouched(false);
     setTitle(stats.title);
   }, [player.id, player.name, player.stats.rankedPoints, player.stats.title]);
 
@@ -4617,16 +4817,35 @@ export function AdminPlayerEditor({ player, onSave, onKick }: { player: PublicPl
         </label>
         <label className="field-label">
           <span>积分</span>
-          <input type="number" min={player.nameWarEnabled ? -1999 : -999} max={999} value={rankedPoints} onChange={(event) => setRankedPoints(event.target.value)} />
+          <input
+            type="number"
+            value={rankedPoints}
+            onChange={(event) => {
+              setRankedPoints(event.target.value);
+              setRankedPointsTouched(true);
+            }}
+          />
         </label>
         <label className="field-label">
           <span>称号</span>
           <input value={title} maxLength={18} onChange={(event) => setTitle(event.target.value)} />
         </label>
       </div>
-      <p className="hint">当前：{displayStats.rankedPoints} 分 · {player.nameWarPunished ? "性别/称号显示已隐藏" : `显示称号：${displayStats.title}`}</p>
+      <p className="hint">当前：{displayStats.rankedPoints} 分（按后台展示上下限封顶，真实存储分数可能更高或更低）· {player.nameWarPunished ? "性别/称号显示已隐藏" : `显示称号：${displayStats.title}`}</p>
       <div className="admin-action-row">
-        <button className="primary" onClick={() => onSave({ playerId: player.id, name, rankedPoints: Number(rankedPoints), title })}>保存玩家资料</button>
+        <button
+          className="primary"
+          onClick={() =>
+            onSave({
+              playerId: player.id,
+              name,
+              title,
+              ...(rankedPointsTouched ? { rankedPoints: Number(rankedPoints) } : {})
+            })
+          }
+        >
+          保存玩家资料
+        </button>
         <button className="danger-button" onClick={onKick}>踢出</button>
       </div>
     </div>

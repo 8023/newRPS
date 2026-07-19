@@ -6,7 +6,7 @@
 //	site.json, announcement-board.json, security-disclaimer.json, gender-factions.json,
 //	titles.json, punishments.json, player-punishment-room-name-pool.json, room-tags.json,
 //	room-info-tags.json, access-control.json, name-war.json, giveaway.json,
-//	extreme-mode.json, bots.json, games.json, messages.json
+//	extreme-mode.json, ranked-score.json, bots.json, games.json, messages.json
 package config
 
 import (
@@ -39,6 +39,7 @@ var splitConfigFiles = []string{
 	"name-war.json",
 	"giveaway.json",
 	"extreme-mode.json",
+	"ranked-score.json",
 	"bots.json",
 	"games.json",
 	"messages.json",
@@ -490,6 +491,12 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 		return input, fmt.Errorf("至少需要一个称号段位")
 	}
 	for _, segment := range input.Titles {
+		if segment.MinPercent < -100 || segment.MaxPercent > 100 {
+			return input, fmt.Errorf("%s 的百分比范围必须在 -100 到 100 之间", segment.ID)
+		}
+		if segment.MinPercent > segment.MaxPercent {
+			return input, fmt.Errorf("%s 的最小百分比不能大于最大百分比", segment.ID)
+		}
 		if len(segment.Names) == 0 {
 			return input, fmt.Errorf("%s 至少需要一个通用称号", segment.ID)
 		}
@@ -577,6 +584,9 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 	if strings.TrimSpace(input.NameWar.ExtremeForceClosedLabel) == "" {
 		return input, fmt.Errorf("极限强关标签不能为空")
 	}
+	if input.NameWar.PenaltyThreshold >= 0 {
+		return input, fmt.Errorf("名字争夺战失格分阈值必须为负数")
+	}
 	if strings.TrimSpace(input.Giveaway.PanelTitle) == "" {
 		return input, fmt.Errorf("白给模式面板标题不能为空")
 	}
@@ -631,11 +641,44 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 	if input.ExtremeMode.ForceRenameProtectHours < 1 {
 		return input, fmt.Errorf("极限强关改名保护小时至少为 1")
 	}
+	if input.RankedScore.Max < 1 {
+		return input, fmt.Errorf("排位分显示上限必须大于 0")
+	}
+	if input.RankedScore.Min >= 0 || input.RankedScore.Min >= input.RankedScore.Max {
+		return input, fmt.Errorf("排位分普通玩家显示下限必须为负且小于上限")
+	}
+	if input.RankedScore.NameWarMin > input.RankedScore.Min {
+		return input, fmt.Errorf("抢名大战显示下限不能高于普通玩家显示下限")
+	}
+	if input.RankedScore.DailyDecayRatio <= 0 || input.RankedScore.DailyDecayRatio > 1 {
+		return input, fmt.Errorf("每日衰减比例必须在 0（不含）到 1（含）之间")
+	}
 	if input.AccessControl.MaxOnlinePerIP < 1 {
 		return input, fmt.Errorf("同设备在线人数限制至少为 1")
 	}
 	if input.AccessControl.MaxCreatesPer10Min < 1 {
 		return input, fmt.Errorf("同设备 10 分钟新建玩家限制至少为 1")
+	}
+	if input.AccessControl.IPBackstopMultiplier < 1 {
+		return input, fmt.Errorf("IP 兜底限流倍数至少为 1")
+	}
+	if input.AccessControl.IPBackstopMinLimit < 1 {
+		return input, fmt.Errorf("IP 兜底限流最低下限至少为 1")
+	}
+	if input.AccessControl.MaxSessionIssuePerIP < 1 {
+		return input, fmt.Errorf("同 IP 10 分钟签发会话上限至少为 1")
+	}
+	if input.AccessControl.MaxOnlinePerIPTotal < 1 {
+		return input, fmt.Errorf("同 IP 在线人数上限至少为 1")
+	}
+	if input.AccessControl.MaxCreatesPerIP < 1 {
+		return input, fmt.Errorf("同 IP 10 分钟新建玩家上限至少为 1")
+	}
+	if input.AccessControl.MaxActiveRoomsPerOwner < 1 {
+		return input, fmt.Errorf("单玩家同时开房数量上限至少为 1")
+	}
+	if input.AccessControl.MaxProofUploadsPerPlayer < 1 {
+		return input, fmt.Errorf("同玩家 10 分钟证明图上传上限至少为 1")
 	}
 	if len(input.Bots.Names) == 0 || len(input.Bots.Difficulties) == 0 {
 		return input, fmt.Errorf("bot 名字和难度不能为空")
@@ -777,6 +820,7 @@ func readSplitConfig() (types.AppConfig, error) {
 		{"name-war.json", &cfg.NameWar},
 		{"giveaway.json", &cfg.Giveaway},
 		{"extreme-mode.json", &cfg.ExtremeMode},
+		{"ranked-score.json", &cfg.RankedScore},
 		{"bots.json", &cfg.Bots},
 		{"games.json", &cfg.Games},
 		{"messages.json", &cfg.Messages},
@@ -814,6 +858,7 @@ func writeSplitConfig(cfg types.AppConfig) error {
 		{"name-war.json", cfg.NameWar},
 		{"giveaway.json", cfg.Giveaway},
 		{"extreme-mode.json", cfg.ExtremeMode},
+		{"ranked-score.json", cfg.RankedScore},
 		{"bots.json", cfg.Bots},
 		{"games.json", cfg.Games},
 		{"messages.json", cfg.Messages},

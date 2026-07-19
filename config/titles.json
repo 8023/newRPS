@@ -1,8 +1,8 @@
 [
   {
     "id": "neg4",
-    "min": -999,
-    "max": -750,
+    "minPercent": -100,
+    "maxPercent": -75,
     "names": [
       "反向传奇",
       "倒霉拳王",
@@ -33,8 +33,8 @@
   },
   {
     "id": "neg3",
-    "min": -749,
-    "max": -500,
+    "minPercent": -75,
+    "maxPercent": -50,
     "names": [
       "失误专家",
       "惜败旅人",
@@ -65,8 +65,8 @@
   },
   {
     "id": "neg2",
-    "min": -499,
-    "max": -250,
+    "minPercent": -50,
+    "maxPercent": -25,
     "names": [
       "再来一局",
       "慢热选手",
@@ -97,8 +97,8 @@
   },
   {
     "id": "neg1",
-    "min": -249,
-    "max": -1,
+    "minPercent": -25,
+    "maxPercent": -0.01,
     "names": [
       "新手保护期",
       "粉蓝练习生",
@@ -129,8 +129,8 @@
   },
   {
     "id": "pos0",
-    "min": 0,
-    "max": 0,
+    "minPercent": 0,
+    "maxPercent": 0,
     "names": [
       "初心拳手",
       "轻松玩家",
@@ -161,8 +161,8 @@
   },
   {
     "id": "pos1",
-    "min": 1,
-    "max": 249,
+    "minPercent": 0.01,
+    "maxPercent": 25,
     "names": [
       "小有手感",
       "粉蓝上分中",
@@ -193,8 +193,8 @@
   },
   {
     "id": "pos2",
-    "min": 250,
-    "max": 499,
+    "minPercent": 25,
+    "maxPercent": 50,
     "names": [
       "稳定发挥",
       "剪刀灵感家",
@@ -225,8 +225,8 @@
   },
   {
     "id": "pos3",
-    "min": 500,
-    "max": 749,
+    "minPercent": 50,
+    "maxPercent": 75,
     "names": [
       "读心高手",
       "节奏大师",
@@ -257,8 +257,8 @@
   },
   {
     "id": "pos4",
-    "min": 750,
-    "max": 999,
+    "minPercent": 75,
+    "maxPercent": 100,
     "names": [
       "常胜拳王",
       "天选之手",

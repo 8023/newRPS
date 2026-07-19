@@ -94,13 +94,22 @@ type PunishmentTaskConfig struct {
 
 type PublicStats struct {
 	// Wins/Losses/Draws 为五游戏合计（由 GameStats 汇总），排行总榜直接读这里。
-	Wins           int    `json:"wins"`
-	Losses         int    `json:"losses"`
-	Draws          int    `json:"draws"`
-	Punishments    int    `json:"punishments"`
-	RankedPoints   int    `json:"rankedPoints"`
-	Title          string `json:"title"`
-	TitleSegmentID string `json:"titleSegmentId,omitempty"`
+	Wins         int `json:"wins"`
+	Losses       int `json:"losses"`
+	Draws        int `json:"draws"`
+	Punishments  int `json:"punishments"`
+	// RankedPoints/HighestScore/LowestScore：下发展示值（按 RankedScore 配置封顶）。
+	// 真实存储值见 Sort* 字段；排行榜排序必须用 Sort*，显示用本字段。
+	RankedPoints int `json:"rankedPoints"`
+	// HighestScore/LowestScore：历史最高/最低排位分的展示值（同样按展示上下限封顶）。
+	HighestScore int `json:"highestScore"`
+	LowestScore  int `json:"lowestScore"`
+	// Sort*：数据库/内存中的真实分，仅用于排行榜排序（显示仍用上面已封顶的字段）。
+	SortRankedPoints int    `json:"sortRankedPoints"`
+	SortHighestScore int    `json:"sortHighestScore"`
+	SortLowestScore  int    `json:"sortLowestScore"`
+	Title            string `json:"title"`
+	TitleSegmentID   string `json:"titleSegmentId,omitempty"`
 }
 
 // GameWLD 单游戏胜/负/平。
@@ -199,6 +208,7 @@ type PublicPlayer struct {
 	ExtremeModeCooldownUntil         *int64       `json:"extremeModeCooldownUntil,omitempty"`
 	ExtremeWinStreak                 *int         `json:"extremeWinStreak,omitempty"`
 	ExtremeLastDecayHour             *int64       `json:"extremeLastDecayHour,omitempty"`
+	RankedLastDecayDay               *int64       `json:"rankedLastDecayDay,omitempty"`
 	ExtremeForceClosed               *bool        `json:"extremeForceClosed,omitempty"`
 	ExtremeForceClosedAt             *int64       `json:"extremeForceClosedAt,omitempty"`
 	ExtremeRenameProtectedUntil      *int64       `json:"extremeRenameProtectedUntil,omitempty"`
@@ -221,17 +231,16 @@ type BotPlayer struct {
 // Encoded as json.RawMessage / any in snapshots.
 
 type ChatMessage struct {
-	ID           string        `json:"id"`
-	RoomID       string        `json:"roomId,omitempty"`
-	PlayerID     string        `json:"playerId"`
-	Author       string        `json:"author"`
-	AuthorPlayer *PublicPlayer `json:"authorPlayer,omitempty"`
-	AuthorRole   string        `json:"authorRole,omitempty"`
-	Text         string        `json:"text"`
-	At           int64         `json:"at"`
-	System       bool          `json:"system,omitempty"`
-	Transient    bool          `json:"transient,omitempty"`
-	ExpiresAt    *int64        `json:"expiresAt,omitempty"`
+	ID         string `json:"id"`
+	RoomID     string `json:"roomId,omitempty"`
+	PlayerID   string `json:"playerId"`
+	Author     string `json:"author"`
+	AuthorRole string `json:"authorRole,omitempty"`
+	Text       string `json:"text"`
+	At         int64  `json:"at"`
+	System     bool   `json:"system,omitempty"`
+	Transient  bool   `json:"transient,omitempty"`
+	ExpiresAt  *int64 `json:"expiresAt,omitempty"`
 	// Mentions：被 @ 的玩家 public id 列表；前端据此在 me.id 命中时高亮气泡。
 	Mentions []string `json:"mentions,omitempty"`
 	// Seq：SQLite 自增序号，仅出站聊天用作分页游标；系统消息为 0。
@@ -274,6 +283,8 @@ type RoomSettings struct {
 	GomokuBoardTheme       string         `json:"gomokuBoardTheme,omitempty"`
 	LiarsDiceMinPlayers    int            `json:"liarsDiceMinPlayers,omitempty"`
 	LiarsDiceMaxPlayers    int            `json:"liarsDiceMaxPlayers,omitempty"`
+	// 合法取值含 0（禁止悔棋），不能用 omitempty，否则 0 会被当成"未设置"丢失
+	GomokuUndoLimit int `json:"gomokuUndoLimit"`
 }
 
 type PunishmentProof struct {
@@ -505,7 +516,6 @@ type LiarsDiceState struct {
 
 type RoomSnapshot struct {
 	ID                string                `json:"id"`
-	Code              string                `json:"code"`
 	UpdatedAt         int64                 `json:"updatedAt"`
 	Settings          RoomSettings          `json:"settings"`
 	Status            string                `json:"status"`
@@ -550,7 +560,6 @@ type ServerStats struct {
 type LobbyRoomInfo struct {
 	ID                     string          `json:"id"`
 	GameID                 GameID          `json:"gameId"`
-	Code                   string          `json:"code"`
 	Name                   string          `json:"name"`
 	HasPassword            bool            `json:"hasPassword"`
 	Players                int             `json:"players"`
@@ -587,10 +596,15 @@ type LobbySnapshot struct {
 	ServerStats       ServerStats              `json:"serverStats"`
 }
 
+// TitleSegment 称号分段：按排位分相对展示上下限的百分比划分（-100%～100%）。
+// 正分百分比 = rankedPoints / RankedScore.Max * 100；
+// 负分百分比 = rankedPoints / |RankedScore.Min| * 100（结果为负）；
+// 0 分单独匹配 MinPercent=MaxPercent=0 的段。
+// 这样改展示上下限时称号分段自动缩放，不必改 titles.json 的绝对分值。
 type TitleSegment struct {
 	ID           string              `json:"id"`
-	Min          int                 `json:"min"`
-	Max          int                 `json:"max"`
+	MinPercent   float64             `json:"minPercent"`
+	MaxPercent   float64             `json:"maxPercent"`
 	Names        []string            `json:"names"`
 	FactionNames map[string][]string `json:"factionNames,omitempty"`
 }
@@ -648,6 +662,16 @@ type ExtremeModeConfig struct {
 	ForceRenameProtectHours int                `json:"forceRenameProtectHours,omitempty"`
 }
 
+// RankedScoreConfig 排位分「展示」上下限与每日衰减比例。
+// 存储在数据库里的真实 RankedPoints 永远不设上下限；这里的 Max/Min/NameWarMin
+// 只影响下发给客户端（大厅/房间/个人资料/排行榜）时的封顶显示值。
+type RankedScoreConfig struct {
+	Max             int     `json:"max"`
+	Min             int     `json:"min"`
+	NameWarMin      int     `json:"nameWarMin"`
+	DailyDecayRatio float64 `json:"dailyDecayRatio"`
+}
+
 type AppConfig struct {
 	Site struct {
 		Name          string `json:"name"`
@@ -666,6 +690,19 @@ type AppConfig struct {
 	AccessControl                struct {
 		MaxOnlinePerIP     int `json:"maxOnlinePerIp"`
 		MaxCreatesPer10Min int `json:"maxCreatesPer10Min"`
+		// 以下字段是纯 IP 维度（不依赖客户端可伪造的浏览器指纹）的兜底上限，
+		// 用于防止"每次请求都换指纹/换 session"绕过上面两项按指纹计算的限制。
+		IPBackstopMultiplier     int `json:"ipBackstopMultiplier"`
+		IPBackstopMinLimit       int `json:"ipBackstopMinLimit"`
+		MaxSessionIssuePerIP     int `json:"maxSessionIssuePerIp"`
+		MaxOnlinePerIPTotal      int `json:"maxOnlinePerIpTotal"`
+		MaxCreatesPerIP          int `json:"maxCreatesPerIp"`
+		MaxActiveRoomsPerOwner   int `json:"maxActiveRoomsPerOwner"`
+		MaxProofUploadsPerPlayer int `json:"maxProofUploadsPerPlayer"`
+		// RegistrationDisabled：勾选后拒绝一切新建玩家（player:join 时 player==nil 的分支），
+		// 但已有 PlayerID+PlayerSecret 的老用户仍可正常登录游玩——用于批量注册攻击时先止血，
+		// 再人工排查/封禁具体的恶意老用户。
+		RegistrationDisabled bool `json:"registrationDisabled"`
 	} `json:"accessControl"`
 	NameWar struct {
 		PenaltyPrefix           string `json:"penaltyPrefix"`
@@ -674,6 +711,9 @@ type AppConfig struct {
 		RenamePanelTitle        string `json:"renamePanelTitle,omitempty"`
 		NameWarLoserLabel       string `json:"nameWarLoserLabel,omitempty"`
 		ExtremeForceClosedLabel string `json:"extremeForceClosedLabel,omitempty"`
+		// PenaltyThreshold：真实排位分 ≤ 此值时进入名争失格（显示惩罚名、可被改名）。
+		// 默认 -4999；按真实存储分判定，不受展示封顶影响。
+		PenaltyThreshold int `json:"penaltyThreshold"`
 	} `json:"nameWar"`
 	Giveaway struct {
 		PanelTitle        string `json:"panelTitle"`
@@ -682,6 +722,7 @@ type AppConfig struct {
 		EmptyText         string `json:"emptyText"`
 	} `json:"giveaway"`
 	ExtremeMode ExtremeModeConfig `json:"extremeMode"`
+	RankedScore RankedScoreConfig `json:"rankedScore"`
 	Bots        struct {
 		Names        []string              `json:"names"`
 		Difficulties []BotDifficultyConfig `json:"difficulties"`

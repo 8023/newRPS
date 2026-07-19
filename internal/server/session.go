@@ -110,6 +110,22 @@ func rateLimitKey(event, ipAddress, sid string) string {
 	return event + ":" + ipAddress + ":" + sid
 }
 
+// checkIPEventBackstop 是纯 IP 维度的粗粒度兜底桶，与 rateLimitKey 的 event:ip:sid 桶并行生效。
+// sid 可以免费换发（/api/session 无限重新签发新 token），单靠 event:ip:sid 会被"每次换 sid"绕过；
+// 这层桶按 opts.Limit 的倍数（AccessControl.IPBackstopMultiplier，设下限 IPBackstopMinLimit）钉死
+// 同一 IP 在同一窗口内的总请求量，不受 sid/指纹更换影响。
+func (s *Server) checkIPEventBackstop(event, ipAddress string, opts RateLimitOptions) bool {
+	if opts.Limit <= 0 {
+		return true
+	}
+	limit := opts.Limit * s.cfg.AccessControl.IPBackstopMultiplier
+	if limit < s.cfg.AccessControl.IPBackstopMinLimit {
+		limit = s.cfg.AccessControl.IPBackstopMinLimit
+	}
+	backstop := RateLimitOptions{Limit: limit, WindowMs: opts.WindowMs, CooldownMs: opts.CooldownMs}
+	return s.checkRateLimit(event+":ipcap:"+ipAddress, backstop)
+}
+
 func (s *Server) consumeRateLimit(key string, windowMs int64, max int) bool {
 	now := nowMs()
 	if s.rateLimitBuckets == nil {
@@ -162,6 +178,18 @@ func (s *Server) pruneEphemeralState() {
 		}
 		if !fresh {
 			delete(s.deviceCreateAttempts, k)
+		}
+	}
+	for k, attempts := range s.ipCreateAttempts {
+		fresh := false
+		for _, t := range attempts {
+			if now-t < idleMs {
+				fresh = true
+				break
+			}
+		}
+		if !fresh {
+			delete(s.ipCreateAttempts, k)
 		}
 	}
 }

@@ -44,7 +44,6 @@ CREATE TABLE IF NOT EXISTS lobby_messages (
 	author_role   TEXT,
 	text          TEXT,
 	mentions      TEXT,
-	author_player TEXT,
 	at            INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_lobby_seq ON lobby_messages(seq);
@@ -57,7 +56,6 @@ CREATE TABLE IF NOT EXISTS room_messages (
 	author_role   TEXT,
 	text          TEXT,
 	mentions      TEXT,
-	author_player TEXT,
 	at            INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_room_seq ON room_messages(room_id, seq);
@@ -109,28 +107,6 @@ func decodeMentions(raw string) []string {
 	return out
 }
 
-func encodeAuthorPlayer(p *types.PublicPlayer) string {
-	if p == nil {
-		return ""
-	}
-	b, err := json.Marshal(p)
-	if err != nil {
-		return ""
-	}
-	return string(b)
-}
-
-func decodeAuthorPlayer(raw string) *types.PublicPlayer {
-	if raw == "" {
-		return nil
-	}
-	var p types.PublicPlayer
-	if err := json.Unmarshal([]byte(raw), &p); err != nil {
-		return nil
-	}
-	return &p
-}
-
 // append 写入一条聊天并回填 seq；roomID 为空写大厅表，否则写房间表。
 func (c *chatStore) append(roomID string, msg types.ChatMessage) (int64, error) {
 	if c == nil || c.db == nil {
@@ -144,17 +120,17 @@ func (c *chatStore) append(roomID string, msg types.ChatMessage) (int64, error) 
 	)
 	if roomID == "" {
 		res, err = c.db.Exec(
-			`INSERT INTO lobby_messages (id, player_id, author, author_role, text, mentions, author_player, at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO lobby_messages (id, player_id, author, author_role, text, mentions, at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
 			msg.ID, msg.PlayerID, msg.Author, msg.AuthorRole, msg.Text,
-			encodeMentions(msg.Mentions), encodeAuthorPlayer(msg.AuthorPlayer), msg.At,
+			encodeMentions(msg.Mentions), msg.At,
 		)
 	} else {
 		res, err = c.db.Exec(
-			`INSERT INTO room_messages (room_id, id, player_id, author, author_role, text, mentions, author_player, at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO room_messages (room_id, id, player_id, author, author_role, text, mentions, at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			roomID, msg.ID, msg.PlayerID, msg.Author, msg.AuthorRole, msg.Text,
-			encodeMentions(msg.Mentions), encodeAuthorPlayer(msg.AuthorPlayer), msg.At,
+			encodeMentions(msg.Mentions), msg.At,
 		)
 	}
 	if err != nil {
@@ -187,21 +163,21 @@ func (c *chatStore) older(roomID string, beforeSeq int64, limit int) ([]types.Ch
 	if roomID == "" {
 		if beforeSeq > 0 {
 			rows, err = c.db.Query(
-				`SELECT seq, id, player_id, author, author_role, text, mentions, author_player, at
+				`SELECT seq, id, player_id, author, author_role, text, mentions, at
 				 FROM lobby_messages WHERE seq < ? ORDER BY seq DESC LIMIT ?`, beforeSeq, fetch)
 		} else {
 			rows, err = c.db.Query(
-				`SELECT seq, id, player_id, author, author_role, text, mentions, author_player, at
+				`SELECT seq, id, player_id, author, author_role, text, mentions, at
 				 FROM lobby_messages ORDER BY seq DESC LIMIT ?`, fetch)
 		}
 	} else {
 		if beforeSeq > 0 {
 			rows, err = c.db.Query(
-				`SELECT seq, id, player_id, author, author_role, text, mentions, author_player, at
+				`SELECT seq, id, player_id, author, author_role, text, mentions, at
 				 FROM room_messages WHERE room_id = ? AND seq < ? ORDER BY seq DESC LIMIT ?`, roomID, beforeSeq, fetch)
 		} else {
 			rows, err = c.db.Query(
-				`SELECT seq, id, player_id, author, author_role, text, mentions, author_player, at
+				`SELECT seq, id, player_id, author, author_role, text, mentions, at
 				 FROM room_messages WHERE room_id = ? ORDER BY seq DESC LIMIT ?`, roomID, fetch)
 		}
 	}
@@ -213,16 +189,14 @@ func (c *chatStore) older(roomID string, beforeSeq int64, limit int) ([]types.Ch
 	var desc []types.ChatMessage
 	for rows.Next() {
 		var (
-			m         types.ChatMessage
-			mentions  string
-			authorRaw string
+			m        types.ChatMessage
+			mentions string
 		)
-		if err := rows.Scan(&m.Seq, &m.ID, &m.PlayerID, &m.Author, &m.AuthorRole, &m.Text, &mentions, &authorRaw, &m.At); err != nil {
+		if err := rows.Scan(&m.Seq, &m.ID, &m.PlayerID, &m.Author, &m.AuthorRole, &m.Text, &mentions, &m.At); err != nil {
 			return nil, false, err
 		}
 		m.RoomID = roomID
 		m.Mentions = decodeMentions(mentions)
-		m.AuthorPlayer = decodeAuthorPlayer(authorRaw)
 		desc = append(desc, m)
 	}
 	if err := rows.Err(); err != nil {

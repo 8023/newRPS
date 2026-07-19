@@ -187,7 +187,7 @@ func TestLobbyHasPasswordStillPresent(t *testing.T) {
 		Players:     map[string]types.LobbyPlayer{},
 		Rooms: map[string]types.LobbyRoomInfo{
 			"r1": {
-				ID: "r1", Code: "ABC", Name: "密房", HasPassword: true,
+				ID: "r1", Name: "密房", HasPassword: true,
 				Versus: map[types.SeatKey]any{types.SeatA: nil, types.SeatB: nil},
 				Tags:   []string{},
 			},

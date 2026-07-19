@@ -17,6 +17,11 @@ import (
 // 旧版玩家档案 players.json：启动时 loadPlayersFromDisk 会幂等导入后改名为 players.json.migrated。
 // WAL 模式下未 checkpoint 的最新数据在 -wal 边车文件里，必须连 -shm/-wal 一起搬，
 // 否则只搬主文件会把最近一批还没落盘的聊天记录留在旧文件名下，等于丢数据。
+//
+// 建表/建索引/结构升级都交给 ensureSchema（见 schema_migrations.go）：数据库里有一张
+// schema_version 表记录当前结构版本，和代码里的 currentSchemaVersion 比对，版本落后
+// 就顺序跑 migrations 里显式写好的升级步骤（加列/改列/搬数据），而不是靠"建索引时
+// 报错"去反推该怎么改。
 func openDatabase(dataDir string) (*sql.DB, error) {
 	path := filepath.Join(dataDir, "database.db")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -37,11 +42,18 @@ func openDatabase(dataDir string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := db.Exec(chatSchema + roomEventSchema + punishmentEventSchema + pushSubscriptionSchema + playerSchema); err != nil {
+	if err := ensureSchema(db); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("database schema: %w", err)
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 	return db, nil
+}
+
+// allSchemas 是每个 store 各自维护的一段建表 DDL（CREATE TABLE/INDEX IF NOT EXISTS），
+// 顺序无关紧要——彼此互不引用。始终反映"当前代码期望的最新结构"；已有数据库从旧结构
+// 升到这个结构靠 schema_migrations.go 里的 migrations，不靠改这里的 DDL 文本本身。
+var allSchemas = []string{
+	chatSchema, roomEventSchema, punishmentEventSchema, pushSubscriptionSchema, playerSchema, activityEventSchema,
 }

@@ -4,5 +4,6 @@
   "escapeTitle": "逃跑的人",
   "renamePanelTitle": "通用改名处",
   "nameWarLoserLabel": "名争失格",
-  "extremeForceClosedLabel": "极限强关"
+  "extremeForceClosedLabel": "极限强关",
+  "penaltyThreshold": -4999
 }

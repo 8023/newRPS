@@ -81,10 +81,9 @@ func TestChatStoreRoomIsolationAndMentions(t *testing.T) {
 	}
 	defer store.Close()
 
-	pub := &types.PublicPlayer{ID: "pX", Name: "小红"}
 	if _, err := store.append("roomA", types.ChatMessage{
 		ID: "m1", PlayerID: "pX", Author: "小红", Text: "hi @小明", At: 1,
-		Mentions: []string{"pMing"}, AuthorPlayer: pub,
+		Mentions: []string{"pMing"},
 	}); err != nil {
 		t.Fatalf("append roomA: %v", err)
 	}
@@ -96,16 +95,13 @@ func TestChatStoreRoomIsolationAndMentions(t *testing.T) {
 	if len(lobby) != 0 {
 		t.Fatalf("lobby should be empty, got %d", len(lobby))
 	}
-	// roomA 只有 1 条，且 mentions/authorPlayer 正确回读
+	// roomA 只有 1 条，且 mentions 正确回读
 	roomA, _, _ := store.recent("roomA", 100)
 	if len(roomA) != 1 {
 		t.Fatalf("roomA len = %d, want 1", len(roomA))
 	}
 	if len(roomA[0].Mentions) != 1 || roomA[0].Mentions[0] != "pMing" {
 		t.Fatalf("mentions not round-tripped: %#v", roomA[0].Mentions)
-	}
-	if roomA[0].AuthorPlayer == nil || roomA[0].AuthorPlayer.Name != "小红" {
-		t.Fatalf("authorPlayer not round-tripped: %#v", roomA[0].AuthorPlayer)
 	}
 	// clearRoom 只清指定房间
 	if err := store.clearRoom("roomA"); err != nil {

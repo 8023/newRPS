@@ -1,7 +1,6 @@
 package server
 
 import (
-	crand "crypto/rand"
 	"fmt"
 	mrand "math/rand"
 	"strings"
@@ -16,26 +15,16 @@ const (
 	defaultGomokuRoomName    = "新的五子棋房间"
 )
 
-func (s *Server) roomCode() string {
-	for {
-		b := make([]byte, 3)
-		_, _ = randRead(b)
-		code := fmt.Sprintf("DM-%s", strings.ToUpper(fmt.Sprintf("%x", b)[:4]))
-		exists := false
-		for _, room := range s.rooms {
-			if room.Code == code {
-				exists = true
-				break
-			}
-		}
-		if !exists {
-			return code
+// activeRoomsOwnedBy 统计某玩家当前存活（未关闭，s.rooms 里还在）的房间数，
+// 用于限制单玩家同时开着的房间数量——房间创建频率限流本身不限制"攒了多少个不关"。
+func (s *Server) activeRoomsOwnedBy(playerID string) int {
+	n := 0
+	for _, room := range s.rooms {
+		if room.OwnerID == playerID {
+			n++
 		}
 	}
-}
-
-func randRead(b []byte) (int, error) {
-	return cryptoRandRead(b)
+	return n
 }
 
 func (s *Server) seatOf(room *RoomState, playerID string) (types.SeatKey, bool) {
@@ -94,7 +83,7 @@ func (s *Server) cleanupRoomIfEmpty(room *RoomState) bool {
 	s.dropSyncChannel(channelRoom(room.ID))
 	delete(s.rooms, room.ID)
 	if s.eventDB != nil {
-		if err := s.eventDB.closeRoom(room.ID, nowMs(), "empty_cleanup"); err != nil {
+		if err := s.eventDB.insertClosedRoom(room.ID, room.Settings.Name, string(room.Settings.GameID), room.OwnerID, room.CreatorName, room.CreatedAt, nowMs(), "empty_cleanup"); err != nil {
 			s.errorLog("room_event_close_failed", err.Error())
 		}
 	}
@@ -186,7 +175,6 @@ func (s *Server) roomSnapshot(room *RoomState, includeChat, includeHistory bool)
 	choices := s.hideOpponentChoices(room)
 	snap := types.RoomSnapshot{
 		ID:                room.ID,
-		Code:              room.Code,
 		UpdatedAt:         room.UpdatedAt,
 		Settings:          publicRoomSettings(room.Settings),
 		Status:            room.Status,
@@ -661,8 +649,4 @@ func (s *Server) createDisconnectForfeit(room *RoomState, player *PlayerState) {
 		BaseStake:      room.Settings.Stake,
 		RankMultiplier: rankMultiplierFor(room.Settings),
 	}
-}
-
-func cryptoRandRead(b []byte) (int, error) {
-	return crand.Read(b)
 }
