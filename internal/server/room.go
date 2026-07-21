@@ -79,6 +79,8 @@ func (s *Server) cleanupRoomIfEmpty(room *RoomState) bool {
 	s.clearTicTacToeGiveawayTimer(room.ID)
 	s.clearGomokuUndoTimer(room.ID)
 	s.clearLiarsDiceStartTimer(room.ID)
+	s.clearOthelloClockTimer(room.ID)
+	s.clearGomokuClockTimer(room.ID)
 	s.clearRoomBroadcastTimer(room.ID)
 	s.dropSyncChannel(channelRoom(room.ID))
 	delete(s.rooms, room.ID)

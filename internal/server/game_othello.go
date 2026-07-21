@@ -212,6 +212,7 @@ func (s *Server) clearOthelloSettlementTimer(roomID string) {
 
 func (s *Server) resetOthelloRoom(room *RoomState) {
 	s.clearOthelloSettlementTimer(room.ID)
+	s.clearOthelloClockTimer(room.ID)
 	room.Othello = nil
 	s.resetTurnBasedRoom(room)
 }
@@ -223,6 +224,115 @@ func (s *Server) startOthelloRoom(room *RoomState) {
 	blackSeat := randomSeat()
 	s.startTurnBasedPlaying(room)
 	room.Othello = s.freshOthelloState(blackSeat)
+	s.armOthelloTimers(room, blackSeat)
+}
+
+// ── 每子时长 / 每局时长（超时判负）──────────────────────
+
+func (s *Server) clearOthelloClockTimer(roomID string) {
+	if t := s.othelloClockTimers[roomID]; t != nil {
+		t.Stop()
+		delete(s.othelloClockTimers, roomID)
+	}
+}
+
+// freezeOthelloClock 把 seat 当前正在走动的总时长时钟冻结为静态剩余值（毫秒），供离场/换手时调用。
+func (s *Server) freezeOthelloClock(room *RoomState, seat types.SeatKey) {
+	if room.Othello == nil || room.Othello.ClockRemaining == nil {
+		return
+	}
+	if room.Othello.ClockDeadlineAt > 0 {
+		remaining := room.Othello.ClockDeadlineAt - nowMs()
+		if remaining < 0 {
+			remaining = 0
+		}
+		room.Othello.ClockRemaining[seat] = remaining
+	}
+	room.Othello.ClockDeadlineAt = 0
+}
+
+// pauseOthelloTimers：进入白给/上贡结算等待窗口时暂停两个计时器——该窗口已有自己独立的超时机制
+// （scheduleOthelloSettlement），避免和每子/每局计时器重复判负。
+func (s *Server) pauseOthelloTimers(room *RoomState, seat types.SeatKey) {
+	if room.Othello == nil {
+		return
+	}
+	s.freezeOthelloClock(room, seat)
+	room.Othello.MoveDeadlineAt = 0
+	s.clearOthelloClockTimer(room.ID)
+}
+
+// armOthelloTimers 在真正轮到 seat 落子时重新起算每子倒计时/总时长时钟，并重排服务端超时检测。
+func (s *Server) armOthelloTimers(room *RoomState, seat types.SeatKey) {
+	if room.Othello == nil {
+		return
+	}
+	if room.Settings.OthelloMoveSeconds > 0 {
+		room.Othello.MoveDeadlineAt = nowMs() + int64(room.Settings.OthelloMoveSeconds)*1000
+	} else {
+		room.Othello.MoveDeadlineAt = 0
+	}
+	if room.Settings.OthelloGameMinutes > 0 {
+		if room.Othello.ClockRemaining == nil {
+			total := int64(room.Settings.OthelloGameMinutes) * 60_000
+			room.Othello.ClockRemaining = map[types.SeatKey]int64{types.SeatA: total, types.SeatB: total}
+		}
+		room.Othello.ClockDeadlineAt = nowMs() + room.Othello.ClockRemaining[seat]
+	} else {
+		room.Othello.ClockDeadlineAt = 0
+	}
+	s.scheduleOthelloClockTimer(room)
+}
+
+func (s *Server) scheduleOthelloClockTimer(room *RoomState) {
+	s.clearOthelloClockTimer(room.ID)
+	if room.Othello == nil || room.Othello.Ended {
+		return
+	}
+	deadline := earliestPositiveDeadline(room.Othello.MoveDeadlineAt, room.Othello.ClockDeadlineAt)
+	if deadline == 0 {
+		return
+	}
+	delay := deadline - nowMs()
+	if delay < 0 {
+		delay = 0
+	}
+	seat := room.Othello.Turn
+	roomID := room.ID
+	timer := timeAfterFunc(time.Duration(delay)*time.Millisecond, func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		delete(s.othelloClockTimers, roomID)
+		current := s.rooms[roomID]
+		if current == nil || current.Othello == nil || current.Othello.Ended {
+			return
+		}
+		if current.Othello.Turn != seat || current.Othello.PendingSettlement != nil {
+			return
+		}
+		now := nowMs()
+		moveExpired := current.Othello.MoveDeadlineAt > 0 && now >= current.Othello.MoveDeadlineAt
+		clockExpired := current.Othello.ClockDeadlineAt > 0 && now >= current.Othello.ClockDeadlineAt
+		if !moveExpired && !clockExpired {
+			s.scheduleOthelloClockTimer(current)
+			return
+		}
+		s.forfeitOthelloTimeout(current, seat)
+		s.broadcastRoom(current.ID, true)
+	})
+	s.othelloClockTimers[room.ID] = timer
+}
+
+func (s *Server) forfeitOthelloTimeout(room *RoomState, loserSeat types.SeatKey) {
+	winnerSeat := oppositeSeat(loserSeat)
+	loserName := occupantName(room.Seats[loserSeat])
+	winnerName := occupantName(room.Seats[winnerSeat])
+	s.forceEndOthelloGame(room, types.RoundResult(winnerSeat), forceOthelloOpts{
+		Label:              fmt.Sprintf("%s超时判负，%s胜利", loserName, winnerName),
+		HistoryNote:        "超时判负",
+		Notice:             fmt.Sprintf("%s 用时已到，本局判负。", loserName),
+		ForfeitRankedFloor: true,
+	})
 }
 
 func (s *Server) scheduleOthelloReadyStart(room *RoomState) {
@@ -456,6 +566,7 @@ func (s *Server) advanceOthelloTurn(room *RoomState, nextTurn types.SeatKey, pas
 		room.Othello.BlackCount = bc
 		room.Othello.WhiteCount = wc
 		room.ResultText = ""
+		s.armOthelloTimers(room, nextTurn)
 		s.notifyOpponentTurn(room, nextTurn)
 		return
 	}
@@ -478,6 +589,7 @@ func (s *Server) advanceOthelloTurn(room *RoomState, nextTurn types.SeatKey, pas
 	room.Othello.PassCount = passCount + 1
 	room.Othello.BlackCount = bc
 	room.Othello.WhiteCount = wc
+	s.armOthelloTimers(room, fallbackTurn)
 	s.notifyOpponentTurn(room, fallbackTurn)
 }
 
@@ -499,6 +611,7 @@ func (s *Server) applyOthelloMove(room *RoomState, seat types.SeatKey, row, col 
 	if len(flips) == 0 {
 		return false, "这个位置不能落子"
 	}
+	s.pauseOthelloTimers(room, seat)
 	board := cloneOthelloBoard(room.Othello.Board)
 	c := color
 	board[row][col] = &c
@@ -601,6 +714,7 @@ func (s *Server) finishOthelloGame(room *RoomState) {
 		return
 	}
 	s.clearOthelloSettlementTimer(room.ID)
+	s.clearOthelloClockTimer(room.ID)
 	blackCount, whiteCount := othelloCounts(room.Othello.Board)
 	blackSeat := room.Othello.BlackSeat
 	whiteSeat := oppositeSeat(blackSeat)
@@ -673,6 +787,7 @@ func (s *Server) forceEndOthelloGame(room *RoomState, result types.RoundResult, 
 		return false, "当前黑白棋对局已经结束"
 	}
 	s.clearOthelloSettlementTimer(room.ID)
+	s.clearOthelloClockTimer(room.ID)
 	blackCount, whiteCount := othelloCounts(room.Othello.Board)
 	punishedPlayers := s.punishmentPlayersForResult(room, result)
 	punishedNames := make([]string, len(punishedPlayers))
@@ -769,12 +884,12 @@ func (s *Server) forceEndOthelloGame(room *RoomState, result types.RoundResult, 
 }
 
 type forceOthelloOpts struct {
-	Label               string
-	HistoryNote         string
-	Notice              string
-	ForfeitRankedFloor  bool
-	EscapePenaltyRatio  float64
-	EscapePenaltyLabel  string
+	Label              string
+	HistoryNote        string
+	Notice             string
+	ForfeitRankedFloor bool
+	EscapePenaltyRatio float64
+	EscapePenaltyLabel string
 }
 
 func (s *Server) applyOthelloDisconnectForfeit(room *RoomState, forfeit DisconnectForfeit) bool {
@@ -782,6 +897,7 @@ func (s *Server) applyOthelloDisconnectForfeit(room *RoomState, forfeit Disconne
 	if room.Phase == types.PhaseResult || (room.Othello != nil && room.Othello.Ended) {
 		return true
 	}
+	s.clearOthelloClockTimer(room.ID)
 	winner := s.players[forfeit.WinnerID]
 	loser := s.players[forfeit.LoserID]
 	blackCount, whiteCount := 0, 0
@@ -846,7 +962,7 @@ func (s *Server) applyOthelloDisconnectForfeit(room *RoomState, forfeit Disconne
 		Result: types.RoundResult(forfeit.WinnerSeat), ResultLabel: forfeit.WinnerName + "胜利",
 		ResultText: room.ResultText + "（断线判负）", GameID: types.GameOthello,
 		OthelloScore: &types.OthelloScore{Black: blackCount, White: whiteCount},
-		Ranked: room.Settings.EnableRanked, ExtremeRanked: room.Settings.EnableExtremeRanked,
+		Ranked:       room.Settings.EnableRanked, ExtremeRanked: room.Settings.EnableExtremeRanked,
 		PunishmentTasks: punishmentTasks, PunishedNames: punishedNames, Proofs: []types.HistoryProof{},
 	}
 	if room.Othello != nil {

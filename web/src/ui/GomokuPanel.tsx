@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import type { PublicPlayer, RoomSnapshot, RoomSettings, SeatKey } from "../shared/types";
 import { gomokuBoardThemes } from "../lib/constants";
 import { ask } from "../lib/rpc";
-import { occupantDisplay } from "./AppViews";
+import { GameClockBar, occupantDisplay } from "./AppViews";
 
 const isTouchDevice = typeof window !== "undefined" && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
 
@@ -193,6 +193,7 @@ export function GomokuPanel({ room, me, now, onError }: { room: RoomSnapshot; me
           )}
         </div>
       )}
+      <GameClockBar room={room} state={state} moveSeconds={room.settings.gomokuMoveSeconds} gameMinutes={room.settings.gomokuGameMinutes} now={now} />
       <div className="gomoku-board" role="grid" aria-label="五子棋棋盘" style={boardTheme}>
         {(state?.board || Array.from({ length: 15 }, () => Array.from({ length: 15 }, () => null))).map((row, rowIndex) => row.map((cell, colIndex) => {
           const key = `${rowIndex}-${colIndex}`;

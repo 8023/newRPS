@@ -23,11 +23,11 @@ func newTestServer(t *testing.T) *Server {
 func TestIsSameDevice(t *testing.T) {
 	cases := []struct {
 		recorded, incoming string
-		want                bool
+		want               bool
 	}{
 		{"deviceA", "deviceA", true},
 		{"deviceA", "deviceB", false},
-		{"", "", false},   // 空值不算"同设备"，宁可多确认一次也不要静默放行
+		{"", "", false}, // 空值不算"同设备"，宁可多确认一次也不要静默放行
 		{"", "deviceB", false},
 		{"deviceA", "", false},
 	}
@@ -42,10 +42,10 @@ func TestNeedsKickConfirm(t *testing.T) {
 	cases := []struct {
 		sameDevice, forceKick, want bool
 	}{
-		{sameDevice: true, forceKick: false, want: false},  // 同设备刷新：永不确认
-		{sameDevice: true, forceKick: true, want: false},   // 同设备 + forceKick：依然不需要（forceKick 无害）
-		{sameDevice: false, forceKick: false, want: true},  // 换设备、未确认：必须先确认
-		{sameDevice: false, forceKick: true, want: false},  // 换设备、已确认：放行
+		{sameDevice: true, forceKick: false, want: false}, // 同设备刷新：永不确认
+		{sameDevice: true, forceKick: true, want: false},  // 同设备 + forceKick：依然不需要（forceKick 无害）
+		{sameDevice: false, forceKick: false, want: true}, // 换设备、未确认：必须先确认
+		{sameDevice: false, forceKick: true, want: false}, // 换设备、已确认：放行
 	}
 	for _, c := range cases {
 		if got := needsKickConfirm(c.sameDevice, c.forceKick); got != c.want {
@@ -112,27 +112,10 @@ func TestVerifyPlayerSecretModernList(t *testing.T) {
 	}
 }
 
-func TestVerifyPlayerSecretLegacyMigration(t *testing.T) {
-	s := newTestServer(t)
-	p := &PlayerState{PlayerSecretHash: hashSecret("legacy-secret")}
-	if len(p.PlayerSecrets) != 0 {
-		t.Fatalf("precondition: should start with no modern secrets")
-	}
-	if !s.verifyPlayerSecret(p, "legacy-secret") {
-		t.Fatalf("should verify against legacy hash and auto-migrate")
-	}
-	if !p.hasPlayerSecret("legacy-secret") {
-		t.Fatalf("legacy secret should have been migrated into PlayerSecrets")
-	}
-	// 第二次验证应该直接走新列表命中，不再需要哈希兜底
-	if !s.verifyPlayerSecret(p, "legacy-secret") {
-		t.Fatalf("should still verify on second call via modern list")
-	}
-}
-
 func TestVerifyPlayerSecretRejectsGarbage(t *testing.T) {
 	s := newTestServer(t)
-	p := &PlayerState{PlayerSecretHash: hashSecret("real")}
+	p := &PlayerState{}
+	p.addPlayerSecret("real")
 	if s.verifyPlayerSecret(p, "fake") {
 		t.Fatalf("should reject non-matching secret")
 	}

@@ -20,7 +20,6 @@ CREATE TABLE IF NOT EXISTS players (
 	id TEXT PRIMARY KEY,
 	player_id TEXT NOT NULL UNIQUE,
 	claim_key TEXT NOT NULL DEFAULT '',
-	player_secret_hash TEXT NOT NULL DEFAULT '',
 	name TEXT NOT NULL DEFAULT '',
 	gender_id TEXT NOT NULL DEFAULT '',
 	avatar_url TEXT NOT NULL DEFAULT '',
@@ -110,7 +109,7 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 	// 注意：db.SetMaxOpenConns(1)，不能在 rows 未 Close 时再 Query（会死锁）。
 	// 先扫完 players，再一次性加载全部 secrets。
 	rows, err := ps.db.Query(`
-		SELECT id, player_id, claim_key, player_secret_hash, name, gender_id, avatar_url,
+		SELECT id, player_id, claim_key, name, gender_id, avatar_url,
 			name_war_enabled, name_war_allow_rename, name_war_toggled_at, name_war_original_name,
 			name_war_penalty_name, name_war_punished, name_war_rename_protected_until,
 			name_war_renamed_by, name_war_renamed_by_name, name_war_rename_window_started_at, name_war_rename_count,
@@ -145,7 +144,7 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 			rankedDecay                             sql.NullInt64
 		)
 		err := rows.Scan(
-			&item.ID, &item.PlayerID, &item.ClaimKey, &item.PlayerSecretHash, &item.Name, &item.GenderID, &item.AvatarURL,
+			&item.ID, &item.PlayerID, &item.ClaimKey, &item.Name, &item.GenderID, &item.AvatarURL,
 			&nwEnabled, &nwAllow, &nwToggled, &item.NameWarOriginalName,
 			&item.NameWarPenaltyName, &nwPunished, &nwProt,
 			&item.NameWarRenamedBy, &item.NameWarRenamedByName, &nwWinStart, &nwRename,
@@ -277,7 +276,7 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 	gs := item.GameStats
 	_, err := tx.Exec(`
 		INSERT INTO players (
-			id, player_id, claim_key, player_secret_hash, name, gender_id, avatar_url,
+			id, player_id, claim_key, name, gender_id, avatar_url,
 			name_war_enabled, name_war_allow_rename, name_war_toggled_at, name_war_original_name,
 			name_war_penalty_name, name_war_punished, name_war_rename_protected_until,
 			name_war_renamed_by, name_war_renamed_by_name, name_war_rename_window_started_at, name_war_rename_count,
@@ -294,7 +293,7 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			liarsdice_wins, liarsdice_losses, liarsdice_draws,
 			created_at, last_seen_at
 		) VALUES (
-			?,?,?,?,?,?,?,
+			?,?,?,?,?,?,
 			?,?,?,?,?,?,?,?,?,?,?,
 			?,?,?,
 			?,
@@ -311,7 +310,6 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 		ON CONFLICT(id) DO UPDATE SET
 			player_id=excluded.player_id,
 			claim_key=excluded.claim_key,
-			player_secret_hash=excluded.player_secret_hash,
 			name=excluded.name,
 			gender_id=excluded.gender_id,
 			avatar_url=excluded.avatar_url,
@@ -350,7 +348,7 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			liarsdice_wins=excluded.liarsdice_wins, liarsdice_losses=excluded.liarsdice_losses, liarsdice_draws=excluded.liarsdice_draws,
 			created_at=excluded.created_at, last_seen_at=excluded.last_seen_at
 	`,
-		item.ID, item.PlayerID, item.ClaimKey, item.PlayerSecretHash, item.Name, item.GenderID, item.AvatarURL,
+		item.ID, item.PlayerID, item.ClaimKey, item.Name, item.GenderID, item.AvatarURL,
 		boolPtrToSQL(item.NameWarEnabled), boolPtrToSQL(item.NameWarAllowRename), int64PtrToSQL(item.NameWarToggledAt), item.NameWarOriginalName,
 		item.NameWarPenaltyName, boolPtrToSQL(item.NameWarPunished), int64PtrToSQL(item.NameWarRenameProtectedUntil),
 		item.NameWarRenamedBy, item.NameWarRenamedByName, int64PtrToSQL(item.NameWarRenameWindowStartedAt), intPtrToSQL(item.NameWarRenameCount),

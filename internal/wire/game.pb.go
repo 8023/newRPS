@@ -1819,6 +1819,10 @@ type RoomSettings struct {
 	LiarsDiceMaxPlayers    int32                  `protobuf:"varint,25,opt,name=liars_dice_max_players,json=liarsDiceMaxPlayers,proto3" json:"liars_dice_max_players,omitempty"`
 	GomokuBoardTheme       string                 `protobuf:"bytes,26,opt,name=gomoku_board_theme,json=gomokuBoardTheme,proto3" json:"gomoku_board_theme,omitempty"`
 	GomokuUndoLimit        int32                  `protobuf:"varint,27,opt,name=gomoku_undo_limit,json=gomokuUndoLimit,proto3" json:"gomoku_undo_limit,omitempty"`
+	OthelloMoveSeconds     int32                  `protobuf:"varint,28,opt,name=othello_move_seconds,json=othelloMoveSeconds,proto3" json:"othello_move_seconds,omitempty"`
+	OthelloGameMinutes     int32                  `protobuf:"varint,29,opt,name=othello_game_minutes,json=othelloGameMinutes,proto3" json:"othello_game_minutes,omitempty"`
+	GomokuMoveSeconds      int32                  `protobuf:"varint,30,opt,name=gomoku_move_seconds,json=gomokuMoveSeconds,proto3" json:"gomoku_move_seconds,omitempty"`
+	GomokuGameMinutes      int32                  `protobuf:"varint,31,opt,name=gomoku_game_minutes,json=gomokuGameMinutes,proto3" json:"gomoku_game_minutes,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -2035,6 +2039,34 @@ func (x *RoomSettings) GetGomokuUndoLimit() int32 {
 	return 0
 }
 
+func (x *RoomSettings) GetOthelloMoveSeconds() int32 {
+	if x != nil {
+		return x.OthelloMoveSeconds
+	}
+	return 0
+}
+
+func (x *RoomSettings) GetOthelloGameMinutes() int32 {
+	if x != nil {
+		return x.OthelloGameMinutes
+	}
+	return 0
+}
+
+func (x *RoomSettings) GetGomokuMoveSeconds() int32 {
+	if x != nil {
+		return x.GomokuMoveSeconds
+	}
+	return 0
+}
+
+func (x *RoomSettings) GetGomokuGameMinutes() int32 {
+	if x != nil {
+		return x.GomokuGameMinutes
+	}
+	return 0
+}
+
 type GomokuUndoRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	FromSeat      string                 `protobuf:"bytes,1,opt,name=from_seat,json=fromSeat,proto3" json:"from_seat,omitempty"`
@@ -2164,21 +2196,24 @@ func (x *GomokuResignRequest) GetCreatedAt() int64 {
 }
 
 type GomokuState struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Board         []*BoardRow            `protobuf:"bytes,1,rep,name=board,proto3" json:"board,omitempty"`
-	Turn          string                 `protobuf:"bytes,2,opt,name=turn,proto3" json:"turn,omitempty"`
-	BlackSeat     string                 `protobuf:"bytes,3,opt,name=black_seat,json=blackSeat,proto3" json:"black_seat,omitempty"`
-	MoveCount     int32                  `protobuf:"varint,4,opt,name=move_count,json=moveCount,proto3" json:"move_count,omitempty"`
-	Moves         []*Pos                 `protobuf:"bytes,5,rep,name=moves,proto3" json:"moves,omitempty"`
-	WinningLine   []*Pos                 `protobuf:"bytes,6,rep,name=winning_line,json=winningLine,proto3" json:"winning_line,omitempty"`
-	RankedDelta   []*IntPair             `protobuf:"bytes,7,rep,name=ranked_delta,json=rankedDelta,proto3" json:"ranked_delta,omitempty"`
-	UndoCount     []*IntPair             `protobuf:"bytes,8,rep,name=undo_count,json=undoCount,proto3" json:"undo_count,omitempty"`
-	UndoRequest   *GomokuUndoRequest     `protobuf:"bytes,9,opt,name=undo_request,json=undoRequest,proto3" json:"undo_request,omitempty"`
-	ResignRequest *GomokuResignRequest   `protobuf:"bytes,10,opt,name=resign_request,json=resignRequest,proto3" json:"resign_request,omitempty"`
-	Ended         bool                   `protobuf:"varint,11,opt,name=ended,proto3" json:"ended,omitempty"`
-	Winner        string                 `protobuf:"bytes,12,opt,name=winner,proto3" json:"winner,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Board           []*BoardRow            `protobuf:"bytes,1,rep,name=board,proto3" json:"board,omitempty"`
+	Turn            string                 `protobuf:"bytes,2,opt,name=turn,proto3" json:"turn,omitempty"`
+	BlackSeat       string                 `protobuf:"bytes,3,opt,name=black_seat,json=blackSeat,proto3" json:"black_seat,omitempty"`
+	MoveCount       int32                  `protobuf:"varint,4,opt,name=move_count,json=moveCount,proto3" json:"move_count,omitempty"`
+	Moves           []*Pos                 `protobuf:"bytes,5,rep,name=moves,proto3" json:"moves,omitempty"`
+	WinningLine     []*Pos                 `protobuf:"bytes,6,rep,name=winning_line,json=winningLine,proto3" json:"winning_line,omitempty"`
+	RankedDelta     []*IntPair             `protobuf:"bytes,7,rep,name=ranked_delta,json=rankedDelta,proto3" json:"ranked_delta,omitempty"`
+	UndoCount       []*IntPair             `protobuf:"bytes,8,rep,name=undo_count,json=undoCount,proto3" json:"undo_count,omitempty"`
+	UndoRequest     *GomokuUndoRequest     `protobuf:"bytes,9,opt,name=undo_request,json=undoRequest,proto3" json:"undo_request,omitempty"`
+	ResignRequest   *GomokuResignRequest   `protobuf:"bytes,10,opt,name=resign_request,json=resignRequest,proto3" json:"resign_request,omitempty"`
+	Ended           bool                   `protobuf:"varint,11,opt,name=ended,proto3" json:"ended,omitempty"`
+	Winner          string                 `protobuf:"bytes,12,opt,name=winner,proto3" json:"winner,omitempty"`
+	MoveDeadlineAt  int64                  `protobuf:"varint,13,opt,name=move_deadline_at,json=moveDeadlineAt,proto3" json:"move_deadline_at,omitempty"`
+	ClockDeadlineAt int64                  `protobuf:"varint,14,opt,name=clock_deadline_at,json=clockDeadlineAt,proto3" json:"clock_deadline_at,omitempty"`
+	ClockRemaining  []*IntPair             `protobuf:"bytes,15,rep,name=clock_remaining,json=clockRemaining,proto3" json:"clock_remaining,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *GomokuState) Reset() {
@@ -2293,6 +2328,27 @@ func (x *GomokuState) GetWinner() string {
 		return x.Winner
 	}
 	return ""
+}
+
+func (x *GomokuState) GetMoveDeadlineAt() int64 {
+	if x != nil {
+		return x.MoveDeadlineAt
+	}
+	return 0
+}
+
+func (x *GomokuState) GetClockDeadlineAt() int64 {
+	if x != nil {
+		return x.ClockDeadlineAt
+	}
+	return 0
+}
+
+func (x *GomokuState) GetClockRemaining() []*IntPair {
+	if x != nil {
+		return x.ClockRemaining
+	}
+	return nil
 }
 
 type PunishmentProof struct {
@@ -3687,6 +3743,9 @@ type OthelloState struct {
 	SurrenderRequest  *OthelloSurrenderRequest  `protobuf:"bytes,11,opt,name=surrender_request,json=surrenderRequest,proto3" json:"surrender_request,omitempty"`
 	Ended             bool                      `protobuf:"varint,12,opt,name=ended,proto3" json:"ended,omitempty"`
 	Winner            string                    `protobuf:"bytes,13,opt,name=winner,proto3" json:"winner,omitempty"`
+	MoveDeadlineAt    int64                     `protobuf:"varint,14,opt,name=move_deadline_at,json=moveDeadlineAt,proto3" json:"move_deadline_at,omitempty"`
+	ClockDeadlineAt   int64                     `protobuf:"varint,15,opt,name=clock_deadline_at,json=clockDeadlineAt,proto3" json:"clock_deadline_at,omitempty"`
+	ClockRemaining    []*IntPair                `protobuf:"bytes,16,rep,name=clock_remaining,json=clockRemaining,proto3" json:"clock_remaining,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -3810,6 +3869,27 @@ func (x *OthelloState) GetWinner() string {
 		return x.Winner
 	}
 	return ""
+}
+
+func (x *OthelloState) GetMoveDeadlineAt() int64 {
+	if x != nil {
+		return x.MoveDeadlineAt
+	}
+	return 0
+}
+
+func (x *OthelloState) GetClockDeadlineAt() int64 {
+	if x != nil {
+		return x.ClockDeadlineAt
+	}
+	return 0
+}
+
+func (x *OthelloState) GetClockRemaining() []*IntPair {
+	if x != nil {
+		return x.ClockRemaining
+	}
+	return nil
 }
 
 type TicTacToeGiveawayPrompt struct {
@@ -4686,6 +4766,13 @@ type LobbyRoomInfo struct {
 	RankMultiplier         int32                  `protobuf:"varint,21,opt,name=rank_multiplier,json=rankMultiplier,proto3" json:"rank_multiplier,omitempty"`
 	EnableExtremeRanked    bool                   `protobuf:"varint,22,opt,name=enable_extreme_ranked,json=enableExtremeRanked,proto3" json:"enable_extreme_ranked,omitempty"`
 	Tags                   []string               `protobuf:"bytes,23,rep,name=tags,proto3" json:"tags,omitempty"`
+	LiarsDiceMinPlayers    int32                  `protobuf:"varint,24,opt,name=liars_dice_min_players,json=liarsDiceMinPlayers,proto3" json:"liars_dice_min_players,omitempty"`
+	LiarsDiceMaxPlayers    int32                  `protobuf:"varint,25,opt,name=liars_dice_max_players,json=liarsDiceMaxPlayers,proto3" json:"liars_dice_max_players,omitempty"`
+	OthelloMoveSeconds     int32                  `protobuf:"varint,26,opt,name=othello_move_seconds,json=othelloMoveSeconds,proto3" json:"othello_move_seconds,omitempty"`
+	OthelloGameMinutes     int32                  `protobuf:"varint,27,opt,name=othello_game_minutes,json=othelloGameMinutes,proto3" json:"othello_game_minutes,omitempty"`
+	GomokuMoveSeconds      int32                  `protobuf:"varint,28,opt,name=gomoku_move_seconds,json=gomokuMoveSeconds,proto3" json:"gomoku_move_seconds,omitempty"`
+	GomokuGameMinutes      int32                  `protobuf:"varint,29,opt,name=gomoku_game_minutes,json=gomokuGameMinutes,proto3" json:"gomoku_game_minutes,omitempty"`
+	GomokuUndoLimit        int32                  `protobuf:"varint,30,opt,name=gomoku_undo_limit,json=gomokuUndoLimit,proto3" json:"gomoku_undo_limit,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -4872,6 +4959,55 @@ func (x *LobbyRoomInfo) GetTags() []string {
 		return x.Tags
 	}
 	return nil
+}
+
+func (x *LobbyRoomInfo) GetLiarsDiceMinPlayers() int32 {
+	if x != nil {
+		return x.LiarsDiceMinPlayers
+	}
+	return 0
+}
+
+func (x *LobbyRoomInfo) GetLiarsDiceMaxPlayers() int32 {
+	if x != nil {
+		return x.LiarsDiceMaxPlayers
+	}
+	return 0
+}
+
+func (x *LobbyRoomInfo) GetOthelloMoveSeconds() int32 {
+	if x != nil {
+		return x.OthelloMoveSeconds
+	}
+	return 0
+}
+
+func (x *LobbyRoomInfo) GetOthelloGameMinutes() int32 {
+	if x != nil {
+		return x.OthelloGameMinutes
+	}
+	return 0
+}
+
+func (x *LobbyRoomInfo) GetGomokuMoveSeconds() int32 {
+	if x != nil {
+		return x.GomokuMoveSeconds
+	}
+	return 0
+}
+
+func (x *LobbyRoomInfo) GetGomokuGameMinutes() int32 {
+	if x != nil {
+		return x.GomokuGameMinutes
+	}
+	return 0
+}
+
+func (x *LobbyRoomInfo) GetGomokuUndoLimit() int32 {
+	if x != nil {
+		return x.GomokuUndoLimit
+	}
+	return 0
 }
 
 type LobbyPlayerEntry struct {
@@ -7664,7 +7800,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x06author\x18\x03 \x01(\tR\x06author\x127\n" +
 	"\rauthor_player\x18\x04 \x01(\v2\x12.game.PublicPlayerR\fauthorPlayer\x12\x12\n" +
 	"\x04text\x18\x05 \x01(\tR\x04text\x12\x0e\n" +
-	"\x02at\x18\x06 \x01(\x03R\x02at\"\xb4\b\n" +
+	"\x02at\x18\x06 \x01(\x03R\x02at\"\xf8\t\n" +
 	"\fRoomSettings\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x17\n" +
@@ -7694,7 +7830,11 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x16liars_dice_min_players\x18\x18 \x01(\x05R\x13liarsDiceMinPlayers\x123\n" +
 	"\x16liars_dice_max_players\x18\x19 \x01(\x05R\x13liarsDiceMaxPlayers\x12,\n" +
 	"\x12gomoku_board_theme\x18\x1a \x01(\tR\x10gomokuBoardTheme\x12*\n" +
-	"\x11gomoku_undo_limit\x18\x1b \x01(\x05R\x0fgomokuUndoLimit\"\x87\x01\n" +
+	"\x11gomoku_undo_limit\x18\x1b \x01(\x05R\x0fgomokuUndoLimit\x120\n" +
+	"\x14othello_move_seconds\x18\x1c \x01(\x05R\x12othelloMoveSeconds\x120\n" +
+	"\x14othello_game_minutes\x18\x1d \x01(\x05R\x12othelloGameMinutes\x12.\n" +
+	"\x13gomoku_move_seconds\x18\x1e \x01(\x05R\x11gomokuMoveSeconds\x12.\n" +
+	"\x13gomoku_game_minutes\x18\x1f \x01(\x05R\x11gomokuGameMinutes\"\x87\x01\n" +
 	"\x11GomokuUndoRequest\x12\x1b\n" +
 	"\tfrom_seat\x18\x01 \x01(\tR\bfromSeat\x12\x17\n" +
 	"\ato_seat\x18\x02 \x01(\tR\x06toSeat\x12\x1d\n" +
@@ -7706,7 +7846,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\tfrom_seat\x18\x01 \x01(\tR\bfromSeat\x12\x17\n" +
 	"\ato_seat\x18\x02 \x01(\tR\x06toSeat\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x03 \x01(\x03R\tcreatedAt\"\xe0\x03\n" +
+	"created_at\x18\x03 \x01(\x03R\tcreatedAt\"\xee\x04\n" +
 	"\vGomokuState\x12$\n" +
 	"\x05board\x18\x01 \x03(\v2\x0e.game.BoardRowR\x05board\x12\x12\n" +
 	"\x04turn\x18\x02 \x01(\tR\x04turn\x12\x1d\n" +
@@ -7723,7 +7863,10 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x0eresign_request\x18\n" +
 	" \x01(\v2\x19.game.GomokuResignRequestR\rresignRequest\x12\x14\n" +
 	"\x05ended\x18\v \x01(\bR\x05ended\x12\x16\n" +
-	"\x06winner\x18\f \x01(\tR\x06winner\"\xe7\x02\n" +
+	"\x06winner\x18\f \x01(\tR\x06winner\x12(\n" +
+	"\x10move_deadline_at\x18\r \x01(\x03R\x0emoveDeadlineAt\x12*\n" +
+	"\x11clock_deadline_at\x18\x0e \x01(\x03R\x0fclockDeadlineAt\x126\n" +
+	"\x0fclock_remaining\x18\x0f \x03(\v2\r.game.IntPairR\x0eclockRemaining\"\xe7\x02\n" +
 	"\x0fPunishmentProof\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x1b\n" +
@@ -7869,7 +8012,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x05cells\x18\x01 \x03(\tR\x05cells\"1\n" +
 	"\aIntPair\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x05R\x05value\"\x9c\x04\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value\"\xaa\x05\n" +
 	"\fOthelloState\x12$\n" +
 	"\x05board\x18\x01 \x03(\v2\x0e.game.BoardRowR\x05board\x12\x12\n" +
 	"\x04turn\x18\x02 \x01(\tR\x04turn\x12\x1d\n" +
@@ -7889,7 +8032,10 @@ const file_api_proto_game_proto_rawDesc = "" +
 	" \x01(\v2\x1e.game.OthelloPendingSettlementR\x11pendingSettlement\x12J\n" +
 	"\x11surrender_request\x18\v \x01(\v2\x1d.game.OthelloSurrenderRequestR\x10surrenderRequest\x12\x14\n" +
 	"\x05ended\x18\f \x01(\bR\x05ended\x12\x16\n" +
-	"\x06winner\x18\r \x01(\tR\x06winner\"\x83\x01\n" +
+	"\x06winner\x18\r \x01(\tR\x06winner\x12(\n" +
+	"\x10move_deadline_at\x18\x0e \x01(\x03R\x0emoveDeadlineAt\x12*\n" +
+	"\x11clock_deadline_at\x18\x0f \x01(\x03R\x0fclockDeadlineAt\x126\n" +
+	"\x0fclock_remaining\x18\x10 \x03(\v2\r.game.IntPairR\x0eclockRemaining\"\x83\x01\n" +
 	"\x17TicTacToeGiveawayPrompt\x12\x12\n" +
 	"\x04seat\x18\x01 \x01(\tR\x04seat\x12\x16\n" +
 	"\x06forced\x18\x02 \x01(\bR\x06forced\x12\x1d\n" +
@@ -7977,7 +8123,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\n" +
 	"VersusPair\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12&\n" +
-	"\x05value\x18\x02 \x01(\v2\x10.game.VersusSeatR\x05value\"\xac\x06\n" +
+	"\x05value\x18\x02 \x01(\v2\x10.game.VersusSeatR\x05value\"\x86\t\n" +
 	"\rLobbyRoomInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\agame_id\x18\x02 \x01(\tR\x06gameId\x12\x12\n" +
@@ -8004,7 +8150,14 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x16enable_rank_multiplier\x18\x14 \x01(\bR\x14enableRankMultiplier\x12'\n" +
 	"\x0frank_multiplier\x18\x15 \x01(\x05R\x0erankMultiplier\x122\n" +
 	"\x15enable_extreme_ranked\x18\x16 \x01(\bR\x13enableExtremeRanked\x12\x12\n" +
-	"\x04tags\x18\x17 \x03(\tR\x04tagsJ\x04\b\x03\x10\x04\"M\n" +
+	"\x04tags\x18\x17 \x03(\tR\x04tags\x123\n" +
+	"\x16liars_dice_min_players\x18\x18 \x01(\x05R\x13liarsDiceMinPlayers\x123\n" +
+	"\x16liars_dice_max_players\x18\x19 \x01(\x05R\x13liarsDiceMaxPlayers\x120\n" +
+	"\x14othello_move_seconds\x18\x1a \x01(\x05R\x12othelloMoveSeconds\x120\n" +
+	"\x14othello_game_minutes\x18\x1b \x01(\x05R\x12othelloGameMinutes\x12.\n" +
+	"\x13gomoku_move_seconds\x18\x1c \x01(\x05R\x11gomokuMoveSeconds\x12.\n" +
+	"\x13gomoku_game_minutes\x18\x1d \x01(\x05R\x11gomokuGameMinutes\x12*\n" +
+	"\x11gomoku_undo_limit\x18\x1e \x01(\x05R\x0fgomokuUndoLimitJ\x04\b\x03\x10\x04\"M\n" +
 	"\x10LobbyPlayerEntry\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12)\n" +
 	"\x06player\x18\x02 \x01(\v2\x11.game.LobbyPlayerR\x06player\"I\n" +
@@ -8336,115 +8489,117 @@ var file_api_proto_game_proto_depIdxs = []int32{
 	31,  // 19: game.GomokuState.undo_count:type_name -> game.IntPair
 	15,  // 20: game.GomokuState.undo_request:type_name -> game.GomokuUndoRequest
 	16,  // 21: game.GomokuState.resign_request:type_name -> game.GomokuResignRequest
-	20,  // 22: game.RoundHistoryItem.othello_score:type_name -> game.OthelloScore
-	3,   // 23: game.RoundHistoryItem.tictactoe_line:type_name -> game.Pos
-	21,  // 24: game.RoundHistoryItem.punishment_tasks:type_name -> game.PunishmentTask
-	22,  // 25: game.RoundHistoryItem.proofs:type_name -> game.HistoryProof
-	25,  // 26: game.RoundHistoryItem.liars_dice_hands:type_name -> game.LiarsDiceHandsPair
-	36,  // 27: game.RoundHistoryItem.liars_dice_names:type_name -> game.StringPair
-	3,   // 28: game.RoundHistoryItem.gomoku_line:type_name -> game.Pos
-	24,  // 29: game.LiarsDiceHandsPair.value:type_name -> game.Int32List
-	31,  // 30: game.LiarsDiceState.dice_counts:type_name -> game.IntPair
-	26,  // 31: game.LiarsDiceState.current_bid:type_name -> game.LiarsDiceBid
-	26,  // 32: game.LiarsDiceState.bid_history:type_name -> game.LiarsDiceBid
-	25,  // 33: game.LiarsDiceState.revealed_hands:type_name -> game.LiarsDiceHandsPair
-	30,  // 34: game.OthelloState.board:type_name -> game.BoardRow
-	3,   // 35: game.OthelloState.legal_moves:type_name -> game.Pos
-	31,  // 36: game.OthelloState.ranked_delta:type_name -> game.IntPair
-	28,  // 37: game.OthelloState.pending_settlement:type_name -> game.OthelloPendingSettlement
-	29,  // 38: game.OthelloState.surrender_request:type_name -> game.OthelloSurrenderRequest
-	30,  // 39: game.TicTacToeState.board:type_name -> game.BoardRow
-	33,  // 40: game.TicTacToeState.giveaway_prompt:type_name -> game.TicTacToeGiveawayPrompt
-	3,   // 41: game.TicTacToeState.winning_line:type_name -> game.Pos
-	31,  // 42: game.TicTacToeState.ranked_delta:type_name -> game.IntPair
-	11,  // 43: game.SeatOccupantPair.value:type_name -> game.SeatOccupant
-	19,  // 44: game.SeatStatsPair.value:type_name -> game.SeatStats
-	14,  // 45: game.RoomSnapshot.settings:type_name -> game.RoomSettings
-	37,  // 46: game.RoomSnapshot.seats:type_name -> game.SeatOccupantPair
-	8,   // 47: game.RoomSnapshot.spectators:type_name -> game.PublicPlayer
-	35,  // 48: game.RoomSnapshot.ready:type_name -> game.BoolPair
-	36,  // 49: game.RoomSnapshot.choices:type_name -> game.StringPair
-	36,  // 50: game.RoomSnapshot.revealed_choices:type_name -> game.StringPair
-	32,  // 51: game.RoomSnapshot.othello:type_name -> game.OthelloState
-	34,  // 52: game.RoomSnapshot.tictactoe:type_name -> game.TicTacToeState
-	27,  // 53: game.RoomSnapshot.liars_dice:type_name -> game.LiarsDiceState
-	17,  // 54: game.RoomSnapshot.gomoku:type_name -> game.GomokuState
-	18,  // 55: game.RoomSnapshot.proofs:type_name -> game.PunishmentProof
-	31,  // 56: game.RoomSnapshot.score:type_name -> game.IntPair
-	31,  // 57: game.RoomSnapshot.seated_score:type_name -> game.IntPair
-	38,  // 58: game.RoomSnapshot.seat_stats:type_name -> game.SeatStatsPair
-	23,  // 59: game.RoomSnapshot.round_history:type_name -> game.RoundHistoryItem
-	12,  // 60: game.RoomSnapshot.chat:type_name -> game.ChatMessage
-	8,   // 61: game.VersusSeat.player:type_name -> game.PublicPlayer
-	10,  // 62: game.VersusSeat.bot:type_name -> game.BotPlayer
-	41,  // 63: game.VersusPair.value:type_name -> game.VersusSeat
-	42,  // 64: game.LobbyRoomInfo.versus:type_name -> game.VersusPair
-	9,   // 65: game.LobbyPlayerEntry.player:type_name -> game.LobbyPlayer
-	43,  // 66: game.LobbyRoomEntry.room:type_name -> game.LobbyRoomInfo
-	64,  // 67: game.LobbySnapshot.config:type_name -> game.AppConfig
-	44,  // 68: game.LobbySnapshot.players:type_name -> game.LobbyPlayerEntry
-	45,  // 69: game.LobbySnapshot.rooms:type_name -> game.LobbyRoomEntry
-	9,   // 70: game.LobbySnapshot.normal_leaderboard:type_name -> game.LobbyPlayer
-	9,   // 71: game.LobbySnapshot.ranked_leaderboard:type_name -> game.LobbyPlayer
-	13,  // 72: game.LobbySnapshot.suggestions:type_name -> game.Suggestion
-	12,  // 73: game.LobbySnapshot.lobby_chat:type_name -> game.ChatMessage
-	40,  // 74: game.LobbySnapshot.server_stats:type_name -> game.ServerStats
-	48,  // 75: game.RoomInfoTagEntry.style:type_name -> game.RoomInfoTagStyle
-	36,  // 76: game.PunishmentTaskConfig.variants:type_name -> game.StringPair
-	76,  // 77: game.TitleSegment.faction_names:type_name -> game.TitleSegment.FactionNames
-	36,  // 78: game.PunishmentConfig.variants:type_name -> game.StringPair
-	50,  // 79: game.PunishmentConfig.tasks:type_name -> game.PunishmentTaskConfig
-	47,  // 80: game.PunishmentConfig.room_name_pool:type_name -> game.RoomNamePool
-	57,  // 81: game.ExtremeModeConfig.positive_loss_rates:type_name -> game.DoublePair
-	57,  // 82: game.ExtremeModeConfig.negative_win_rates:type_name -> game.DoublePair
-	57,  // 83: game.ExtremeModeConfig.hourly_decay:type_name -> game.DoublePair
-	53,  // 84: game.BotsConfig.difficulties:type_name -> game.BotDifficultyConfig
-	59,  // 85: game.AppConfig.site:type_name -> game.SiteConfig
-	55,  // 86: game.AppConfig.announcement_board:type_name -> game.AnnouncementBoard
-	1,   // 87: game.AppConfig.genders:type_name -> game.GenderOption
-	2,   // 88: game.AppConfig.gender_factions:type_name -> game.GenderFaction
-	51,  // 89: game.AppConfig.titles:type_name -> game.TitleSegment
-	52,  // 90: game.AppConfig.punishments:type_name -> game.PunishmentConfig
-	47,  // 91: game.AppConfig.player_punishment_room_name_pool:type_name -> game.RoomNamePool
-	49,  // 92: game.AppConfig.room_info_tags:type_name -> game.RoomInfoTagEntry
-	60,  // 93: game.AppConfig.access_control:type_name -> game.AccessControlConfig
-	61,  // 94: game.AppConfig.name_war:type_name -> game.NameWarConfig
-	62,  // 95: game.AppConfig.giveaway:type_name -> game.GiveawayConfig
-	58,  // 96: game.AppConfig.extreme_mode:type_name -> game.ExtremeModeConfig
-	63,  // 97: game.AppConfig.bots:type_name -> game.BotsConfig
-	54,  // 98: game.AppConfig.games:type_name -> game.GameConfig
-	36,  // 99: game.AppConfig.messages:type_name -> game.StringPair
-	56,  // 100: game.AppConfig.security_disclaimer:type_name -> game.SecurityDisclaimerConfig
-	65,  // 101: game.AppConfig.ranked_score:type_name -> game.RankedScoreConfig
-	46,  // 102: game.StateDocument.lobby:type_name -> game.LobbySnapshot
-	39,  // 103: game.StateDocument.room:type_name -> game.RoomSnapshot
-	64,  // 104: game.StateDocument.config:type_name -> game.AppConfig
-	8,   // 105: game.PlayerBatch.players:type_name -> game.PublicPlayer
-	8,   // 106: game.MeState.player:type_name -> game.PublicPlayer
-	39,  // 107: game.MeState.room:type_name -> game.RoomSnapshot
-	23,  // 108: game.HistoryPage.item:type_name -> game.RoundHistoryItem
-	8,   // 109: game.PlayerResult.player:type_name -> game.PublicPlayer
-	13,  // 110: game.SuggestionsResult.suggestions:type_name -> game.Suggestion
-	77,  // 111: game.RawBody.dynamic:type_name -> google.protobuf.Struct
-	67,  // 112: game.RawBody.player_batch:type_name -> game.PlayerBatch
-	12,  // 113: game.RawBody.chat:type_name -> game.ChatMessage
-	13,  // 114: game.RawBody.suggestion:type_name -> game.Suggestion
-	8,   // 115: game.RawBody.player:type_name -> game.PublicPlayer
-	68,  // 116: game.RawBody.me:type_name -> game.MeState
-	69,  // 117: game.RawBody.announcement:type_name -> game.AnnouncementPayload
-	70,  // 118: game.RawBody.room_closed:type_name -> game.RoomClosed
-	71,  // 119: game.RawBody.history_page:type_name -> game.HistoryPage
-	72,  // 120: game.RawBody.ok:type_name -> game.OkResult
-	73,  // 121: game.RawBody.player_result:type_name -> game.PlayerResult
-	74,  // 122: game.RawBody.suggestions:type_name -> game.SuggestionsResult
-	39,  // 123: game.RawBody.room:type_name -> game.RoomSnapshot
-	64,  // 124: game.RawBody.config:type_name -> game.AppConfig
-	46,  // 125: game.RawBody.lobby:type_name -> game.LobbySnapshot
-	126, // [126:126] is the sub-list for method output_type
-	126, // [126:126] is the sub-list for method input_type
-	126, // [126:126] is the sub-list for extension type_name
-	126, // [126:126] is the sub-list for extension extendee
-	0,   // [0:126] is the sub-list for field type_name
+	31,  // 22: game.GomokuState.clock_remaining:type_name -> game.IntPair
+	20,  // 23: game.RoundHistoryItem.othello_score:type_name -> game.OthelloScore
+	3,   // 24: game.RoundHistoryItem.tictactoe_line:type_name -> game.Pos
+	21,  // 25: game.RoundHistoryItem.punishment_tasks:type_name -> game.PunishmentTask
+	22,  // 26: game.RoundHistoryItem.proofs:type_name -> game.HistoryProof
+	25,  // 27: game.RoundHistoryItem.liars_dice_hands:type_name -> game.LiarsDiceHandsPair
+	36,  // 28: game.RoundHistoryItem.liars_dice_names:type_name -> game.StringPair
+	3,   // 29: game.RoundHistoryItem.gomoku_line:type_name -> game.Pos
+	24,  // 30: game.LiarsDiceHandsPair.value:type_name -> game.Int32List
+	31,  // 31: game.LiarsDiceState.dice_counts:type_name -> game.IntPair
+	26,  // 32: game.LiarsDiceState.current_bid:type_name -> game.LiarsDiceBid
+	26,  // 33: game.LiarsDiceState.bid_history:type_name -> game.LiarsDiceBid
+	25,  // 34: game.LiarsDiceState.revealed_hands:type_name -> game.LiarsDiceHandsPair
+	30,  // 35: game.OthelloState.board:type_name -> game.BoardRow
+	3,   // 36: game.OthelloState.legal_moves:type_name -> game.Pos
+	31,  // 37: game.OthelloState.ranked_delta:type_name -> game.IntPair
+	28,  // 38: game.OthelloState.pending_settlement:type_name -> game.OthelloPendingSettlement
+	29,  // 39: game.OthelloState.surrender_request:type_name -> game.OthelloSurrenderRequest
+	31,  // 40: game.OthelloState.clock_remaining:type_name -> game.IntPair
+	30,  // 41: game.TicTacToeState.board:type_name -> game.BoardRow
+	33,  // 42: game.TicTacToeState.giveaway_prompt:type_name -> game.TicTacToeGiveawayPrompt
+	3,   // 43: game.TicTacToeState.winning_line:type_name -> game.Pos
+	31,  // 44: game.TicTacToeState.ranked_delta:type_name -> game.IntPair
+	11,  // 45: game.SeatOccupantPair.value:type_name -> game.SeatOccupant
+	19,  // 46: game.SeatStatsPair.value:type_name -> game.SeatStats
+	14,  // 47: game.RoomSnapshot.settings:type_name -> game.RoomSettings
+	37,  // 48: game.RoomSnapshot.seats:type_name -> game.SeatOccupantPair
+	8,   // 49: game.RoomSnapshot.spectators:type_name -> game.PublicPlayer
+	35,  // 50: game.RoomSnapshot.ready:type_name -> game.BoolPair
+	36,  // 51: game.RoomSnapshot.choices:type_name -> game.StringPair
+	36,  // 52: game.RoomSnapshot.revealed_choices:type_name -> game.StringPair
+	32,  // 53: game.RoomSnapshot.othello:type_name -> game.OthelloState
+	34,  // 54: game.RoomSnapshot.tictactoe:type_name -> game.TicTacToeState
+	27,  // 55: game.RoomSnapshot.liars_dice:type_name -> game.LiarsDiceState
+	17,  // 56: game.RoomSnapshot.gomoku:type_name -> game.GomokuState
+	18,  // 57: game.RoomSnapshot.proofs:type_name -> game.PunishmentProof
+	31,  // 58: game.RoomSnapshot.score:type_name -> game.IntPair
+	31,  // 59: game.RoomSnapshot.seated_score:type_name -> game.IntPair
+	38,  // 60: game.RoomSnapshot.seat_stats:type_name -> game.SeatStatsPair
+	23,  // 61: game.RoomSnapshot.round_history:type_name -> game.RoundHistoryItem
+	12,  // 62: game.RoomSnapshot.chat:type_name -> game.ChatMessage
+	8,   // 63: game.VersusSeat.player:type_name -> game.PublicPlayer
+	10,  // 64: game.VersusSeat.bot:type_name -> game.BotPlayer
+	41,  // 65: game.VersusPair.value:type_name -> game.VersusSeat
+	42,  // 66: game.LobbyRoomInfo.versus:type_name -> game.VersusPair
+	9,   // 67: game.LobbyPlayerEntry.player:type_name -> game.LobbyPlayer
+	43,  // 68: game.LobbyRoomEntry.room:type_name -> game.LobbyRoomInfo
+	64,  // 69: game.LobbySnapshot.config:type_name -> game.AppConfig
+	44,  // 70: game.LobbySnapshot.players:type_name -> game.LobbyPlayerEntry
+	45,  // 71: game.LobbySnapshot.rooms:type_name -> game.LobbyRoomEntry
+	9,   // 72: game.LobbySnapshot.normal_leaderboard:type_name -> game.LobbyPlayer
+	9,   // 73: game.LobbySnapshot.ranked_leaderboard:type_name -> game.LobbyPlayer
+	13,  // 74: game.LobbySnapshot.suggestions:type_name -> game.Suggestion
+	12,  // 75: game.LobbySnapshot.lobby_chat:type_name -> game.ChatMessage
+	40,  // 76: game.LobbySnapshot.server_stats:type_name -> game.ServerStats
+	48,  // 77: game.RoomInfoTagEntry.style:type_name -> game.RoomInfoTagStyle
+	36,  // 78: game.PunishmentTaskConfig.variants:type_name -> game.StringPair
+	76,  // 79: game.TitleSegment.faction_names:type_name -> game.TitleSegment.FactionNames
+	36,  // 80: game.PunishmentConfig.variants:type_name -> game.StringPair
+	50,  // 81: game.PunishmentConfig.tasks:type_name -> game.PunishmentTaskConfig
+	47,  // 82: game.PunishmentConfig.room_name_pool:type_name -> game.RoomNamePool
+	57,  // 83: game.ExtremeModeConfig.positive_loss_rates:type_name -> game.DoublePair
+	57,  // 84: game.ExtremeModeConfig.negative_win_rates:type_name -> game.DoublePair
+	57,  // 85: game.ExtremeModeConfig.hourly_decay:type_name -> game.DoublePair
+	53,  // 86: game.BotsConfig.difficulties:type_name -> game.BotDifficultyConfig
+	59,  // 87: game.AppConfig.site:type_name -> game.SiteConfig
+	55,  // 88: game.AppConfig.announcement_board:type_name -> game.AnnouncementBoard
+	1,   // 89: game.AppConfig.genders:type_name -> game.GenderOption
+	2,   // 90: game.AppConfig.gender_factions:type_name -> game.GenderFaction
+	51,  // 91: game.AppConfig.titles:type_name -> game.TitleSegment
+	52,  // 92: game.AppConfig.punishments:type_name -> game.PunishmentConfig
+	47,  // 93: game.AppConfig.player_punishment_room_name_pool:type_name -> game.RoomNamePool
+	49,  // 94: game.AppConfig.room_info_tags:type_name -> game.RoomInfoTagEntry
+	60,  // 95: game.AppConfig.access_control:type_name -> game.AccessControlConfig
+	61,  // 96: game.AppConfig.name_war:type_name -> game.NameWarConfig
+	62,  // 97: game.AppConfig.giveaway:type_name -> game.GiveawayConfig
+	58,  // 98: game.AppConfig.extreme_mode:type_name -> game.ExtremeModeConfig
+	63,  // 99: game.AppConfig.bots:type_name -> game.BotsConfig
+	54,  // 100: game.AppConfig.games:type_name -> game.GameConfig
+	36,  // 101: game.AppConfig.messages:type_name -> game.StringPair
+	56,  // 102: game.AppConfig.security_disclaimer:type_name -> game.SecurityDisclaimerConfig
+	65,  // 103: game.AppConfig.ranked_score:type_name -> game.RankedScoreConfig
+	46,  // 104: game.StateDocument.lobby:type_name -> game.LobbySnapshot
+	39,  // 105: game.StateDocument.room:type_name -> game.RoomSnapshot
+	64,  // 106: game.StateDocument.config:type_name -> game.AppConfig
+	8,   // 107: game.PlayerBatch.players:type_name -> game.PublicPlayer
+	8,   // 108: game.MeState.player:type_name -> game.PublicPlayer
+	39,  // 109: game.MeState.room:type_name -> game.RoomSnapshot
+	23,  // 110: game.HistoryPage.item:type_name -> game.RoundHistoryItem
+	8,   // 111: game.PlayerResult.player:type_name -> game.PublicPlayer
+	13,  // 112: game.SuggestionsResult.suggestions:type_name -> game.Suggestion
+	77,  // 113: game.RawBody.dynamic:type_name -> google.protobuf.Struct
+	67,  // 114: game.RawBody.player_batch:type_name -> game.PlayerBatch
+	12,  // 115: game.RawBody.chat:type_name -> game.ChatMessage
+	13,  // 116: game.RawBody.suggestion:type_name -> game.Suggestion
+	8,   // 117: game.RawBody.player:type_name -> game.PublicPlayer
+	68,  // 118: game.RawBody.me:type_name -> game.MeState
+	69,  // 119: game.RawBody.announcement:type_name -> game.AnnouncementPayload
+	70,  // 120: game.RawBody.room_closed:type_name -> game.RoomClosed
+	71,  // 121: game.RawBody.history_page:type_name -> game.HistoryPage
+	72,  // 122: game.RawBody.ok:type_name -> game.OkResult
+	73,  // 123: game.RawBody.player_result:type_name -> game.PlayerResult
+	74,  // 124: game.RawBody.suggestions:type_name -> game.SuggestionsResult
+	39,  // 125: game.RawBody.room:type_name -> game.RoomSnapshot
+	64,  // 126: game.RawBody.config:type_name -> game.AppConfig
+	46,  // 127: game.RawBody.lobby:type_name -> game.LobbySnapshot
+	128, // [128:128] is the sub-list for method output_type
+	128, // [128:128] is the sub-list for method input_type
+	128, // [128:128] is the sub-list for extension type_name
+	128, // [128:128] is the sub-list for extension extendee
+	0,   // [0:128] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_game_proto_init() }

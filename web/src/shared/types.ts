@@ -59,6 +59,12 @@ export type OthelloState = {
     toSeat: SeatKey;
     createdAt: number;
   };
+  // 计时：0/缺省表示对应计时器未启用或当前无人在计时（如白给/上贡结算等待窗口期间）。
+  // clockRemaining 是双方总时长剩余（毫秒）：非当前落子方为冻结静态值，当前落子方需用
+  // clockDeadlineAt 在前端本地倒算实时剩余，不依赖服务器逐秒推送。
+  moveDeadlineAt?: number;
+  clockDeadlineAt?: number;
+  clockRemaining?: Record<SeatKey, number>;
   ended?: boolean;
   winner?: RoundResult;
 };
@@ -85,6 +91,9 @@ export type GomokuState = {
   };
   ended?: boolean;
   winner?: RoundResult;
+  moveDeadlineAt?: number;
+  clockDeadlineAt?: number;
+  clockRemaining?: Record<SeatKey, number>;
 };
 export type RankMultiplier = 1 | 2 | 5 | 10;
 export type BotDifficulty = "easy" | "normal" | "chaos";
@@ -256,6 +265,11 @@ export type RoomSettings = {
   gomokuUndoLimit?: 0 | 1 | 3 | 10;
   liarsDiceMinPlayers?: number;
   liarsDiceMaxPlayers?: number;
+  // 计时设置：0/缺省表示不限时
+  othelloMoveSeconds?: number;
+  othelloGameMinutes?: number;
+  gomokuMoveSeconds?: number;
+  gomokuGameMinutes?: number;
 };
 
 export type LiarsDiceBid = {
@@ -436,6 +450,13 @@ export type LobbySnapshot = {
     rankMultiplier?: RankMultiplier;
     enableExtremeRanked?: boolean;
     tags?: string[];
+    liarsDiceMinPlayers?: number;
+    liarsDiceMaxPlayers?: number;
+    othelloMoveSeconds?: number;
+    othelloGameMinutes?: number;
+    gomokuMoveSeconds?: number;
+    gomokuGameMinutes?: number;
+    gomokuUndoLimit?: number;
   }>;
   normalLeaderboard: PublicPlayer[];
   rankedLeaderboard: PublicPlayer[];

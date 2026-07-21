@@ -8,7 +8,10 @@ import (
 	"github.com/doumiao/newRPS/internal/types"
 )
 
-func TestAvatarURLPersistedAndReloaded(t *testing.T) {
+// TestAvatarURLWrittenToJSONFallback 验证 SQLite 不可用（playerDB 为 nil）时，
+// writeSnapshot 走 writePlayersJSONFallback 保底路径，AvatarURL 等字段完整写出。
+// AvatarURL 经 SQLite 正常读写往返见 TestPlayerStoreUpsertAndLoadRoundTrip。
+func TestAvatarURLWrittenToJSONFallback(t *testing.T) {
 	s := newTestServer(t)
 	s.playerIdToID = map[string]string{}
 	s.tokenToPlayer = map[string]string{}
@@ -44,20 +47,5 @@ func TestAvatarURLPersistedAndReloaded(t *testing.T) {
 	}
 	if len(onDisk) != 1 || onDisk[0].AvatarURL != "/uploads/avatars/demo.webp" {
 		t.Fatalf("avatarUrl not written to disk: %+v", onDisk)
-	}
-
-	// 模拟重启后从磁盘恢复
-	s2 := newTestServer(t)
-	s2.playersFile = s.playersFile
-	s2.playerIdToID = map[string]string{}
-	s2.tokenToPlayer = map[string]string{}
-	s2.loadPlayersFromDisk()
-
-	restored := s2.players["pub-avatar-1"]
-	if restored == nil {
-		t.Fatal("player not reloaded")
-	}
-	if restored.AvatarURL != "/uploads/avatars/demo.webp" {
-		t.Fatalf("AvatarURL after reload = %q, want /uploads/avatars/demo.webp", restored.AvatarURL)
 	}
 }

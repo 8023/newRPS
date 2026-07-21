@@ -245,6 +245,10 @@ message RoomSettings {
   int32 liars_dice_max_players = 25;
   string gomoku_board_theme = 26;
   int32 gomoku_undo_limit = 27;
+  int32 othello_move_seconds = 28;
+  int32 othello_game_minutes = 29;
+  int32 gomoku_move_seconds = 30;
+  int32 gomoku_game_minutes = 31;
 }
 
 message GomokuUndoRequest {
@@ -273,6 +277,9 @@ message GomokuState {
   GomokuResignRequest resign_request = 10;
   bool ended = 11;
   string winner = 12;
+  int64 move_deadline_at = 13;
+  int64 clock_deadline_at = 14;
+  repeated IntPair clock_remaining = 15;
 }
 
 message PunishmentProof {
@@ -441,6 +448,9 @@ message OthelloState {
   OthelloSurrenderRequest surrender_request = 11;
   bool ended = 12;
   string winner = 13;
+  int64 move_deadline_at = 14;
+  int64 clock_deadline_at = 15;
+  repeated IntPair clock_remaining = 16;
 }
 
 message TicTacToeGiveawayPrompt {
@@ -561,6 +571,13 @@ message LobbyRoomInfo {
   int32 rank_multiplier = 21;
   bool enable_extreme_ranked = 22;
   repeated string tags = 23;
+  int32 liars_dice_min_players = 24;
+  int32 liars_dice_max_players = 25;
+  int32 othello_move_seconds = 26;
+  int32 othello_game_minutes = 27;
+  int32 gomoku_move_seconds = 28;
+  int32 gomoku_game_minutes = 29;
+  int32 gomoku_undo_limit = 30;
 }
 
 message LobbyPlayerEntry {

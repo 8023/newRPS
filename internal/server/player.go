@@ -468,13 +468,19 @@ func (s *Server) createPlayer(name, genderID, token string, identityPlayerID, id
 	return player
 }
 
-func (s *Server) getPlayerByClientID(clientID string) *PlayerState {
-	for _, player := range s.players {
-		if player.SocketID == clientID {
-			return player
-		}
+// getPlayerByClient 按 client.playerID 直接索引 s.players（O(1)），再用
+// player.SocketID == client.id 确认这条连接确实是该玩家当前活跃的连接——
+// 语义等价于旧版对 s.players 的线性扫描（顶号/断线重连后旧连接的 playerID
+// 仍指向同一个玩家对象，但 SocketID 已指向新连接，这里会正确返回 nil）。
+func (s *Server) getPlayerByClient(client *Client) *PlayerState {
+	if client == nil || client.playerID == "" {
+		return nil
 	}
-	return nil
+	player := s.players[client.playerID]
+	if player == nil || player.SocketID != client.id {
+		return nil
+	}
+	return player
 }
 
 func (s *Server) clearDisconnectHold(player *PlayerState) {

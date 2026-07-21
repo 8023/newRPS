@@ -155,4 +155,12 @@ func TestSchemaMigrationFromLegacyV0AddsMissingPlayerColumns(t *testing.T) {
 	if highest != 100 {
 		t.Fatalf("highest_score backfill = %d, want 100", highest)
 	}
+
+	var hashColCount int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('players') WHERE name = 'player_secret_hash'`).Scan(&hashColCount); err != nil {
+		t.Fatalf("query players columns: %v", err)
+	}
+	if hashColCount != 0 {
+		t.Fatalf("expected legacy player_secret_hash column to be dropped by v6 migration, still present")
+	}
 }

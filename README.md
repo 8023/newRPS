@@ -2,7 +2,7 @@
 
 实时联机小游戏平台：**Go 后端** + **React 前端**。
 
-主玩法：锤子剪刀布 / 黑白棋 / 井字棋。含大厅、房间、聊天、观战、Bot、排位、惩罚、名字争夺战、白给、极限模式、后台配置等。
+主玩法：锤子剪刀布 / 黑白棋 / 井字棋 / 五子棋 / 大话骰。含大厅、房间、聊天、观战、Bot、排位、惩罚、名字争夺战、白给、极限模式、后台配置等。
 
 ## 目录结构
 
@@ -113,7 +113,7 @@ docker compose logs -f gamehouse
 
 | 路径 | 内容 | 说明 |
 |------|------|------|
-| `data/database.db`（及 `-wal`/`-shm`） | 玩家档案、聊天、房间/惩罚事件、Web Push | **核心存档**；旧 `players.json` 启动时会自动迁入库并改名为 `players.json.migrated` |
+| `data/database.db`（及 `-wal`/`-shm`） | 玩家档案、聊天、房间/惩罚事件、Web Push | **核心存档**；`data/players.json` → SQLite 的一次性导入代码已删除（现网存量部署已全部迁移完成），仍停留在 pre-v2.1.28 `players.json` 且从未启动过带迁移代码版本的部署，需先在某个旧版本上启动一次完成迁移，再升级到当前版本 |
 | `work/uploads/` | 证明图、后台上传图 | 丢了历史图片链会 404 |
 | `work/session.secret` | 会话 HMAC（未设 `SESSION_SECRET` 时） | 丢了则旧浏览器 token 全部失效 |
 | `config/*.json` | 后台改过的运行时配置（按功能拆分） | **整目录备份**；升级勿用空包覆盖已改配置 |
@@ -121,11 +121,11 @@ docker compose logs -f gamehouse
 
 可用新版本覆盖的：`bin/`、`dist/`、`docker-compose.yml`。配置仅在确认需要重置时再覆盖 `config/`。
 
-⚠️ **`data/players.json` → SQLite 迁移代码，与 `PlayerSecretHash` 兼容分支同属临时桥接，等老部署基本迁完后应删除**：v2.1.28 起玩家档案改存 `data/database.db`（`internal/server/playerstore.go`），旧 `players.json` 由 `internal/server/persist.go` 的 `migratePlayersJSONIfNeeded` 在每次启动时幂等扫描导入，成功后整体改名为 `players.json.migrated` 避免下次重复扫描；`ingestPersistedPlayer`/`loadPlayersFromSQLite` 是正常加载也要用的常驻逻辑，不在此列。待确认所有仍在运营的部署都已完成一次这个迁移（即 `players.json` 已普遍变成 `players.json.migrated`）后，应删除：`migratePlayersJSONIfNeeded` 本体及其在 `loadPlayersFromDisk` 里的调用、`persistedPlayer.LegacyOthelloStats` 字段、`migrateGameStats` 里从旧版合计战绩反推分游戏战绩的兜底分支（`hasNew` 为假时的逻辑）。
+玩家档案存于 `data/database.db`（`internal/server/playerstore.go`），启动时经 `loadPlayersFromSQLite`/`ingestPersistedPlayer` 全量加载进内存。`data/players.json` → SQLite 的一次性导入代码（`migratePlayersJSONIfNeeded`）与 `PlayerSecretHash` 兼容分支已随现网存量部署完成迁移后一并删除。
 
-⚠️ **`writePlayersJSONFallback`（`internal/server/persist.go`）是 SQLite 不可用/写失败时的保底路径，和上面那条"迁移代码"方向相反**：上面那条是"把旧 `players.json` 导入库"，这条是"库写不进去时兜底写回 `players.json`"，两者独立，删除其中一个不影响另一个。SQLite 持久化（`playerDB.upsertMany`）稳定运行一段时间、确认生产环境没有再触发过这个降级路径后，可以评估是否精简/删除 `writeSnapshot`/`writePlayersJSONFallback` 里的这条兜底分支，改为只记 `errorLog` 不再写 JSON。
+⚠️ **`writePlayersJSONFallback`（`internal/server/persist.go`）是 SQLite 不可用/写失败时的保底路径**：库写不进去时兜底写回 `data/players.json`，避免彻底丢档；不提供反向的"启动时从这份 JSON 读回"能力（SQLite 是唯一的读路径）。SQLite 持久化（`playerDB.upsertMany`）稳定运行一段时间、确认生产环境没有再触发过这个降级路径后，可以评估是否精简/删除 `writeSnapshot`/`writePlayersJSONFallback` 里的这条兜底分支，改为只记 `errorLog` 不再写 JSON。
 
-⚠️ **改 SQLite 表结构必须同步 bump `internal/server/schema_migrations.go` 的 `currentSchemaVersion`，否则线上旧库不会迁移，读写会用错列**：`data/database.db` 里有张 `schema_version` 表记录当前结构版本，`openDatabase` 每次启动都会跟代码里的 `currentSchemaVersion` 比对——一致就跳过，不一致就依次执行 `migrations` 里对应版本号的显式迁移（`ALTER TABLE ADD/RENAME COLUMN`、建新表倒数据等）。改动流程：① 把 `internal/server/*.go` 里对应的 `xxxSchema` 常量改成目标结构；② 在 `migrations` 追加一条 `{version: currentSchemaVersion+1, migrate: ...}`，用真正的 SQL 把旧数据搬到新结构；③ 把 `currentSchemaVersion` 加一。只改①不做②③，等于新代码按新结构读写字段，但已经建过表的旧库还停在旧结构，轻则报错重则悄悄错位。`version==0`（全新库，或本机制引入之前就存在、结构在代码里已无法追溯的历史遗留库）时有一次性的"某条 `CREATE INDEX` 因为列不存在报错 → 把该表整体改名隔离为 `<表名>_legacy`"兜底，只用于应付"完全够不到历史"的场景（比如 `punishment_events` 曾经用过 `kind`/`source`/`player_id`/`at` 这套更早的列名），**不能**当成常规迁移手段来偷懒——它只能处理"缺列导致建索引失败"，处理不了删列/改列名（旧列会悄悄留在表里没人管）。
+⚠️ **改 SQLite 表结构必须同步 bump `internal/server/schema_migrations.go` 的 `currentSchemaVersion`，否则线上旧库不会迁移，读写会用错列**：`data/database.db` 里有张 `schema_version` 表记录当前结构版本，`openDatabase` 每次启动都会跟代码里的 `currentSchemaVersion` 比对——一致就跳过，不一致就依次执行 `migrations` 里对应版本号的显式迁移（`ALTER TABLE ADD/RENAME COLUMN`、建新表倒数据等）。改动流程：① 把 `internal/server/*.go` 里对应的 `xxxSchema` 常量改成目标结构；② 在 `migrations` 追加一条 `{version: currentSchemaVersion+1, migrate: ...}`，用真正的 SQL 把旧数据搬到新结构；③ 把 `currentSchemaVersion` 加一。只改①不做②③，等于新代码按新结构读写字段，但已经建过表的旧库还停在旧结构，轻则报错重则悄悄错位。`version==0`（全新库，或本机制引入之前就存在、结构在代码里已无法追溯的历史遗留库）时有一次性的"某条 `CREATE INDEX` 因为列不存在报错 → 把该表整体改名隔离为 `<表名>_legacy`"兜底，只用于应付"完全够不到历史"的场景（比如 `punishment_events` 曾经用过 `kind`/`source`/`player_id`/`at` 这套更早的列名），**不能**当成常规迁移手段来偷懒——它只能处理"缺列导致建索引失败"，处理不了删列/改列名（旧列会悄悄留在表里没人管）。`punishment_events` 隔离出的 `_legacy` 表不会就此撂着：v4 迁移（`convertLegacyPunishmentEvents`）按 `room_id`+被罚玩家+`task_text` 把旧版"发布"/"提交证明"两行拼回新版一行一任务的结构，尽量不丢历史，转换完即丢弃 `_legacy` 表。
 
 ```bash
 # 备份数据（推荐）
@@ -264,14 +264,7 @@ docker compose up -d
 - **多端同时"记住"，但同一时刻只有一端在线**：一个身份最多同时记住 3 台设备的凭据（`PlayerSecrets`，超出后挤掉最早一条，绝不挤当前活跃会话），但服务端仍是单 socket 模型——已有设备在线时，新设备登录会先收到 `alreadyOnline` 提示确认是否顶替，确认后走 `forceKick`，被顶替端会收到 `session:kicked` 事件（同设备刷新重连不受影响，不会误触发确认）。
 - **登出**：`identity:logout` 撤销当前设备的那条 `playerSecret`，前端随后清空本地 `localStorage`。
 
-⚠️ **一次性迁移代码，请在合并后一个月内删除**：早期版本身份凭据只存 `hashSecret(secret)`（`internal/server/util.go` 的 `hashSecret`），字段是 `PlayerState.PlayerSecretHash` / `persistedPlayer.PlayerSecretHash`。现在改为明文存储的 `PlayerSecrets` 列表（认领密钥本身就要求服务端能把密钥"读出来"展示给用户，哈希做不到这点；而"服务器数据泄露"这个威胁模型下，明文认领密钥本来就足以接管账号，给另一个字段单独加密没有实际收益，详见迁移决策讨论）。`internal/server/identity.go` 的 `verifyPlayerSecret` 里有一段兼容分支：老账号第一次带着老 secret 重连时，校验通过后会自动把明文迁移进 `PlayerSecrets`，不需要用户做任何操作。
-
-一个月后（正常活跃账号届时都已完成自动迁移）应整体删除：
-- `internal/server/identity.go` 的 `verifyPlayerSecret` 里 `PlayerSecretHash` 兜底分支
-- `PlayerState.PlayerSecretHash` / `persistedPlayer.PlayerSecretHash` 字段
-- `internal/server/util.go` 的 `hashSecret` 函数
-
-**代价**：这一个月内始终没有上线过的账号，届时会无法再用老设备的身份登录（因为兜底校验代码被删掉、且它们的明文 secret 从未被自动迁移过）——这是时间窗口本身带来的必然结果，不是 bug。
+身份凭据统一存明文 `PlayerSecrets` 列表（`verifyPlayerSecret` 只查这一份）。早期版本用单值哈希（`PlayerState.PlayerSecretHash`，`hashSecret`）存凭据的兼容分支已删除；当时仍停留在旧哈希格式、从未在删除前重连过的账号，其明文 secret 从未完成自动迁移，现已无法再用老设备身份登录（档案本身仍保留，见 `internal/server/schema_migrations.go` v6 迁移）。
 
 ## 大话骰（Liar's Dice）
 
@@ -307,6 +300,15 @@ npm run test           # go test + 前端 build
 ```
 
 ## 最近更新记录
+
+### v2.2.2（2026-07-21）
+
+- **黑白棋/五子棋新增计时（棋钟）**：建房可选「每子时长」（0/30/45/60/90/120/180 秒，默认不限）与「每局时长」（0/5/10/15/20/30/45/60 分钟，默认不限，双方各自独立累计，类似传统棋钟）。轮到己方时开始计时，落子后暂停直到轮到对方；五子棋的悔棋/认输请求处理期间同样暂停双方计时，处理完毕后重新起算，不占用任何一方的时间；黑白棋白给/上贡结算等待窗口走独立的超时机制，同样不占用棋钟。任一方某步超过「每子时长」或总时长耗尽即超时判负（黑白棋按既有强制结束流程结算，触发排位保底；五子棋按普通终局流程结算）。棋盘上方新增倒计时条，本步剩余 ≤10 秒变色提醒。
+- **房间/大厅卡片新增设置标签**：黑白棋/五子棋显示"计时：xx秒/xx分钟"（未启用计时则不显示）；五子棋额外显示悔棋次数（"禁止悔棋"/"允许悔棋N次"）；大话骰显示参战人数区间（如"3-7人"）。这些设置此前进房后才能看到，现在大厅列表就能看到。
+- **身份认证迁移期兼容代码删除**：早期版本的单值哈希凭据字段 `PlayerSecretHash`、其读写与自动迁移分支（`verifyPlayerSecret` 里的兼容判断、`hashSecret` 函数）已随现网存量部署完成迁移后一并删除，身份校验现在只查明文 `PlayerSecrets` 列表；`players` 表的 `player_secret_hash` 列由新的 schema v6 迁移在启动时自动清理。
+- **`data/players.json` → SQLite 一次性迁移代码删除**：`migratePlayersJSONIfNeeded`/`migrateGameStats`/`LegacyOthelloStats` 均已移除，`loadPlayersFromDisk` 现在纯粹从 SQLite 加载；SQLite 写失败时的降级保底写（`writePlayersJSONFallback`）不受影响，仍然保留，二者方向相反、互不依赖。
+- **`punishment_events_legacy` 隔离表新增自动转换**：schema v4 迁移（`convertLegacyPunishmentEvents`）按房间+被罚玩家+任务文本，把旧版一次性隔离改名保留的 `punishment_events_legacy`（`kind=task`/`kind=proof` 两行式旧结构）尽量拼回新版一行一任务结构，转换完即丢弃该表，不再无限期滞留。
+- **清理两个历史遗留列**：schema v5 删除 `rooms.code`（旧版房间码，新代码已不再读写）；schema v6 删除 `players.player_secret_hash`（见上）。
 
 ### v2.2.0（2026-07-19）
 

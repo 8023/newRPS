@@ -457,7 +457,7 @@ func (s *Server) onClientDisconnect(client *Client) {
 	delete(s.adminClientIDs, client.id)
 	delete(s.clients, client.id)
 
-	player := s.getPlayerByClientID(client.id)
+	player := s.getPlayerByClient(client)
 	playerID := ""
 	if player != nil {
 		playerID = player.ID

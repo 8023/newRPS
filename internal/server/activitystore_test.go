@@ -59,7 +59,7 @@ func TestCloseLiveStateOnShutdown(t *testing.T) {
 	s := newActivityTestServer(t)
 
 	// 一条已经绑定玩家的连接，一条从没关联过玩家的（比如连上就断的游客）。
-	s.clients["sock-bound"] = &Client{id: "sock-bound", connectedAt: 1000, sid: "sid-a", ipAddress: "1.1.1.1", compression: "ctx"}
+	s.clients["sock-bound"] = &Client{id: "sock-bound", connectedAt: 1000, sid: "sid-a", ipAddress: "1.1.1.1", compression: "ctx", playerID: "p1"}
 	s.clients["sock-guest"] = &Client{id: "sock-guest", connectedAt: 1100, sid: "sid-b", ipAddress: "2.2.2.2"}
 	s.players["p1"] = &PlayerState{PublicPlayer: types.PublicPlayer{ID: "p1"}, SocketID: "sock-bound"}
 

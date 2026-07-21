@@ -230,6 +230,8 @@ export function normalizeStateTree(doc: any): any {
     out.othello.blackCount = numOr(out.othello.blackCount, 0);
     out.othello.whiteCount = numOr(out.othello.whiteCount, 0);
     out.othello.passCount = numOr(out.othello.passCount, 0);
+    out.othello.moveDeadlineAt = numOr(out.othello.moveDeadlineAt, 0);
+    out.othello.clockDeadlineAt = numOr(out.othello.clockDeadlineAt, 0);
     if (!Array.isArray(out.othello.settlementEvents)) out.othello.settlementEvents = [];
   }
   if (out.tictactoe && typeof out.tictactoe === "object") {
@@ -242,6 +244,8 @@ export function normalizeStateTree(doc: any): any {
     out.gomoku.moves = normalizePosList(out.gomoku.moves);
     out.gomoku.winningLine = normalizePosList(out.gomoku.winningLine);
     out.gomoku.moveCount = numOr(out.gomoku.moveCount, 0);
+    out.gomoku.moveDeadlineAt = numOr(out.gomoku.moveDeadlineAt, 0);
+    out.gomoku.clockDeadlineAt = numOr(out.gomoku.clockDeadlineAt, 0);
   }
   // protobufjs defaults:false 会丢掉数值零值；这些字段会在广播窗口清空时回落到 0，
   // 若不补齐，管理面板会在 DELTA 把 key 整个删掉后显示 undefined/NaN。
@@ -302,8 +306,17 @@ function fillRoomSettingsDefaults(settings: any): any {
   // true/false，线上房间永远不会是"未设置"——false 是它的零值，缺省按 false 补齐即可
   // 无损还原（true 是非零值，永远不会被 protojson 丢掉）。
   // gomokuUndoLimit 同理：建房时已校验为 0/1/3/10 之一，键缺失只可能是真值 0（禁止悔棋）
-  // 被 defaults:false 连 key 一起丢掉，缺省按 0 补齐即可无损还原。
-  return { ...settings, allowProofImage: settings.allowProofImage ?? false, gomokuUndoLimit: numOr(settings.gomokuUndoLimit, 0) };
+  // 被 defaults:false 连 key 一起丢掉，缺省按 0 补齐即可无损还原。计时设置四个字段同理，
+  // 0 就是"不限时"的合法值。
+  return {
+    ...settings,
+    allowProofImage: settings.allowProofImage ?? false,
+    gomokuUndoLimit: numOr(settings.gomokuUndoLimit, 0),
+    othelloMoveSeconds: numOr(settings.othelloMoveSeconds, 0),
+    othelloGameMinutes: numOr(settings.othelloGameMinutes, 0),
+    gomokuMoveSeconds: numOr(settings.gomokuMoveSeconds, 0),
+    gomokuGameMinutes: numOr(settings.gomokuGameMinutes, 0)
+  };
 }
 
 function fillReviewedAtDefault(proof: any): any {
@@ -451,9 +464,12 @@ function materializeRoom(room: any): any {
     r.othello.board = padBoardMatrix(boardRows(r.othello.board), 8);
     r.othello.legalMoves = normalizePosList(r.othello.legalMoves);
     r.othello.rankedDelta = pairsToMap(r.othello.rankedDelta, 0);
+    r.othello.clockRemaining = pairsToMap(r.othello.clockRemaining, 0);
     r.othello.blackCount = numOr(r.othello.blackCount, 0);
     r.othello.whiteCount = numOr(r.othello.whiteCount, 0);
     r.othello.passCount = numOr(r.othello.passCount, 0);
+    r.othello.moveDeadlineAt = numOr(r.othello.moveDeadlineAt, 0);
+    r.othello.clockDeadlineAt = numOr(r.othello.clockDeadlineAt, 0);
     if (r.othello.pendingSettlement) {
       r.othello.pendingSettlement.flips = numOr(r.othello.pendingSettlement.flips, 0);
       r.othello.pendingSettlement.stake = numOr(r.othello.pendingSettlement.stake, 0);
@@ -474,7 +490,10 @@ function materializeRoom(room: any): any {
     r.gomoku.winningLine = normalizePosList(r.gomoku.winningLine);
     r.gomoku.rankedDelta = pairsToMap(r.gomoku.rankedDelta, 0);
     r.gomoku.undoCount = pairsToMap(r.gomoku.undoCount, 0);
+    r.gomoku.clockRemaining = pairsToMap(r.gomoku.clockRemaining, 0);
     r.gomoku.moveCount = numOr(r.gomoku.moveCount, 0);
+    r.gomoku.moveDeadlineAt = numOr(r.gomoku.moveDeadlineAt, 0);
+    r.gomoku.clockDeadlineAt = numOr(r.gomoku.clockDeadlineAt, 0);
   }
   // 历史里的井字连线/大话骰开牌数据同样可能丢 0 / 需要 pair 展开
   if (Array.isArray(r.roundHistory)) {

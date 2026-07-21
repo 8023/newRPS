@@ -45,15 +45,14 @@ func (s *Server) recordBroadcast(typ string, bytes int) {
 }
 
 func (s *Server) lobbySnapshot(includeConfig, includeSuggestions bool) types.LobbySnapshot {
-	for _, player := range s.players {
-		s.refreshGiveawayBoard(player, nowMs())
-		if s.refreshNameWarState(player, nowMs()) {
-			s.refreshPlayerSnapshots(player)
-		}
-	}
 	humanPlayers := make(map[string]types.LobbyPlayer, len(s.players))
 	online := 0
+	now := nowMs()
 	for _, player := range s.players {
+		s.refreshGiveawayBoard(player, now)
+		if s.refreshNameWarState(player, now) {
+			s.refreshPlayerSnapshots(player)
+		}
 		lp := types.ToLobbyPlayer(s.publicPlayer(player))
 		humanPlayers[lp.ID] = lp
 		if player.Connected {
@@ -94,6 +93,10 @@ func (s *Server) lobbySnapshot(includeConfig, includeSuggestions bool) types.Lob
 			RequireOpponentConfirm: room.Settings.RequireOpponentConfirm, EnableRanked: room.Settings.EnableRanked,
 			Stake: room.Settings.Stake, EnableRankMultiplier: room.Settings.EnableRankMultiplier,
 			RankMultiplier: rankMultiplierFor(room.Settings), EnableExtremeRanked: room.Settings.EnableExtremeRanked,
+			LiarsDiceMinPlayers: room.Settings.LiarsDiceMinPlayers, LiarsDiceMaxPlayers: room.Settings.LiarsDiceMaxPlayers,
+			OthelloMoveSeconds: room.Settings.OthelloMoveSeconds, OthelloGameMinutes: room.Settings.OthelloGameMinutes,
+			GomokuMoveSeconds: room.Settings.GomokuMoveSeconds, GomokuGameMinutes: room.Settings.GomokuGameMinutes,
+				GomokuUndoLimit: room.Settings.GomokuUndoLimit,
 		}
 		if room.Settings.EnableTags {
 			info.Tags = room.Settings.Tags

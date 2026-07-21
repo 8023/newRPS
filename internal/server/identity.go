@@ -6,9 +6,6 @@ package server
 //   - ClaimKey：单值、明文、一次性——只用于把身份「搬」到一台新设备。展示给用户、
 //     粘贴到另一台设备提交后，服务端验证通过就会：① 生成一条全新的 PlayerSecrets
 //     供新设备使用；② 立即轮换掉这个 ClaimKey（用过即作废），不影响任何一台已登录设备。
-//
-// 迁移期兼容：见 verifyPlayerSecret 里对旧版 PlayerSecretHash 的兜底分支，一个月后删除
-// （README 有说明）。
 
 // isSameDevice 判断新连接的 deviceKey 是否和这个玩家上次记录的 deviceKey 一致——
 // 一致视为「同设备刷新/重连」，不一致视为「换了一台设备」。
@@ -23,27 +20,12 @@ func needsKickConfirm(sameDevice, forceKick bool) bool {
 	return !sameDevice && !forceKick
 }
 
-// verifyPlayerSecret 校验一段明文 secret 能否证明这就是该玩家本人。
-// 优先查新版明文设备列表；如果这个账号还只有老版本的单值哈希（迁移期），校验通过后
-// 顺手把这台设备的明文 secret 迁移进新列表——不需要用户做任何额外操作，正常重连
-// 就会自动完成迁移。
-//
-// TODO(迁移期一次性代码，一个月后删除，见 README)：整个 legacy 分支 + PlayerSecretHash
-// 字段 + hashSecret 函数都应在那之后一并清理。窗口期内始终没有上线过的老账号，届时
-// 将无法再用老设备身份登录。
+// verifyPlayerSecret 校验一段明文 secret 能否证明这就是该玩家本人：查新版明文设备列表。
 func (s *Server) verifyPlayerSecret(player *PlayerState, secret string) bool {
 	if secret == "" {
 		return false
 	}
-	if player.hasPlayerSecret(secret) {
-		return true
-	}
-	if player.PlayerSecretHash != "" && hashSecret(secret) == player.PlayerSecretHash {
-		player.addPlayerSecret(secret)
-		s.requestPersist("lazy")
-		return true
-	}
-	return false
+	return player.hasPlayerSecret(secret)
 }
 
 // onIdentityShowClaimKey 把当前有效的认领密钥回给发起请求的这一条 socket（不广播）。

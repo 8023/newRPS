@@ -116,6 +116,8 @@ func New() (*Server, error) {
 		ticTacToeGiveawayTimers: map[string]*time.Timer{},
 		liarsDiceStartTimers:    map[string]*time.Timer{},
 		gomokuUndoTimers:        map[string]*time.Timer{},
+		othelloClockTimers:      map[string]*time.Timer{},
+		gomokuClockTimers:       map[string]*time.Timer{},
 		deviceCreateAttempts:    map[string][]int64{},
 		ipCreateAttempts:        map[string][]int64{},
 		adminClientIDs:          map[string]struct{}{},
@@ -272,7 +274,7 @@ func (s *Server) closeLiveStateOnShutdown() {
 		}
 		c.connectionLogged = true
 		playerID := ""
-		if p := s.getPlayerByClientID(c.id); p != nil {
+		if p := s.getPlayerByClient(c); p != nil {
 			playerID = p.ID
 		}
 		conns = append(conns, openConn{

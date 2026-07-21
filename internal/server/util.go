@@ -2,9 +2,7 @@ package server
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"math"
 	"regexp"
@@ -29,11 +27,6 @@ func generatePublicID() string {
 	b := make([]byte, 9)
 	_, _ = rand.Read(b)
 	return base64.RawURLEncoding.EncodeToString(b)
-}
-
-func hashSecret(secret string) string {
-	sum := sha256.Sum256([]byte(secret))
-	return hex.EncodeToString(sum[:])
 }
 
 func clamp(value, min, max int) int {
@@ -97,10 +90,10 @@ func safeUploadURL(value string) string {
 	return ""
 }
 
-func boolPtr(b bool) *bool       { return &b }
-func intPtr(i int) *int          { return &i }
+func boolPtr(b bool) *bool        { return &b }
+func intPtr(i int) *int           { return &i }
 func floatPtr(f float64) *float64 { return &f }
-func int64Ptr(i int64) *int64    { return &i }
+func int64Ptr(i int64) *int64     { return &i }
 
 func ptrBool(p *bool) bool {
 	if p == nil {

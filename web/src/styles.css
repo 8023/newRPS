@@ -2216,6 +2216,24 @@ main {
   overflow-wrap: anywhere;
 }
 
+.game-clock-bar {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 0.92em;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.game-clock-move.urgent {
+  color: #a9344f;
+}
+
+:root[data-theme="dark"] .game-clock-move.urgent {
+  color: #ffc2d0;
+}
+
 .othello-board {
   width: min(100%, 680px, 72dvh);
   aspect-ratio: 1;
@@ -5435,6 +5453,20 @@ main {
 }
 
 .liarsdice-roster-settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9em;
+}
+
+.game-timer-settings {
+  display: flex;
+  gap: 16px;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+
+.game-timer-settings label {
   display: flex;
   flex-direction: column;
   gap: 4px;

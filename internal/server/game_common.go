@@ -5,6 +5,39 @@ import "github.com/doumiao/newRPS/internal/types"
 // 轮流制棋类（黑白棋 / 井字棋）共用：复位字段、座位胜负统计、历史+惩罚收尾。
 // RPS 结算路径不同（按手即时结算），不走此处。
 
+// clampMoveSeconds/clampGameMinutes：黑白棋/五子棋建房计时下拉框合法值校验，0 表示不限时。
+func clampMoveSeconds(v int) int {
+	switch v {
+	case 0, 30, 45, 60, 90, 120, 180:
+		return v
+	default:
+		return 0
+	}
+}
+
+func clampGameMinutes(v int) int {
+	switch v {
+	case 0, 5, 10, 15, 20, 30, 45, 60:
+		return v
+	default:
+		return 0
+	}
+}
+
+// earliestPositiveDeadline 取两个 epoch 毫秒时间戳中较早的一个；<=0 视为「未启用」并忽略。
+func earliestPositiveDeadline(a, b int64) int64 {
+	if a <= 0 {
+		return b
+	}
+	if b <= 0 {
+		return a
+	}
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // resetTurnBasedRoom 将房间回到「双方准备」公共字段（调用方再清各自的 othello/tictactoe 状态）。
 func (s *Server) resetTurnBasedRoom(room *RoomState) {
 	room.Phase = types.PhaseReady

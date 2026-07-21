@@ -33,7 +33,6 @@ CREATE TABLE IF NOT EXISTS rooms (
 	closed_at    INTEGER NOT NULL,
 	close_reason TEXT NOT NULL
 );
--- 兼容旧库：历史上有 code（DM-xxxx）列；新写入不再使用该列，表若已存在则保留旧列不删。
 CREATE TABLE IF NOT EXISTS room_join_events (
 	seq         INTEGER PRIMARY KEY AUTOINCREMENT,
 	at          INTEGER NOT NULL,
@@ -86,8 +85,6 @@ func (e *eventStore) insertClosedRoom(roomID, roomName, gameID, creatorID, creat
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	// 新库无 code 列；若旧库仍有 code 列，用 INSERT 指定列列表即可不写该列（SQLite 对缺列会用 NULL/默认值）。
-	// 旧库若 code 无默认且 NOT NULL，几乎不会（原 schema 为可空 TEXT）。
 	_, err := e.db.Exec(
 		`INSERT INTO rooms (room_id, room_name, game_id, creator_id, creator_name, created_at, closed_at, close_reason)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,

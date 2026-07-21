@@ -4,7 +4,7 @@ import type { AppConfig, BotDifficulty, ChatMessage, GenderFaction, LobbySnapsho
 import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, withAccessControlDefaults, withRankedScoreDefaults } from "../lib/normalize";
 import {
   defaultGomokuRoomName, defaultLiarsDiceRoomName, defaultOthelloRoomName, defaultRoomName, defaultTicTacToeRoomName,
-  gomokuBoardThemes, othelloBoardThemes, sponsorLinks, tictactoeBoardThemes, tokenKey
+  gameMinutesOptions, gomokuBoardThemes, moveSecondsOptions, othelloBoardThemes, sponsorLinks, tictactoeBoardThemes, tokenKey
 } from "../lib/constants";
 import { ask } from "../lib/rpc";
 import { claimIdentity, encodeClaimCode, fetchClaimKey, joinIdentityPayload, logout, refreshClaimKey } from "../lib/session";
@@ -453,7 +453,11 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
     gomokuBoardTheme: "wood",
     gomokuUndoLimit: 0,
     liarsDiceMinPlayers: 3,
-    liarsDiceMaxPlayers: 3
+    liarsDiceMaxPlayers: 3,
+    othelloMoveSeconds: 0,
+    othelloGameMinutes: 0,
+    gomokuMoveSeconds: 0,
+    gomokuGameMinutes: 0
   });
   const [customRoomName, setCustomRoomName] = useState(false);
 
@@ -502,6 +506,18 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
         merged.gomokuBoardTheme = merged.gomokuBoardTheme || "wood";
         merged.gomokuUndoLimit = merged.gomokuUndoLimit ?? 0;
         merged.enableBot = false;
+      }
+      if ("othelloMoveSeconds" in next && !moveSecondsOptions.includes(next.othelloMoveSeconds as typeof moveSecondsOptions[number])) {
+        merged.othelloMoveSeconds = 0;
+      }
+      if ("othelloGameMinutes" in next && !gameMinutesOptions.includes(next.othelloGameMinutes as typeof gameMinutesOptions[number])) {
+        merged.othelloGameMinutes = 0;
+      }
+      if ("gomokuMoveSeconds" in next && !moveSecondsOptions.includes(next.gomokuMoveSeconds as typeof moveSecondsOptions[number])) {
+        merged.gomokuMoveSeconds = 0;
+      }
+      if ("gomokuGameMinutes" in next && !gameMinutesOptions.includes(next.gomokuGameMinutes as typeof gameMinutesOptions[number])) {
+        merged.gomokuGameMinutes = 0;
       }
       if (next.gameId === "liarsdice" || merged.gameId === "liarsdice") {
         merged.liarsDiceMinPlayers = merged.liarsDiceMinPlayers || 3;
@@ -657,18 +673,40 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
               {settings.gameId === "liarsdice" && <p className="hint">大话骰支持 2-8 人参战，进房默认观战，可自由加入/离开参战席；全员准备且名单 5 秒无变动后自动开局，Bot 暂不开放。</p>}
               {settings.gameId === "gomoku" && <p className="hint">五子棋支持真人 1v1、观战、聊天、排位和惩罚；15x15 棋盘先连成五子者胜，可向对方请求悔棋或认输，Bot 暂不开放。</p>}
               {settings.gameId === "gomoku" && (
-                <div className="multiplier-choice-grid">
-                  {([0, 1, 3, 10] as const).map((limit) => (
-                    <button
-                      type="button"
-                      className={`ranked-choice-card ${(settings.gomokuUndoLimit ?? 0) === limit ? "active" : ""}`}
-                      key={limit}
-                      onClick={() => patch({ gomokuUndoLimit: limit })}
+                <div className="game-timer-settings">
+                  <label>
+                    悔棋次数
+                    <select
+                      value={settings.gomokuUndoLimit ?? 0}
+                      onChange={(event) => patch({ gomokuUndoLimit: Number(event.target.value) as RoomSettings["gomokuUndoLimit"] })}
                     >
-                      <span>{limit === 0 ? "禁止悔棋" : `允许悔棋${limit}次`}</span>
-                      <small>{limit === 0 ? "本局任何一方都不能申请悔棋" : `每方本局最多可申请 ${limit} 次悔棋`}</small>
-                    </button>
-                  ))}
+                      {([0, 1, 3, 10] as const).map((limit) => (
+                        <option key={limit} value={limit}>{limit === 0 ? "禁止" : `${limit}次`}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    每子时长
+                    <select
+                      value={settings.gomokuMoveSeconds ?? 0}
+                      onChange={(event) => patch({ gomokuMoveSeconds: Number(event.target.value) as RoomSettings["gomokuMoveSeconds"] })}
+                    >
+                      {moveSecondsOptions.map((n) => (
+                        <option key={n} value={n}>{n === 0 ? "不限" : `${n} 秒`}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    每局时长
+                    <select
+                      value={settings.gomokuGameMinutes ?? 0}
+                      onChange={(event) => patch({ gomokuGameMinutes: Number(event.target.value) as RoomSettings["gomokuGameMinutes"] })}
+                    >
+                      {gameMinutesOptions.map((n) => (
+                        <option key={n} value={n}>{n === 0 ? "不限" : `${n} 分钟`}</option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
               )}
               {settings.gameId === "liarsdice" && (
@@ -692,6 +730,32 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
                     >
                       {Array.from({ length: 7 }, (_, i) => i + 2).map((n) => (
                         <option key={n} value={n}>{n} 人</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
+              {settings.gameId === "othello" && (
+                <div className="game-timer-settings">
+                  <label>
+                    每子时长
+                    <select
+                      value={settings.othelloMoveSeconds ?? 0}
+                      onChange={(event) => patch({ othelloMoveSeconds: Number(event.target.value) as RoomSettings["othelloMoveSeconds"] })}
+                    >
+                      {moveSecondsOptions.map((n) => (
+                        <option key={n} value={n}>{n === 0 ? "不限" : `${n} 秒`}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    每局时长
+                    <select
+                      value={settings.othelloGameMinutes ?? 0}
+                      onChange={(event) => patch({ othelloGameMinutes: Number(event.target.value) as RoomSettings["othelloGameMinutes"] })}
+                    >
+                      {gameMinutesOptions.map((n) => (
+                        <option key={n} value={n}>{n === 0 ? "不限" : `${n} 分钟`}</option>
                       ))}
                     </select>
                   </label>
@@ -1812,6 +1876,51 @@ export function tictactoeDeltaText(state: NonNullable<RoomSnapshot["tictactoe"]>
   return `${delta >= 0 ? "+" : ""}${delta}`;
 }
 
+function formatClockMs(ms: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+type TimedGameState = {
+  turn: SeatKey;
+  blackSeat: SeatKey;
+  ended?: boolean;
+  moveDeadlineAt?: number;
+  clockDeadlineAt?: number;
+  clockRemaining?: Record<SeatKey, number>;
+};
+
+/** 黑白棋/五子棋共用：棋盘上方的每子/每局倒计时条，未启用对应计时器时不显示。 */
+export function GameClockBar({ room, state, moveSeconds, gameMinutes, now }: {
+  room: RoomSnapshot;
+  state?: TimedGameState;
+  moveSeconds?: number;
+  gameMinutes?: number;
+  now: number;
+}) {
+  if (!state || state.ended || room.phase !== "choosing" || (!moveSeconds && !gameMinutes)) return null;
+  const whiteSeat: SeatKey = state.blackSeat === "A" ? "B" : "A";
+  const moveSecondsLeft = moveSeconds && state.moveDeadlineAt ? Math.max(0, Math.ceil((state.moveDeadlineAt - now) / 1000)) : null;
+  function remainingMsFor(seat: SeatKey): number {
+    if (state!.turn === seat && state!.clockDeadlineAt) return Math.max(0, state!.clockDeadlineAt - now);
+    return state!.clockRemaining?.[seat] ?? 0;
+  }
+  return (
+    <div className="game-clock-bar">
+      {moveSeconds && moveSecondsLeft !== null && (
+        <span className={`game-clock-move ${moveSecondsLeft <= 10 ? "urgent" : ""}`}>本步剩余 {moveSecondsLeft} 秒</span>
+      )}
+      {Boolean(gameMinutes) && (
+        <span className="game-clock-total">
+          ⚫ {formatClockMs(remainingMsFor(state.blackSeat))} · ⚪ {formatClockMs(remainingMsFor(whiteSeat))}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function OthelloPanel({ room, me, now, onMove, onSettle, onRestart, onReady, onRequestSurrender, onRespondSurrender, onEscape }: { room: RoomSnapshot; me: PublicPlayer; now: number; onMove: (row: number, col: number) => void; onSettle: (mode: "normal" | "giveaway" | "tribute") => void; onRestart: () => void; onReady: () => void; onRequestSurrender: () => void; onRespondSurrender: (accept: boolean) => void; onEscape: () => void }) {
   const state = room.othello;
   const boardTheme = othelloThemeStyle(room.settings.othelloBoardTheme);
@@ -1904,6 +2013,7 @@ export function OthelloPanel({ room, me, now, onMove, onSettle, onRestart, onRea
           onSettle={onSettle}
         />
       )}
+      <GameClockBar room={room} state={state} moveSeconds={room.settings.othelloMoveSeconds} gameMinutes={room.settings.othelloGameMinutes} now={now} />
       <div className="othello-board" role="grid" aria-label="黑白棋棋盘" style={boardTheme}>
         {(state?.board || Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => null))).map((row, rowIndex) => row.map((cell, colIndex) => {
           const legal = legalKeys.has(`${rowIndex}-${colIndex}`);
@@ -2605,6 +2715,32 @@ export function rankedInfoExtra(stake: number, multiplier = 1, gameId: RoomSetti
   return multiplier > 1 ? ` ${stake} 分 ×${multiplier}` : ` ${stake} 分`;
 }
 
+const plainInfoTagStyle: RoomInfoTagStyle = { label: "", textColor: "#4d5c6f", backgroundColor: "#eef3f8", borderColor: "#c9d6e4" };
+
+/** 大话骰参战人数区间标签，如「3-7人」；人数区间未知（如 0）时不显示。 */
+function liarsDiceRosterTag(roomId: string, min?: number, max?: number): RoomInfoTagView | null {
+  if (!min || !max) return null;
+  return { key: `liarsdice-roster-${roomId}`, text: `${min}-${max}人`, style: plainInfoTagStyle };
+}
+
+/** 黑白棋/五子棋计时标签，如「计时：30秒/20分钟」；两个计时器都未启用时不显示。 */
+function gameTimerTag(roomId: string, moveSeconds?: number, gameMinutes?: number): RoomInfoTagView | null {
+  if (!moveSeconds && !gameMinutes) return null;
+  const parts: string[] = [];
+  if (moveSeconds) parts.push(`${moveSeconds}秒`);
+  if (gameMinutes) parts.push(`${gameMinutes}分钟`);
+  return { key: `game-timer-${roomId}`, text: `计时：${parts.join("/")}`, style: plainInfoTagStyle };
+}
+
+/** 五子棋悔棋次数标签，如「禁止悔棋」「允许悔棋1次」。 */
+function gomokuUndoTag(roomId: string, undoLimit?: number): RoomInfoTagView {
+  return {
+    key: `gomoku-undo-${roomId}`,
+    text: undoLimit ? `允许悔棋${undoLimit}次` : "禁止悔棋",
+    style: plainInfoTagStyle
+  };
+}
+
 export function roomInfoTags(config: AppConfig, room: RoomSnapshot) {
   const phaseKey = room.phase === "ready" ? "phaseReady"
     : room.phase === "choosing" ? (room.settings.gameId === "liarsdice" ? "phaseChoosingLiarsDice" : "phaseChoosing")
@@ -2624,6 +2760,17 @@ export function roomInfoTags(config: AppConfig, room: RoomSnapshot) {
     if (room.settings.requireOpponentConfirm) tags.push(roomInfoTag(config, "requireOpponentConfirm"));
     tags.push(roomInfoTag(config, room.settings.allowProofImage === false ? "textProofOnly" : "allowProofImage"));
   }
+  if (room.settings.gameId === "liarsdice") {
+    const t = liarsDiceRosterTag(room.id, room.settings.liarsDiceMinPlayers, room.settings.liarsDiceMaxPlayers);
+    if (t) tags.push(t);
+  } else if (room.settings.gameId === "othello") {
+    const t = gameTimerTag(room.id, room.settings.othelloMoveSeconds, room.settings.othelloGameMinutes);
+    if (t) tags.push(t);
+  } else if (room.settings.gameId === "gomoku") {
+    const t = gameTimerTag(room.id, room.settings.gomokuMoveSeconds, room.settings.gomokuGameMinutes);
+    if (t) tags.push(t);
+    tags.push(gomokuUndoTag(room.id, room.settings.gomokuUndoLimit));
+  }
   return tags;
 }
 
@@ -2639,10 +2786,21 @@ export function lobbyRoomInfoTags(config: AppConfig, room: LobbySnapshot["rooms"
     if (room.tieDoublePunish) tags.push(roomInfoTag(config, "tieDoublePunish"));
     if (room.requireOpponentConfirm) tags.push(roomInfoTag(config, "requireOpponentConfirm"));
   }
+  if (room.gameId === "liarsdice") {
+    const t = liarsDiceRosterTag(room.id, room.liarsDiceMinPlayers, room.liarsDiceMaxPlayers);
+    if (t) tags.push(t);
+  } else if (room.gameId === "othello") {
+    const t = gameTimerTag(room.id, room.othelloMoveSeconds, room.othelloGameMinutes);
+    if (t) tags.push(t);
+  } else if (room.gameId === "gomoku") {
+    const t = gameTimerTag(room.id, room.gomokuMoveSeconds, room.gomokuGameMinutes);
+    if (t) tags.push(t);
+    tags.push(gomokuUndoTag(room.id, room.gomokuUndoLimit));
+  }
   tags.push({
     key: `opponent-${room.id}`,
     text: room.enableBot ? `Bot ${room.botDifficulty}` : "真人房",
-    style: { label: "", textColor: "#4d5c6f", backgroundColor: "#eef3f8", borderColor: "#c9d6e4" }
+    style: plainInfoTagStyle
   });
   return tags;
 }

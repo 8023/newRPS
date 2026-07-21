@@ -94,10 +94,10 @@ type PunishmentTaskConfig struct {
 
 type PublicStats struct {
 	// Wins/Losses/Draws 为五游戏合计（由 GameStats 汇总），排行总榜直接读这里。
-	Wins         int `json:"wins"`
-	Losses       int `json:"losses"`
-	Draws        int `json:"draws"`
-	Punishments  int `json:"punishments"`
+	Wins        int `json:"wins"`
+	Losses      int `json:"losses"`
+	Draws       int `json:"draws"`
+	Punishments int `json:"punishments"`
 	// RankedPoints/HighestScore/LowestScore：下发展示值（按 RankedScore 配置封顶）。
 	// 真实存储值见 Sort* 字段；排行榜排序必须用 Sort*，显示用本字段。
 	RankedPoints int `json:"rankedPoints"`
@@ -285,6 +285,11 @@ type RoomSettings struct {
 	LiarsDiceMaxPlayers    int            `json:"liarsDiceMaxPlayers,omitempty"`
 	// 合法取值含 0（禁止悔棋），不能用 omitempty，否则 0 会被当成"未设置"丢失
 	GomokuUndoLimit int `json:"gomokuUndoLimit"`
+	// 计时设置：0 表示不限时，omitempty 安全（0 本就是"未设置/不限"的默认值）
+	OthelloMoveSeconds int `json:"othelloMoveSeconds,omitempty"`
+	OthelloGameMinutes int `json:"othelloGameMinutes,omitempty"`
+	GomokuMoveSeconds  int `json:"gomokuMoveSeconds,omitempty"`
+	GomokuGameMinutes  int `json:"gomokuGameMinutes,omitempty"`
 }
 
 type PunishmentProof struct {
@@ -426,6 +431,12 @@ type OthelloState struct {
 	SurrenderRequest  *OthelloSurrenderRequest  `json:"surrenderRequest,omitempty"`
 	Ended             bool                      `json:"ended,omitempty"`
 	Winner            RoundResult               `json:"winner,omitempty"`
+	// 计时：MoveDeadlineAt/ClockDeadlineAt 为 0 表示对应计时器未启用或当前无人在计时中
+	// （如白给/上贡结算等待窗口期间会临时清零）；ClockRemaining 为双方总时长剩余（毫秒），
+	// 非当前落子方的一侧是冻结的静态值，当前落子方的实时剩余由前端用 ClockDeadlineAt 倒算。
+	MoveDeadlineAt  int64             `json:"moveDeadlineAt,omitempty"`
+	ClockDeadlineAt int64             `json:"clockDeadlineAt,omitempty"`
+	ClockRemaining  map[SeatKey]int64 `json:"clockRemaining,omitempty"`
 }
 
 type TicTacToeCell string
@@ -487,6 +498,10 @@ type GomokuState struct {
 	ResignRequest *GomokuResignRequest `json:"resignRequest,omitempty"`
 	Ended         bool                 `json:"ended,omitempty"`
 	Winner        RoundResult          `json:"winner,omitempty"`
+	// 计时：语义同 OthelloState 的同名字段。
+	MoveDeadlineAt  int64             `json:"moveDeadlineAt,omitempty"`
+	ClockDeadlineAt int64             `json:"clockDeadlineAt,omitempty"`
+	ClockRemaining  map[SeatKey]int64 `json:"clockRemaining,omitempty"`
 }
 
 type LiarsDiceBid struct {
@@ -580,6 +595,14 @@ type LobbyRoomInfo struct {
 	RankMultiplier         RankMultiplier  `json:"rankMultiplier,omitempty"`
 	EnableExtremeRanked    bool            `json:"enableExtremeRanked,omitempty"`
 	Tags                   []string        `json:"tags"`
+	// 大厅房间卡片标签用：大话骰参战人数区间 / 黑白棋、五子棋计时设置（均为 0 表示未设置/不限）
+	LiarsDiceMinPlayers int `json:"liarsDiceMinPlayers,omitempty"`
+	LiarsDiceMaxPlayers int `json:"liarsDiceMaxPlayers,omitempty"`
+	OthelloMoveSeconds  int `json:"othelloMoveSeconds,omitempty"`
+	OthelloGameMinutes  int `json:"othelloGameMinutes,omitempty"`
+	GomokuMoveSeconds   int `json:"gomokuMoveSeconds,omitempty"`
+	GomokuGameMinutes   int `json:"gomokuGameMinutes,omitempty"`
+	GomokuUndoLimit     int `json:"gomokuUndoLimit,omitempty"`
 }
 
 type LobbySnapshot struct {

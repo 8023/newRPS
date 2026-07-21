@@ -371,7 +371,7 @@ func (s *Server) onAdminLogin(client *Client, env wsEnvelope) {
 		Password string `json:"password"`
 	}
 	_ = decodeD(env, &p)
-	player := s.getPlayerByClientID(client.id)
+	player := s.getPlayerByClient(client)
 	if !s.adminPasswordMatches(p.Password) {
 		client.reply(env.ID, nil, "管理员口令不正确或尚未设置")
 		return
@@ -624,7 +624,7 @@ func (s *Server) onGiveawayVote(client *Client, env wsEnvelope) {
 		Vote     string `json:"vote"`
 	}
 	_ = decodeD(env, &p)
-	actor := s.getPlayerByClientID(client.id)
+	actor := s.getPlayerByClient(client)
 	target := s.players[p.TargetID]
 	if actor == nil {
 		client.reply(env.ID, nil, "请先进入游戏")
@@ -748,7 +748,7 @@ func (s *Server) onNameWarRenameTarget(client *Client, env wsEnvelope) {
 		Kind     string `json:"kind"`
 	}
 	_ = decodeD(env, &p)
-	actor := s.getPlayerByClientID(client.id)
+	actor := s.getPlayerByClient(client)
 	target := s.players[p.TargetID]
 	if actor == nil {
 		client.reply(env.ID, nil, "请先进入游戏")

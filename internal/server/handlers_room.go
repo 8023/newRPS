@@ -58,6 +58,8 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		default:
 			settings.OthelloBoardTheme = "classic"
 		}
+		settings.OthelloMoveSeconds = clampMoveSeconds(settings.OthelloMoveSeconds)
+		settings.OthelloGameMinutes = clampGameMinutes(settings.OthelloGameMinutes)
 		settings.EnableBot = false
 	} else if settings.GameID == types.GameTicTacToe {
 		switch settings.Stake {
@@ -98,6 +100,8 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 			// 与建房表单默认一致：非法值回退为禁止悔棋。
 			settings.GomokuUndoLimit = 0
 		}
+		settings.GomokuMoveSeconds = clampMoveSeconds(settings.GomokuMoveSeconds)
+		settings.GomokuGameMinutes = clampGameMinutes(settings.GomokuGameMinutes)
 		settings.EnableBot = false
 	} else {
 		switch settings.Stake {
@@ -1496,7 +1500,7 @@ func (s *Server) onChatLoad(client *Client, env wsEnvelope) {
 	_ = decodeD(env, &p)
 	if p.RoomID != "" {
 		// 房间聊天：必须在该房间内才能拉取
-		player := s.getPlayerByClientID(client.id)
+		player := s.getPlayerByClient(client)
 		if player == nil || player.RoomID != p.RoomID {
 			client.reply(env.ID, nil, "你不在这个房间里")
 			return
@@ -1521,7 +1525,7 @@ func (s *Server) onChatLoadOlder(client *Client, env wsEnvelope) {
 	}
 	_ = decodeD(env, &p)
 	if p.RoomID != "" {
-		player := s.getPlayerByClientID(client.id)
+		player := s.getPlayerByClient(client)
 		if player == nil || player.RoomID != p.RoomID {
 			client.reply(env.ID, nil, "你不在这个房间里")
 			return
@@ -1581,7 +1585,7 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 		OthelloResult   types.RoundResult `json:"othelloResult"`
 	}
 	_ = decodeD(env, &p)
-	admin := s.getPlayerByClientID(client.id)
+	admin := s.getPlayerByClient(client)
 	_, isAdminSocket := s.adminClientIDs[client.id]
 	if (admin == nil || !ptrBool(admin.IsAdmin)) && !isAdminSocket {
 		client.reply(env.ID, nil, "需要管理员权限")

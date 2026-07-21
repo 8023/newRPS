@@ -323,7 +323,10 @@ export function normalizeOthello(state: RoomSnapshot["othello"]): RoomSnapshot["
     blackCount: Number(state.blackCount) || 0,
     whiteCount: Number(state.whiteCount) || 0,
     passCount: Number(state.passCount) || 0,
-    board: padBoard(state.board, 8)
+    board: padBoard(state.board, 8),
+    moveDeadlineAt: Number(state.moveDeadlineAt) || 0,
+    clockDeadlineAt: Number(state.clockDeadlineAt) || 0,
+    clockRemaining: state.clockRemaining || { A: 0, B: 0 }
   };
 }
 
@@ -347,7 +350,10 @@ export function normalizeGomoku(state: RoomSnapshot["gomoku"]): RoomSnapshot["go
     rankedDelta: state.rankedDelta || { A: 0, B: 0 },
     undoCount: state.undoCount || { A: 0, B: 0 },
     moveCount: Number(state.moveCount) || 0,
-    board: padBoard(state.board, 15)
+    board: padBoard(state.board, 15),
+    moveDeadlineAt: Number(state.moveDeadlineAt) || 0,
+    clockDeadlineAt: Number(state.clockDeadlineAt) || 0,
+    clockRemaining: state.clockRemaining || { A: 0, B: 0 }
   };
 }
 

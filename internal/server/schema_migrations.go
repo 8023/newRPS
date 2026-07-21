@@ -17,7 +17,7 @@ import (
 //
 // 是 var 不是 const，只是为了让测试能临时替换掉去验证迁移机制本身；正常代码路径里
 // 把它当常量对待，不要在业务逻辑里修改它。
-var currentSchemaVersion = 3
+var currentSchemaVersion = 6
 
 // schemaVersionSchema：只有一行的版本表，openDatabase 每次启动都会先确保它存在。
 const schemaVersionSchema = `
@@ -84,6 +84,180 @@ var migrations = []schemaMigration{
 		}
 		return nil
 	}},
+	// v4：把 execSchemaQuarantiningLegacyTables 隔离出的 punishment_events_legacy
+	// （旧版 kind/source/player_id/at 列）尽量还原进新版单行任务结构。
+	{version: 4, migrate: func(db sqlExecer) error {
+		return convertLegacyPunishmentEvents(db)
+	}},
+	// v5：删除 rooms.code 遗留列（旧版 DM-XXXX 房间码，新代码不再写入/读取）。
+	{version: 5, migrate: func(db sqlExecer) error {
+		return dropColumnIfExists(db, "rooms", "code")
+	}},
+	// v6：删除 players.player_secret_hash 遗留列（旧版单值哈希凭据，身份认证已改为
+	// 明文 PlayerSecrets 列表，见 identity.go；此列不再被任何代码读写）。
+	{version: 6, migrate: func(db sqlExecer) error {
+		return dropColumnIfExists(db, "players", "player_secret_hash")
+	}},
+}
+
+// legacyPunishmentRow 是隔离表 punishment_events_legacy 的一行（旧 schema：
+// seq/at/kind/source/room_id/player_id/player_name/target_id/task_text/status/
+// proof_text/image_file）。
+type legacyPunishmentRow struct {
+	seq        int64
+	at         int64
+	kind       string
+	source     string
+	roomID     string
+	playerID   string
+	playerName string
+	targetID   string
+	taskText   string
+	status     string
+	proofText  string
+	imageFile  string
+}
+
+// convertLegacyPunishmentEvents 把旧版 punishment_events（一个任务发布/证明提交各占一行，
+// 靠 kind 区分、没有任何外键关联）尽量拼回新版 punishment_events（一个任务一行，proof
+// 字段原地回填）。旧库里 kind=task 时 player_id 是发布者、target_id 是被罚玩家；
+// kind=proof 时 player_id 是提交证明的被罚玩家本人、target_id 恒为空——按
+// room_id+被罚玩家+task_text 把 task 行与其后最早一条未匹配的 proof 行配对（先进先出，
+// 同一份任务只能靠这三者共同确定，旧库没有任何显式外键）。配对不到 proof 的 task 行
+// 视为仍处于 assigned（未完成）状态；配对不到 task 的 proof 行（比如早于任务发布事件
+// 开始入库）单独起一行，发布者信息留空。
+// legacy 表不存在（没触发过隔离，或已转换过）时直接跳过，保证幂等。
+func convertLegacyPunishmentEvents(db sqlExecer) error {
+	legacyTable, err := findLegacyPunishmentTable(db)
+	if err != nil || legacyTable == "" {
+		return err
+	}
+	rows, err := db.Query(fmt.Sprintf(
+		`SELECT seq, at, COALESCE(kind,''), COALESCE(source,''), room_id, COALESCE(player_id,''),
+		        COALESCE(player_name,''), COALESCE(target_id,''), COALESCE(task_text,''),
+		        COALESCE(status,''), COALESCE(proof_text,''), COALESCE(image_file,'')
+		 FROM %q ORDER BY seq`,
+		legacyTable,
+	))
+	if err != nil {
+		return fmt.Errorf("read %s: %w", legacyTable, err)
+	}
+	var legacy []legacyPunishmentRow
+	for rows.Next() {
+		var r legacyPunishmentRow
+		if err := rows.Scan(&r.seq, &r.at, &r.kind, &r.source, &r.roomID, &r.playerID,
+			&r.playerName, &r.targetID, &r.taskText, &r.status, &r.proofText, &r.imageFile); err != nil {
+			rows.Close()
+			return err
+		}
+		legacy = append(legacy, r)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+
+	type newRow struct {
+		id, roomID, taskSource, publisherID, publisherName string
+		targetID, targetName, taskText                     string
+		taskAt                                             int64
+		proofText, imageFile                               string
+		proofAt                                            *int64
+		hasProof                                           bool
+		status                                             string
+	}
+	byID := map[string]*newRow{}
+	var order []string
+	// open：每个 (room_id, 被罚玩家, task_text) 组合里，当前还没配到 proof 的 task 行 id。
+	open := map[string]string{}
+	key := func(roomID, playerID, taskText string) string {
+		return roomID + "\x00" + playerID + "\x00" + taskText
+	}
+
+	for _, r := range legacy {
+		switch r.kind {
+		case "task":
+			id := fmt.Sprintf("legacy-%d", r.seq)
+			nr := &newRow{
+				id: id, roomID: r.roomID, taskSource: r.source,
+				publisherID: r.playerID, publisherName: r.playerName,
+				targetID: r.targetID, taskText: r.taskText, taskAt: r.at,
+				status: "assigned",
+			}
+			byID[id] = nr
+			order = append(order, id)
+			open[key(r.roomID, r.targetID, r.taskText)] = id
+		case "proof":
+			k := key(r.roomID, r.playerID, r.taskText)
+			if id, ok := open[k]; ok {
+				nr := byID[id]
+				nr.targetName = r.playerName
+				nr.proofText, nr.imageFile = r.proofText, r.imageFile
+				at := r.at
+				nr.proofAt = &at
+				nr.hasProof = true
+				nr.status = r.status
+				delete(open, k)
+				continue
+			}
+			// 找不到对应 task 行：单独起一行，发布者信息缺失。
+			id := fmt.Sprintf("legacy-p%d", r.seq)
+			at := r.at
+			nr := &newRow{
+				id: id, roomID: r.roomID,
+				targetID: r.playerID, targetName: r.playerName,
+				taskText: r.taskText, taskAt: r.at,
+				proofText: r.proofText, imageFile: r.imageFile,
+				proofAt: &at, hasProof: true, status: r.status,
+			}
+			byID[id] = nr
+			order = append(order, id)
+		}
+	}
+
+	for _, id := range order {
+		nr := byID[id]
+		var proofAt, proofText, imageFile any
+		if nr.hasProof {
+			proofText, imageFile = nr.proofText, nr.imageFile
+			if nr.proofAt != nil {
+				proofAt = *nr.proofAt
+			}
+		}
+		if nr.status == "" {
+			nr.status = "assigned"
+		}
+		if _, err := db.Exec(
+			`INSERT INTO punishment_events (id, room_id, task_source, publisher_id, publisher_name, target_id, target_name, task_text, task_at, proof_text, image_file, proof_at, status)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			nr.id, nr.roomID, nr.taskSource, nr.publisherID, nr.publisherName,
+			nr.targetID, nr.targetName, nr.taskText, nr.taskAt,
+			proofText, imageFile, proofAt, nr.status,
+		); err != nil {
+			return fmt.Errorf("insert converted %s: %w", nr.id, err)
+		}
+	}
+
+	_, err = db.Exec(fmt.Sprintf(`DROP TABLE %q`, legacyTable))
+	return err
+}
+
+// findLegacyPunishmentTable 找 execSchemaQuarantiningLegacyTables 隔离出的
+// punishment_events_legacy（冲突时会带时间戳后缀）；不存在则返回空字符串。
+func findLegacyPunishmentTable(db sqlExecer) (string, error) {
+	rows, err := db.Query(`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'punishment_events_legacy%'`)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	var name string
+	if rows.Next() {
+		if err := rows.Scan(&name); err != nil {
+			return "", err
+		}
+	}
+	return name, rows.Err()
 }
 
 // ensureSchema 是 openDatabase 建表/升级结构的唯一入口：

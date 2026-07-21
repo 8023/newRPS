@@ -330,6 +330,10 @@ func lobbyRoomToProto(r types.LobbyRoomInfo) (*wire.LobbyRoomInfo, error) {
 		EnableRanked: r.EnableRanked, Stake: int32(r.Stake),
 		EnableRankMultiplier: r.EnableRankMultiplier, RankMultiplier: int32(r.RankMultiplier),
 		EnableExtremeRanked: r.EnableExtremeRanked, Tags: r.Tags,
+		LiarsDiceMinPlayers: int32(r.LiarsDiceMinPlayers), LiarsDiceMaxPlayers: int32(r.LiarsDiceMaxPlayers),
+		OthelloMoveSeconds: int32(r.OthelloMoveSeconds), OthelloGameMinutes: int32(r.OthelloGameMinutes),
+		GomokuMoveSeconds: int32(r.GomokuMoveSeconds), GomokuGameMinutes: int32(r.GomokuGameMinutes),
+		GomokuUndoLimit: int32(r.GomokuUndoLimit),
 	}
 	for _, seat := range []types.SeatKey{types.SeatA, types.SeatB} {
 		vs := &wire.VersusSeat{}
@@ -596,6 +600,10 @@ func othelloToProto(s *types.OthelloState) (*wire.OthelloState, error) {
 		Turn: string(s.Turn), BlackSeat: string(s.BlackSeat),
 		PassCount: int32(s.PassCount), BlackCount: int32(s.BlackCount), WhiteCount: int32(s.WhiteCount),
 		SettlementEvents: s.SettlementEvents, Ended: s.Ended, Winner: string(s.Winner),
+		MoveDeadlineAt: s.MoveDeadlineAt, ClockDeadlineAt: s.ClockDeadlineAt,
+	}
+	for k, v := range s.ClockRemaining {
+		m.ClockRemaining = append(m.ClockRemaining, &wire.IntPair{Key: string(k), Value: int32(v)})
 	}
 	for _, row := range s.Board {
 		br := &wire.BoardRow{}
@@ -666,6 +674,10 @@ func gomokuToProto(s *types.GomokuState) (*wire.GomokuState, error) {
 	m := &wire.GomokuState{
 		Turn: string(s.Turn), BlackSeat: string(s.BlackSeat), MoveCount: int32(s.MoveCount),
 		Ended: s.Ended, Winner: string(s.Winner),
+		MoveDeadlineAt: s.MoveDeadlineAt, ClockDeadlineAt: s.ClockDeadlineAt,
+	}
+	for k, v := range s.ClockRemaining {
+		m.ClockRemaining = append(m.ClockRemaining, &wire.IntPair{Key: string(k), Value: int32(v)})
 	}
 	for _, row := range s.Board {
 		br := &wire.BoardRow{}
@@ -1080,6 +1092,7 @@ func RoomProtoToFront(pb *wire.RoomSnapshot) (map[string]any, error) {
 	if o, ok := m["othello"].(map[string]any); ok {
 		o["board"] = boardRowsToMatrix(o["board"])
 		o["rankedDelta"] = pairsToIntMap(o["rankedDelta"])
+		o["clockRemaining"] = pairsToIntMap(o["clockRemaining"])
 		m["othello"] = o
 	}
 	if t, ok := m["tictactoe"].(map[string]any); ok {
@@ -1096,6 +1109,7 @@ func RoomProtoToFront(pb *wire.RoomSnapshot) (map[string]any, error) {
 		g["board"] = boardRowsToMatrix(g["board"])
 		g["rankedDelta"] = pairsToIntMap(g["rankedDelta"])
 		g["undoCount"] = pairsToIntMap(g["undoCount"])
+		g["clockRemaining"] = pairsToIntMap(g["clockRemaining"])
 		m["gomoku"] = g
 	}
 	if hist, ok := m["roundHistory"].([]any); ok {

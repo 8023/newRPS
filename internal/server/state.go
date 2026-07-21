@@ -94,9 +94,6 @@ type PlayerState struct {
 	DeviceKey   string // sha256(ip||fingerprint)，防多开维度
 	RecentMoves []RpsMove
 	PlayerID    string // long-term identity (not public)
-	// PlayerSecretHash：旧版单值哈希字段，仅用于迁移期兼容（见 migrateLegacySecret）。
-	// 迁移窗口结束后应整体删除，见 README「一次性迁移代码」章节。
-	PlayerSecretHash string
 	// PlayerSecrets：一台设备一条，明文存储（认领/迁移方案已确认不哈希）。
 	// 最多 maxPlayerSecrets 条，超出后挤掉最早的一条（见 addPlayerSecret）。
 	PlayerSecrets []string
@@ -192,7 +189,7 @@ func (b *BotSeat) GetID() string { return b.Bot.ID }
 func (b *BotSeat) IsBot() bool   { return true }
 
 type RoomState struct {
-	ID              string
+	ID string
 
 	UpdatedAt       int64
 	Settings        types.RoomSettings
@@ -297,6 +294,8 @@ type Server struct {
 	ticTacToeGiveawayTimers map[string]*time.Timer
 	liarsDiceStartTimers    map[string]*time.Timer
 	gomokuUndoTimers        map[string]*time.Timer
+	othelloClockTimers      map[string]*time.Timer
+	gomokuClockTimers       map[string]*time.Timer
 
 	// deviceCreateAttempts：按 deviceKey 记录 10 分钟内新建玩家时间戳
 	deviceCreateAttempts map[string][]int64

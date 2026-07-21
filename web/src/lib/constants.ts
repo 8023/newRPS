@@ -35,6 +35,11 @@ export type TicTacToeBoardThemeId = typeof tictactoeBoardThemes[number]["id"];
 /** 五子棋与黑白棋共用同一套棋盘/棋子配色主题 */
 export const gomokuBoardThemes = othelloBoardThemes;
 export type GomokuBoardThemeId = typeof gomokuBoardThemes[number]["id"];
+/** 黑白棋/五子棋建房「每子时长」下拉选项（秒），0 = 不限时 */
+export const moveSecondsOptions = [0, 30, 45, 60, 90, 120, 180] as const;
+/** 黑白棋/五子棋建房「每局时长」下拉选项（分钟），0 = 不限时 */
+export const gameMinutesOptions = [0, 5, 10, 15, 20, 30, 45, 60] as const;
+
 export const sponsorLinks = [
   { id: "x", label: "X", title: "关注 X 账号", description: "看更新、吐槽和临时公告。", href: "https://x.com/home", icon: "𝕏", tone: "#111827" },
   { id: "telegram", label: "TG", title: "加入 TG 群", description: "一起聊天、反馈 bug、催新玩法。", href: "https://t.me/+X1Jr4GPxgIwzOWY1", icon: "✈", tone: "#229ed9" },
