@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/doumiao/newRPS/internal/types"
@@ -202,8 +203,15 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	player.RoomID = roomID
 	client.leaveRoom(lobbyChannel)
 	client.joinRoom(roomID)
-	// 房间的 rooms 表记录改成关闭时一次性写入（见 room.go/handlers_room.go 的 closeRoom 调用点），
-	// 创建时不再落盘，房间存活期间的"当前在开的房间"直接看内存 s.rooms 即可。
+	if s.eventDB != nil {
+		if err := s.eventDB.insertRoomEvent(roomEventInput{
+			At: nowMs(), RoomID: roomID, RoomName: settings.Name, GameID: string(settings.GameID),
+			UserID: player.ID, UserName: playerShortName(player), Action: "create",
+			PasswordHash: hashRoomPassword(settings.Password), IP: player.IPAddress,
+		}); err != nil {
+			s.errorLog("room_event_insert_failed", err.Error())
+		}
+	}
 	if isLiarsDice {
 		s.roomNotice(room, playerShortName(player)+" 创建了大话骰房间，当前为观战。")
 	} else {
@@ -256,7 +264,10 @@ func (s *Server) onRoomJoin(client *Client, env wsEnvelope) {
 	client.leaveRoom(lobbyChannel)
 	client.joinRoom(room.ID)
 	if s.eventDB != nil {
-		if err := s.eventDB.insertRoomJoinEvent(nowMs(), room.ID, player.ID, playerShortName(player), joinRole, player.IPAddress); err != nil {
+		if err := s.eventDB.insertRoomEvent(roomEventInput{
+			At: nowMs(), RoomID: room.ID, RoomName: room.Settings.Name, GameID: string(room.Settings.GameID),
+			UserID: player.ID, UserName: playerShortName(player), Action: "join", Role: joinRole, IP: player.IPAddress,
+		}); err != nil {
 			s.errorLog("room_event_insert_failed", err.Error())
 		}
 	}
@@ -475,7 +486,7 @@ func (s *Server) onRoomMove(client *Client, env wsEnvelope) {
 	room.Choices[seat] = p.Move
 	if p.Move == types.MoveGiveaway {
 		player.GiveawayClicks = intPtr(ptrInt(player.GiveawayClicks) + 1)
-		s.addGiveawayValue(player, 2)
+		s.addGiveawayValue(player, s.cfg.Giveaway.ActiveBoostValue)
 	}
 	// 对手还没出拳：提醒 Ta 该出拳了；双方都出了就直接进结算，不用再提醒。
 	if room.Choices[oppositeSeat(seat)] == "" {
@@ -1574,15 +1585,19 @@ func (s *Server) chatAuthorsFor(messages []types.ChatMessage) map[string]types.P
 
 func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 	var p struct {
-		Action          string            `json:"action"`
-		RoomID          string            `json:"roomId"`
-		PlayerID        string            `json:"playerId"`
-		Name            string            `json:"name"`
-		RankedPoints    *float64          `json:"rankedPoints"`
-		Title           string            `json:"title"`
-		Message         string            `json:"message"`
-		DurationSeconds *float64          `json:"durationSeconds"`
-		OthelloResult   types.RoundResult `json:"othelloResult"`
+		Action             string            `json:"action"`
+		RoomID             string            `json:"roomId"`
+		PlayerID           string            `json:"playerId"`
+		Name               string            `json:"name"`
+		RankedPoints       *float64          `json:"rankedPoints"`
+		Title              *string           `json:"title"`
+		GenderID           *string           `json:"genderId"`
+		CustomGenderLabel  *string           `json:"customGenderLabel"`
+		FactionID          *string           `json:"factionId"`
+		GiveawayValueInput *string           `json:"giveawayValueInput"`
+		Message            string            `json:"message"`
+		DurationSeconds    *float64          `json:"durationSeconds"`
+		Result             types.RoundResult `json:"result"`
 	}
 	_ = decodeD(env, &p)
 	admin := s.getPlayerByClient(client)
@@ -1593,7 +1608,7 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 	}
 	roomDeleted := false
 	changedPlayerRoomID := ""
-	if p.Action == "clearSuggestions" || p.Action == "clearLobbyChat" {
+	if p.Action == "clearLobbyChat" {
 		if s.chatDB != nil {
 			if err := s.chatDB.clearLobby(); err != nil {
 				s.errorLog("chat_clear_failed", err.Error())
@@ -1646,7 +1661,14 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 			s.dropSyncChannel(channelRoom(p.RoomID))
 			delete(s.rooms, p.RoomID)
 			if s.eventDB != nil {
-				if err := s.eventDB.insertClosedRoom(room.ID, room.Settings.Name, string(room.Settings.GameID), room.OwnerID, room.CreatorName, room.CreatedAt, nowMs(), "admin_close"); err != nil {
+				closerID, closerName := "", "管理员"
+				if admin != nil {
+					closerID, closerName = admin.ID, playerShortName(admin)
+				}
+				if err := s.eventDB.insertRoomEvent(roomEventInput{
+					At: nowMs(), RoomID: room.ID, RoomName: room.Settings.Name, GameID: string(room.Settings.GameID),
+					UserID: closerID, UserName: closerName, Action: "close", Reason: "admin_close", IP: client.ipAddress,
+				}); err != nil {
 					s.errorLog("room_event_close_failed", err.Error())
 				}
 			}
@@ -1668,39 +1690,72 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 			s.resetForNextRound(room)
 		}
 	}
-	if p.Action == "forceOthelloRestart" && p.RoomID != "" {
+	if p.Action == "forceSeatOutcome" && p.RoomID != "" {
 		room := s.rooms[p.RoomID]
-		if room == nil || room.Settings.GameID != types.GameOthello {
-			client.reply(env.ID, nil, "当前房间不是黑白棋房间")
+		if room == nil {
+			client.reply(env.ID, nil, "房间不存在")
 			return
 		}
-		s.flushOthelloPendingSettlement(room)
-		s.resetOthelloRoom(room)
-		s.roomNotice(room, "管理员已重开黑白棋对局。")
-	}
-	if p.Action == "forceOthelloEnd" && p.RoomID != "" {
-		room := s.rooms[p.RoomID]
-		if room == nil || room.Settings.GameID != types.GameOthello {
-			client.reply(env.ID, nil, "当前房间不是黑白棋房间")
+		if p.Result != types.ResultA && p.Result != types.ResultB && p.Result != types.ResultDraw {
+			client.reply(env.ID, nil, "请选择 A 方胜、B 方胜或平局")
 			return
 		}
-		if p.OthelloResult != types.ResultA && p.OthelloResult != types.ResultB && p.OthelloResult != types.ResultDraw {
-			client.reply(env.ID, nil, "请选择黑方胜、白方胜或平局")
-			return
-		}
-		forcedResult := p.OthelloResult
-		if p.OthelloResult != types.ResultDraw && room.Othello != nil {
-			if p.OthelloResult == types.ResultA {
-				forcedResult = types.RoundResult(room.Othello.BlackSeat)
-			} else {
-				forcedResult = types.RoundResult(oppositeSeat(room.Othello.BlackSeat))
+		switch room.Settings.GameID {
+		case types.GameOthello:
+			forcedResult := p.Result
+			if p.Result != types.ResultDraw && room.Othello != nil {
+				if p.Result == types.ResultA {
+					forcedResult = types.RoundResult(room.Othello.BlackSeat)
+				} else {
+					forcedResult = types.RoundResult(oppositeSeat(room.Othello.BlackSeat))
+				}
 			}
-		}
-		ok, errMsg := s.forceEndOthelloGame(room, forcedResult, forceOthelloOpts{})
-		if !ok {
-			client.reply(env.ID, nil, errMsg)
+			ok, errMsg := s.forceEndOthelloGame(room, forcedResult, forceOthelloOpts{})
+			if !ok {
+				client.reply(env.ID, nil, errMsg)
+				return
+			}
+		case types.GameTicTacToe:
+			if room.TicTacToe == nil || room.TicTacToe.Ended {
+				client.reply(env.ID, nil, "对局尚未开始或已经结束")
+				return
+			}
+			s.finishTicTacToeGame(room, p.Result, nil, "管理员判定")
+		case types.GameGomoku:
+			if room.Gomoku == nil || room.Gomoku.Ended {
+				client.reply(env.ID, nil, "对局尚未开始或已经结束")
+				return
+			}
+			s.finishGomokuGame(room, p.Result, nil, "管理员判定")
+		case types.GameRPS:
+			ok, errMsg := s.forceEndRpsRound(room, p.Result)
+			if !ok {
+				client.reply(env.ID, nil, errMsg)
+				return
+			}
+		default:
+			client.reply(env.ID, nil, "当前游戏不支持强制判定胜负")
 			return
 		}
+	}
+	if p.Action == "showClaimKey" && p.PlayerID != "" {
+		// 管理员协助玩家找回账号：返回与个人资料「显示认领密钥」相同的 playerId.claimKey。
+		// 只回给当前管理员 socket，不广播；非持久身份没有认领体系。
+		pl := s.players[p.PlayerID]
+		if pl == nil {
+			client.reply(env.ID, nil, "玩家不存在")
+			return
+		}
+		if !pl.Persistent || pl.PlayerID == "" {
+			client.reply(env.ID, nil, "该玩家身份不支持认领密钥")
+			return
+		}
+		if pl.ClaimKey == "" {
+			pl.ClaimKey = randomID()
+			s.requestPersist("lazy")
+		}
+		client.reply(env.ID, map[string]any{"claimKey": pl.ClaimKey, "playerId": pl.PlayerID}, "")
+		return
 	}
 	if p.Action == "kick" && p.PlayerID != "" {
 		if pl := s.players[p.PlayerID]; pl != nil {
@@ -1740,7 +1795,6 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 			return
 		}
 		cleanName := cleanText(p.Name, 12)
-		cleanTitle := cleanText(p.Title, 18)
 		if len([]rune(cleanName)) < 2 {
 			client.reply(env.ID, nil, "名字至少需要 2 个字")
 			return
@@ -1752,8 +1806,60 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 		if p.RankedPoints != nil {
 			s.setRankedPointsByAdmin(pl, int(*p.RankedPoints))
 		}
-		if cleanTitle != "" {
-			pl.Stats.Title = cleanTitle
+		// Title 为 nil 表示管理员没有改动这一栏，保持原值不动。非 nil 时：非空文本 → 管理员
+		// 自定义，之后不随排位分档位变化自动改写（见 syncTitleForRankSegment 里的 TitleCustom
+		// 判断）；清空则视为主动清除自定义，立即按当前排位分重新计算回自动称号。
+		if p.Title != nil {
+			cleanTitle := cleanText(*p.Title, 18)
+			if cleanTitle != "" {
+				pl.Stats.Title = cleanTitle
+				pl.Stats.TitleCustom = true
+			} else if pl.Stats.TitleCustom {
+				pl.Stats.TitleCustom = false
+				s.syncTitleForRankSegment(pl, true)
+			}
+		}
+		// GenderID/CustomGenderLabel/FactionID 都为 nil 表示管理员没有改动性别/阵营；三者
+		// 任一非 nil 就用玩家当前值补齐缺省项后统一走 resolveGender（与玩家自己改资料同一条
+		// 解析逻辑：genderId 命中预设用预设文案，否则 customGenderLabel 当自定义文本清洗到
+		// 1-9 字符；factionId 始终独立解析，与性别选择无关）。
+		if p.GenderID != nil || p.CustomGenderLabel != nil || p.FactionID != nil {
+			genderID := pl.GenderID
+			if p.GenderID != nil {
+				genderID = *p.GenderID
+			}
+			customGenderLabel := ""
+			if pl.GenderID == "" {
+				customGenderLabel = pl.GenderLabel
+			}
+			if p.CustomGenderLabel != nil {
+				customGenderLabel = *p.CustomGenderLabel
+			}
+			factionID := pl.FactionID
+			if p.FactionID != nil {
+				factionID = *p.FactionID
+			}
+			if ok, reason := s.validGenderSubmission(genderID, customGenderLabel, factionID); !ok {
+				client.reply(env.ID, nil, reason)
+				return
+			}
+			s.applyGender(pl, genderID, customGenderLabel, factionID)
+		}
+		// GiveawayValueInput 为 nil 表示管理员没有改动这一栏；否则按数字语义解析（0-100，1 位小数）：
+		// 大于 0 直接设为白给值并开启；0 或任何解析失败/超范围的内容都视为清空白给值并关闭白给
+		// （不再接受"关闭"这个文本哨兵值，前端已经改成纯数字输入框）。
+		if p.GiveawayValueInput != nil {
+			trimmed := strings.TrimSpace(*p.GiveawayValueInput)
+			if v, err := strconv.ParseFloat(trimmed, 64); err == nil && v > 0 && v <= 100 {
+				pl.GiveawayEnabled = boolPtr(true)
+				pl.GiveawayValue = floatPtr(clampGiveawayValue(v))
+			} else {
+				pl.GiveawayEnabled = boolPtr(false)
+				pl.GiveawayValue = floatPtr(0)
+				pl.GiveawayBoardText = ""
+				pl.GiveawayBoardSubmittedAt = nil
+				pl.GiveawayBoardExpiresAt = nil
+			}
 		}
 		pl.DisplayName = formatDisplayName(pl)
 		s.refreshPlayerSnapshots(pl)

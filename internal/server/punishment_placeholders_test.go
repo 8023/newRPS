@@ -58,9 +58,14 @@ func TestWinnerNameForResult(t *testing.T) {
 }
 
 func TestPunishmentTaskForPlayerPlaceholders(t *testing.T) {
-	s := &Server{players: map[string]*PlayerState{}}
-	winner := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "w1", Name: "Alice", FactionID: "male_faction", FactionLabel: "男性阵营"}}
-	loser := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "l1", Name: "Bob", FactionID: "female_faction", FactionLabel: "女性阵营"}}
+	s := &Server{players: map[string]*PlayerState{}, cfg: types.AppConfig{
+		GenderFactions: []types.GenderFaction{
+			{ID: "male_faction", Label: "顺性别男", TaskGroup: "male"},
+			{ID: "female_faction", Label: "顺性别女", TaskGroup: "female"},
+		},
+	}}
+	winner := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "w1", Name: "Alice", FactionID: "male_faction", FactionLabel: "顺性别男"}}
+	loser := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "l1", Name: "Bob", FactionID: "female_faction", FactionLabel: "顺性别女"}}
 	s.players[winner.ID] = winner
 	s.players[loser.ID] = loser
 	room := &RoomState{
@@ -76,8 +81,8 @@ func TestPunishmentTaskForPlayerPlaceholders(t *testing.T) {
 				ID:   "t1",
 				Name: "默认",
 				Variants: map[string]string{
-					"female_faction": "{loser} 需要拥抱 {winner}",
-					"male_faction":   "{loser} 需要拥抱 {winner}",
+					"female": "{loser} 需要拥抱 {winner}",
+					"male":   "{loser} 需要拥抱 {winner}",
 				},
 			},
 		},

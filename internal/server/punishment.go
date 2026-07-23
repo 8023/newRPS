@@ -156,12 +156,13 @@ func (s *Server) punishmentTaskForPlayer(room *RoomState, player *PlayerState, w
 		t := punishment.Tasks[randIntn(len(punishment.Tasks))]
 		task = &t
 	}
+	group := s.taskGroupForFaction(player.FactionID)
 	variant := ""
 	if task != nil && task.Variants != nil {
-		variant = strings.TrimSpace(task.Variants[player.FactionID])
+		variant = strings.TrimSpace(task.Variants[group])
 	}
 	if variant == "" && punishment.Variants != nil {
-		variant = strings.TrimSpace(punishment.Variants[player.FactionID])
+		variant = strings.TrimSpace(punishment.Variants[group])
 	}
 	taskText := cleanTaskText(variant, player.FactionLabel)
 	if taskText == "" {
@@ -185,6 +186,9 @@ func cleanTaskText(taskText, factionLabel string) string {
 		re := regexp.MustCompile(`^` + regexp.QuoteMeta(factionLabel) + `[：:]\s*`)
 		taskText = re.ReplaceAllString(taskText, "")
 	}
+	// 兜底：清掉改名前的旧版硬编码阵营标签前缀。阵营标签现在完全由后台配置、可随时改名
+	// （本次就把"男性阵营"等改成了"顺性别男"等），历史任务文案里可能还留着改名前的旧
+	// 前缀——这些字符串已经不在当前配置里，上面按 factionLabel 动态匹配的分支测不到它们。
 	re2 := regexp.MustCompile(`^(男性阵营|女性阵营|男娘阵营|其他阵营)[：:]\s*`)
 	taskText = re2.ReplaceAllString(taskText, "")
 	return strings.TrimSpace(taskText)

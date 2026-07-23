@@ -571,6 +571,7 @@ func (s *Server) applyGomokuDisconnectForfeit(room *RoomState, forfeit Disconnec
 	}
 	recordGameOutcome(winner, types.GameGomoku, "win")
 	recordGameOutcome(loser, types.GameGomoku, "loss")
+	s.applyGiveawayWinPenalty(winner)
 	room.Score[forfeit.WinnerSeat]++
 	room.SeatedScore[forfeit.WinnerSeat]++
 	ssW := room.SeatStats[forfeit.WinnerSeat]

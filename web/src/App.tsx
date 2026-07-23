@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Crown, Info, Moon, Sun, UserRound } from "lucide-react";
 import { socket } from "./main";
 import type { AppConfig, ChatMessage, LobbySnapshot, PublicPlayer, RoomSnapshot } from "./shared/types";
-import { leaderboardRefreshMs, securityDisclaimerKey, tokenKey } from "./lib/constants";
+import { leaderboardRefreshMs, playerSecretKey, securityDisclaimerKey, tokenKey } from "./lib/constants";
 import {
-  bumpWsAuthRetryCount, connectSocketWithSession, getWsAuthRetryCount, hasCachedLogin,
+  bumpWsAuthRetryCount, clearPlayerIdentity, connectSocketWithSession, getWsAuthRetryCount, hasCachedLogin,
   joinIdentityPayload, resetWsAuthRetryCount, sessionTokenLooksValid
 } from "./lib/session";
 import { ask, isAdminRoute, todayKey } from "./lib/rpc";
@@ -16,9 +16,12 @@ import { refreshActiveChats } from "./lib/chatStore";
 import { fetchPushPreferences, notifyMentionIfHidden, notifySeatIfHidden, notifyTurnIfHidden, setPushMeId } from "./lib/pushNotify";
 import type { AnnouncementPayload, MeState } from "./lib/types";
 import {
-  AboutPanel, AdminPanel, GlobalLeaderboardPanel, Lobby, Login, PlayerBadge, ProfilePanel, Room, SecurityDisclaimer,
+  AboutPanel, GlobalLeaderboardPanel, Lobby, Login, PlayerBadge, ProfilePanel, Room, SecurityDisclaimer,
   connectionStateText, phaseText
 } from "./ui/AppViews";
+
+// 后台管理面板（含可能新增的图表等重型组件）单独打包，普通玩家不会触发这次 import。
+const AdminPanel = lazy(() => import("./ui/AdminViews").then((module) => ({ default: module.AdminPanel })));
 
 // Level 1（页面在前台开着但被切到后台/最小化）：对比新旧房间快照，检测"对手座位刚被
 // 坐满"和"轮到我了"这两类事件，命中就交给 notify* 决定要不要弹 Notification（它们内部
@@ -109,6 +112,8 @@ export function App() {
     const token = localStorage.getItem(tokenKey);
     const cachedName = localStorage.getItem("rps-online-name") || "";
     const cachedGender = localStorage.getItem("rps-online-gender") || "male";
+    const cachedCustomGender = localStorage.getItem("rps-online-custom-gender") || "";
+    const cachedFaction = localStorage.getItem("rps-online-faction") || "";
     if (!cachedName || !sessionTokenLooksValid(token)) {
       setRestoringSession(false);
       return;
@@ -117,7 +122,9 @@ export function App() {
     if (!socket.connected) return;
 
     restoreInFlightRef.current = true;
-    const payload = { name: cachedName, genderId: cachedGender, token, ...(await joinIdentityPayload()) };
+    // 阵营现在独立于性别选择，重连/刷新页面时必须把缓存的 factionId/customGenderLabel
+    // 一起带上——不传就会被服务端 applyGender 兜底成第一个已配置阵营，等于每次刷新都重置阵营。
+    const payload = { name: cachedName, genderId: cachedGender, customGenderLabel: cachedCustomGender, factionId: cachedFaction, token, ...(await joinIdentityPayload()) };
     try {
       const next = await ask<MeState & { alreadyOnline?: true }>("player:join", payload);
       if (next.alreadyOnline) {
@@ -126,6 +133,7 @@ export function App() {
         return;
       }
       if (next.token) localStorage.setItem(tokenKey, next.token);
+      if (next.reissuedSecret) localStorage.setItem(playerSecretKey, next.reissuedSecret);
       setMe(next);
       initPushForPlayer(next.player.id);
       if (next.room) setRoom(normalizeRoomSnapshot(next.room));
@@ -140,6 +148,12 @@ export function App() {
       // 仅身份/会话类错误放弃自动登录；瞬时断线等保持缓存，下次 connect 再试。
       if (/身份校验|Session|session|token|令牌|会话/i.test(message)) {
         localStorage.removeItem(tokenKey);
+        if (message === "玩家身份校验失败") {
+          // 本地缓存的 playerId/playerSecret 服务端已经不认（常见于老账号未完成迁移）：
+          // 只清 token 治标不治本——下次登录页仍会用同一对失效凭据再挂一次，必须连
+          // 身份一起清掉，让登录页那次注册用全新身份重试。
+          clearPlayerIdentity();
+        }
         setMe(null);
         setRoom(null);
         if (!isAdminRoute()) setView("login");
@@ -157,6 +171,7 @@ export function App() {
     try {
       const next = await ask<MeState>("player:join", { ...restoreKickPending, forceKick: true });
       if (next.token) localStorage.setItem(tokenKey, next.token);
+      if (next.reissuedSecret) localStorage.setItem(playerSecretKey, next.reissuedSecret);
       setMe(next);
       initPushForPlayer(next.player.id);
       if (next.room) setRoom(normalizeRoomSnapshot(next.room));
@@ -495,7 +510,11 @@ export function App() {
       }} onError={setNotice} />}
       {view === "lobby" && me && lobby && <Lobby config={config} lobby={lobby} me={me.player} onError={setNotice} onGoRoom={(nextRoom) => { if (nextRoom) setRoom(nextRoom); setView("room"); }} />}
       {view === "room" && me && room && <Room config={config} room={room} me={me.player} lobby={lobby} onBack={() => setView("lobby")} onError={setNotice} />}
-      {view === "admin" && lobby && <AdminPanel config={config} lobby={lobby} onBack={() => { if (window.location.hash === "#admin") window.location.hash = ""; setView(me ? "lobby" : "login"); }} onError={setNotice} />}
+      {view === "admin" && lobby && (
+        <Suspense fallback={<div className="loading">正在加载后台管理…</div>}>
+          <AdminPanel config={config} lobby={lobby} onBack={() => { if (window.location.hash === "#admin") window.location.hash = ""; setView(me ? "lobby" : "login"); }} onError={setNotice} />
+        </Suspense>
+      )}
       {view === "room" && !room && <section className="panel">你暂时不在房间里。</section>}
       {aboutOpen && <AboutPanel config={config} onClose={() => setAboutOpen(false)} />}
       {profileOpen && me && (
@@ -503,7 +522,13 @@ export function App() {
           config={config}
           me={me.player}
           onClose={() => setProfileOpen(false)}
-          onUpdated={(player) => { setMe({ ...me, player }); localStorage.setItem("rps-online-name", player.name); localStorage.setItem("rps-online-gender", player.genderId); }}
+          onUpdated={(player) => {
+            setMe({ ...me, player });
+            localStorage.setItem("rps-online-name", player.name);
+            localStorage.setItem("rps-online-gender", player.genderId);
+            localStorage.setItem("rps-online-custom-gender", player.genderId ? "" : player.genderLabel);
+            localStorage.setItem("rps-online-faction", player.factionId);
+          }}
           onError={setNotice}
           onLoggedOut={() => { window.location.reload(); }}
         />

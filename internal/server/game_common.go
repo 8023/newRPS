@@ -98,6 +98,7 @@ func (s *Server) applySeatOutcome(room *RoomState, result types.RoundResult) (pl
 	loser := s.humanPlayerFromSeat(room, loserSeat)
 	recordGameOutcome(winner, gameID, "win")
 	recordGameOutcome(loser, gameID, "loss")
+	s.applyGiveawayWinPenalty(winner)
 	room.Score[types.SeatKey(result)]++
 	room.SeatedScore[types.SeatKey(result)]++
 	ssW := room.SeatStats[types.SeatKey(result)]

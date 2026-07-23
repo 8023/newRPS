@@ -83,10 +83,11 @@ func (x *GenderColors) GetBorderColor() string {
 }
 
 type GenderOption struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
-	FactionId     string                 `protobuf:"bytes,3,opt,name=faction_id,json=factionId,proto3" json:"faction_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Label string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
+	// 该性别预设归属的阵营 id；空表示不限阵营都能选（兼容历史/测试数据）。
+	FactionId     string `protobuf:"bytes,4,opt,name=faction_id,json=factionId,proto3" json:"faction_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -149,9 +150,10 @@ type GenderFaction struct {
 	TextColor       string                 `protobuf:"bytes,3,opt,name=text_color,json=textColor,proto3" json:"text_color,omitempty"`
 	BackgroundColor string                 `protobuf:"bytes,4,opt,name=background_color,json=backgroundColor,proto3" json:"background_color,omitempty"`
 	BorderColor     string                 `protobuf:"bytes,5,opt,name=border_color,json=borderColor,proto3" json:"border_color,omitempty"`
-	Genders         []*GenderOption        `protobuf:"bytes,6,rep,name=genders,proto3" json:"genders,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// 任务分组：male（生理男）/ female（生理女）/ default（默认兜底），决定系统任务/称号取哪份文案。
+	TaskGroup     string `protobuf:"bytes,7,opt,name=task_group,json=taskGroup,proto3" json:"task_group,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GenderFaction) Reset() {
@@ -219,11 +221,11 @@ func (x *GenderFaction) GetBorderColor() string {
 	return ""
 }
 
-func (x *GenderFaction) GetGenders() []*GenderOption {
+func (x *GenderFaction) GetTaskGroup() string {
 	if x != nil {
-		return x.Genders
+		return x.TaskGroup
 	}
-	return nil
+	return ""
 }
 
 type Pos struct {
@@ -293,8 +295,10 @@ type PublicStats struct {
 	SortRankedPoints int32 `protobuf:"varint,10,opt,name=sort_ranked_points,json=sortRankedPoints,proto3" json:"sort_ranked_points,omitempty"`
 	SortHighestScore int32 `protobuf:"varint,11,opt,name=sort_highest_score,json=sortHighestScore,proto3" json:"sort_highest_score,omitempty"`
 	SortLowestScore  int32 `protobuf:"varint,12,opt,name=sort_lowest_score,json=sortLowestScore,proto3" json:"sort_lowest_score,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 管理员在后台手动设置过称号（不随排位分档位变化自动改写），见 title_custom 相关后端逻辑。
+	TitleCustom   bool `protobuf:"varint,13,opt,name=title_custom,json=titleCustom,proto3" json:"title_custom,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PublicStats) Reset() {
@@ -411,6 +415,13 @@ func (x *PublicStats) GetSortLowestScore() int32 {
 	return 0
 }
 
+func (x *PublicStats) GetTitleCustom() bool {
+	if x != nil {
+		return x.TitleCustom
+	}
+	return false
+}
+
 type LobbyStats struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Wins             int32                  `protobuf:"varint,1,opt,name=wins,proto3" json:"wins,omitempty"`
@@ -424,6 +435,7 @@ type LobbyStats struct {
 	SortRankedPoints int32                  `protobuf:"varint,9,opt,name=sort_ranked_points,json=sortRankedPoints,proto3" json:"sort_ranked_points,omitempty"`
 	SortHighestScore int32                  `protobuf:"varint,10,opt,name=sort_highest_score,json=sortHighestScore,proto3" json:"sort_highest_score,omitempty"`
 	SortLowestScore  int32                  `protobuf:"varint,11,opt,name=sort_lowest_score,json=sortLowestScore,proto3" json:"sort_lowest_score,omitempty"`
+	TitleCustom      bool                   `protobuf:"varint,12,opt,name=title_custom,json=titleCustom,proto3" json:"title_custom,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -533,6 +545,13 @@ func (x *LobbyStats) GetSortLowestScore() int32 {
 		return x.SortLowestScore
 	}
 	return 0
+}
+
+func (x *LobbyStats) GetTitleCustom() bool {
+	if x != nil {
+		return x.TitleCustom
+	}
+	return false
 }
 
 type GameWLD struct {
@@ -7616,23 +7635,24 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\n" +
 	"text_color\x18\x01 \x01(\tR\ttextColor\x12)\n" +
 	"\x10background_color\x18\x02 \x01(\tR\x0fbackgroundColor\x12!\n" +
-	"\fborder_color\x18\x03 \x01(\tR\vborderColor\"S\n" +
+	"\fborder_color\x18\x03 \x01(\tR\vborderColor\"Y\n" +
 	"\fGenderOption\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12\x1d\n" +
 	"\n" +
-	"faction_id\x18\x03 \x01(\tR\tfactionId\"\xd0\x01\n" +
+	"faction_id\x18\x04 \x01(\tR\tfactionIdJ\x04\b\x03\x10\x04\"\xd0\x01\n" +
 	"\rGenderFaction\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12\x1d\n" +
 	"\n" +
 	"text_color\x18\x03 \x01(\tR\ttextColor\x12)\n" +
 	"\x10background_color\x18\x04 \x01(\tR\x0fbackgroundColor\x12!\n" +
-	"\fborder_color\x18\x05 \x01(\tR\vborderColor\x12,\n" +
-	"\agenders\x18\x06 \x03(\v2\x12.game.GenderOptionR\agenders\")\n" +
+	"\fborder_color\x18\x05 \x01(\tR\vborderColor\x12\x1d\n" +
+	"\n" +
+	"task_group\x18\a \x01(\tR\ttaskGroupJ\x04\b\x06\x10\aR\agenders\")\n" +
 	"\x03Pos\x12\x10\n" +
 	"\x03row\x18\x01 \x01(\x05R\x03row\x12\x10\n" +
-	"\x03col\x18\x02 \x01(\x05R\x03col\"\xa6\x03\n" +
+	"\x03col\x18\x02 \x01(\x05R\x03col\"\xc9\x03\n" +
 	"\vPublicStats\x12\x12\n" +
 	"\x04wins\x18\x01 \x01(\x05R\x04wins\x12\x16\n" +
 	"\x06losses\x18\x02 \x01(\x05R\x06losses\x12\x14\n" +
@@ -7646,7 +7666,8 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x12sort_ranked_points\x18\n" +
 	" \x01(\x05R\x10sortRankedPoints\x12,\n" +
 	"\x12sort_highest_score\x18\v \x01(\x05R\x10sortHighestScore\x12*\n" +
-	"\x11sort_lowest_score\x18\f \x01(\x05R\x0fsortLowestScore\"\xfb\x02\n" +
+	"\x11sort_lowest_score\x18\f \x01(\x05R\x0fsortLowestScore\x12!\n" +
+	"\ftitle_custom\x18\r \x01(\bR\vtitleCustom\"\x9e\x03\n" +
 	"\n" +
 	"LobbyStats\x12\x12\n" +
 	"\x04wins\x18\x01 \x01(\x05R\x04wins\x12\x16\n" +
@@ -7660,7 +7681,8 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x12sort_ranked_points\x18\t \x01(\x05R\x10sortRankedPoints\x12,\n" +
 	"\x12sort_highest_score\x18\n" +
 	" \x01(\x05R\x10sortHighestScore\x12*\n" +
-	"\x11sort_lowest_score\x18\v \x01(\x05R\x0fsortLowestScore\"K\n" +
+	"\x11sort_lowest_score\x18\v \x01(\x05R\x0fsortLowestScore\x12!\n" +
+	"\ftitle_custom\x18\f \x01(\bR\vtitleCustom\"K\n" +
 	"\aGameWLD\x12\x12\n" +
 	"\x04wins\x18\x01 \x01(\x05R\x04wins\x12\x16\n" +
 	"\x06losses\x18\x02 \x01(\x05R\x06losses\x12\x14\n" +
@@ -8467,139 +8489,138 @@ var file_api_proto_game_proto_goTypes = []any{
 	(*structpb.Struct)(nil),           // 77: google.protobuf.Struct
 }
 var file_api_proto_game_proto_depIdxs = []int32{
-	1,   // 0: game.GenderFaction.genders:type_name -> game.GenderOption
-	6,   // 1: game.GameStats.rps:type_name -> game.GameWLD
-	6,   // 2: game.GameStats.othello:type_name -> game.GameWLD
-	6,   // 3: game.GameStats.tictactoe:type_name -> game.GameWLD
-	6,   // 4: game.GameStats.gomoku:type_name -> game.GameWLD
-	6,   // 5: game.GameStats.liarsdice:type_name -> game.GameWLD
-	0,   // 6: game.PublicPlayer.faction_colors:type_name -> game.GenderColors
-	4,   // 7: game.PublicPlayer.stats:type_name -> game.PublicStats
-	7,   // 8: game.PublicPlayer.game_stats:type_name -> game.GameStats
-	0,   // 9: game.LobbyPlayer.faction_colors:type_name -> game.GenderColors
-	5,   // 10: game.LobbyPlayer.stats:type_name -> game.LobbyStats
-	7,   // 11: game.LobbyPlayer.game_stats:type_name -> game.GameStats
-	8,   // 12: game.SeatOccupant.player:type_name -> game.PublicPlayer
-	10,  // 13: game.SeatOccupant.bot:type_name -> game.BotPlayer
-	8,   // 14: game.Suggestion.author_player:type_name -> game.PublicPlayer
-	30,  // 15: game.GomokuState.board:type_name -> game.BoardRow
-	3,   // 16: game.GomokuState.moves:type_name -> game.Pos
-	3,   // 17: game.GomokuState.winning_line:type_name -> game.Pos
-	31,  // 18: game.GomokuState.ranked_delta:type_name -> game.IntPair
-	31,  // 19: game.GomokuState.undo_count:type_name -> game.IntPair
-	15,  // 20: game.GomokuState.undo_request:type_name -> game.GomokuUndoRequest
-	16,  // 21: game.GomokuState.resign_request:type_name -> game.GomokuResignRequest
-	31,  // 22: game.GomokuState.clock_remaining:type_name -> game.IntPair
-	20,  // 23: game.RoundHistoryItem.othello_score:type_name -> game.OthelloScore
-	3,   // 24: game.RoundHistoryItem.tictactoe_line:type_name -> game.Pos
-	21,  // 25: game.RoundHistoryItem.punishment_tasks:type_name -> game.PunishmentTask
-	22,  // 26: game.RoundHistoryItem.proofs:type_name -> game.HistoryProof
-	25,  // 27: game.RoundHistoryItem.liars_dice_hands:type_name -> game.LiarsDiceHandsPair
-	36,  // 28: game.RoundHistoryItem.liars_dice_names:type_name -> game.StringPair
-	3,   // 29: game.RoundHistoryItem.gomoku_line:type_name -> game.Pos
-	24,  // 30: game.LiarsDiceHandsPair.value:type_name -> game.Int32List
-	31,  // 31: game.LiarsDiceState.dice_counts:type_name -> game.IntPair
-	26,  // 32: game.LiarsDiceState.current_bid:type_name -> game.LiarsDiceBid
-	26,  // 33: game.LiarsDiceState.bid_history:type_name -> game.LiarsDiceBid
-	25,  // 34: game.LiarsDiceState.revealed_hands:type_name -> game.LiarsDiceHandsPair
-	30,  // 35: game.OthelloState.board:type_name -> game.BoardRow
-	3,   // 36: game.OthelloState.legal_moves:type_name -> game.Pos
-	31,  // 37: game.OthelloState.ranked_delta:type_name -> game.IntPair
-	28,  // 38: game.OthelloState.pending_settlement:type_name -> game.OthelloPendingSettlement
-	29,  // 39: game.OthelloState.surrender_request:type_name -> game.OthelloSurrenderRequest
-	31,  // 40: game.OthelloState.clock_remaining:type_name -> game.IntPair
-	30,  // 41: game.TicTacToeState.board:type_name -> game.BoardRow
-	33,  // 42: game.TicTacToeState.giveaway_prompt:type_name -> game.TicTacToeGiveawayPrompt
-	3,   // 43: game.TicTacToeState.winning_line:type_name -> game.Pos
-	31,  // 44: game.TicTacToeState.ranked_delta:type_name -> game.IntPair
-	11,  // 45: game.SeatOccupantPair.value:type_name -> game.SeatOccupant
-	19,  // 46: game.SeatStatsPair.value:type_name -> game.SeatStats
-	14,  // 47: game.RoomSnapshot.settings:type_name -> game.RoomSettings
-	37,  // 48: game.RoomSnapshot.seats:type_name -> game.SeatOccupantPair
-	8,   // 49: game.RoomSnapshot.spectators:type_name -> game.PublicPlayer
-	35,  // 50: game.RoomSnapshot.ready:type_name -> game.BoolPair
-	36,  // 51: game.RoomSnapshot.choices:type_name -> game.StringPair
-	36,  // 52: game.RoomSnapshot.revealed_choices:type_name -> game.StringPair
-	32,  // 53: game.RoomSnapshot.othello:type_name -> game.OthelloState
-	34,  // 54: game.RoomSnapshot.tictactoe:type_name -> game.TicTacToeState
-	27,  // 55: game.RoomSnapshot.liars_dice:type_name -> game.LiarsDiceState
-	17,  // 56: game.RoomSnapshot.gomoku:type_name -> game.GomokuState
-	18,  // 57: game.RoomSnapshot.proofs:type_name -> game.PunishmentProof
-	31,  // 58: game.RoomSnapshot.score:type_name -> game.IntPair
-	31,  // 59: game.RoomSnapshot.seated_score:type_name -> game.IntPair
-	38,  // 60: game.RoomSnapshot.seat_stats:type_name -> game.SeatStatsPair
-	23,  // 61: game.RoomSnapshot.round_history:type_name -> game.RoundHistoryItem
-	12,  // 62: game.RoomSnapshot.chat:type_name -> game.ChatMessage
-	8,   // 63: game.VersusSeat.player:type_name -> game.PublicPlayer
-	10,  // 64: game.VersusSeat.bot:type_name -> game.BotPlayer
-	41,  // 65: game.VersusPair.value:type_name -> game.VersusSeat
-	42,  // 66: game.LobbyRoomInfo.versus:type_name -> game.VersusPair
-	9,   // 67: game.LobbyPlayerEntry.player:type_name -> game.LobbyPlayer
-	43,  // 68: game.LobbyRoomEntry.room:type_name -> game.LobbyRoomInfo
-	64,  // 69: game.LobbySnapshot.config:type_name -> game.AppConfig
-	44,  // 70: game.LobbySnapshot.players:type_name -> game.LobbyPlayerEntry
-	45,  // 71: game.LobbySnapshot.rooms:type_name -> game.LobbyRoomEntry
-	9,   // 72: game.LobbySnapshot.normal_leaderboard:type_name -> game.LobbyPlayer
-	9,   // 73: game.LobbySnapshot.ranked_leaderboard:type_name -> game.LobbyPlayer
-	13,  // 74: game.LobbySnapshot.suggestions:type_name -> game.Suggestion
-	12,  // 75: game.LobbySnapshot.lobby_chat:type_name -> game.ChatMessage
-	40,  // 76: game.LobbySnapshot.server_stats:type_name -> game.ServerStats
-	48,  // 77: game.RoomInfoTagEntry.style:type_name -> game.RoomInfoTagStyle
-	36,  // 78: game.PunishmentTaskConfig.variants:type_name -> game.StringPair
-	76,  // 79: game.TitleSegment.faction_names:type_name -> game.TitleSegment.FactionNames
-	36,  // 80: game.PunishmentConfig.variants:type_name -> game.StringPair
-	50,  // 81: game.PunishmentConfig.tasks:type_name -> game.PunishmentTaskConfig
-	47,  // 82: game.PunishmentConfig.room_name_pool:type_name -> game.RoomNamePool
-	57,  // 83: game.ExtremeModeConfig.positive_loss_rates:type_name -> game.DoublePair
-	57,  // 84: game.ExtremeModeConfig.negative_win_rates:type_name -> game.DoublePair
-	57,  // 85: game.ExtremeModeConfig.hourly_decay:type_name -> game.DoublePair
-	53,  // 86: game.BotsConfig.difficulties:type_name -> game.BotDifficultyConfig
-	59,  // 87: game.AppConfig.site:type_name -> game.SiteConfig
-	55,  // 88: game.AppConfig.announcement_board:type_name -> game.AnnouncementBoard
-	1,   // 89: game.AppConfig.genders:type_name -> game.GenderOption
-	2,   // 90: game.AppConfig.gender_factions:type_name -> game.GenderFaction
-	51,  // 91: game.AppConfig.titles:type_name -> game.TitleSegment
-	52,  // 92: game.AppConfig.punishments:type_name -> game.PunishmentConfig
-	47,  // 93: game.AppConfig.player_punishment_room_name_pool:type_name -> game.RoomNamePool
-	49,  // 94: game.AppConfig.room_info_tags:type_name -> game.RoomInfoTagEntry
-	60,  // 95: game.AppConfig.access_control:type_name -> game.AccessControlConfig
-	61,  // 96: game.AppConfig.name_war:type_name -> game.NameWarConfig
-	62,  // 97: game.AppConfig.giveaway:type_name -> game.GiveawayConfig
-	58,  // 98: game.AppConfig.extreme_mode:type_name -> game.ExtremeModeConfig
-	63,  // 99: game.AppConfig.bots:type_name -> game.BotsConfig
-	54,  // 100: game.AppConfig.games:type_name -> game.GameConfig
-	36,  // 101: game.AppConfig.messages:type_name -> game.StringPair
-	56,  // 102: game.AppConfig.security_disclaimer:type_name -> game.SecurityDisclaimerConfig
-	65,  // 103: game.AppConfig.ranked_score:type_name -> game.RankedScoreConfig
-	46,  // 104: game.StateDocument.lobby:type_name -> game.LobbySnapshot
-	39,  // 105: game.StateDocument.room:type_name -> game.RoomSnapshot
-	64,  // 106: game.StateDocument.config:type_name -> game.AppConfig
-	8,   // 107: game.PlayerBatch.players:type_name -> game.PublicPlayer
-	8,   // 108: game.MeState.player:type_name -> game.PublicPlayer
-	39,  // 109: game.MeState.room:type_name -> game.RoomSnapshot
-	23,  // 110: game.HistoryPage.item:type_name -> game.RoundHistoryItem
-	8,   // 111: game.PlayerResult.player:type_name -> game.PublicPlayer
-	13,  // 112: game.SuggestionsResult.suggestions:type_name -> game.Suggestion
-	77,  // 113: game.RawBody.dynamic:type_name -> google.protobuf.Struct
-	67,  // 114: game.RawBody.player_batch:type_name -> game.PlayerBatch
-	12,  // 115: game.RawBody.chat:type_name -> game.ChatMessage
-	13,  // 116: game.RawBody.suggestion:type_name -> game.Suggestion
-	8,   // 117: game.RawBody.player:type_name -> game.PublicPlayer
-	68,  // 118: game.RawBody.me:type_name -> game.MeState
-	69,  // 119: game.RawBody.announcement:type_name -> game.AnnouncementPayload
-	70,  // 120: game.RawBody.room_closed:type_name -> game.RoomClosed
-	71,  // 121: game.RawBody.history_page:type_name -> game.HistoryPage
-	72,  // 122: game.RawBody.ok:type_name -> game.OkResult
-	73,  // 123: game.RawBody.player_result:type_name -> game.PlayerResult
-	74,  // 124: game.RawBody.suggestions:type_name -> game.SuggestionsResult
-	39,  // 125: game.RawBody.room:type_name -> game.RoomSnapshot
-	64,  // 126: game.RawBody.config:type_name -> game.AppConfig
-	46,  // 127: game.RawBody.lobby:type_name -> game.LobbySnapshot
-	128, // [128:128] is the sub-list for method output_type
-	128, // [128:128] is the sub-list for method input_type
-	128, // [128:128] is the sub-list for extension type_name
-	128, // [128:128] is the sub-list for extension extendee
-	0,   // [0:128] is the sub-list for field type_name
+	6,   // 0: game.GameStats.rps:type_name -> game.GameWLD
+	6,   // 1: game.GameStats.othello:type_name -> game.GameWLD
+	6,   // 2: game.GameStats.tictactoe:type_name -> game.GameWLD
+	6,   // 3: game.GameStats.gomoku:type_name -> game.GameWLD
+	6,   // 4: game.GameStats.liarsdice:type_name -> game.GameWLD
+	0,   // 5: game.PublicPlayer.faction_colors:type_name -> game.GenderColors
+	4,   // 6: game.PublicPlayer.stats:type_name -> game.PublicStats
+	7,   // 7: game.PublicPlayer.game_stats:type_name -> game.GameStats
+	0,   // 8: game.LobbyPlayer.faction_colors:type_name -> game.GenderColors
+	5,   // 9: game.LobbyPlayer.stats:type_name -> game.LobbyStats
+	7,   // 10: game.LobbyPlayer.game_stats:type_name -> game.GameStats
+	8,   // 11: game.SeatOccupant.player:type_name -> game.PublicPlayer
+	10,  // 12: game.SeatOccupant.bot:type_name -> game.BotPlayer
+	8,   // 13: game.Suggestion.author_player:type_name -> game.PublicPlayer
+	30,  // 14: game.GomokuState.board:type_name -> game.BoardRow
+	3,   // 15: game.GomokuState.moves:type_name -> game.Pos
+	3,   // 16: game.GomokuState.winning_line:type_name -> game.Pos
+	31,  // 17: game.GomokuState.ranked_delta:type_name -> game.IntPair
+	31,  // 18: game.GomokuState.undo_count:type_name -> game.IntPair
+	15,  // 19: game.GomokuState.undo_request:type_name -> game.GomokuUndoRequest
+	16,  // 20: game.GomokuState.resign_request:type_name -> game.GomokuResignRequest
+	31,  // 21: game.GomokuState.clock_remaining:type_name -> game.IntPair
+	20,  // 22: game.RoundHistoryItem.othello_score:type_name -> game.OthelloScore
+	3,   // 23: game.RoundHistoryItem.tictactoe_line:type_name -> game.Pos
+	21,  // 24: game.RoundHistoryItem.punishment_tasks:type_name -> game.PunishmentTask
+	22,  // 25: game.RoundHistoryItem.proofs:type_name -> game.HistoryProof
+	25,  // 26: game.RoundHistoryItem.liars_dice_hands:type_name -> game.LiarsDiceHandsPair
+	36,  // 27: game.RoundHistoryItem.liars_dice_names:type_name -> game.StringPair
+	3,   // 28: game.RoundHistoryItem.gomoku_line:type_name -> game.Pos
+	24,  // 29: game.LiarsDiceHandsPair.value:type_name -> game.Int32List
+	31,  // 30: game.LiarsDiceState.dice_counts:type_name -> game.IntPair
+	26,  // 31: game.LiarsDiceState.current_bid:type_name -> game.LiarsDiceBid
+	26,  // 32: game.LiarsDiceState.bid_history:type_name -> game.LiarsDiceBid
+	25,  // 33: game.LiarsDiceState.revealed_hands:type_name -> game.LiarsDiceHandsPair
+	30,  // 34: game.OthelloState.board:type_name -> game.BoardRow
+	3,   // 35: game.OthelloState.legal_moves:type_name -> game.Pos
+	31,  // 36: game.OthelloState.ranked_delta:type_name -> game.IntPair
+	28,  // 37: game.OthelloState.pending_settlement:type_name -> game.OthelloPendingSettlement
+	29,  // 38: game.OthelloState.surrender_request:type_name -> game.OthelloSurrenderRequest
+	31,  // 39: game.OthelloState.clock_remaining:type_name -> game.IntPair
+	30,  // 40: game.TicTacToeState.board:type_name -> game.BoardRow
+	33,  // 41: game.TicTacToeState.giveaway_prompt:type_name -> game.TicTacToeGiveawayPrompt
+	3,   // 42: game.TicTacToeState.winning_line:type_name -> game.Pos
+	31,  // 43: game.TicTacToeState.ranked_delta:type_name -> game.IntPair
+	11,  // 44: game.SeatOccupantPair.value:type_name -> game.SeatOccupant
+	19,  // 45: game.SeatStatsPair.value:type_name -> game.SeatStats
+	14,  // 46: game.RoomSnapshot.settings:type_name -> game.RoomSettings
+	37,  // 47: game.RoomSnapshot.seats:type_name -> game.SeatOccupantPair
+	8,   // 48: game.RoomSnapshot.spectators:type_name -> game.PublicPlayer
+	35,  // 49: game.RoomSnapshot.ready:type_name -> game.BoolPair
+	36,  // 50: game.RoomSnapshot.choices:type_name -> game.StringPair
+	36,  // 51: game.RoomSnapshot.revealed_choices:type_name -> game.StringPair
+	32,  // 52: game.RoomSnapshot.othello:type_name -> game.OthelloState
+	34,  // 53: game.RoomSnapshot.tictactoe:type_name -> game.TicTacToeState
+	27,  // 54: game.RoomSnapshot.liars_dice:type_name -> game.LiarsDiceState
+	17,  // 55: game.RoomSnapshot.gomoku:type_name -> game.GomokuState
+	18,  // 56: game.RoomSnapshot.proofs:type_name -> game.PunishmentProof
+	31,  // 57: game.RoomSnapshot.score:type_name -> game.IntPair
+	31,  // 58: game.RoomSnapshot.seated_score:type_name -> game.IntPair
+	38,  // 59: game.RoomSnapshot.seat_stats:type_name -> game.SeatStatsPair
+	23,  // 60: game.RoomSnapshot.round_history:type_name -> game.RoundHistoryItem
+	12,  // 61: game.RoomSnapshot.chat:type_name -> game.ChatMessage
+	8,   // 62: game.VersusSeat.player:type_name -> game.PublicPlayer
+	10,  // 63: game.VersusSeat.bot:type_name -> game.BotPlayer
+	41,  // 64: game.VersusPair.value:type_name -> game.VersusSeat
+	42,  // 65: game.LobbyRoomInfo.versus:type_name -> game.VersusPair
+	9,   // 66: game.LobbyPlayerEntry.player:type_name -> game.LobbyPlayer
+	43,  // 67: game.LobbyRoomEntry.room:type_name -> game.LobbyRoomInfo
+	64,  // 68: game.LobbySnapshot.config:type_name -> game.AppConfig
+	44,  // 69: game.LobbySnapshot.players:type_name -> game.LobbyPlayerEntry
+	45,  // 70: game.LobbySnapshot.rooms:type_name -> game.LobbyRoomEntry
+	9,   // 71: game.LobbySnapshot.normal_leaderboard:type_name -> game.LobbyPlayer
+	9,   // 72: game.LobbySnapshot.ranked_leaderboard:type_name -> game.LobbyPlayer
+	13,  // 73: game.LobbySnapshot.suggestions:type_name -> game.Suggestion
+	12,  // 74: game.LobbySnapshot.lobby_chat:type_name -> game.ChatMessage
+	40,  // 75: game.LobbySnapshot.server_stats:type_name -> game.ServerStats
+	48,  // 76: game.RoomInfoTagEntry.style:type_name -> game.RoomInfoTagStyle
+	36,  // 77: game.PunishmentTaskConfig.variants:type_name -> game.StringPair
+	76,  // 78: game.TitleSegment.faction_names:type_name -> game.TitleSegment.FactionNames
+	36,  // 79: game.PunishmentConfig.variants:type_name -> game.StringPair
+	50,  // 80: game.PunishmentConfig.tasks:type_name -> game.PunishmentTaskConfig
+	47,  // 81: game.PunishmentConfig.room_name_pool:type_name -> game.RoomNamePool
+	57,  // 82: game.ExtremeModeConfig.positive_loss_rates:type_name -> game.DoublePair
+	57,  // 83: game.ExtremeModeConfig.negative_win_rates:type_name -> game.DoublePair
+	57,  // 84: game.ExtremeModeConfig.hourly_decay:type_name -> game.DoublePair
+	53,  // 85: game.BotsConfig.difficulties:type_name -> game.BotDifficultyConfig
+	59,  // 86: game.AppConfig.site:type_name -> game.SiteConfig
+	55,  // 87: game.AppConfig.announcement_board:type_name -> game.AnnouncementBoard
+	1,   // 88: game.AppConfig.genders:type_name -> game.GenderOption
+	2,   // 89: game.AppConfig.gender_factions:type_name -> game.GenderFaction
+	51,  // 90: game.AppConfig.titles:type_name -> game.TitleSegment
+	52,  // 91: game.AppConfig.punishments:type_name -> game.PunishmentConfig
+	47,  // 92: game.AppConfig.player_punishment_room_name_pool:type_name -> game.RoomNamePool
+	49,  // 93: game.AppConfig.room_info_tags:type_name -> game.RoomInfoTagEntry
+	60,  // 94: game.AppConfig.access_control:type_name -> game.AccessControlConfig
+	61,  // 95: game.AppConfig.name_war:type_name -> game.NameWarConfig
+	62,  // 96: game.AppConfig.giveaway:type_name -> game.GiveawayConfig
+	58,  // 97: game.AppConfig.extreme_mode:type_name -> game.ExtremeModeConfig
+	63,  // 98: game.AppConfig.bots:type_name -> game.BotsConfig
+	54,  // 99: game.AppConfig.games:type_name -> game.GameConfig
+	36,  // 100: game.AppConfig.messages:type_name -> game.StringPair
+	56,  // 101: game.AppConfig.security_disclaimer:type_name -> game.SecurityDisclaimerConfig
+	65,  // 102: game.AppConfig.ranked_score:type_name -> game.RankedScoreConfig
+	46,  // 103: game.StateDocument.lobby:type_name -> game.LobbySnapshot
+	39,  // 104: game.StateDocument.room:type_name -> game.RoomSnapshot
+	64,  // 105: game.StateDocument.config:type_name -> game.AppConfig
+	8,   // 106: game.PlayerBatch.players:type_name -> game.PublicPlayer
+	8,   // 107: game.MeState.player:type_name -> game.PublicPlayer
+	39,  // 108: game.MeState.room:type_name -> game.RoomSnapshot
+	23,  // 109: game.HistoryPage.item:type_name -> game.RoundHistoryItem
+	8,   // 110: game.PlayerResult.player:type_name -> game.PublicPlayer
+	13,  // 111: game.SuggestionsResult.suggestions:type_name -> game.Suggestion
+	77,  // 112: game.RawBody.dynamic:type_name -> google.protobuf.Struct
+	67,  // 113: game.RawBody.player_batch:type_name -> game.PlayerBatch
+	12,  // 114: game.RawBody.chat:type_name -> game.ChatMessage
+	13,  // 115: game.RawBody.suggestion:type_name -> game.Suggestion
+	8,   // 116: game.RawBody.player:type_name -> game.PublicPlayer
+	68,  // 117: game.RawBody.me:type_name -> game.MeState
+	69,  // 118: game.RawBody.announcement:type_name -> game.AnnouncementPayload
+	70,  // 119: game.RawBody.room_closed:type_name -> game.RoomClosed
+	71,  // 120: game.RawBody.history_page:type_name -> game.HistoryPage
+	72,  // 121: game.RawBody.ok:type_name -> game.OkResult
+	73,  // 122: game.RawBody.player_result:type_name -> game.PlayerResult
+	74,  // 123: game.RawBody.suggestions:type_name -> game.SuggestionsResult
+	39,  // 124: game.RawBody.room:type_name -> game.RoomSnapshot
+	64,  // 125: game.RawBody.config:type_name -> game.AppConfig
+	46,  // 126: game.RawBody.lobby:type_name -> game.LobbySnapshot
+	127, // [127:127] is the sub-list for method output_type
+	127, // [127:127] is the sub-list for method input_type
+	127, // [127:127] is the sub-list for extension type_name
+	127, // [127:127] is the sub-list for extension extendee
+	0,   // [0:127] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_game_proto_init() }

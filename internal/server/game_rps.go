@@ -332,6 +332,59 @@ func (s *Server) maybeBotAct(room *RoomState) {
 	s.botTimers[room.ID] = timer
 }
 
+// forceEndRpsRound 管理员强制判定当前 RPS 出拳阶段的胜负；仅在 PhaseChoosing 时允许，
+// 避免和 finishRoundIfReady 的自然结算竞争，也避免对已出结果的对局重复结算
+// （RPS 没有像其它三个游戏那样常驻的 Ended 状态对象可供二次校验，改用 Phase 把关）。
+func (s *Server) forceEndRpsRound(room *RoomState, result types.RoundResult) (bool, string) {
+	if room.Phase != types.PhaseChoosing {
+		return false, "当前不在出拳阶段，无法强制判定"
+	}
+	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
+		return false, "双方座位未坐满"
+	}
+	rankedStake := effectiveRankedStake(room.Settings)
+	rankedText := ""
+	streakText := ""
+	playerA, playerB := s.applySeatOutcome(room, result)
+	if result == types.ResultDraw {
+		if room.Settings.EnableRanked && room.Settings.TieDoublePunish {
+			dA, dB := s.applyRankedDrawPenaltyStake(playerA, playerB, rankedStake)
+			rankedText = fmt.Sprintf("（平局双扣：A %d，B %d）", dA, dB)
+		}
+	} else if result == types.ResultA || result == types.ResultB {
+		if room.Settings.EnableRanked {
+			loserSeat := oppositeSeat(types.SeatKey(result))
+			winner := s.humanPlayerFromSeat(room, types.SeatKey(result))
+			loser := s.humanPlayerFromSeat(room, loserSeat)
+			wD, lD := s.applyRankedStake(winner, loser, rankedStake)
+			resetExtremeWinStreak(loser)
+			streakText = s.applyExtremeWinStreakRisk(room, winner)
+			rankedText = fmt.Sprintf("（%s %s，%s %d）",
+				occupantName(room.Seats[types.SeatKey(result)]), formatSigned(wD),
+				occupantName(room.Seats[loserSeat]), lD)
+		}
+	}
+	room.Phase = types.PhaseResult
+	room.Status = "playing"
+	room.RevealedChoices = nil
+	if result == types.ResultDraw {
+		room.ResultText = "管理员判定：平局" + rankedText
+	} else {
+		room.ResultText = "管理员判定：" + occupantName(room.Seats[types.SeatKey(result)]) + " 胜利" + rankedText + streakText
+	}
+	s.refreshHumans(playerA, playerB)
+	resultLabel := s.roundResultLabel(room, result)
+	item := s.buildMatchHistoryShell(room, result, types.GameRPS, resultLabel, room.ResultText)
+	item.ExtremeRanked = room.Settings.EnableExtremeRanked
+	if room.Settings.EnableRanked {
+		es := rankedStake
+		item.EffectiveStake = &es
+	}
+	s.roomNotice(room, room.ResultText)
+	s.finalizeMatch(room, result, item)
+	return true, ""
+}
+
 func (s *Server) finishRoundIfReady(room *RoomState) {
 	if room.Choices[types.SeatA] == "" || room.Choices[types.SeatB] == "" {
 		return
@@ -381,7 +434,7 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 			player = playerB
 		}
 		if player != nil {
-			s.addGiveawayValue(player, 2)
+			s.addGiveawayValue(player, s.cfg.Giveaway.ActiveBoostValue)
 		}
 	}
 	var giveawayResultSeats []types.SeatKey
@@ -398,14 +451,7 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 	}
 
 	if result == types.ResultDoubleLoss {
-		recordGameOutcome(playerA, types.GameRPS, "loss")
-		recordGameOutcome(playerB, types.GameRPS, "loss")
-		ssA := room.SeatStats[types.SeatA]
-		ssA.Losses++
-		room.SeatStats[types.SeatA] = ssA
-		ssB := room.SeatStats[types.SeatB]
-		ssB.Losses++
-		room.SeatStats[types.SeatB] = ssB
+		s.applySeatOutcome(room, result)
 		resetExtremeWinStreak(playerA)
 		resetExtremeWinStreak(playerB)
 		if room.Settings.EnableRanked {
@@ -415,14 +461,7 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 			room.ResultText = "双方白给，双输"
 		}
 	} else if result == types.ResultDraw {
-		recordGameOutcome(playerA, types.GameRPS, "draw")
-		recordGameOutcome(playerB, types.GameRPS, "draw")
-		ssA := room.SeatStats[types.SeatA]
-		ssA.Draws++
-		room.SeatStats[types.SeatA] = ssA
-		ssB := room.SeatStats[types.SeatB]
-		ssB.Draws++
-		room.SeatStats[types.SeatB] = ssB
+		s.applySeatOutcome(room, result)
 		resetExtremeWinStreak(playerA)
 		resetExtremeWinStreak(playerB)
 		if room.Settings.EnableRanked && room.Settings.TieDoublePunish {
@@ -443,16 +482,7 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 		} else {
 			winner, loser = playerB, playerA
 		}
-		recordGameOutcome(winner, types.GameRPS, "win")
-		recordGameOutcome(loser, types.GameRPS, "loss")
-		room.Score[winnerSeat]++
-		room.SeatedScore[winnerSeat]++
-		ssW := room.SeatStats[winnerSeat]
-		ssW.Wins++
-		room.SeatStats[winnerSeat] = ssW
-		ssL := room.SeatStats[loserSeat]
-		ssL.Losses++
-		room.SeatStats[loserSeat] = ssL
+		s.applySeatOutcome(room, result)
 		streakText := ""
 		rankedText := ""
 		if room.Settings.EnableRanked {
@@ -533,6 +563,7 @@ func (s *Server) applyDisconnectForfeit(room *RoomState, player *PlayerState) bo
 	wD, lD := s.applyRankedStake(winner, loser, forfeit.Stake)
 	recordGameOutcome(winner, types.GameRPS, "win")
 	recordGameOutcome(loser, types.GameRPS, "loss")
+	s.applyGiveawayWinPenalty(winner)
 	resetExtremeWinStreak(loser)
 	streakText := s.applyExtremeWinStreakRisk(room, winner)
 	room.Score[forfeit.WinnerSeat]++

@@ -85,7 +85,10 @@ func (s *Server) cleanupRoomIfEmpty(room *RoomState) bool {
 	s.dropSyncChannel(channelRoom(room.ID))
 	delete(s.rooms, room.ID)
 	if s.eventDB != nil {
-		if err := s.eventDB.insertClosedRoom(room.ID, room.Settings.Name, string(room.Settings.GameID), room.OwnerID, room.CreatorName, room.CreatedAt, nowMs(), "empty_cleanup"); err != nil {
+		if err := s.eventDB.insertRoomEvent(roomEventInput{
+			At: nowMs(), RoomID: room.ID, RoomName: room.Settings.Name, GameID: string(room.Settings.GameID),
+			UserID: room.OwnerID, UserName: room.CreatorName, Action: "close", Reason: "empty_cleanup",
+		}); err != nil {
 			s.errorLog("room_event_close_failed", err.Error())
 		}
 	}

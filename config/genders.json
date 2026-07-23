@@ -1,0 +1,42 @@
+[
+  {
+    "id": "boy",
+    "label": "男生",
+    "factionId": "male_faction"
+  },
+  {
+    "id": "male",
+    "label": "男性",
+    "factionId": "male_faction"
+  },
+  {
+    "id": "girl",
+    "label": "女生",
+    "factionId": "female_faction"
+  },
+  {
+    "id": "female",
+    "label": "女性",
+    "factionId": "female_faction"
+  },
+  {
+    "id": "femboy",
+    "label": "男娘",
+    "factionId": "femboy_faction"
+  },
+  {
+    "id": "transgirl",
+    "label": "药娘",
+    "factionId": "femboy_faction"
+  },
+  {
+    "id": "attack_helicopter",
+    "label": "武装直升机",
+    "factionId": "other_faction"
+  },
+  {
+    "id": "walmart_bag",
+    "label": "沃尔玛购物袋",
+    "factionId": "other_faction"
+  }
+]

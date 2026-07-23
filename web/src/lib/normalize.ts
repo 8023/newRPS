@@ -101,7 +101,8 @@ export function normalizePublicStats(stats: PublicPlayer["stats"] | null | undef
     sortHighestScore: statNum(s.sortHighestScore, statNum(s.highestScore)),
     sortLowestScore: statNum(s.sortLowestScore, statNum(s.lowestScore)),
     title: title || "暂无称号",
-    ...(s.titleSegmentId ? { titleSegmentId: s.titleSegmentId } : {})
+    ...(s.titleSegmentId ? { titleSegmentId: s.titleSegmentId } : {}),
+    ...(s.titleCustom ? { titleCustom: true } : {})
   };
 }
 
@@ -440,13 +441,31 @@ export function withAccessControlDefaults(ac?: Partial<AppConfig["accessControl"
   return { ...DEFAULT_ACCESS_CONTROL, ...ac };
 }
 
+/** 与 config/giveaway.json 默认值一致（后台编辑时也用同一份兜底）。 */
+export const DEFAULT_GIVEAWAY: AppConfig["giveaway"] = {
+  panelTitle: "白给自救板",
+  panelDescription: "提交一点自我惩罚宣言，等待其他玩家点赞帮你降低白给值。",
+  submitPlaceholder: "写下你的自我惩罚宣言...",
+  emptyText: "还没有人在白给自救板上。",
+  activeBoostValue: 2,
+  winPenaltyValue: 1,
+  likeVoteLimitPerHour: 3,
+  likeVoteValue: 1,
+  dislikeVoteLimitPerHour: 10,
+  dislikeVoteValue: 0.1
+};
+
+export function withGiveawayDefaults(g?: Partial<AppConfig["giveaway"]> | null): AppConfig["giveaway"] {
+  return { ...DEFAULT_GIVEAWAY, ...g };
+}
+
 export function normalizeConfig(config: AppConfig): AppConfig {
   return {
     ...config,
     genders: config.genders || [],
     genderFactions: (config.genderFactions || []).map((faction) => ({
       ...faction,
-      genders: faction.genders || []
+      taskGroup: faction.taskGroup || "default"
     })),
     titles: (config.titles || []).map((segment) => ({
       ...segment,
@@ -473,6 +492,7 @@ export function normalizeConfig(config: AppConfig): AppConfig {
       ...config.nameWar,
       penaltyThreshold: config.nameWar?.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD
     },
+    giveaway: withGiveawayDefaults(config.giveaway),
     bots: {
       names: config.bots?.names || [],
       difficulties: config.bots?.difficulties || []

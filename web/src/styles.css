@@ -123,6 +123,23 @@ textarea {
   resize: vertical;
 }
 
+/* select 关掉浏览器原生外观，改用 CSS 画的箭头——否则 Safari 的原生下拉控件比同样 padding 的 input
+   要高一截，紧挨着摆在一起（比如性别下拉旁边的自定义输入框）高度会对不齐。 */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 34px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 20px) center,
+    calc(100% - 15px) center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
 main {
   min-height: 100vh;
   background: var(--main-bg);
@@ -613,20 +630,6 @@ main {
   color: var(--page-text);
 }
 
-.gender-faction-picker {
-  display: grid;
-  gap: 10px;
-}
-
-.gender-faction-group {
-  display: grid;
-  gap: 6px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel-soft);
-}
-
 .faction-label,
 .faction-preview {
   width: fit-content;
@@ -640,49 +643,26 @@ main {
   font-weight: 900;
 }
 
-.gender-options {
+/* 性别下拉 + 自定义文本框：默认二分布局（个人资料等紧凑场景），下拉与输入框各占一半宽度——
+   用 grid 而不是 flex，这样未选中"自定义"、输入框不渲染时，下拉也不会被拉伸占满整行，
+   右边那一半留白即可，不需要跟着调整布局。stacked 时各占一行（进入游戏页）。 */
+.gender-select-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
-.gender-options .active {
-  background: var(--pink);
-  border-color: var(--pink-border);
-  font-weight: 800;
+.gender-select-row select {
+  min-width: 0;
 }
 
-.gender-faction-picker.compact {
-  max-height: 190px;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel-solid);
-  padding: 8px;
+.gender-select-row input {
+  min-width: 0;
 }
 
-.gender-faction-picker.compact .gender-faction-group {
-  padding: 7px;
-  gap: 5px;
-}
-
-.gender-faction-picker.compact .faction-label {
-  min-height: 20px;
-  padding: 2px 7px;
-  font-size: 11px;
-}
-
-.gender-faction-picker.compact .gender-options {
+.gender-select-row.stacked {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.gender-faction-picker.compact .gender-options button {
-  min-height: 30px;
-  padding: 5px 9px;
-  border-radius: 999px;
-  font-size: 12px;
+  flex-direction: column;
 }
 
 .dashboard,
@@ -715,8 +695,7 @@ main {
 .panel-title h2,
 .side-column .panel h2,
 .leaderboard-panel h2,
-.name-war-loser-panel h2,
-.lobby-message-board h2 {
+.name-war-loser-panel h2 {
   margin: 0;
   color: var(--page-text);
   font-size: 18px;
@@ -725,6 +704,36 @@ main {
 
 .panel-title {
   margin-bottom: 12px;
+}
+
+/* 用于没有 .panel-title 包裹的裸 h2/h3 场景，给标题配上折叠按钮时补一行 flex 容器。 */
+.panel-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* 标题与徽标/折叠按钮的分组：让它们贴在一起显示在标题行右侧。 */
+.panel-title-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 重置 .sticky-panel-title / .compact-title 给 span 套的药丸样式，避免包裹徽标+折叠按钮的分组本身也被套上药丸底色。 */
+.sticky-panel-title .panel-title-actions,
+.compact-title .panel-title-actions {
+  border: none;
+  background: none;
+  padding: 0;
+  margin-left: auto;
+}
+
+/* 手机端模块折叠三角按钮：桌面端默认不渲染（见下方 920px 断点），折叠状态只在手机端生效。 */
+.mobile-collapse-toggle {
+  display: none;
 }
 
 .stats-row {
@@ -772,6 +781,13 @@ main {
 }
 
 .giveaway-panel {
+  display: grid;
+  gap: 10px;
+}
+
+/* 折叠包装层 .mobile-collapsible-body 现在夹在 .giveaway-panel 和玩法文案/提交框/配额行/列表之间，
+   原本靠 .giveaway-panel 的 gap 撑开的间距够不到孙子节点了，得在这一层重新声明一份。 */
+.giveaway-panel .mobile-collapsible-body {
   display: grid;
   gap: 10px;
 }
@@ -862,10 +878,6 @@ main {
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
-}
-
-.giveaway-panel>.giveaway-quota-line {
-  margin-top: 6px;
 }
 
 .giveaway-quota-line span {
@@ -1163,7 +1175,8 @@ main {
   grid-template-columns: minmax(0, 1fr) minmax(260px, 0.72fr);
   gap: 12px;
   margin-top: 12px;
-  align-items: stretch;
+  /* start：两侧面板各自按内容增高，避免矮的一方被 stretch 拉高后在提示语上下摊出大段空白 */
+  align-items: start;
 }
 
 .room-card {
@@ -1200,7 +1213,7 @@ main {
   min-width: 0;
   display: grid;
   align-content: start;
-  gap: 4px;
+  gap: 2px;
 }
 
 .room-card.has-room-card-background::after {
@@ -1260,7 +1273,7 @@ main {
 }
 
 .room-versus-line .player-badge {
-  max-width: min(100%, 240px);
+  max-width: min(100%, 300px);
   overflow: hidden;
 }
 
@@ -1341,17 +1354,32 @@ main {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 8px;
-  height: 230px;
+  height: 360px;
   min-height: 0;
   overflow: hidden;
 }
 
+/* 与白给自救板一致：玩法框随内容增高；空列表时仅占内容最小高度；
+   列表本身用 max-height 封顶并滚动，卡片高度由内容决定、不被面板撑开。 */
 .name-war-loser-panel {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
   gap: 9px;
-  max-height: 340px;
-  overflow: hidden;
+  align-content: start;
+}
+
+.name-war-loser-panel .mobile-collapsible-body {
+  display: grid;
+  gap: 9px;
+  align-content: start;
+}
+
+/* 标题行已有 margin-bottom，再叠面板 gap 会在提示语上方留出偏大空隙 */
+.name-war-loser-panel>.panel-header-row {
+  margin-bottom: 14px;
+}
+
+.name-war-loser-panel .mobile-collapsible-body>.hint {
+  margin-block: 0;
 }
 
 .giveaway-placeholder-panel {
@@ -1382,18 +1410,16 @@ main {
   padding: 14px;
 }
 
-.name-war-loser-panel:has(.empty) {
-  max-height: none;
-}
-
 .name-war-loser-panel h2 {
   margin: 0;
 }
 
+/* max-height 与 .giveaway-board-list 一致；仅列表滚动，面板本身不设死高 */
 .name-war-loser-list {
   display: grid;
   gap: 8px;
-  min-height: 0;
+  align-content: start;
+  max-height: 280px;
   overflow: auto;
   padding-right: 3px;
 }
@@ -1401,6 +1427,8 @@ main {
 .name-war-loser-card {
   display: grid;
   gap: 8px;
+  align-self: start;
+  height: fit-content;
   border: 1px solid color-mix(in srgb, var(--pink-border) 70%, var(--border));
   border-radius: 8px;
   background: linear-gradient(135deg, color-mix(in srgb, var(--pink) 28%, var(--panel-solid)), var(--panel-solid));
@@ -1767,9 +1795,9 @@ main {
 
 .chat-panel {
   display: grid;
-  grid-template-rows: auto minmax(220px, 1fr) auto;
+  grid-template-rows: auto minmax(360px, 1fr) auto;
   gap: 10px;
-  min-height: 420px;
+  height: 560px;
 }
 
 .chat-panel h3 {
@@ -1781,6 +1809,14 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.chat-panel-head-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .chat-tabs {
@@ -3247,6 +3283,7 @@ main {
 .chat-scroll-shell {
   position: relative;
   min-height: 0;
+  height: 100%;
 }
 
 .chat-stick-button {
@@ -3270,25 +3307,14 @@ main {
   transform: translateX(-50%) translateY(-1px);
 }
 
-.lobby-message-board {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 10px;
-  min-height: 390px;
-  overflow: hidden;
-}
-
-.lobby-suggestion-messages {
-  min-height: 0;
-  height: 300px;
-  max-height: none;
-}
-
+/* 大厅聊天与房间聊天共用 .chat-panel 的网格布局；这两个类只用来选中各自的消息列表，
+   高度统一交给 .chat-scroll-shell 的 height:100% 链路撑满，不再各自维护一份固定/clamp 高度
+   （之前各写各的，房间聊天改高度时大厅那份没同步，两边表现就分叉了）。 */
+.lobby-suggestion-messages,
 .room-chat-messages {
   min-height: 0;
-  height: clamp(260px, 34vh, 380px);
+  height: 100%;
   max-height: none;
-  align-self: stretch;
 }
 
 .chat-bubble-row {
@@ -4131,19 +4157,20 @@ main {
   margin: 0;
 }
 
+/* 名字、阵营、性别、头像按钮同属一个框，不再各自分开单独装框。 */
 .profile-edit-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 0.9fr) minmax(260px, 1.3fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   align-items: start;
-}
-
-.profile-name-field,
-.profile-gender-field {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel-solid);
-  padding: 10px;
+  padding: 12px;
+}
+
+.profile-edit-grid-full {
+  grid-column: 1 / -1;
 }
 
 .name-war-card {
@@ -4233,21 +4260,13 @@ main {
   box-shadow: 0 12px 28px var(--shadow);
 }
 
-.profile-name-field small,
-.profile-gender-field>span,
-.profile-gender-field>small {
+.profile-name-field small {
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
 }
 
-.profile-gender-field {
-  display: grid;
-  gap: 7px;
-}
-
-.config-editor textarea,
-.advanced-json {
+.config-editor textarea {
   min-height: 520px;
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 13px;
@@ -4257,6 +4276,11 @@ main {
 .hint,
 .empty {
   color: var(--muted);
+}
+
+.hint {
+  margin-block-end: .2em;
+  margin-block-start: .2em;
 }
 
 .admin-room {
@@ -4360,6 +4384,53 @@ main {
   gap: 8px;
 }
 
+/* 房间管理内仅「房间 / 聊天管理」两个子页签 */
+.admin-action-tabs.admin-room-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* 用户管理过滤器：启用=主色蓝（同「保存玩家资料」），禁用=降饱和灰蓝 */
+.admin-player-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-filter-btn {
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 10%, var(--panel-solid));
+  color: color-mix(in srgb, var(--primary) 42%, var(--muted));
+  font-weight: 700;
+  filter: saturate(0.55);
+}
+
+.admin-filter-btn:hover {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  background: color-mix(in srgb, var(--primary) 16%, var(--panel-solid));
+}
+
+.admin-filter-btn.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #ffffff;
+  font-weight: 700;
+  filter: none;
+}
+
+.admin-filter-btn.active:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+.admin-player-list {
+  display: grid;
+  width: 100%;
+  gap: 8px;
+}
+
 .admin-action-tabs button {
   display: flex;
   align-items: center;
@@ -4447,25 +4518,69 @@ main {
 .admin-player-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.admin-name-war-status {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--panel-soft);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 900;
-  padding: 5px 9px;
+/* 第一行：名字、称号平分剩余空间，积分固定 8 字符宽，白给值固定 4 字符宽。 */
+.admin-player-row1 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 8em 8em;
+  gap: 8px;
 }
 
-.admin-name-war-status.active {
-  border-color: var(--pink-border);
-  background: color-mix(in srgb, var(--pink) 26%, var(--panel-solid));
-  color: var(--page-text);
+/* 白给值那一栏只有 4ch 宽，number input 默认的上下调节箭头 + 左右各 12px 内边距会把数字挤没——
+   去掉箭头、收窄内边距，数字才有地方显示。 */
+.admin-player-row1 input[type="number"] {
+  padding: 8px 4px;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.admin-player-row1 input[type="number"]::-webkit-outer-spin-button,
+.admin-player-row1 input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* 第二行：阵营下拉、性别下拉、自定义性别输入框三等分，跟第一行一样平级展示，不再单独装框。
+   自定义输入框只有选中"自定义"才渲染（GenderCustomField 内部判断），未选中时该栏留空，
+   不回收给另外两栏——三栏宽度始终固定。 */
+.admin-player-row2 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* 认领密钥行：固定宽按钮 + 占满剩余空间的只读 input（默认 password 掩码，点击按钮后明文并复制）。 */
+.admin-player-claim-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin-claim-key-btn {
+  flex: 0 0 8.5em;
+  width: 8.5em;
+  white-space: nowrap;
+}
+
+.admin-claim-key-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  letter-spacing: 0.02em;
+}
+
+/* 自定义性别输入框未显示时的占位：边框/内边距跟输入框同一套盒模型，撑出一致的高度，
+   让三栏保持同一行对齐（不设背景/可见边框，视觉上是空的）。 */
+.gender-custom-placeholder {
+  display: block;
+  border: 1px solid transparent;
+  padding: 10px 12px;
+  line-height: 1.2;
 }
 
 .field-label {
@@ -4477,6 +4592,17 @@ main {
   color: var(--muted);
   font-size: 13px;
   font-weight: 700;
+}
+
+/* 管理员在后台手动设置过的称号：黄色输入框，与按积分自动计算的称号区分开 */
+.input-title-custom {
+  border-color: #c9971f;
+  background: color-mix(in srgb, #ffd54a 22%, var(--panel-solid));
+}
+
+[data-theme="dark"] .input-title-custom {
+  border-color: #e0b13a;
+  background: color-mix(in srgb, #ffd54a 16%, var(--panel-solid));
 }
 
 .danger-button {
@@ -4590,6 +4716,11 @@ main {
 .faction-gender-card {
   gap: 8px;
   background: var(--panel-soft);
+}
+
+.faction-gender-row {
+  grid-template-columns: 1fr 1fr 1fr auto;
+  align-items: end;
 }
 
 .color-grid,
@@ -4807,6 +4938,65 @@ main {
     padding: 8px;
   }
 
+  /* 手机端功能折叠：三角按钮仅在这个断点内显示，折叠状态也只在这个断点内真正隐藏内容——
+     桌面端永远展开、不受 localStorage 里记的折叠偏好影响。 */
+  .mobile-collapse-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    flex: none;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--panel-solid);
+    color: var(--muted);
+  }
+
+  .mobile-collapse-toggle svg {
+    transition: transform 0.15s ease;
+  }
+
+  .mobile-collapse-toggle.collapsed svg {
+    transform: rotate(-90deg);
+  }
+
+  .mobile-collapsible-body.collapsed {
+    display: none;
+  }
+
+  /* 所有可折叠面板统一规则：折叠状态标记在最外层 .panel 元素本身（而不是只标在内部
+     内容块上）——这样才能同时收起面板自身的固定/弹性高度（leaderboard-panel 的
+     height:230px、round-history 的 height:clamp(...)、各 grid-template-rows 里的
+     minmax(0,1fr) 弹性行）以及标题行残留的 margin/padding，让所有面板折叠后都收缩到
+     只剩标题一行，高度保持一致（.chat-panel 内部是 ChatPanel 用 Fragment 直接吐出的
+     .chat-scroll-shell + .send-row，两者是 .chat-panel 网格的直接子项，没有套
+     .mobile-collapsible-body，因此单独用 .chat-panel.collapsed 补一条隐藏规则）。 */
+  .panel.collapsed {
+    grid-template-rows: auto;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+  }
+
+  .panel.collapsed .panel-header-row,
+  .panel.collapsed .panel-title {
+    margin-bottom: 0;
+  }
+
+  .panel.collapsed .sticky-panel-title {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  .chat-panel.collapsed .chat-scroll-shell,
+  .chat-panel.collapsed .send-row,
+  .chat-panel.collapsed .chat-readonly-hint {
+    display: none;
+  }
+
   .dashboard,
   .battle-panel,
   .move-panel,
@@ -4992,10 +5182,6 @@ main {
     grid-template-columns: 1fr;
   }
 
-  .gender-faction-picker.compact {
-    max-height: 160px;
-  }
-
   .punishment-choice-card {
     min-height: 118px;
     gap: 7px;
@@ -5131,18 +5317,6 @@ main {
 
   .leaderboard-panel {
     height: 214px;
-  }
-
-  .name-war-loser-panel {
-    max-height: 300px;
-  }
-
-  .lobby-message-board {
-    min-height: 360px;
-  }
-
-  .lobby-suggestion-messages {
-    height: 270px;
   }
 
   .create-box {
@@ -5317,12 +5491,8 @@ main {
   }
 
   .chat-panel {
-    min-height: 390px;
-    grid-template-rows: auto minmax(240px, 1fr) auto;
-  }
-
-  .room-chat-messages {
-    height: clamp(240px, 42vh, 340px);
+    height: 560px;
+    grid-template-rows: auto minmax(320px, 1fr) auto;
   }
 
   .round-history {
@@ -5361,8 +5531,23 @@ main {
   }
 
   .config-row,
-  .config-row.compact {
+  .config-row.compact,
+  .admin-player-row1,
+  .admin-player-row2 {
     grid-template-columns: 1fr;
+  }
+
+  .admin-player-claim-row {
+    flex-wrap: wrap;
+  }
+
+  .admin-claim-key-btn {
+    flex: 0 0 auto;
+    width: auto;
+  }
+
+  .admin-claim-key-input {
+    flex: 1 1 100%;
   }
 
   .title-faction-grid {

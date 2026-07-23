@@ -301,11 +301,6 @@ func sanitizePublicConfig(cfg types.AppConfig) types.AppConfig {
 	if cfg.GenderFactions == nil {
 		cfg.GenderFactions = []types.GenderFaction{}
 	}
-	for i := range cfg.GenderFactions {
-		if cfg.GenderFactions[i].Genders == nil {
-			cfg.GenderFactions[i].Genders = []types.GenderOption{}
-		}
-	}
 	if cfg.Titles == nil {
 		cfg.Titles = []types.TitleSegment{}
 	}

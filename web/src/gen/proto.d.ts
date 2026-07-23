@@ -97,6 +97,13 @@ export namespace wire {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): wire.Envelope & wire.Envelope.$Shape;
 
         /**
+         * Verifies an Envelope message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates an Envelope message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns Envelope
@@ -259,6 +266,13 @@ export namespace wire {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): wire.StateDelta & wire.StateDelta.$Shape;
 
         /**
+         * Verifies a StateDelta message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a StateDelta message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns StateDelta
@@ -376,6 +390,13 @@ export namespace wire {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): wire.PatchOp & wire.PatchOp.$Shape;
+
+        /**
+         * Verifies a PatchOp message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a PatchOp message from a plain object. Also converts values to their respective internal types.
@@ -509,6 +530,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.GenderColors & game.GenderColors.$Shape;
 
         /**
+         * Verifies a GenderColors message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a GenderColors message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns GenderColors
@@ -631,6 +659,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.GenderOption & game.GenderOption.$Shape;
 
         /**
+         * Verifies a GenderOption message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a GenderOption message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns GenderOption
@@ -715,8 +750,8 @@ export namespace game {
         /** GenderFaction borderColor. */
         borderColor: string;
 
-        /** GenderFaction genders. */
-        genders: game.GenderOption.$Properties[];
+        /** GenderFaction taskGroup. */
+        taskGroup: string;
 
         /**
          * Creates a new GenderFaction instance using the specified properties.
@@ -760,6 +795,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.GenderFaction & game.GenderFaction.$Shape;
+
+        /**
+         * Verifies a GenderFaction message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a GenderFaction message from a plain object. Also converts values to their respective internal types.
@@ -810,8 +852,8 @@ export namespace game {
             /** GenderFaction borderColor */
             borderColor?: (string|null);
 
-            /** GenderFaction genders */
-            genders?: (game.GenderOption.$Properties[]|null);
+            /** GenderFaction taskGroup */
+            taskGroup?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -888,6 +930,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.Pos & game.Pos.$Shape;
+
+        /**
+         * Verifies a Pos message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a Pos message from a plain object. Also converts values to their respective internal types.
@@ -992,6 +1041,9 @@ export namespace game {
         /** PublicStats sortLowestScore. */
         sortLowestScore: number;
 
+        /** PublicStats titleCustom. */
+        titleCustom: boolean;
+
         /**
          * Creates a new PublicStats instance using the specified properties.
          * @param [properties] Properties to set
@@ -1034,6 +1086,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.PublicStats & game.PublicStats.$Shape;
+
+        /**
+         * Verifies a PublicStats message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a PublicStats message from a plain object. Also converts values to their respective internal types.
@@ -1105,6 +1164,9 @@ export namespace game {
             /** PublicStats sortLowestScore */
             sortLowestScore?: (number|null);
 
+            /** PublicStats titleCustom */
+            titleCustom?: (boolean|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
@@ -1165,6 +1227,9 @@ export namespace game {
         /** LobbyStats sortLowestScore. */
         sortLowestScore: number;
 
+        /** LobbyStats titleCustom. */
+        titleCustom: boolean;
+
         /**
          * Creates a new LobbyStats instance using the specified properties.
          * @param [properties] Properties to set
@@ -1207,6 +1272,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.LobbyStats & game.LobbyStats.$Shape;
+
+        /**
+         * Verifies a LobbyStats message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a LobbyStats message from a plain object. Also converts values to their respective internal types.
@@ -1274,6 +1346,9 @@ export namespace game {
 
             /** LobbyStats sortLowestScore */
             sortLowestScore?: (number|null);
+
+            /** LobbyStats titleCustom */
+            titleCustom?: (boolean|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -1353,6 +1428,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.GameWLD & game.GameWLD.$Shape;
+
+        /**
+         * Verifies a GameWLD message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a GameWLD message from a plain object. Also converts values to their respective internal types.
@@ -1481,6 +1563,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.GameStats & game.GameStats.$Shape;
+
+        /**
+         * Verifies a GameStats message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a GameStats message from a plain object. Also converts values to their respective internal types.
@@ -1759,6 +1848,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.PublicPlayer & game.PublicPlayer.$Shape;
+
+        /**
+         * Verifies a PublicPlayer message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a PublicPlayer message from a plain object. Also converts values to their respective internal types.
@@ -2126,6 +2222,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.LobbyPlayer & game.LobbyPlayer.$Shape;
 
         /**
+         * Verifies a LobbyPlayer message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a LobbyPlayer message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns LobbyPlayer
@@ -2344,6 +2447,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.BotPlayer & game.BotPlayer.$Shape;
 
         /**
+         * Verifies a BotPlayer message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a BotPlayer message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns BotPlayer
@@ -2467,6 +2577,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.SeatOccupant & game.SeatOccupant.$Shape;
+
+        /**
+         * Verifies a SeatOccupant message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a SeatOccupant message from a plain object. Also converts values to their respective internal types.
@@ -2616,6 +2733,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.ChatMessage & game.ChatMessage.$Shape;
+
+        /**
+         * Verifies a ChatMessage message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a ChatMessage message from a plain object. Also converts values to their respective internal types.
@@ -2768,6 +2892,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.Suggestion & game.Suggestion.$Shape;
+
+        /**
+         * Verifies a Suggestion message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a Suggestion message from a plain object. Also converts values to their respective internal types.
@@ -2982,6 +3113,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.RoomSettings & game.RoomSettings.$Shape;
 
         /**
+         * Verifies a RoomSettings message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a RoomSettings message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns RoomSettings
@@ -3188,6 +3326,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.GomokuUndoRequest & game.GomokuUndoRequest.$Shape;
 
         /**
+         * Verifies a GomokuUndoRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a GomokuUndoRequest message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns GomokuUndoRequest
@@ -3311,6 +3456,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.GomokuResignRequest & game.GomokuResignRequest.$Shape;
+
+        /**
+         * Verifies a GomokuResignRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a GomokuResignRequest message from a plain object. Also converts values to their respective internal types.
@@ -3469,6 +3621,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.GomokuState & game.GomokuState.$Shape;
+
+        /**
+         * Verifies a GomokuState message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a GomokuState message from a plain object. Also converts values to their respective internal types.
@@ -3653,6 +3812,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.PunishmentProof & game.PunishmentProof.$Shape;
 
         /**
+         * Verifies a PunishmentProof message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a PunishmentProof message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns PunishmentProof
@@ -3802,6 +3968,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.SeatStats & game.SeatStats.$Shape;
 
         /**
+         * Verifies a SeatStats message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a SeatStats message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns SeatStats
@@ -3922,6 +4095,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.OthelloScore & game.OthelloScore.$Shape;
+
+        /**
+         * Verifies an OthelloScore message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates an OthelloScore message from a plain object. Also converts values to their respective internal types.
@@ -4059,6 +4239,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.PunishmentTask & game.PunishmentTask.$Shape;
+
+        /**
+         * Verifies a PunishmentTask message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a PunishmentTask message from a plain object. Also converts values to their respective internal types.
@@ -4223,6 +4410,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.HistoryProof & game.HistoryProof.$Shape;
+
+        /**
+         * Verifies a HistoryProof message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a HistoryProof message from a plain object. Also converts values to their respective internal types.
@@ -4467,6 +4661,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.RoundHistoryItem & game.RoundHistoryItem.$Shape;
 
         /**
+         * Verifies a RoundHistoryItem message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a RoundHistoryItem message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns RoundHistoryItem
@@ -4679,6 +4880,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.Int32List & game.Int32List.$Shape;
 
         /**
+         * Verifies an Int32List message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates an Int32List message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns Int32List
@@ -4790,6 +4998,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.LiarsDiceHandsPair & game.LiarsDiceHandsPair.$Shape;
+
+        /**
+         * Verifies a LiarsDiceHandsPair message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a LiarsDiceHandsPair message from a plain object. Also converts values to their respective internal types.
@@ -4912,6 +5127,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.LiarsDiceBid & game.LiarsDiceBid.$Shape;
+
+        /**
+         * Verifies a LiarsDiceBid message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a LiarsDiceBid message from a plain object. Also converts values to their respective internal types.
@@ -5073,6 +5295,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.LiarsDiceState & game.LiarsDiceState.$Shape;
+
+        /**
+         * Verifies a LiarsDiceState message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a LiarsDiceState message from a plain object. Also converts values to their respective internal types.
@@ -5251,6 +5480,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.OthelloPendingSettlement & game.OthelloPendingSettlement.$Shape;
 
         /**
+         * Verifies an OthelloPendingSettlement message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates an OthelloPendingSettlement message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns OthelloPendingSettlement
@@ -5391,6 +5627,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.OthelloSurrenderRequest & game.OthelloSurrenderRequest.$Shape;
 
         /**
+         * Verifies an OthelloSurrenderRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates an OthelloSurrenderRequest message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns OthelloSurrenderRequest
@@ -5507,6 +5750,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.BoardRow & game.BoardRow.$Shape;
 
         /**
+         * Verifies a BoardRow message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a BoardRow message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns BoardRow
@@ -5618,6 +5868,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.IntPair & game.IntPair.$Shape;
+
+        /**
+         * Verifies an IntPair message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates an IntPair message from a plain object. Also converts values to their respective internal types.
@@ -5776,6 +6033,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.OthelloState & game.OthelloState.$Shape;
+
+        /**
+         * Verifies an OthelloState message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates an OthelloState message from a plain object. Also converts values to their respective internal types.
@@ -5942,6 +6206,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.TicTacToeGiveawayPrompt & game.TicTacToeGiveawayPrompt.$Shape;
 
         /**
+         * Verifies a TicTacToeGiveawayPrompt message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a TicTacToeGiveawayPrompt message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns TicTacToeGiveawayPrompt
@@ -6085,6 +6356,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.TicTacToeState & game.TicTacToeState.$Shape;
 
         /**
+         * Verifies a TicTacToeState message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a TicTacToeState message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns TicTacToeState
@@ -6222,6 +6500,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.BoolPair & game.BoolPair.$Shape;
 
         /**
+         * Verifies a BoolPair message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a BoolPair message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns BoolPair
@@ -6338,6 +6623,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.StringPair & game.StringPair.$Shape;
 
         /**
+         * Verifies a StringPair message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a StringPair message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns StringPair
@@ -6452,6 +6744,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.SeatOccupantPair & game.SeatOccupantPair.$Shape;
+
+        /**
+         * Verifies a SeatOccupantPair message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a SeatOccupantPair message from a plain object. Also converts values to their respective internal types.
@@ -6572,6 +6871,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.SeatStatsPair & game.SeatStatsPair.$Shape;
+
+        /**
+         * Verifies a SeatStatsPair message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a SeatStatsPair message from a plain object. Also converts values to their respective internal types.
@@ -6757,6 +7063,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.RoomSnapshot & game.RoomSnapshot.$Shape;
+
+        /**
+         * Verifies a RoomSnapshot message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a RoomSnapshot message from a plain object. Also converts values to their respective internal types.
@@ -6998,6 +7311,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.ServerStats & game.ServerStats.$Shape;
 
         /**
+         * Verifies a ServerStats message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a ServerStats message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns ServerStats
@@ -7141,6 +7461,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.VersusSeat & game.VersusSeat.$Shape;
 
         /**
+         * Verifies a VersusSeat message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a VersusSeat message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns VersusSeat
@@ -7255,6 +7582,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.VersusPair & game.VersusPair.$Shape;
+
+        /**
+         * Verifies a VersusPair message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a VersusPair message from a plain object. Also converts values to their respective internal types.
@@ -7454,6 +7788,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.LobbyRoomInfo & game.LobbyRoomInfo.$Shape;
 
         /**
+         * Verifies a LobbyRoomInfo message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a LobbyRoomInfo message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns LobbyRoomInfo
@@ -7651,6 +7992,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.LobbyPlayerEntry & game.LobbyPlayerEntry.$Shape;
 
         /**
+         * Verifies a LobbyPlayerEntry message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a LobbyPlayerEntry message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns LobbyPlayerEntry
@@ -7765,6 +8113,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.LobbyRoomEntry & game.LobbyRoomEntry.$Shape;
+
+        /**
+         * Verifies a LobbyRoomEntry message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a LobbyRoomEntry message from a plain object. Also converts values to their respective internal types.
@@ -7902,6 +8257,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.LobbySnapshot & game.LobbySnapshot.$Shape;
+
+        /**
+         * Verifies a LobbySnapshot message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a LobbySnapshot message from a plain object. Also converts values to their respective internal types.
@@ -8044,6 +8406,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.RoomNamePool & game.RoomNamePool.$Shape;
 
         /**
+         * Verifies a RoomNamePool message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a RoomNamePool message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns RoomNamePool
@@ -8169,6 +8538,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.RoomInfoTagStyle & game.RoomInfoTagStyle.$Shape;
 
         /**
+         * Verifies a RoomInfoTagStyle message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a RoomInfoTagStyle message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns RoomInfoTagStyle
@@ -8289,6 +8665,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.RoomInfoTagEntry & game.RoomInfoTagEntry.$Shape;
+
+        /**
+         * Verifies a RoomInfoTagEntry message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a RoomInfoTagEntry message from a plain object. Also converts values to their respective internal types.
@@ -8414,6 +8797,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.PunishmentTaskConfig & game.PunishmentTaskConfig.$Shape;
+
+        /**
+         * Verifies a PunishmentTaskConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a PunishmentTaskConfig message from a plain object. Also converts values to their respective internal types.
@@ -8550,6 +8940,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.TitleSegment & game.TitleSegment.$Shape;
 
         /**
+         * Verifies a TitleSegment message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a TitleSegment message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns TitleSegment
@@ -8672,6 +9069,13 @@ export namespace game {
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
             static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.TitleSegment.FactionNames & game.TitleSegment.FactionNames.$Shape;
+
+            /**
+             * Verifies a FactionNames message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            static verify(message: { [k: string]: any }): (string|null);
 
             /**
              * Creates a FactionNames message from a plain object. Also converts values to their respective internal types.
@@ -8810,6 +9214,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.PunishmentConfig & game.PunishmentConfig.$Shape;
+
+        /**
+         * Verifies a PunishmentConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a PunishmentConfig message from a plain object. Also converts values to their respective internal types.
@@ -8964,6 +9375,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.BotDifficultyConfig & game.BotDifficultyConfig.$Shape;
 
         /**
+         * Verifies a BotDifficultyConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a BotDifficultyConfig message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns BotDifficultyConfig
@@ -9098,6 +9516,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.GameConfig & game.GameConfig.$Shape;
 
         /**
+         * Verifies a GameConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a GameConfig message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns GameConfig
@@ -9220,6 +9645,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.AnnouncementBoard & game.AnnouncementBoard.$Shape;
 
         /**
+         * Verifies an AnnouncementBoard message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates an AnnouncementBoard message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns AnnouncementBoard
@@ -9336,6 +9768,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.SecurityDisclaimerConfig & game.SecurityDisclaimerConfig.$Shape;
 
         /**
+         * Verifies a SecurityDisclaimerConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a SecurityDisclaimerConfig message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns SecurityDisclaimerConfig
@@ -9447,6 +9886,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.DoublePair & game.DoublePair.$Shape;
+
+        /**
+         * Verifies a DoublePair message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a DoublePair message from a plain object. Also converts values to their respective internal types.
@@ -9593,6 +10039,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.ExtremeModeConfig & game.ExtremeModeConfig.$Shape;
+
+        /**
+         * Verifies an ExtremeModeConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates an ExtremeModeConfig message from a plain object. Also converts values to their respective internal types.
@@ -9744,6 +10197,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.SiteConfig & game.SiteConfig.$Shape;
 
         /**
+         * Verifies a SiteConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a SiteConfig message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns SiteConfig
@@ -9885,6 +10345,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.AccessControlConfig & game.AccessControlConfig.$Shape;
+
+        /**
+         * Verifies an AccessControlConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates an AccessControlConfig message from a plain object. Also converts values to their respective internal types.
@@ -10042,6 +10509,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.NameWarConfig & game.NameWarConfig.$Shape;
 
         /**
+         * Verifies a NameWarConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a NameWarConfig message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns NameWarConfig
@@ -10179,6 +10653,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.GiveawayConfig & game.GiveawayConfig.$Shape;
 
         /**
+         * Verifies a GiveawayConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a GiveawayConfig message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns GiveawayConfig
@@ -10299,6 +10780,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.BotsConfig & game.BotsConfig.$Shape;
+
+        /**
+         * Verifies a BotsConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a BotsConfig message from a plain object. Also converts values to their respective internal types.
@@ -10463,6 +10951,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.AppConfig & game.AppConfig.$Shape;
+
+        /**
+         * Verifies an AppConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates an AppConfig message from a plain object. Also converts values to their respective internal types.
@@ -10635,6 +11130,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.RankedScoreConfig & game.RankedScoreConfig.$Shape;
 
         /**
+         * Verifies a RankedScoreConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a RankedScoreConfig message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns RankedScoreConfig
@@ -10763,6 +11265,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.StateDocument & game.StateDocument.$Shape;
 
         /**
+         * Verifies a StateDocument message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a StateDocument message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns StateDocument
@@ -10889,6 +11398,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.PlayerBatch & game.PlayerBatch.$Shape;
 
         /**
+         * Verifies a PlayerBatch message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a PlayerBatch message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns PlayerBatch
@@ -11006,6 +11522,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.MeState & game.MeState.$Shape;
+
+        /**
+         * Verifies a MeState message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a MeState message from a plain object. Also converts values to their respective internal types.
@@ -11142,6 +11665,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.AnnouncementPayload & game.AnnouncementPayload.$Shape;
 
         /**
+         * Verifies an AnnouncementPayload message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates an AnnouncementPayload message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns AnnouncementPayload
@@ -11261,6 +11791,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.RoomClosed & game.RoomClosed.$Shape;
 
         /**
+         * Verifies a RoomClosed message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a RoomClosed message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns RoomClosed
@@ -11375,6 +11912,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.HistoryPage & game.HistoryPage.$Shape;
+
+        /**
+         * Verifies a HistoryPage message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a HistoryPage message from a plain object. Also converts values to their respective internal types.
@@ -11493,6 +12037,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.OkResult & game.OkResult.$Shape;
 
         /**
+         * Verifies an OkResult message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates an OkResult message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns OkResult
@@ -11603,6 +12154,13 @@ export namespace game {
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.PlayerResult & game.PlayerResult.$Shape;
 
         /**
+         * Verifies a PlayerResult message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
          * Creates a PlayerResult message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
          * @returns PlayerResult
@@ -11711,6 +12269,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.SuggestionsResult & game.SuggestionsResult.$Shape;
+
+        /**
+         * Verifies a SuggestionsResult message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a SuggestionsResult message from a plain object. Also converts values to their respective internal types.
@@ -11866,6 +12431,13 @@ export namespace game {
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
         static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.RawBody & game.RawBody.$Shape;
+
+        /**
+         * Verifies a RawBody message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
 
         /**
          * Creates a RawBody message from a plain object. Also converts values to their respective internal types.
@@ -12049,6 +12621,13 @@ export namespace google {
             static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): google.protobuf.Struct & google.protobuf.Struct.$Shape;
 
             /**
+             * Verifies a Struct message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            static verify(message: { [k: string]: any }): (string|null);
+
+            /**
              * Creates a Struct message from a plain object. Also converts values to their respective internal types.
              * @param object Plain object
              * @returns Struct
@@ -12178,6 +12757,13 @@ export namespace google {
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
             static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): google.protobuf.Value & google.protobuf.Value.$Shape;
+
+            /**
+             * Verifies a Value message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            static verify(message: { [k: string]: any }): (string|null);
 
             /**
              * Creates a Value message from a plain object. Also converts values to their respective internal types.
@@ -12323,6 +12909,13 @@ export namespace google {
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
             static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): google.protobuf.ListValue & google.protobuf.ListValue.$Shape;
+
+            /**
+             * Verifies a ListValue message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            static verify(message: { [k: string]: any }): (string|null);
 
             /**
              * Creates a ListValue message from a plain object. Also converts values to their respective internal types.

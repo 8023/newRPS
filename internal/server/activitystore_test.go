@@ -96,18 +96,18 @@ func TestCloseLiveStateOnShutdown(t *testing.T) {
 	}
 
 	var roomCount int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM rooms`).Scan(&roomCount); err != nil {
-		t.Fatalf("count rooms: %v", err)
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM room_events WHERE action = 'close'`).Scan(&roomCount); err != nil {
+		t.Fatalf("count room_events: %v", err)
 	}
 	if roomCount != 1 {
-		t.Fatalf("rooms count = %d, want 1", roomCount)
+		t.Fatalf("room_events close count = %d, want 1", roomCount)
 	}
-	var roomName, creatorName, closeReason string
-	if err := s.db.QueryRow(`SELECT room_name, creator_name, close_reason FROM rooms WHERE room_id = ?`, "room1").
-		Scan(&roomName, &creatorName, &closeReason); err != nil {
+	var roomName, userName, reason string
+	if err := s.db.QueryRow(`SELECT room_name, user_name, reason FROM room_events WHERE room_id = ? AND action = 'close'`, "room1").
+		Scan(&roomName, &userName, &reason); err != nil {
 		t.Fatalf("scan room1: %v", err)
 	}
-	if roomName != "测试房间" || creatorName != "小明" || closeReason != "server_shutdown" {
-		t.Fatalf("room1 row: name=%q creator=%q reason=%q", roomName, creatorName, closeReason)
+	if roomName != "测试房间" || userName != "小明" || reason != "server_shutdown" {
+		t.Fatalf("room1 row: name=%q creator=%q reason=%q", roomName, userName, reason)
 	}
 }

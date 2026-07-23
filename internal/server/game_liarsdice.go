@@ -418,6 +418,7 @@ func (s *Server) resolveLiarsDiceChallenge(room *RoomState, challengerID string)
 	streakText := ""
 	recordGameOutcome(winner, types.GameLiarsDice, "win")
 	recordGameOutcome(loser, types.GameLiarsDice, "loss")
+	s.applyGiveawayWinPenalty(winner)
 	if room.Settings.EnableRanked {
 		wD, lD := s.applyRankedStake(winner, loser, effectiveRankedStake(room.Settings))
 		resetExtremeWinStreak(loser)
@@ -648,6 +649,7 @@ func (s *Server) applyLiarsDiceDisconnectForfeit(room *RoomState, player *Player
 	streakText := ""
 	recordGameOutcome(winner, types.GameLiarsDice, "win")
 	recordGameOutcome(loser, types.GameLiarsDice, "loss")
+	s.applyGiveawayWinPenalty(winner)
 	if room.Settings.EnableRanked {
 		wD, lD := s.applyRankedStake(winner, loser, forfeit.Stake)
 		resetExtremeWinStreak(loser)

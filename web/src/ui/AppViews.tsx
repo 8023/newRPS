@@ -1,17 +1,17 @@
-import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type UIEvent as ReactUIEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Coffee, Crown, DoorOpen, Download, ExternalLink, Eye, HeartHandshake, Info, MessageCircle, Moon, Pencil, RefreshCcw, Save, Send, Settings, Shield, Sun, Swords, Upload, UserRound, Users } from "lucide-react";
+import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type ReactNode, type UIEvent as ReactUIEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, Coffee, Crown, DoorOpen, ExternalLink, Eye, HeartHandshake, Info, Moon, Pencil, Save, Send, Shield, Sun, Swords, Upload, UserRound, Users } from "lucide-react";
 import type { AppConfig, BotDifficulty, ChatMessage, GenderFaction, LobbySnapshot, Move, PublicPlayer, PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant } from "../shared/types";
-import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, withAccessControlDefaults, withRankedScoreDefaults } from "../lib/normalize";
+import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, withRankedScoreDefaults } from "../lib/normalize";
 import {
   defaultGomokuRoomName, defaultLiarsDiceRoomName, defaultOthelloRoomName, defaultRoomName, defaultTicTacToeRoomName,
-  gameMinutesOptions, gomokuBoardThemes, moveSecondsOptions, othelloBoardThemes, sponsorLinks, tictactoeBoardThemes, tokenKey
+  gameMinutesOptions, gomokuBoardThemes, moveSecondsOptions, othelloBoardThemes, playerSecretKey, doumiaoLinks, luv4uLinks, tictactoeBoardThemes, tokenKey
 } from "../lib/constants";
 import { ask } from "../lib/rpc";
-import { claimIdentity, encodeClaimCode, fetchClaimKey, joinIdentityPayload, logout, refreshClaimKey } from "../lib/session";
+import { claimIdentity, clearPlayerIdentity, encodeClaimCode, fetchClaimKey, joinIdentityPayload, logout, refreshClaimKey } from "../lib/session";
 import { appendHistoryPage, normalizeRoomSnapshot, normalizeRoundHistoryItem } from "../lib/normalize";
-import { prepareProofImageForUpload, compressAdminImageForUpload } from "../lib/proofImage";
+import { prepareProofImageForUpload } from "../lib/proofImage";
 import { prepareAvatarImageForUpload } from "../lib/avatarImage";
-import { isNearScrollBottom, scrollToBottomSoon, stickChatToBottom } from "../lib/uiHelpers";
+import { isNearScrollBottom, scrollToBottomSoon, stickChatToBottom, useMobileCollapse } from "../lib/uiHelpers";
 import { appendMentionText, loadChat, loadOlderChat, useChat } from "../lib/chatStore";
 import {
   disablePushSubscription, ensurePushSubscription, fetchPushPreferences,
@@ -21,10 +21,30 @@ import type { MeState } from "../lib/types";
 import { LiarsDicePanel } from "./LiarsDicePanel";
 import { GomokuPanel, GomokuScore } from "./GomokuPanel";
 
-import { formatBytes, formatDuration } from "../lib/format";
+import { formatDuration } from "../lib/format";
+
+// 仅手机端生效的模块折叠开关（三角图标）；桌面端由 CSS 隐藏按钮并强制展开，不受折叠状态影响。
+// collapsed/onToggle 由调用方通过 useMobileCollapse(sectionKey) 持有，与被折叠的内容共享同一份状态。
+export function CollapseToggle({ collapsed, onToggle, label }: { collapsed: boolean; onToggle: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      className={`mobile-collapse-toggle ${collapsed ? "collapsed" : ""}`}
+      onClick={onToggle}
+      aria-expanded={!collapsed}
+      aria-label={collapsed ? `展开${label}` : `收起${label}`}
+      title={collapsed ? `展开${label}` : `收起${label}`}
+    >
+      <ChevronDown size={16} />
+    </button>
+  );
+}
+
 export function Login({ config, onDone, onError }: { config: AppConfig; onDone: (me: MeState) => void; onError: (message: string) => void }) {
   const [name, setName] = useState("");
-  const [genderId, setGenderId] = useState(firstGenderId(config));
+  const [factionId, setFactionId] = useState(firstFactionId(config));
+  const [genderId, setGenderId] = useState(() => firstGenderId(config, firstFactionId(config)));
+  const [customGenderLabel, setCustomGenderLabel] = useState("");
   const [mode, setMode] = useState<"new" | "restore">("new");
   const [restoreCode, setRestoreCode] = useState("");
   const [restoreBusy, setRestoreBusy] = useState(false);
@@ -39,14 +59,35 @@ export function Login({ config, onDone, onError }: { config: AppConfig; onDone: 
     localStorage.setItem(tokenKey, result.token);
     if (typeof payload.name === "string") localStorage.setItem("rps-online-name", payload.name);
     if (typeof payload.genderId === "string") localStorage.setItem("rps-online-gender", payload.genderId);
+    if (typeof payload.customGenderLabel === "string") localStorage.setItem("rps-online-custom-gender", payload.customGenderLabel);
+    if (typeof payload.factionId === "string") localStorage.setItem("rps-online-faction", payload.factionId);
+    if (result.reissuedSecret) localStorage.setItem(playerSecretKey, result.reissuedSecret);
     onDone(result);
   }
 
   async function submit() {
+    const genderError = genderChoiceError(config, genderId, customGenderLabel, factionId);
+    if (genderError) {
+      onError(genderError);
+      return;
+    }
     try {
-      await doJoin({ name, genderId, token: localStorage.getItem(tokenKey), ...(await joinIdentityPayload()) });
+      await doJoin({ name, genderId, customGenderLabel, factionId, token: localStorage.getItem(tokenKey), ...(await joinIdentityPayload()) });
     } catch (error) {
-      onError(error instanceof Error ? error.message : "进入失败");
+      const message = error instanceof Error ? error.message : "进入失败";
+      if (message === "玩家身份校验失败") {
+        // 本地缓存的 playerId/playerSecret 服务端已经不认（常见于老账号未完成迁移）：
+        // 清掉本地身份重试一次，等价于自动执行"清 localStorage 重新注册"。
+        clearPlayerIdentity();
+        try {
+          await doJoin({ name, genderId, customGenderLabel, factionId, token: localStorage.getItem(tokenKey), ...(await joinIdentityPayload()) });
+          return;
+        } catch (retryError) {
+          onError(retryError instanceof Error ? retryError.message : "进入失败");
+          return;
+        }
+      }
+      onError(message);
     }
   }
 
@@ -59,7 +100,7 @@ export function Login({ config, onDone, onError }: { config: AppConfig; onDone: 
     try {
       const claimed = await claimIdentity(restoreCode);
       await doJoin({
-        name: claimed.name, genderId: claimed.genderId,
+        name: claimed.name, genderId: claimed.genderId, customGenderLabel: claimed.customGenderLabel, factionId: claimed.factionId,
         token: localStorage.getItem(tokenKey), ...(await joinIdentityPayload())
       });
     } catch (error) {
@@ -99,7 +140,23 @@ export function Login({ config, onDone, onError }: { config: AppConfig; onDone: 
       {mode === "new" ? (
         <>
           <input value={name} onChange={(event) => setName(event.target.value)} maxLength={12} placeholder="你的名字，允许重复" />
-          <GenderPicker config={config} value={genderId} onChange={setGenderId} />
+          <FactionSelect
+            config={config}
+            factionId={factionId}
+            onFactionChange={(nextFactionId) => {
+              setFactionId(nextFactionId);
+              setGenderId((old) => nextGenderIdForFaction(config, nextFactionId, old));
+            }}
+          />
+          <GenderSelect
+            config={config}
+            genderId={genderId}
+            customGenderLabel={customGenderLabel}
+            factionId={factionId}
+            onGenderChange={setGenderId}
+            onCustomGenderLabelChange={setCustomGenderLabel}
+            stacked
+          />
           <button className="primary" onClick={submit}>进入大厅</button>
           <button className="link-button" onClick={() => setMode("restore")}>已有账号？用认领密钥恢复</button>
         </>
@@ -238,8 +295,27 @@ export function displayPlayerName(player: PublicPlayer) {
   return player.name;
 }
 
-export function firstGenderId(config: AppConfig) {
-  return config.genderFactions[0]?.genders[0]?.id || config.genders[0]?.id || "male";
+// 按阵营过滤可选性别：性别预设未设归属阵营（factionId 为空）时视为不限阵营都能选，
+// 与后端 validGenderSubmission 的兼容口径保持一致。
+export function gendersForFaction(config: AppConfig, factionId: string) {
+  return config.genders.filter((gender) => !gender.factionId || gender.factionId === factionId);
+}
+
+export function firstFactionId(config: AppConfig) {
+  return config.genderFactions[0]?.id || "";
+}
+
+export function firstGenderId(config: AppConfig, factionId: string) {
+  return gendersForFaction(config, factionId)[0]?.id || "";
+}
+
+// 切换阵营时性别是否需要跟着重置：自定义性别（genderId 为空）不受阵营限制，原样保留；
+// 预设性别只有在还落在新阵营的可选池内才保留，否则退回新阵营的第一个预设。
+export function nextGenderIdForFaction(config: AppConfig, factionId: string, currentGenderId: string) {
+  if (!currentGenderId) return currentGenderId;
+  const pool = gendersForFaction(config, factionId);
+  if (pool.some((gender) => gender.id === currentGenderId)) return currentGenderId;
+  return pool[0]?.id || "";
 }
 
 export function genderStyle(player: PublicPlayer): CSSProperties {
@@ -258,30 +334,150 @@ export function factionStyle(faction: GenderFaction): CSSProperties {
   };
 }
 
-export function genderInfoFromConfig(config: AppConfig, genderId: string) {
-  for (const faction of config.genderFactions) {
-    const gender = faction.genders.find((item) => item.id === genderId);
-    if (gender) return { ...gender, factionId: faction.id, factionLabel: faction.label };
-  }
-  return config.genders.find((item) => item.id === genderId);
+// 阵营是独立下拉 5 选 1，不套用阵营颜色（颜色只用于玩家名字前的药丸标签）。
+export function FactionSelect({ config, factionId, onFactionChange }: { config: AppConfig; factionId: string; onFactionChange: (factionId: string) => void }) {
+  // 和 GenderSelectControl 一样：当前 factionId 若不在配置里（比如阵营被后台改名/删除后，
+  // 页面还留着旧 id），补一个占位 option，避免原生 <select> 因 value 找不到匹配 <option>
+  // 而静默显示成列表第一项，让人误以为已经选中了别的阵营、保存时却提交了这个失效的旧 id。
+  const hasMatch = config.genderFactions.some((faction) => faction.id === factionId);
+  return (
+    <label className="field-label">
+      <span>阵营</span>
+      <select value={factionId} onChange={(event) => onFactionChange(event.target.value)}>
+        {!hasMatch && factionId && <option value={factionId}>（未知阵营：{factionId}）</option>}
+        {config.genderFactions.map((faction) => (
+          <option key={faction.id} value={faction.id}>{faction.label}</option>
+        ))}
+      </select>
+    </label>
+  );
 }
 
-export function GenderPicker({ config, value, onChange, compact = false }: { config: AppConfig; value: string; onChange: (genderId: string) => void; compact?: boolean }) {
+const CUSTOM_GENDER_OPTION = "__custom__";
+
+// 与后端 validGenderSubmission 保持一致：选中预设要求该预设归属当前阵营（未设归属阵营的
+// 预设不限）；选中"自定义…"（genderId 为空）则要求 customGenderLabel 去空格后落在 1-9
+// 字符内且不能和任何预设性别文案重复。返回空字符串表示校验通过，否则返回给用户看的原因。
+export function genderChoiceError(config: AppConfig, genderId: string, customGenderLabel: string, factionId: string) {
+  if (genderId) {
+    const preset = config.genders.find((gender) => gender.id === genderId);
+    if (!preset) return "所选性别不存在";
+    if (preset.factionId && preset.factionId !== factionId) return "所选性别不属于当前阵营";
+    return "";
+  }
+  const trimmed = customGenderLabel.trim();
+  if (trimmed.length < 1 || trimmed.length > 9) return "请输入 1-9 个字符的自定义性别";
+  if (config.genders.some((gender) => gender.label === trimmed)) return "自定义性别不能与已有性别重复";
+  if (!config.genderFactions.some((faction) => faction.id === factionId)) return "所选阵营不存在";
+  return "";
+}
+
+export function isValidGenderChoice(config: AppConfig, genderId: string, customGenderLabel: string, factionId: string) {
+  return genderChoiceError(config, genderId, customGenderLabel, factionId) === "";
+}
+
+// 性别下拉本体（不含外层 label/自定义输入框），供 GenderSelect（登录/个人资料，选择框与
+// 自定义输入框绑在同一个字段里）和 GenderSelectField（后台，三栏里独立占一栏）共用。选项按
+// factionId 过滤；若当前 genderId 不在过滤后的池子里（比如阵营调整前的历史数据），额外把它
+// 补回选项列表，避免原生 <select> 因 value 找不到匹配 <option> 而静默显示错乱。
+function GenderSelectControl({ config, genderId, factionId, onGenderChange }: {
+  config: AppConfig;
+  genderId: string;
+  factionId: string;
+  onGenderChange: (genderId: string) => void;
+}) {
+  const isCustom = !genderId;
+  const pool = gendersForFaction(config, factionId);
+  const options = genderId && !pool.some((gender) => gender.id === genderId)
+    ? [...pool, ...config.genders.filter((gender) => gender.id === genderId)]
+    : pool;
   return (
-    <div className={`gender-faction-picker ${compact ? "compact" : ""}`}>
-      {config.genderFactions.map((faction) => (
-        <div className="gender-faction-group" key={faction.id}>
-          <span className="faction-label" style={factionStyle(faction)}>{faction.label}</span>
-          <div className="gender-options">
-            {faction.genders.map((gender) => (
-              <button key={gender.id} className={value === gender.id ? "active" : ""} onClick={() => onChange(gender.id)}>
-                {gender.label}
-              </button>
-            ))}
-          </div>
-        </div>
+    <select
+      value={isCustom ? CUSTOM_GENDER_OPTION : genderId}
+      onChange={(event) => {
+        const next = event.target.value;
+        onGenderChange(next === CUSTOM_GENDER_OPTION ? "" : next);
+      }}
+    >
+      {options.map((gender) => (
+        <option key={gender.id} value={gender.id}>{gender.label}</option>
       ))}
-    </div>
+      <option value={CUSTOM_GENDER_OPTION}>自定义…</option>
+    </select>
+  );
+}
+
+// 性别：预设下拉 + 选“自定义…”后出现的文本框（1-9 个字符）。
+// 用回原生 <select>，不用 <input list> 组合框——Safari 下 datalist 弹出列表的配色不跟随页面暗色主题，
+// 会出现白底白字看不清的问题，<select> 的原生下拉在 Safari 上表现正常。
+// stacked=true（进入游戏页）：下拉和自定义输入框上下各占一行；默认二分布局，下拉与自定义输入框
+// 各占一半宽度——未选中自定义时输入框不渲染，但那一半宽度仍然保留（CSS 网格留白），不会被下拉占满。
+export function GenderSelect({
+  config, genderId, customGenderLabel, factionId, onGenderChange, onCustomGenderLabelChange, stacked = false
+}: {
+  config: AppConfig;
+  genderId: string;
+  customGenderLabel: string;
+  factionId: string;
+  onGenderChange: (genderId: string) => void;
+  onCustomGenderLabelChange: (label: string) => void;
+  stacked?: boolean;
+}) {
+  const isCustom = !genderId;
+  return (
+    <label className="field-label">
+      <span>性别</span>
+      <div className={`gender-select-row ${stacked ? "stacked" : ""}`}>
+        <GenderSelectControl config={config} genderId={genderId} factionId={factionId} onGenderChange={onGenderChange} />
+        {isCustom && (
+          <input
+            value={customGenderLabel}
+            maxLength={9}
+            placeholder="输入 1-9 个字符"
+            onChange={(event) => onCustomGenderLabelChange(event.target.value)}
+          />
+        )}
+      </div>
+    </label>
+  );
+}
+
+// 后台用：性别下拉单独占一栏（与阵营下拉、自定义输入框三栏等分），不内嵌自定义输入框。
+export function GenderSelectField({ config, genderId, factionId, onGenderChange }: {
+  config: AppConfig;
+  genderId: string;
+  factionId: string;
+  onGenderChange: (genderId: string) => void;
+}) {
+  return (
+    <label className="field-label">
+      <span>性别</span>
+      <GenderSelectControl config={config} genderId={genderId} factionId={factionId} onGenderChange={onGenderChange} />
+    </label>
+  );
+}
+
+// 后台用：自定义性别文本框单独占一栏。未选中"自定义"时不渲染输入框，但保留该栏位置（留空）。
+export function GenderCustomField({ genderId, customGenderLabel, onCustomGenderLabelChange }: {
+  genderId: string;
+  customGenderLabel: string;
+  onCustomGenderLabelChange: (label: string) => void;
+}) {
+  const isCustom = !genderId;
+  return (
+    <label className="field-label gender-custom-field">
+      <span>&nbsp;</span>
+      {isCustom ? (
+        <input
+          value={customGenderLabel}
+          maxLength={9}
+          placeholder="输入 1-9 个字符"
+          onChange={(event) => onCustomGenderLabelChange(event.target.value)}
+        />
+      ) : (
+        <span className="gender-custom-placeholder" aria-hidden="true">{" "}</span>
+      )}
+    </label>
   );
 }
 
@@ -328,7 +524,8 @@ export function safePlayerStats(player: PublicPlayer | null | undefined) {
     sortRankedPoints: Number.isFinite(Number(s.sortRankedPoints)) ? Number(s.sortRankedPoints) : rankedPoints,
     sortHighestScore: Number.isFinite(Number(s.sortHighestScore)) ? Number(s.sortHighestScore) : highestScore,
     sortLowestScore: Number.isFinite(Number(s.sortLowestScore)) ? Number(s.sortLowestScore) : lowestScore,
-    title: title || "暂无称号"
+    title: title || "暂无称号",
+    titleCustom: !!s.titleCustom
   };
 }
 
@@ -409,8 +606,7 @@ export function Lobby({ config, lobby, me, onError, onGoRoom }: { config: AppCon
       </div>
       <aside className="side-column">
         <Leaderboard title="在线积分榜" players={lobby.rankedLeaderboard} />
-        <div className="panel lobby-message-board">
-          <h2><MessageCircle size={18} /> 留言板</h2>
+        <ChatBoardShell title="大厅聊天" collapseKey="lobbyChat">
           <ChatPanel
             scope=""
             me={me}
@@ -420,7 +616,7 @@ export function Lobby({ config, lobby, me, onError, onGoRoom }: { config: AppCon
             emptyText="还没有留言"
             messagesClass="lobby-suggestion-messages"
           />
-        </div>
+        </ChatBoardShell>
       </aside>
       {showCreate && <CreateRoom config={config} me={me} onCreated={onGoRoom} onCancel={() => setShowCreate(false)} onError={onError} />}
     </section>
@@ -1173,6 +1369,8 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
   const historyListRef = useRef<HTMLDivElement | null>(null);
   const historyStickRef = useRef(true);
   const historyLoadingRef = useRef(false);
+  const { collapsed: roomPlayersCollapsed, toggle: toggleRoomPlayersCollapsed } = useMobileCollapse("roomPlayers");
+  const { collapsed: roundHistoryCollapsed, toggle: toggleRoundHistoryCollapsed } = useMobileCollapse("roundHistory");
   const seats = room.seats || { A: null, B: null };
   const choices = room.choices || {};
   const mySeat = seats.A?.id === me.id ? "A" : seats.B?.id === me.id ? "B" : null;
@@ -1641,24 +1839,29 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
           )}
         </div>
         <div className="room-side-stack">
-          <div className="panel room-player-panel">
+          <div className={`panel room-player-panel ${roomPlayersCollapsed ? "collapsed" : ""}`}>
             <h3 className="sticky-panel-title">
               房间玩家名单
-              <span>{roomPlayers.length} 人</span>
+              <span className="panel-title-actions">
+                <span>{roomPlayers.length} 人</span>
+                <CollapseToggle collapsed={roomPlayersCollapsed} onToggle={toggleRoomPlayersCollapsed} label="房间玩家名单" />
+              </span>
             </h3>
-            <div className="room-player-list">
+            <div className={`room-player-list mobile-collapsible-body ${roomPlayersCollapsed ? "collapsed" : ""}`}>
               {roomPlayers.map((item) => <RoomPlayerRow key={`${item.role}-${item.player.id}`} player={item.player} role={item.role} now={now} />)}
               {roomPlayers.length === 0 && <p className="empty">暂无真人玩家</p>}
             </div>
           </div>
-          <div className="panel chat-panel">
-            <div className="chat-panel-head">
-              <h3>{chatTab === "room" ? "房间聊天" : "大厅聊天室"}</h3>
+          <ChatBoardShell
+            title={chatTab === "room" ? "房间聊天" : "大厅聊天"}
+            collapseKey="roomChat"
+            tabs={
               <div className="segmented chat-tabs">
                 <button className={chatTab === "room" ? "active" : ""} onClick={() => setChatTab("room")}>本房间</button>
                 <button className={chatTab === "lobby" ? "active" : ""} onClick={() => setChatTab("lobby")}>大厅</button>
               </div>
-            </div>
+            }
+          >
             {chatTab === "room" ? (
               <ChatPanel
                 key={`room-${room.id}`}
@@ -1678,30 +1881,35 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
                 players={chatPlayers}
                 onError={onError}
                 readOnly
-                readOnlyHint="大厅聊天室在房间内只能查看，回到大厅后可以发送。"
+                readOnlyHint="大厅聊天内容在房间内只能查看，回到大厅后可以发送。"
                 emptyText="大厅还没有留言"
                 subscribeLobbyChannel
                 messagesClass="room-chat-messages"
               />
             )}
-          </div>
+          </ChatBoardShell>
         </div>
-        <div className="panel round-history">
+        <div className={`panel round-history ${roundHistoryCollapsed ? "collapsed" : ""}`}>
           <h3 className="sticky-panel-title">
             📜 对局记录
-            <span>{visibleRoundHistory.length} / {room.roundHistoryTotal}</span>
+            <span className="panel-title-actions">
+              <span>{visibleRoundHistory.length} / {room.roundHistoryTotal}</span>
+              <CollapseToggle collapsed={roundHistoryCollapsed} onToggle={toggleRoundHistoryCollapsed} label="对局记录" />
+            </span>
           </h3>
-          <div className="chat-scroll-shell">
-            <div className="round-history-list" ref={historyListRef} onScroll={handleHistoryScroll}>
-              {hasMoreHistory && <div className="chat-more-hint">{historyLoading ? "加载中…" : "↑ 上滑加载更早记录"}</div>}
-              {orderedRoundHistory.map((item) => <RoundHistoryCard key={item.id} item={item} onOpenImage={setPreviewImage} />)}
-              {visibleRoundHistory.length === 0 && <p className="empty">还没有对局记录</p>}
+          <div className={`mobile-collapsible-body ${roundHistoryCollapsed ? "collapsed" : ""}`}>
+            <div className="chat-scroll-shell">
+              <div className="round-history-list" ref={historyListRef} onScroll={handleHistoryScroll}>
+                {hasMoreHistory && <div className="chat-more-hint">{historyLoading ? "加载中…" : "↑ 上滑加载更早记录"}</div>}
+                {orderedRoundHistory.map((item) => <RoundHistoryCard key={item.id} item={item} onOpenImage={setPreviewImage} />)}
+                {visibleRoundHistory.length === 0 && <p className="empty">还没有对局记录</p>}
+              </div>
+              {!historyStick && visibleRoundHistory.length > 0 && (
+                <button type="button" className="chat-stick-button" onClick={() => stickChatToBottom(historyListRef.current, historyStickRef, setHistoryStick)}>
+                  ↓ 回到底部
+                </button>
+              )}
             </div>
-            {!historyStick && visibleRoundHistory.length > 0 && (
-              <button type="button" className="chat-stick-button" onClick={() => stickChatToBottom(historyListRef.current, historyStickRef, setHistoryStick)}>
-                ↓ 回到底部
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -2391,7 +2599,35 @@ export function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// ChatPanel：房间聊天与大厅留言板共用。scope="" 为大厅，否则为 roomId。
+// ChatBoardShell：大厅聊天与房间聊天共用的外壳——标题行（含手机端折叠三角）+ 可选的 tabs + ChatPanel。
+// ChatPanel 内部用 <> Fragment 直接吐出 .chat-scroll-shell 和 .send-row 两个元素，
+// 让它们成为 .chat-panel 这个 3 行 grid（标题/消息/输入）的直接子项——所以折叠态不能再包一层
+// wrapper div（会把 2 个 grid 子项并成 1 个，挤爆行映射），而是在 .chat-panel 本身打 collapsed class，
+// 具体隐藏规则见 styles.css 里 .chat-panel.collapsed 的说明。
+export function ChatBoardShell({
+  title, collapseKey, tabs, children
+}: {
+  title: string;
+  collapseKey: string;
+  tabs?: ReactNode;
+  children: ReactNode;
+}) {
+  const { collapsed, toggle } = useMobileCollapse(collapseKey);
+  return (
+    <div className={`panel chat-panel ${collapsed ? "collapsed" : ""}`}>
+      <div className="chat-panel-head">
+        <div className="chat-panel-head-main">
+          <h3>{title}</h3>
+          {tabs}
+        </div>
+        <CollapseToggle collapsed={collapsed} onToggle={toggle} label={title} />
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ChatPanel：房间聊天与大厅聊天共用。scope="" 为大厅，否则为 roomId。
 // 首屏/历史走 chatStore（chat:load/loadOlder，读 SQLite），增量由 chatStore 监听 chat:new。
 // 滚到顶部瀑布流加载更早 100 条并保持滚动位置；点头像 @人；@到自己的气泡高亮。
 export function ChatPanel({
@@ -2865,10 +3101,14 @@ export function connectionStateText(state: "connected" | "connecting" | "disconn
 }
 
 export function Leaderboard({ title, players }: { title: string; players: PublicPlayer[] }) {
+  const { collapsed, toggle } = useMobileCollapse("leaderboard");
   return (
-    <div className="panel leaderboard-panel">
-      <h2><Crown size={18} /> {title}</h2>
-      <div className="leaderboard-list">
+    <div className={`panel leaderboard-panel ${collapsed ? "collapsed" : ""}`}>
+      <div className="panel-header-row">
+        <h2><Crown size={18} /> {title}</h2>
+        <CollapseToggle collapsed={collapsed} onToggle={toggle} label={title} />
+      </div>
+      <div className={`leaderboard-list mobile-collapsible-body ${collapsed ? "collapsed" : ""}`}>
         {players.map((player, index) => {
           const stats = safePlayerStats(player);
           return (
@@ -2934,12 +3174,38 @@ export function AboutPanel({ config, onClose }: { config: AppConfig; onClose: ()
         <div className="sponsor-hero">
           <div className="sponsor-hero-icon"><Coffee size={30} /></div>
           <div>
-            <strong>谢谢你愿意支持抖喵游戏屋</strong>
-            <p>赞助会优先用在服务器、域名和继续加新玩法上。也欢迎只进群提建议。</p>
+            <strong>谢谢你愿意支持抖喵酱</strong>
+            <p>使用以下链接来联系、赞助本游戏屋原作作者。</p>
           </div>
         </div>
         <div className="sponsor-grid">
-          {sponsorLinks.map((item) => (
+          {doumiaoLinks.map((item) => (
+            <a
+              className="sponsor-card"
+              href={item.href}
+              target="_blank"
+              rel="noreferrer"
+              key={item.id}
+              style={{ "--sponsor-tone": item.tone } as CSSProperties}
+            >
+              <span className="sponsor-icon" aria-hidden="true">{item.id === "telegram" ? <Send size={22} /> : item.icon}</span>
+              <span className="sponsor-copy">
+                <strong>{item.title}</strong>
+                <small>{item.description}</small>
+              </span>
+              <ExternalLink size={16} />
+            </a>
+          ))}
+        </div>
+        <div className="sponsor-hero">
+          <div className="sponsor-hero-icon"><Coffee size={30} /></div>
+          <div>
+            <strong>谢谢你愿意支持 8023</strong>
+            <p>使用以下链接来联系、赞助本游戏屋现任开发者与运维者。</p>
+          </div>
+        </div>
+        <div className="sponsor-grid">
+          {luv4uLinks.map((item) => (
             <a
               className="sponsor-card"
               href={item.href}
@@ -3221,6 +3487,7 @@ export function UniversalRenamePanel({ config, targets, me, onError }: { config:
   const canNameWarRename = me.stats.rankedPoints >= 500 && nameWarQuota > 0;
   const extremeMinPoints = Math.max(1, Math.round(config.extremeMode.forceRenameMinPoints || 1));
   const canExtremeRename = Boolean(me.extremeModeEnabled && me.stats.rankedPoints >= extremeMinPoints);
+  const { collapsed, toggle: toggleCollapsed } = useMobileCollapse("nameWarLoser");
 
   useEffect(() => {
     if (!targets.some((player) => (player.nameWarRenameProtectedUntil && player.nameWarRenameProtectedUntil > now) || (player.extremeRenameProtectedUntil && player.extremeRenameProtectedUntil > now))) return;
@@ -3241,52 +3508,57 @@ export function UniversalRenamePanel({ config, targets, me, onError }: { config:
   }
 
   return (
-    <div className="panel name-war-loser-panel">
-      <h2>🏷️ {config.nameWar.renamePanelTitle || config.nameWar.loserPanelTitle || "通用改名处"}</h2>
-      <p className="hint">名争改名需要 500 分以上，你剩余 {nameWarQuota} / 3 次；极限强关改名需要开启极限模式且至少 {extremeMinPoints} 分。</p>
-      <div className="name-war-loser-list">
-        {targets.map((player) => {
-          const nameWarTarget = isNameWarLoser(player);
-          const extremeTarget = isExtremeRenameTarget(player);
-          const nameWarProtectedMs = player.nameWarRenameProtectedUntil ? Math.max(0, player.nameWarRenameProtectedUntil - now) : 0;
-          const extremeProtectedMs = player.extremeRenameProtectedUntil ? Math.max(0, player.extremeRenameProtectedUntil - now) : 0;
-          const offlineKeepMs = !player.connected && player.disconnectedAt ? Math.max(0, 1_800_000 - (now - player.disconnectedAt)) : 0;
-          const nameWarProtectedText = nameWarProtectedMs > 0 ? `名争保护 ${Math.ceil(nameWarProtectedMs / 3_600_000)} 小时` : "名争可改";
-          const extremeProtectedText = extremeProtectedMs > 0 ? `极限保护 ${Math.ceil(extremeProtectedMs / 3_600_000)} 小时` : "极限可改";
-          const inputValue = inputs[player.id] || "";
-          const selfTarget = player.id === me.id;
-          const nameWarDisabled = !nameWarTarget || !canNameWarRename || selfTarget || nameWarProtectedMs > 0;
-          const extremeDisabled = !extremeTarget || !canExtremeRename || selfTarget || extremeProtectedMs > 0;
-          return (
-            <div className="name-war-loser-card" key={player.id}>
-              <div className="admin-card-title">
-                <strong>{player.nameWarPenaltyName || player.name}</strong>
-                <small>
-                  <span className={`online-dot ${player.connected ? "online" : "offline"}`}>{player.connected ? "在线" : "离线"}</span>
-                  {player.stats.rankedPoints} 分
-                </small>
+    <div className={`panel name-war-loser-panel ${collapsed ? "collapsed" : ""}`}>
+      <div className="panel-header-row">
+        <h2>🏷️ {config.nameWar.renamePanelTitle || config.nameWar.loserPanelTitle || "通用改名处"}</h2>
+        <CollapseToggle collapsed={collapsed} onToggle={toggleCollapsed} label={config.nameWar.renamePanelTitle || config.nameWar.loserPanelTitle || "通用改名处"} />
+      </div>
+      <div className={`mobile-collapsible-body ${collapsed ? "collapsed" : ""}`}>
+        <p className="hint">名争改名需要 500 分以上，你剩余 {nameWarQuota} / 3 次；极限强关改名需要开启极限模式且至少 {extremeMinPoints} 分。</p>
+        <div className="name-war-loser-list">
+          {targets.map((player) => {
+            const nameWarTarget = isNameWarLoser(player);
+            const extremeTarget = isExtremeRenameTarget(player);
+            const nameWarProtectedMs = player.nameWarRenameProtectedUntil ? Math.max(0, player.nameWarRenameProtectedUntil - now) : 0;
+            const extremeProtectedMs = player.extremeRenameProtectedUntil ? Math.max(0, player.extremeRenameProtectedUntil - now) : 0;
+            const offlineKeepMs = !player.connected && player.disconnectedAt ? Math.max(0, 1_800_000 - (now - player.disconnectedAt)) : 0;
+            const nameWarProtectedText = nameWarProtectedMs > 0 ? `名争保护 ${Math.ceil(nameWarProtectedMs / 3_600_000)} 小时` : "名争可改";
+            const extremeProtectedText = extremeProtectedMs > 0 ? `极限保护 ${Math.ceil(extremeProtectedMs / 3_600_000)} 小时` : "极限可改";
+            const inputValue = inputs[player.id] || "";
+            const selfTarget = player.id === me.id;
+            const nameWarDisabled = !nameWarTarget || !canNameWarRename || selfTarget || nameWarProtectedMs > 0;
+            const extremeDisabled = !extremeTarget || !canExtremeRename || selfTarget || extremeProtectedMs > 0;
+            return (
+              <div className="name-war-loser-card" key={player.id}>
+                <div className="admin-card-title">
+                  <strong>{player.nameWarPenaltyName || player.name}</strong>
+                  <small>
+                    <span className={`online-dot ${player.connected ? "online" : "offline"}`}>{player.connected ? "在线" : "离线"}</span>
+                    {player.stats.rankedPoints} 分
+                  </small>
+                </div>
+                <div className="room-info-tags">
+                  {nameWarTarget && <span className="room-info-tag">⚔️ {config.nameWar.nameWarLoserLabel || "名争失格"}</span>}
+                  {extremeTarget && <span className="room-info-tag">⚡ {config.nameWar.extremeForceClosedLabel || "极限强关"}</span>}
+                </div>
+                <p className="hint">
+                  {nameWarTarget ? nameWarProtectedText : ""}
+                  {nameWarTarget && extremeTarget ? " · " : ""}
+                  {extremeTarget ? extremeProtectedText : ""}
+                </p>
+                {offlineKeepMs > 0 && <p className="hint">离线保留：约 {Math.ceil(offlineKeepMs / 60_000)} 分钟后从名单隐藏。</p>}
+                {player.nameWarRenamedByName && <p className="hint">名争最后改名者：{player.nameWarRenamedByName}</p>}
+                {player.extremeRenamedByName && <p className="hint">极限最后改名者：{player.extremeRenamedByName}</p>}
+                <div className="send-row">
+                  <input value={inputValue} maxLength={12} disabled={selfTarget || (!nameWarTarget && !extremeTarget)} onChange={(event) => setInputs((old) => ({ ...old, [player.id]: event.target.value }))} placeholder={selfTarget ? "不能改自己的名字" : "输入新名字"} />
+                  {nameWarTarget && <button disabled={nameWarDisabled || !inputValue.trim()} onClick={() => renameTarget(player.id, "nameWar")}>名争改名</button>}
+                  {extremeTarget && <button disabled={extremeDisabled || !inputValue.trim()} onClick={() => renameTarget(player.id, "extreme")}>极限改名</button>}
+                </div>
               </div>
-              <div className="room-info-tags">
-                {nameWarTarget && <span className="room-info-tag">⚔️ {config.nameWar.nameWarLoserLabel || "名争失格"}</span>}
-                {extremeTarget && <span className="room-info-tag">⚡ {config.nameWar.extremeForceClosedLabel || "极限强关"}</span>}
-              </div>
-              <p className="hint">
-                {nameWarTarget ? nameWarProtectedText : ""}
-                {nameWarTarget && extremeTarget ? " · " : ""}
-                {extremeTarget ? extremeProtectedText : ""}
-              </p>
-              {offlineKeepMs > 0 && <p className="hint">离线保留：约 {Math.ceil(offlineKeepMs / 60_000)} 分钟后从名单隐藏。</p>}
-              {player.nameWarRenamedByName && <p className="hint">名争最后改名者：{player.nameWarRenamedByName}</p>}
-              {player.extremeRenamedByName && <p className="hint">极限最后改名者：{player.extremeRenamedByName}</p>}
-              <div className="send-row">
-                <input value={inputValue} maxLength={12} disabled={selfTarget || (!nameWarTarget && !extremeTarget)} onChange={(event) => setInputs((old) => ({ ...old, [player.id]: event.target.value }))} placeholder={selfTarget ? "不能改自己的名字" : "输入新名字"} />
-                {nameWarTarget && <button disabled={nameWarDisabled || !inputValue.trim()} onClick={() => renameTarget(player.id, "nameWar")}>名争改名</button>}
-                {extremeTarget && <button disabled={extremeDisabled || !inputValue.trim()} onClick={() => renameTarget(player.id, "extreme")}>极限改名</button>}
-              </div>
-            </div>
-          );
-        })}
-        {targets.length === 0 && <p className="empty">暂无可改名目标</p>}
+            );
+          })}
+          {targets.length === 0 && <p className="empty">暂无可改名目标</p>}
+        </div>
       </div>
     </div>
   );
@@ -3295,12 +3567,13 @@ export function UniversalRenamePanel({ config, targets, me, onError }: { config:
 export function GiveawayPanel({ config, players, me, onError }: { config: AppConfig; players: PublicPlayer[]; me: PublicPlayer; onError: (message: string) => void }) {
   const [text, setText] = useState("");
   const [now, setNow] = useState(Date.now());
+  const { collapsed, toggle: toggleCollapsed } = useMobileCollapse("giveaway");
   const activeBoards = players
     .filter((player) => player.giveawayBoardText && player.giveawayBoardExpiresAt && player.giveawayBoardExpiresAt > now)
     .sort((a, b) => (b.giveawayBoardSubmittedAt || 0) - (a.giveawayBoardSubmittedAt || 0));
   const myActiveBoard = activeBoards.find((player) => player.id === me.id);
   const canSubmit = Boolean(me.giveawayEnabled && (me.giveawayValue || 0) > 0 && !myActiveBoard);
-  const voteQuota = giveawayVoteQuota(me, now);
+  const voteQuota = giveawayVoteQuota(me, now, config.giveaway.likeVoteLimitPerHour, config.giveaway.dislikeVoteLimitPerHour);
 
   useEffect(() => {
     const hasExpiry = players.some((player) => player.giveawayBoardExpiresAt && player.giveawayBoardExpiresAt > Date.now());
@@ -3329,55 +3602,60 @@ export function GiveawayPanel({ config, players, me, onError }: { config: AppCon
   }
 
   return (
-    <div className="panel giveaway-panel">
+    <div className={`panel giveaway-panel ${collapsed ? "collapsed" : ""}`}>
       <div className="panel-title compact-title">
         <h2>🫴 {config.giveaway.panelTitle}</h2>
-        <span>{activeBoards.length} 条</span>
+        <span className="panel-title-actions">
+          <span>{activeBoards.length} 条</span>
+          <CollapseToggle collapsed={collapsed} onToggle={toggleCollapsed} label={config.giveaway.panelTitle} />
+        </span>
       </div>
-      <div className="giveaway-hints">
-        <p className="hint">{config.giveaway.panelDescription}</p>
-        {myActiveBoard && <p className="hint">你已经上板，过期后才能重新提交。当前剩余 {formatDuration((myActiveBoard.giveawayBoardExpiresAt || now) - now)}。</p>}
-        {!canSubmit && me.giveawayEnabled && <p className="hint">你的白给值已经是 {formatGiveawayValue(me.giveawayValue || 0)}%，归零后可以在个人设置关闭模式。</p>}
-      </div>
-      {canSubmit && (
-        <div className="giveaway-submit">
-          <textarea value={text} maxLength={300} onChange={(event) => setText(event.target.value)} placeholder={config.giveaway.submitPlaceholder} />
-          <button className="primary small" onClick={submitBoard}>上板 12 小时</button>
+      <div className={`mobile-collapsible-body ${collapsed ? "collapsed" : ""}`}>
+        <div className="giveaway-hints">
+          <p className="hint">{config.giveaway.panelDescription}</p>
+          {myActiveBoard && <p className="hint">你已经上板，过期后才能重新提交。当前剩余 {formatDuration((myActiveBoard.giveawayBoardExpiresAt || now) - now)}。</p>}
+          {!canSubmit && me.giveawayEnabled && <p className="hint">你的白给值已经是 {formatGiveawayValue(me.giveawayValue || 0)}%，归零后自动关闭白给模式。</p>}
         </div>
-      )}
-      {activeBoards.length > 0 && (
-        <div className="giveaway-quota-line">
-          <span>👍 还可 {voteQuota.likesLeft}/3 · 👎 还可 {voteQuota.dislikesLeft}/10 · {voteQuota.refreshText}</span>
+        {canSubmit && (
+          <div className="giveaway-submit">
+            <textarea value={text} maxLength={300} onChange={(event) => setText(event.target.value)} placeholder={config.giveaway.submitPlaceholder} />
+            <button className="primary small" onClick={submitBoard}>上板 12 小时</button>
+          </div>
+        )}
+        {activeBoards.length > 0 && (
+          <div className="giveaway-quota-line">
+            <span>👍 还可 {voteQuota.likesLeft}/{config.giveaway.likeVoteLimitPerHour} · 👎 还可 {voteQuota.dislikesLeft}/{config.giveaway.dislikeVoteLimitPerHour} · {voteQuota.refreshText}</span>
+          </div>
+        )}
+        <div className="giveaway-board-list">
+          {activeBoards.map((player) => {
+            const isSelf = player.id === me.id;
+            const expiresText = player.giveawayBoardExpiresAt ? formatDuration(player.giveawayBoardExpiresAt - now) : "";
+            return (
+              <article className="giveaway-card" key={player.id}>
+                <div className="giveaway-card-head">
+                  <PlayerBadge player={player} />
+                </div>
+                <p className="giveaway-board-text">{player.giveawayBoardText}</p>
+                <div className="giveaway-card-meta">
+                  <span>剩余 {expiresText}</span>
+                  <span>👍 {player.giveawayBoardLikes || 0} · 👎 {player.giveawayBoardDislikes || 0}</span>
+                </div>
+                <div className="giveaway-actions">
+                  <button disabled={isSelf || voteQuota.likesLeft <= 0} onClick={() => vote(player.id, "like")}>👍 -{formatGiveawayValue(config.giveaway.likeVoteValue)}%</button>
+                  <button disabled={isSelf || voteQuota.dislikesLeft <= 0} onClick={() => vote(player.id, "dislike")}>👎 +{formatGiveawayValue(config.giveaway.dislikeVoteValue)}%</button>
+                </div>
+              </article>
+            );
+          })}
+          {activeBoards.length === 0 && <p className="empty">{config.giveaway.emptyText}</p>}
         </div>
-      )}
-      <div className="giveaway-board-list">
-        {activeBoards.map((player) => {
-          const isSelf = player.id === me.id;
-          const expiresText = player.giveawayBoardExpiresAt ? formatDuration(player.giveawayBoardExpiresAt - now) : "";
-          return (
-            <article className="giveaway-card" key={player.id}>
-              <div className="giveaway-card-head">
-                <PlayerBadge player={player} />
-              </div>
-              <p className="giveaway-board-text">{player.giveawayBoardText}</p>
-              <div className="giveaway-card-meta">
-                <span>剩余 {expiresText}</span>
-                <span>👍 {player.giveawayBoardLikes || 0} · 👎 {player.giveawayBoardDislikes || 0}</span>
-              </div>
-              <div className="giveaway-actions">
-                <button disabled={isSelf || voteQuota.likesLeft <= 0} onClick={() => vote(player.id, "like")}>👍 -1%</button>
-                <button disabled={isSelf || voteQuota.dislikesLeft <= 0} onClick={() => vote(player.id, "dislike")}>👎 +0.1%</button>
-              </div>
-            </article>
-          );
-        })}
-        {activeBoards.length === 0 && <p className="empty">{config.giveaway.emptyText}</p>}
       </div>
     </div>
   );
 }
 
-export function giveawayVoteQuota(player: PublicPlayer, now: number) {
+export function giveawayVoteQuota(player: PublicPlayer, now: number, likeLimit = 3, dislikeLimit = 10) {
   const startedAt = player.giveawayVoteWindowStartedAt || 0;
   const windowMs = 3_600_000;
   const expired = !startedAt || now - startedAt >= windowMs;
@@ -3386,8 +3664,8 @@ export function giveawayVoteQuota(player: PublicPlayer, now: number) {
   // 刷新文案统一用「分钟」单位（向下取整），例如 2 小时 → 120 分钟；不足 1 分钟 → 0 分钟
   const remainMinutes = expired ? 60 : Math.floor(Math.max(0, startedAt + windowMs - now) / 60_000);
   return {
-    likesLeft: Math.max(0, 3 - likesUsed),
-    dislikesLeft: Math.max(0, 10 - dislikesUsed),
+    likesLeft: Math.max(0, likeLimit - likesUsed),
+    dislikesLeft: Math.max(0, dislikeLimit - dislikesUsed),
     refreshText: `${remainMinutes} 分钟后刷新`
   };
 }
@@ -3401,6 +3679,8 @@ export function formatGiveawayValue(value: number) {
 export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLoggedOut }: { config: AppConfig; me: PublicPlayer; onClose: () => void; onUpdated: (player: PublicPlayer) => void; onError: (message: string) => void; onLoggedOut: () => void }) {
   const [name, setName] = useState(me.name);
   const [genderId, setGenderId] = useState(me.genderId);
+  const [customGenderLabel, setCustomGenderLabel] = useState(me.genderId ? "" : me.genderLabel);
+  const [factionId, setFactionId] = useState(me.factionId);
   const [nameWarEnabled, setNameWarEnabled] = useState(Boolean(me.nameWarEnabled));
   const [nameWarAllowRename, setNameWarAllowRename] = useState(Boolean(me.nameWarAllowRename));
   const [giveawayEnabled, setGiveawayEnabled] = useState(Boolean(me.giveawayEnabled));
@@ -3477,6 +3757,11 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
   }, [nameWarEnabled]);
 
   async function saveProfile() {
+    const genderError = genderChoiceError(config, genderId, customGenderLabel, factionId);
+    if (genderError) {
+      onError(genderError);
+      return;
+    }
     if (nameChanged && nameLockedByWar) {
       onError("名字争夺战开启后不能修改名字");
       return;
@@ -3506,7 +3791,7 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
       if (!ok) return;
     }
     try {
-      const result = await ask<{ player: PublicPlayer }>("player:updateProfile", { name, genderId, nameWarEnabled, nameWarAllowRename, giveawayEnabled, extremeModeEnabled });
+      const result = await ask<{ player: PublicPlayer }>("player:updateProfile", { name, genderId, customGenderLabel, factionId, nameWarEnabled, nameWarAllowRename, giveawayEnabled, extremeModeEnabled });
       onUpdated(result.player);
       onError("个人资料已更新");
     } catch (error) {
@@ -3618,25 +3903,24 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
 
         <div className="profile-stats">
           <Stat label="总局数" value={`${total}`} />
-          <Stat label="总胜 / 负 / 平" value={`${stats.wins}/${stats.losses}/${stats.draws}`} />
           <Stat label="总胜率" value={`${winRate}%`} />
           <Stat label="惩罚次数" value={`${stats.punishments}`} />
           <Stat label="排位积分" value={`${stats.rankedPoints}`} />
-          <Stat label="历史最高分" value={`${stats.highestScore}`} />
-          <Stat label="历史最低分" value={`${stats.lowestScore}`} />
+          <Stat label="历史战绩" value={`${stats.lowestScore} ～ ${stats.highestScore}`} />
           <Stat label="当前称号" value={me.nameWarPunished ? "已隐藏" : stats.title} />
           <Stat label="白给值" value={`${formatGiveawayValue(giveawayValue)}%`} />
           <Stat label="极限模式" value={me.extremeModeEnabled ? `连胜 ${me.extremeWinStreak || 0}` : "未开启"} />
         </div>
         <div className="profile-stats profile-game-stats">
+          <Stat label="对局总计（胜/负/平）" value={`${stats.wins} / ${stats.losses} / ${stats.draws}`} />
           {([
-            ["锤子剪刀布", me.gameStats?.rps],
-            ["黑白棋", me.gameStats?.othello],
-            ["井字棋", me.gameStats?.tictactoe],
-            ["五子棋", me.gameStats?.gomoku],
-            ["大话骰", me.gameStats?.liarsdice]
+            ["锤子剪刀布（胜/负/平）", me.gameStats?.rps],
+            ["黑白棋（胜/负/平）", me.gameStats?.othello],
+            ["井字棋（胜/负/平）", me.gameStats?.tictactoe],
+            ["五子棋（胜/负/平）", me.gameStats?.gomoku],
+            ["大话骰（胜/负/平）", me.gameStats?.liarsdice]
           ] as const).map(([label, g]) => (
-            <Stat key={label} label={label} value={`${g?.wins || 0}/${g?.losses || 0}/${g?.draws || 0}`} />
+            <Stat key={label} label={label} value={`${g?.wins || 0} / ${g?.losses || 0} / ${g?.draws || 0}`} />
           ))}
         </div>
 
@@ -3647,33 +3931,45 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
               <span>名字</span>
               <input value={name} maxLength={12} disabled={nameLockedByWar} onChange={(event) => setName(event.target.value)} placeholder="新的名字" />
               <small>{nameLockedByWar ? "名字争夺战开启后不能修改名字" : nameChanged && cooldownMs > 0 ? `改名冷却：${nameCooldownSeconds} 秒` : "名字会显示在大厅、房间和聊天里"}</small>
-              <div className="profile-avatar-upload-row">
-                <input
-                  ref={avatarInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="profile-avatar-upload-input"
-                  disabled={avatarBusy}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) void uploadAvatar(file);
-                  }}
-                />
-                <button type="button" disabled={avatarBusy} onClick={() => avatarInputRef.current?.click()}>
-                  {avatarBusy ? "上传中…" : "上传头像"}
-                </button>
-                <button type="button" disabled={avatarBusy || !me.avatarUrl} onClick={() => void clearAvatar()}>
-                  清空头像
-                </button>
-              </div>
             </label>
-            <div className="profile-gender-field">
-              <span>性别</span>
-              <GenderPicker config={config} value={genderId} onChange={setGenderId} compact />
-              <small>性别和阵营都可以随时修改</small>
+            <FactionSelect
+              config={config}
+              factionId={factionId}
+              onFactionChange={(nextFactionId) => {
+                setFactionId(nextFactionId);
+                setGenderId((old) => nextGenderIdForFaction(config, nextFactionId, old));
+              }}
+            />
+            <div className="profile-edit-grid-full">
+              <GenderSelect
+                config={config}
+                genderId={genderId}
+                customGenderLabel={customGenderLabel}
+                factionId={factionId}
+                onGenderChange={setGenderId}
+                onCustomGenderLabelChange={setCustomGenderLabel}
+              />
+            </div>
+            <div className="profile-edit-grid-full profile-avatar-upload-row">
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="profile-avatar-upload-input"
+                disabled={avatarBusy}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void uploadAvatar(file);
+                }}
+              />
+              <button type="button" disabled={avatarBusy} onClick={() => avatarInputRef.current?.click()}>
+                {avatarBusy ? "上传中…" : "上传头像"}
+              </button>
+              <button type="button" disabled={avatarBusy || !me.avatarUrl} onClick={() => void clearAvatar()}>
+                清空头像
+              </button>
             </div>
           </div>
-          <p className="hint">性别和阵营现在都可以随时调整，不再限制切换时间。</p>
           <p className="hint">上次改名：{me.profileUpdatedAt ? new Date(me.profileUpdatedAt).toLocaleString() : "还没有修改过"}</p>
           <div className="name-war-card">
             <div className="admin-card-title">
@@ -3682,7 +3978,7 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
             </div>
             <Toggle label="开启名字争夺战" value={nameWarEnabled} disabled={nameWarCooldownMs > 0} onChange={setNameWarEnabled} />
             <Toggle label="允许其他玩家改名" value={nameWarAllowRename} disabled={!nameWarEnabled || nameWarCooldownMs > 0} onChange={setNameWarAllowRename} />
-            <p className="hint">开启后排位分展示下限变为 {withRankedScoreDefaults(config.rankedScore).nameWarMin}（真实存储的分数不受此限制）；真实分跌到 {config.nameWar?.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD} 及以下后，只显示系统惩罚名，不显示性别和称号。</p>
+            <p className="hint">开启后排位分展示下限变为 {withRankedScoreDefaults(config.rankedScore).nameWarMin}；积分跌到 {config.nameWar?.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD} 及以下后，只显示系统惩罚名，不显示性别和称号。</p>
             <p className="hint">允许其他玩家改名后，真实分跌到 {config.nameWar?.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD} 及以下会出现在大厅失格者名单，500 分以上玩家可以抢先给你改名。</p>
             <p className="hint">被其他玩家改名后，保护期内即使真实分回到失格线以上也不会提前恢复；保护期结束且真实分高于失格线才恢复。</p>
             {me.nameWarRenameProtectedUntil && me.nameWarRenameProtectedUntil > now && <p className="hint">改名保护中：约 {Math.ceil((me.nameWarRenameProtectedUntil - now) / 3_600_000)} 小时。</p>}
@@ -3695,10 +3991,10 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
               <small>{me.giveawayEnabled ? `${formatGiveawayValue(giveawayValue)}%` : "未开启"}</small>
             </div>
             <Toggle label="开启白给模式" value={giveawayEnabled} disabled={giveawayCannotClose} onChange={setGiveawayEnabled} />
-            <p className="hint">开启后，锤子剪刀布真人对战会按白给值概率触发强制白给；黑白棋排位落子后可选择不白给、白给或上贡。</p>
-            <p className="hint">出拳区点击“白给”会让白给值 +2%，触发强制白给后也会 +2%，最高 100%。</p>
+            <p className="hint">开启后白给值默认为 0.1%，锤子剪刀布真人对战会按白给值概率触发强制白给；黑白棋排位落子后可选择不白给、白给或上贡。</p>
+            <p className="hint">出拳区点击“白给”会让白给值 +{formatGiveawayValue(config.giveaway.activeBoostValue)}%，触发强制白给后也会 +{formatGiveawayValue(config.giveaway.activeBoostValue)}%，最高 100%。</p>
             <p className="hint">黑白棋白给会让本手翻子不结算排位分并按 0.1%/子增加白给值；上贡会把本手分数给对面并按 0.2%/子增加白给值。</p>
-            <p className="hint">白给值归零后，才可以关闭这个模式。可以在大厅的白给自救板提交宣言，等待其他玩家点赞帮你降低。</p>
+            <p className="hint">白给值归零后，该模式自动关闭。游玩任何游戏获胜会让白给值 -{formatGiveawayValue(config.giveaway.winPenaltyValue)}%；也可以在大厅的白给自救板提交宣言，等待其他玩家点赞帮你降低；</p>
             {giveawayCannotClose && <p className="hint danger-hint">当前还有 {formatGiveawayValue(giveawayValue)}% 白给值，暂时不能关闭。</p>}
           </div>
           <div className="name-war-card extreme-profile-card">
@@ -3786,9 +4082,6 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
   );
 }
 
-export type AdminSection = "site" | "factions" | "titles" | "punishments" | "roomTags" | "roomInfoTags" | "nameWar" | "giveaway" | "extremeMode" | "rankedScore" | "accessControl" | "bots" | "messages" | "actions" | "advanced";
-export type AdminActionTab = "online" | "offline" | "rooms" | "announcement";
-
 export const roomInfoTagOrder = [
   { key: "gameRps", label: "锤子剪刀布" },
   { key: "gameOthello", label: "黑白棋" },
@@ -3815,1085 +4108,6 @@ export function defaultRoomInfoTagStyle(label: string): RoomInfoTagStyle {
   return { label, textColor: "#4d5c6f", backgroundColor: "#eef3f8", borderColor: "#c9d6e4" };
 }
 
-export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConfig; lobby: LobbySnapshot; onBack: () => void; onError: (message: string) => void }) {
-  const [password, setPassword] = useState("");
-  const [logged, setLogged] = useState(false);
-  const [draft, setDraft] = useState<AppConfig>(config);
-  const [activeSection, setActiveSection] = useState<AdminSection>("site");
-  const [activeFactionId, setActiveFactionId] = useState(config.genderFactions[0]?.id || "");
-  const [factionSearch, setFactionSearch] = useState("");
-  const [activeTitleId, setActiveTitleId] = useState(config.titles[0]?.id || "");
-  const [titleSearch, setTitleSearch] = useState("");
-  const [activePunishmentId, setActivePunishmentId] = useState(config.punishments[0]?.id || "");
-  const [punishmentSearch, setPunishmentSearch] = useState("");
-  const [announcementMessage, setAnnouncementMessage] = useState("");
-  const [announcementSeconds, setAnnouncementSeconds] = useState("8");
-  const [activeActionTab, setActiveActionTab] = useState<AdminActionTab>("online");
-  const [configText, setConfigText] = useState(JSON.stringify(config, null, 2));
-  const [dirty, setDirty] = useState(false);
-  const [serverConfigChanged, setServerConfigChanged] = useState(false);
-  const lastServerConfigText = useRef(JSON.stringify(config));
-
-  useEffect(() => {
-    const nextText = JSON.stringify(config);
-    if (nextText === lastServerConfigText.current) return;
-    lastServerConfigText.current = nextText;
-    if (dirty) {
-      setServerConfigChanged(true);
-      return;
-    }
-    applyServerConfig(config);
-  }, [config, dirty]);
-
-  function applyServerConfig(nextConfig: AppConfig) {
-    lastServerConfigText.current = JSON.stringify(nextConfig);
-    setDraft(nextConfig);
-    setConfigText(JSON.stringify(nextConfig, null, 2));
-    setActiveFactionId((old) => nextConfig.genderFactions.some((item) => item.id === old) ? old : nextConfig.genderFactions[0]?.id || "");
-    setActiveTitleId((old) => nextConfig.titles.some((item) => item.id === old) ? old : nextConfig.titles[0]?.id || "");
-    setActivePunishmentId((old) => nextConfig.punishments.some((item) => item.id === old) ? old : nextConfig.punishments[0]?.id || "");
-    setDirty(false);
-    setServerConfigChanged(false);
-  }
-
-  async function login() {
-    try {
-      await ask("admin:login", { password });
-      setLogged(true);
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "登录失败");
-    }
-  }
-
-  async function save() {
-    try {
-      const nextConfig = activeSection === "advanced" ? JSON.parse(configText) as AppConfig : draft;
-      const response = await ask<{ config: AppConfig }>("config:save", { password, nextConfig });
-      applyServerConfig(response.config);
-      onError("配置保存成功");
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "配置保存失败");
-    }
-  }
-
-  async function resetDefault() {
-    try {
-      // 配置已按功能拆分并原地读写，无 default/active 双轨；此处从磁盘重新加载当前文件。
-      const response = await ask<{ config: AppConfig }>("config:reset", { password });
-      applyServerConfig(response.config);
-      onError("已从磁盘重新加载配置");
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "重新加载配置失败");
-    }
-  }
-
-  async function exportConfig() {
-    try {
-      const response = await fetch("/api/config/export", {
-        method: "GET",
-        headers: { "Accept": "application/json", "X-Admin-Password": password }
-      });
-      if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        throw new Error(data?.message || "配置导出失败");
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "rps-config.json";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      onError("配置已导出");
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "配置导出失败");
-    }
-  }
-
-  function patch(next: Partial<AppConfig>) {
-    setDirty(true);
-    setDraft((old) => ({ ...old, ...next }));
-  }
-
-  function patchFactions(nextFactions: GenderFaction[]) {
-    const normalized = nextFactions.map((faction) => ({
-      ...faction,
-      genders: faction.genders.map((gender) => ({ ...gender, factionId: faction.id }))
-    }));
-    patch({ genderFactions: normalized, genders: flattenDraftGenders(normalized) });
-  }
-
-  async function action(actionName: string, payload: Record<string, unknown> = {}) {
-    try {
-      await ask("admin:action", { action: actionName, ...payload });
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "管理操作失败");
-    }
-  }
-
-  async function sendAnnouncement() {
-    try {
-      await ask("admin:action", {
-        action: "broadcastAnnouncement",
-        message: announcementMessage,
-        durationSeconds: Number(announcementSeconds)
-      });
-      setAnnouncementMessage("");
-      onError("公告已发送");
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "公告发送失败");
-    }
-  }
-
-  async function uploadAdminImage(file: File) {
-    const uploadFile = await compressAdminImageForUpload(file);
-    if (uploadFile.size > 8 * 1024 * 1024) throw new Error("图片超过 8MB，请换一张或先压缩");
-    const form = new FormData();
-    form.append("password", password);
-    form.append("image", uploadFile, uploadFile.name);
-    const response = await fetch("/api/admin-image", { method: "POST", body: form });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.message || "上传失败");
-    return data.imageUrl as string;
-  }
-
-  const navItems: Array<{ id: AdminSection; label: string; detail: string }> = [
-    { id: "site", label: "网站信息", detail: draft.site.name },
-    { id: "factions", label: "阵营与性别", detail: `${draft.genderFactions.length} 个阵营` },
-    { id: "titles", label: "称号池", detail: `${draft.titles.length} 个段位` },
-    { id: "punishments", label: "惩罚池", detail: `${draft.punishments.length} 项` },
-    { id: "roomTags", label: "房间标签", detail: `${draft.roomTags.length} 个标签` },
-    { id: "roomInfoTags", label: "房间信息标签", detail: "房间头部彩色标签" },
-    { id: "nameWar", label: "名字争夺战", detail: draft.nameWar.penaltyPrefix },
-    { id: "giveaway", label: "白给模式", detail: draft.giveaway.panelTitle },
-    { id: "extremeMode", label: "极限模式", detail: `${draft.extremeMode.emoji} ${draft.extremeMode.label}` },
-    { id: "rankedScore", label: "排位分设置", detail: (() => { const rs = withRankedScoreDefaults(draft.rankedScore); return `上限 ${rs.max} / 下限 ${rs.min} / 名争下限 ${rs.nameWarMin}`; })() },
-    { id: "accessControl", label: "防多开", detail: (() => { const ac = withAccessControlDefaults(draft.accessControl); return ac.registrationDisabled ? "已禁止新用户注册" : `同指纹 ${ac.maxOnlinePerIp} 在线 / ${ac.maxCreatesPer10Min} 新建`; })() },
-    { id: "bots", label: "Bot 设置", detail: `${draft.bots.difficulties.length} 个难度` },
-    { id: "messages", label: "系统提示", detail: `${Object.keys(draft.messages).length} 条文案` },
-    { id: "actions", label: "管理操作", detail: `${lobby.rooms.length} 房间 / ${lobby.players.length} 玩家` },
-    { id: "advanced", label: "高级 JSON", detail: "谨慎编辑" }
-  ];
-
-  const currentNav = navItems.find((item) => item.id === activeSection) || navItems[0];
-
-  function switchSection(section: AdminSection) {
-    if (section === "advanced") setConfigText(JSON.stringify(draft, null, 2));
-    setActiveSection(section);
-  }
-
-  function renderSection() {
-    if (activeSection === "site") {
-      return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="网站信息" subtitle="修改网站名称、说明和管理员口令。" />
-          <div className="admin-preview-card">
-            <span>预览</span>
-            <strong>{draft.site.name}</strong>
-            <p>{draft.site.description || "暂无网站说明"}</p>
-          </div>
-          <label className="field-label"><span>网站名称</span><input value={draft.site.name} onChange={(event) => patch({ site: { ...draft.site, name: event.target.value } })} placeholder="网站名称" /></label>
-          <label className="field-label"><span>网站说明</span><textarea value={draft.site.description} onChange={(event) => patch({ site: { ...draft.site, description: event.target.value } })} placeholder="网站说明" /></label>
-          <label className="field-label"><span>管理员口令</span><input type="password" value={draft.site.adminPassword} onChange={(event) => patch({ site: { ...draft.site, adminPassword: event.target.value } })} placeholder="管理员口令" /></label>
-        </div>
-      );
-    }
-
-    if (activeSection === "factions") {
-      const filteredFactions = draft.genderFactions.filter((faction) => {
-        const keyword = factionSearch.trim().toLowerCase();
-        if (!keyword) return true;
-        return `${faction.id} ${faction.label} ${faction.genders.map((gender) => `${gender.id} ${gender.label}`).join(" ")}`.toLowerCase().includes(keyword);
-      });
-      const factionIndex = Math.max(0, draft.genderFactions.findIndex((faction) => faction.id === activeFactionId));
-      const faction = draft.genderFactions[factionIndex];
-      return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="阵营与性别" subtitle="玩家选择性别后，会自动归入对应阵营并使用这里的标签颜色。" />
-          <div className="punishment-manager faction-manager">
-            <aside className="punishment-index-panel">
-              <input value={factionSearch} onChange={(event) => setFactionSearch(event.target.value)} placeholder="搜索阵营 / 性别 / ID" />
-              <div className="punishment-index-list">
-                {filteredFactions.map((item) => (
-                  <button className={item.id === faction?.id ? "active" : ""} key={item.id} onClick={() => setActiveFactionId(item.id)}>
-                    <span>{item.label}</span>
-                    <small>{item.id} · {item.genders.length} 个性别</small>
-                  </button>
-                ))}
-                {filteredFactions.length === 0 && <p className="empty">没有匹配的阵营</p>}
-              </div>
-              <button onClick={() => {
-                const factionId = nextAdminId("faction", draft.genderFactions.map((item) => item.id));
-                const genderId = nextAdminId(`${factionId}_gender`, draft.genders.map((gender) => gender.id));
-                setActiveFactionId(factionId);
-                patchFactions([...draft.genderFactions, { id: factionId, label: "新阵营", textColor: "#4d5c6f", backgroundColor: "#eef3f8", borderColor: "#c9d6e4", genders: [{ id: genderId, label: "新性别", factionId }] }]);
-              }}>添加阵营</button>
-            </aside>
-            {faction && (
-              <div className="mini-card punishment-detail-panel faction-editor">
-                <div className="admin-card-title">
-                  <strong>{faction.label}</strong>
-                  <small>{factionIndex + 1} / {draft.genderFactions.length} · {faction.genders.length} 个性别</small>
-                </div>
-                <div className="admin-preview-strip compact-preview-strip">
-                  <span className="faction-preview" style={factionStyle(faction)}>预览：{faction.label}</span>
-                  {faction.genders.map((gender) => <span className="faction-preview" style={factionStyle(faction)} key={`${faction.id}-${gender.id}`}>{gender.label}</span>)}
-                </div>
-                <div className="config-row">
-                  <label className="field-label"><span>阵营 ID（自动生成，一般不用改）</span><input value={faction.id} onChange={(event) => { setActiveFactionId(event.target.value); patchFactions(draft.genderFactions.map((item, itemIndex) => itemIndex === factionIndex ? { ...item, id: event.target.value } : item)); }} placeholder="阵营ID" /></label>
-                  <label className="field-label"><span>阵营名称</span><input value={faction.label} onChange={(event) => patchFactions(draft.genderFactions.map((item, itemIndex) => itemIndex === factionIndex ? { ...item, label: event.target.value } : item))} placeholder="阵营名称" /></label>
-                </div>
-                <div className="color-grid">
-                  <ColorInput label="文字颜色" value={faction.textColor} onChange={(value) => patchFactions(draft.genderFactions.map((item, itemIndex) => itemIndex === factionIndex ? { ...item, textColor: value } : item))} />
-                  <ColorInput label="背景颜色" value={faction.backgroundColor} onChange={(value) => patchFactions(draft.genderFactions.map((item, itemIndex) => itemIndex === factionIndex ? { ...item, backgroundColor: value } : item))} />
-                  <ColorInput label="边框颜色" value={faction.borderColor} onChange={(value) => patchFactions(draft.genderFactions.map((item, itemIndex) => itemIndex === factionIndex ? { ...item, borderColor: value } : item))} />
-                </div>
-                <div className="faction-gender-list">
-                  {faction.genders.map((gender, genderIndex) => (
-                    <div className="mini-card faction-gender-card" key={gender.id}>
-                      <div className="admin-card-title">
-                        <strong>{gender.label}</strong>
-                        <small>{gender.id}</small>
-                      </div>
-                      <div className="config-row">
-                        <label className="field-label"><span>性别 ID（自动生成，一般不用改）</span><input value={gender.id} onChange={(event) => patchFactions(draft.genderFactions.map((item, itemIndex) => itemIndex === factionIndex ? { ...item, genders: item.genders.map((genderItem, currentIndex) => currentIndex === genderIndex ? { ...genderItem, id: event.target.value } : genderItem) } : item))} placeholder="性别ID" /></label>
-                        <label className="field-label"><span>显示文字</span><input value={gender.label} onChange={(event) => patchFactions(draft.genderFactions.map((item, itemIndex) => itemIndex === factionIndex ? { ...item, genders: item.genders.map((genderItem, currentIndex) => currentIndex === genderIndex ? { ...genderItem, label: event.target.value } : genderItem) } : item))} placeholder="显示文字" /></label>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <button onClick={() => patchFactions(draft.genderFactions.map((item, itemIndex) => {
-                  if (itemIndex !== factionIndex) return item;
-                  const genderId = nextAdminId(`${item.id}_gender`, draft.genders.map((genderItem) => genderItem.id));
-                  return { ...item, genders: [...item.genders, { id: genderId, label: "新性别", factionId: item.id }] };
-                }))}>给这个阵营添加性别</button>
-              </div>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (activeSection === "titles") {
-      const filteredTitles = draft.titles.filter((segment) => {
-        const keyword = titleSearch.trim().toLowerCase();
-        if (!keyword) return true;
-        return `${segment.id} ${segment.minPercent} ${segment.maxPercent} ${segment.names.join(" ")}`.toLowerCase().includes(keyword);
-      });
-      const selectedIndex = Math.max(0, draft.titles.findIndex((segment) => segment.id === activeTitleId));
-      const segment = draft.titles[selectedIndex];
-      return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="称号池" subtitle="按排位分相对展示上下限的百分比分段；真实分换算百分比后落入某段，再从该段称号池随机装备。" />
-          <div className="punishment-manager title-manager">
-            <aside className="punishment-index-panel">
-              <input value={titleSearch} onChange={(event) => setTitleSearch(event.target.value)} placeholder="搜索段位 ID / 百分比 / 称号" />
-              <div className="punishment-index-list">
-                {filteredTitles.map((item) => (
-                  <button className={item.id === segment?.id ? "active" : ""} key={item.id} onClick={() => setActiveTitleId(item.id)}>
-                    <span>{item.id} · {item.minPercent}% ~ {item.maxPercent}%</span>
-                    <small>通用 {item.names.length} 个 · {draft.genderFactions.length} 个阵营专属池</small>
-                  </button>
-                ))}
-                {filteredTitles.length === 0 && <p className="empty">没有匹配的段位</p>}
-              </div>
-              <button onClick={() => {
-                const nextId = nextAdminId("title", draft.titles.map((item) => item.id));
-                setActiveTitleId(nextId);
-                patch({ titles: [...draft.titles, { id: nextId, minPercent: 0, maxPercent: 0, names: ["新称号"], factionNames: Object.fromEntries(draft.genderFactions.map((faction) => [faction.id, ["新称号"]])) }] });
-              }}>添加段位</button>
-            </aside>
-            {segment && (
-              <div className="mini-card punishment-detail-panel">
-                <div className="admin-card-title">
-                  <strong>{segment.id} · {segment.minPercent}% ~ {segment.maxPercent}%</strong>
-                  <small>{selectedIndex + 1} / {draft.titles.length} · 通用 {segment.names.length} 个 · 相对展示上下限的百分比</small>
-                </div>
-                <div className="config-row compact">
-                  <label className="field-label"><span>段位 ID（自动生成，一般不用改）</span><input value={segment.id} onChange={(event) => { setActiveTitleId(event.target.value); patch({ titles: draft.titles.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, id: event.target.value } : item) }); }} /></label>
-                  <label className="field-label"><span>最低百分比（-100～100）</span><input type="number" min={-100} max={100} step={0.01} value={segment.minPercent} onChange={(event) => patch({ titles: draft.titles.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, minPercent: Number(event.target.value) } : item) })} /></label>
-                  <label className="field-label"><span>最高百分比（-100～100）</span><input type="number" min={-100} max={100} step={0.01} value={segment.maxPercent} onChange={(event) => patch({ titles: draft.titles.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, maxPercent: Number(event.target.value) } : item) })} /></label>
-                </div>
-                <TagListEditor
-                  label="通用称号（专属为空时兜底）"
-                  placeholder="输入称号后回车"
-                  values={segment.names}
-                  onChange={(names) => patch({ titles: draft.titles.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, names } : item) })}
-                />
-                <div className="title-faction-grid">
-                  {draft.genderFactions.map((faction) => (
-                    <TagListEditor
-                      key={`${segment.id}-${faction.id}`}
-                      label={`${faction.label}专属称号`}
-                      placeholder={`输入${faction.label}称号后回车`}
-                      values={segment.factionNames?.[faction.id] || []}
-                      onChange={(names) => patch({ titles: draft.titles.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, factionNames: { ...(item.factionNames || {}), [faction.id]: names } } : item) })}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (activeSection === "punishments") {
-      const playerRoomNameItemId = "__player_room_names__";
-      const filteredPunishments = draft.punishments.filter((punishment) => {
-        const keyword = punishmentSearch.trim().toLowerCase();
-        if (!keyword) return true;
-        return `${punishment.id} ${punishment.name} ${punishment.description}`.toLowerCase().includes(keyword);
-      });
-      const isPlayerRoomNameSelected = activePunishmentId === playerRoomNameItemId;
-      const selectedIndex = Math.max(0, draft.punishments.findIndex((punishment) => punishment.id === activePunishmentId));
-      const punishment = draft.punishments[selectedIndex];
-      return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="惩罚池" subtitle="编辑系统惩罚、阵营任务版本、随机房名，以及玩家发布任务模式的房名。系统任务文案可用 {loser}/{winner} 插入败者/胜者昵称。" />
-          <div className="punishment-manager">
-            <aside className="punishment-index-panel">
-              <input value={punishmentSearch} onChange={(event) => setPunishmentSearch(event.target.value)} placeholder="搜索惩罚名称 / ID / 简介" />
-              <div className="punishment-index-list">
-                {filteredPunishments.map((item) => (
-                  <button className={!isPlayerRoomNameSelected && item.id === punishment?.id ? "active" : ""} key={item.id} onClick={() => setActivePunishmentId(item.id)}>
-                    <span>{item.name}</span>
-                    <small>{item.id} · {punishmentTasks(item, draft).length} 个任务</small>
-                  </button>
-                ))}
-                {filteredPunishments.length === 0 && <p className="empty">没有匹配的惩罚</p>}
-              </div>
-              <button className={`special-index-item ${isPlayerRoomNameSelected ? "active" : ""}`} onClick={() => setActivePunishmentId(playerRoomNameItemId)}>
-                <span>玩家发布任务房名</span>
-                <small>玩家发布模式 · {draft.playerPunishmentRoomNamePool?.subjects.length || 0} 个关键词</small>
-              </button>
-              <button onClick={() => {
-                const nextId = nextAdminId("punish", draft.punishments.map((item) => item.id));
-                setActivePunishmentId(nextId);
-                patch({ punishments: [...draft.punishments, { id: nextId, name: "新惩罚", description: "写下惩罚说明", cardImageUrl: "", cardImageOpacity: 0.26, roomBackgroundImages: [], variants: Object.fromEntries(draft.genderFactions.map((faction) => [faction.id, "写下这个阵营专属任务"])), tasks: [{ id: "task1", name: "默认任务", backgroundImages: [], backgroundOpacity: 0.22, variants: Object.fromEntries(draft.genderFactions.map((faction) => [faction.id, "写下这个阵营专属任务"])) }], roomNamePool: defaultAdminRoomNamePool() }] });
-              }}>添加惩罚</button>
-            </aside>
-            {isPlayerRoomNameSelected ? (
-              <div className="mini-card punishment-detail-panel player-punishment-room-name-card">
-                <div className="admin-card-title">
-                  <strong>玩家发布任务模式房名词库</strong>
-                  <small>示例：{sampleRoomName(draft.playerPunishmentRoomNamePool)}</small>
-                </div>
-                <p className="hint">创建房间选择“玩家发布”时，会用这里生成随机房间名。它不属于某一个系统惩罚，所以作为惩罚池里的特殊项目管理。</p>
-                <RoomNamePoolEditor title="玩家发布任务随机房名词库" pool={draft.playerPunishmentRoomNamePool || defaultAdminRoomNamePool()} onChange={(playerPunishmentRoomNamePool) => patch({ playerPunishmentRoomNamePool })} />
-              </div>
-            ) : punishment && (
-              <div className="mini-card punishment-detail-panel">
-                <div className="admin-card-title">
-                  <strong>{punishment.name}</strong>
-                  <small>{selectedIndex + 1} / {draft.punishments.length} · {punishmentTasks(punishment, draft).length} 个任务 · 示例：{sampleRoomName(punishment.roomNamePool)}</small>
-                </div>
-                <div className="admin-danger-row">
-                  <button
-                    type="button"
-                    className="danger-button"
-                    onClick={() => {
-                      if (draft.punishments.length <= 1) {
-                        onError("至少需要保留 1 个惩罚池");
-                        return;
-                      }
-                      if (!window.confirm(`确定删除整个惩罚池「${punishment.name}」吗？里面的任务也会一起删除。`)) return;
-                      const nextPunishments = draft.punishments.filter((_, itemIndex) => itemIndex !== selectedIndex);
-                      setActivePunishmentId(nextPunishments[Math.max(0, selectedIndex - 1)]?.id || nextPunishments[0]?.id || "");
-                      patch({ punishments: nextPunishments });
-                    }}
-                  >
-                    删除这个惩罚池
-                  </button>
-                </div>
-                <div className="punishment-admin-preview">
-                  <button
-                    className="punishment-choice-card active"
-                    style={{
-                      "--punishment-bg": punishment.cardImageUrl ? `url(${punishment.cardImageUrl})` : "none",
-                      "--punishment-bg-opacity": String(punishment.cardImageOpacity ?? 0.26)
-                    } as CSSProperties}
-                  >
-                    <span>{punishment.name}</span>
-                    <small>{punishment.description}</small>
-                  </button>
-                </div>
-                <div className="config-row">
-                  <label className="field-label"><span>内部 ID（自动生成，一般不用改）</span><input value={punishment.id} onChange={(event) => { setActivePunishmentId(event.target.value); patch({ punishments: draft.punishments.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, id: event.target.value } : item) }); }} placeholder="内部ID" /></label>
-                  <label className="field-label"><span>玩家可见名称</span><input value={punishment.name} onChange={(event) => patch({ punishments: draft.punishments.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, name: event.target.value } : item) })} placeholder="惩罚名称" /></label>
-                </div>
-                <label className="field-label"><span>通用说明</span><textarea value={punishment.description} onChange={(event) => patch({ punishments: draft.punishments.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, description: event.target.value } : item) })} placeholder="惩罚说明" /></label>
-                <label className="field-label">
-                  <span>卡片背景图 URL（推荐 1200 × 480）</span>
-                  <input value={punishment.cardImageUrl || ""} onChange={(event) => patch({ punishments: draft.punishments.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, cardImageUrl: event.target.value } : item) })} placeholder="例如 /uploads/example.webp 或 https://..." />
-                </label>
-                <AdminImageUpload label="上传为卡片背景图" upload={uploadAdminImage} onError={onError} onUploaded={(cardImageUrl) => patch({ punishments: draft.punishments.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, cardImageUrl } : item) })} />
-                <label className="field-label">
-                  <span>卡片背景透明率（推荐 0.15 ~ 0.45）</span>
-                  <input type="number" min={0} max={1} step={0.01} value={punishment.cardImageOpacity ?? 0.26} onChange={(event) => patch({ punishments: draft.punishments.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, cardImageOpacity: Number(event.target.value) } : item) })} />
-                </label>
-                <TagListEditor label="房间信息卡图库（推荐 1920 × 1080，jpg/webp；用于大厅房间卡和房间内信息卡，手机端会居中裁切）" placeholder="输入图片 URL 后回车" values={punishment.roomBackgroundImages || []} onChange={(roomBackgroundImages) => patch({ punishments: draft.punishments.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, roomBackgroundImages } : item) })} />
-                <AdminImageUpload label="上传并加入房间信息卡图库" upload={uploadAdminImage} onError={onError} onUploaded={(imageUrl) => patch({ punishments: draft.punishments.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, roomBackgroundImages: [...(item.roomBackgroundImages || []), imageUrl] } : item) })} />
-                <div className="punishment-task-list">
-                  {punishmentTasks(punishment, draft).map((task, taskIndex) => (
-                    <details className="mini-card punishment-task-editor" key={task.id} open={taskIndex === 0}>
-                      <summary>
-                        <strong>{task.name}</strong>
-                        <small>{draft.genderFactions.length} 个阵营版本</small>
-                        <button
-                          type="button"
-                          className="danger-button tiny-danger-button"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            if (!window.confirm(`确定删除任务「${task.name}」吗？`)) return;
-                            const currentTasks = punishmentTasks(punishment, draft);
-                            const nextTasks = currentTasks.filter((_, itemIndex) => itemIndex !== taskIndex);
-                            patch({
-                              punishments: draft.punishments.map((item, itemIndex) => itemIndex === selectedIndex
-                                ? { ...item, tasks: nextTasks.length ? nextTasks : [newPunishmentTask(draft, item)] }
-                                : item)
-                            });
-                          }}
-                        >
-                          删除任务
-                        </button>
-                      </summary>
-                      <div className="config-row">
-                        <label className="field-label"><span>任务 ID（自动生成，一般不用改）</span><input value={task.id} onChange={(event) => patchPunishmentTask(patch, draft, selectedIndex, taskIndex, { ...task, id: event.target.value })} placeholder="任务ID" /></label>
-                        <label className="field-label"><span>任务名称</span><input value={task.name} onChange={(event) => patchPunishmentTask(patch, draft, selectedIndex, taskIndex, { ...task, name: event.target.value })} placeholder="任务名称" /></label>
-                      </div>
-                      <div className="config-row">
-                        <label className="field-label">
-                          <span>任务背景透明率（推荐 0.15 ~ 0.4）</span>
-                          <input type="number" min={0} max={1} step={0.01} value={task.backgroundOpacity ?? 0.22} onChange={(event) => patchPunishmentTask(patch, draft, selectedIndex, taskIndex, { ...task, backgroundOpacity: Number(event.target.value) })} />
-                        </label>
-                      </div>
-                      <TagListEditor label="任务背景图库（推荐 1200 × 520）" placeholder="输入图片 URL 后回车" values={task.backgroundImages || []} onChange={(backgroundImages) => patchPunishmentTask(patch, draft, selectedIndex, taskIndex, { ...task, backgroundImages })} />
-                      <AdminImageUpload label="上传并加入任务背景图库" upload={uploadAdminImage} onError={onError} onUploaded={(imageUrl) => patchPunishmentTask(patch, draft, selectedIndex, taskIndex, { ...task, backgroundImages: [...(task.backgroundImages || []), imageUrl] })} />
-                      <div className="variant-grid">
-                        {draft.genderFactions.map((faction) => (
-                          <label key={`${punishment.id}-${task.id}-${faction.id}`}>
-                            <span>{faction.label}任务版本</span>
-                            <textarea value={task.variants?.[faction.id] || ""} onChange={(event) => patchPunishmentTask(patch, draft, selectedIndex, taskIndex, { ...task, variants: { ...(task.variants || {}), [faction.id]: event.target.value } })} placeholder={`系统任务·${faction.label}，可用 {loser}/{winner}，如：{loser} 需要拥抱 {winner}`} />
-                          </label>
-                        ))}
-                      </div>
-                    </details>
-                  ))}
-                </div>
-                <button onClick={() => patch({ punishments: draft.punishments.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, tasks: [...punishmentTasks(item, draft), newPunishmentTask(draft, item)] } : item) })}>给这个惩罚添加任务</button>
-                <RoomNamePoolEditor title="随机房名词库" pool={punishment.roomNamePool || emptyRoomNamePool()} onChange={(roomNamePool) => patch({ punishments: draft.punishments.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, roomNamePool } : item) })} />
-              </div>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (activeSection === "bots") {
-      return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="Bot 设置" subtitle="修改机器人名字池和难度卡片。难度策略会影响 Bot 出拳逻辑。" />
-          <TagListEditor label="Bot 名字池" placeholder="输入 Bot 名字后回车" values={draft.bots.names} onChange={(names) => patch({ bots: { ...draft.bots, names } })} />
-          {draft.bots.difficulties.map((difficulty, index) => (
-            <div className="mini-card bot-admin-card" key={difficulty.id}>
-              <div className="bot-difficulty-card active" style={{ "--bot-card-color": difficulty.cardColor || "#9ed7ff" } as CSSProperties}>
-                <span className="bot-card-emoji">{difficulty.emoji || "🤖"}</span>
-                <strong>{difficulty.name}</strong>
-                <em>{botStars(difficulty.level || 1)}</em>
-                <small>{difficulty.description}</small>
-                <b>{botStrategyText(difficulty.strategy)}</b>
-              </div>
-              <div className="config-row">
-                <label className="field-label"><span>难度名称</span><input value={difficulty.name} onChange={(event) => patch({ bots: { ...draft.bots, difficulties: draft.bots.difficulties.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item) } })} /></label>
-                <label className="field-label"><span>难度说明</span><input value={difficulty.description} onChange={(event) => patch({ bots: { ...draft.bots, difficulties: draft.bots.difficulties.map((item, itemIndex) => itemIndex === index ? { ...item, description: event.target.value } : item) } })} /></label>
-                <label className="field-label"><span>图标 Emoji</span><input value={difficulty.emoji || ""} onChange={(event) => patch({ bots: { ...draft.bots, difficulties: draft.bots.difficulties.map((item, itemIndex) => itemIndex === index ? { ...item, emoji: event.target.value } : item) } })} /></label>
-                <label className="field-label"><span>星级 1-5</span><input type="number" min={1} max={5} value={difficulty.level || 1} onChange={(event) => patch({ bots: { ...draft.bots, difficulties: draft.bots.difficulties.map((item, itemIndex) => itemIndex === index ? { ...item, level: Number(event.target.value) } : item) } })} /></label>
-                <label className="field-label"><span>策略类型</span><Select value={difficulty.strategy || "random"} onChange={(value) => patch({ bots: { ...draft.bots, difficulties: draft.bots.difficulties.map((item, itemIndex) => itemIndex === index ? { ...item, strategy: value as AppConfig["bots"]["difficulties"][number]["strategy"] } : item) } })} options={[
-                  { value: "random", label: "随机" },
-                  { value: "counter", label: "反制" },
-                  { value: "chaos", label: "混乱连招" },
-                  { value: "throw", label: "白给" },
-                  { value: "win", label: "必胜" }
-                ]} /></label>
-                <ColorInput label="卡片颜色" value={difficulty.cardColor || "#9ed7ff"} onChange={(value) => patch({ bots: { ...draft.bots, difficulties: draft.bots.difficulties.map((item, itemIndex) => itemIndex === index ? { ...item, cardColor: value } : item) } })} />
-              </div>
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    if (activeSection === "nameWar") {
-      const preview = `${draft.nameWar.penaltyPrefix || "失名者"}-A7K2`;
-      return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="名字争夺战" subtitle="设置惩罚名前缀、通用改名处标题和退出高难度后的称号。" />
-          <div className="admin-preview-card">
-            <span>预览</span>
-            <strong>{preview}</strong>
-            <p>{draft.nameWar.renamePanelTitle || draft.nameWar.loserPanelTitle || "通用改名处"} · {draft.nameWar.nameWarLoserLabel || "名争失格"} / {draft.nameWar.extremeForceClosedLabel || "极限强关"} · 退出高难度称号：{draft.nameWar.escapeTitle || "逃跑的人"}</p>
-          </div>
-          <div className="config-row">
-            <label className="field-label">
-              <span>惩罚名前缀 XXXX</span>
-              <input value={draft.nameWar.penaltyPrefix} maxLength={16} onChange={(event) => patch({ nameWar: { ...draft.nameWar, penaltyPrefix: event.target.value } })} placeholder="例如：失名者" />
-            </label>
-            <label className="field-label">
-              <span>旧失格者面板标题</span>
-              <input value={draft.nameWar.loserPanelTitle} maxLength={24} onChange={(event) => patch({ nameWar: { ...draft.nameWar, loserPanelTitle: event.target.value } })} placeholder="名字争夺战失格者" />
-            </label>
-            <label className="field-label">
-              <span>通用改名处标题</span>
-              <input value={draft.nameWar.renamePanelTitle || ""} maxLength={24} onChange={(event) => patch({ nameWar: { ...draft.nameWar, renamePanelTitle: event.target.value } })} placeholder="通用改名处" />
-            </label>
-            <label className="field-label">
-              <span>名争来源标签</span>
-              <input value={draft.nameWar.nameWarLoserLabel || ""} maxLength={16} onChange={(event) => patch({ nameWar: { ...draft.nameWar, nameWarLoserLabel: event.target.value } })} placeholder="名争失格" />
-            </label>
-            <label className="field-label">
-              <span>极限强关标签</span>
-              <input value={draft.nameWar.extremeForceClosedLabel || ""} maxLength={16} onChange={(event) => patch({ nameWar: { ...draft.nameWar, extremeForceClosedLabel: event.target.value } })} placeholder="极限强关" />
-            </label>
-            <label className="field-label">
-              <span>退出高难度称号</span>
-              <input value={draft.nameWar.escapeTitle} maxLength={18} onChange={(event) => patch({ nameWar: { ...draft.nameWar, escapeTitle: event.target.value } })} placeholder="逃跑的人" />
-            </label>
-            <label className="field-label">
-              <span>失格分阈值（真实分）</span>
-              <input type="number" max={-1} value={draft.nameWar.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD} onChange={(event) => patch({ nameWar: { ...draft.nameWar, penaltyThreshold: Number(event.target.value) } })} placeholder={String(DEFAULT_NAME_WAR_PENALTY_THRESHOLD)} />
-            </label>
-          </div>
-          <p className="hint">随机码固定为 4 位大写字母/数字；已有惩罚名不会因为你改前缀立刻变化，新触发的玩家会使用新前缀。失格线按数据库真实排位分判定，与展示封顶无关。</p>
-        </div>
-      );
-    }
-
-    if (activeSection === "giveaway") {
-      return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="白给模式" subtitle="修改大厅白给自救板的标题、说明和输入提示。" />
-          <div className="admin-preview-card">
-            <span>预览</span>
-            <strong>{draft.giveaway.panelTitle}</strong>
-            <p>{draft.giveaway.panelDescription}</p>
-          </div>
-          <div className="config-row">
-            <label className="field-label">
-              <span>大厅面板标题</span>
-              <input value={draft.giveaway.panelTitle} maxLength={24} onChange={(event) => patch({ giveaway: { ...draft.giveaway, panelTitle: event.target.value } })} placeholder="白给自救板" />
-            </label>
-            <label className="field-label">
-              <span>提交框提示</span>
-              <input value={draft.giveaway.submitPlaceholder} maxLength={60} onChange={(event) => patch({ giveaway: { ...draft.giveaway, submitPlaceholder: event.target.value } })} placeholder="写下你的自我惩罚宣言..." />
-            </label>
-          </div>
-          <label className="field-label">
-            <span>面板说明</span>
-            <textarea value={draft.giveaway.panelDescription} maxLength={160} onChange={(event) => patch({ giveaway: { ...draft.giveaway, panelDescription: event.target.value } })} placeholder="提交一点自我惩罚宣言..." />
-          </label>
-          <label className="field-label">
-            <span>空状态文案</span>
-            <input value={draft.giveaway.emptyText} maxLength={60} onChange={(event) => patch({ giveaway: { ...draft.giveaway, emptyText: event.target.value } })} placeholder="还没有人在白给自救板上。" />
-          </label>
-          <p className="hint">规则固定：白给按钮 +2%，强制白给后 +2%；点赞 -1%，倒赞 +0.1%；真人对战生效，Bot 对战不生效。</p>
-        </div>
-      );
-    }
-
-    if (activeSection === "extremeMode") {
-      const extreme = draft.extremeMode;
-      const patchExtreme = (nextExtreme: AppConfig["extremeMode"]) => patch({ extremeMode: nextExtreme });
-      return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="极限模式" subtitle="修改极限模式名称、标志、折扣、整点扣分和连胜风险。" />
-          <div className="admin-preview-card">
-            <span>预览</span>
-            <strong>{extreme.emoji} {extreme.label}</strong>
-            <p>关闭后冷却 {extreme.cooldownHours} 小时；{extreme.winStreakThreshold} 连胜后 {Math.round((extreme.winStreakCrashChance ?? 0) * 100)}% 额外扣 {extreme.crashTargetPoints} 分。</p>
-          </div>
-          <div className="config-row">
-            <label className="field-label"><span>显示名称</span><input value={extreme.label} maxLength={16} onChange={(event) => patchExtreme({ ...extreme, label: event.target.value })} /></label>
-            <label className="field-label"><span>标志 Emoji</span><input value={extreme.emoji} maxLength={4} onChange={(event) => patchExtreme({ ...extreme, emoji: event.target.value })} /></label>
-            <label className="field-label"><span>关闭后冷却小时</span><input type="number" min={1} max={168} value={extreme.cooldownHours} onChange={(event) => patchExtreme({ ...extreme, cooldownHours: Number(event.target.value) })} /></label>
-            <label className="field-label"><span>连胜阈值</span><input type="number" min={1} max={100} value={extreme.winStreakThreshold} onChange={(event) => patchExtreme({ ...extreme, winStreakThreshold: Number(event.target.value) })} /></label>
-            <label className="field-label"><span>连胜风险概率 0-1</span><input type="number" min={0} max={1} step={0.01} value={extreme.winStreakCrashChance ?? 0} onChange={(event) => patchExtreme({ ...extreme, winStreakCrashChance: Number(event.target.value) })} /></label>
-            <label className="field-label"><span>连胜风险扣分</span><input type="number" min={1} max={1999} value={extreme.crashTargetPoints} onChange={(event) => patchExtreme({ ...extreme, crashTargetPoints: Number(event.target.value) })} /></label>
-            <label className="field-label"><span>强关改名最低分</span><input type="number" min={1} max={999} value={extreme.forceRenameMinPoints || 1} onChange={(event) => patchExtreme({ ...extreme, forceRenameMinPoints: Number(event.target.value) })} /></label>
-            <label className="field-label"><span>强关保护小时</span><input type="number" min={1} max={168} value={extreme.forceRenameProtectHours || 4} onChange={(event) => patchExtreme({ ...extreme, forceRenameProtectHours: Number(event.target.value) })} /></label>
-          </div>
-          <label className="field-label">
-            <span>强行关闭提示</span>
-            <textarea value={extreme.forceCloseWarning || ""} maxLength={180} onChange={(event) => patchExtreme({ ...extreme, forceCloseWarning: event.target.value })} placeholder="强行关闭极限模式后..." />
-          </label>
-          <div className="admin-card">
-            <div className="admin-card-title">
-              <strong>正分输分比例</strong>
-              <small>0.9 表示只扣 90%</small>
-            </div>
-            <div className="config-row">
-              {(["pos1", "pos2", "pos3", "pos4"] as const).map((key) => (
-                <label className="field-label" key={key}><span>{key}</span><input type="number" min={0} max={1} step={0.01} value={extreme.positiveLossRates[key]} onChange={(event) => patchExtreme({ ...extreme, positiveLossRates: { ...extreme.positiveLossRates, [key]: Number(event.target.value) } })} /></label>
-              ))}
-            </div>
-          </div>
-          <div className="admin-card">
-            <div className="admin-card-title">
-              <strong>负分赢分比例</strong>
-              <small>最负分段按 neg4</small>
-            </div>
-            <div className="config-row">
-              {(["neg1", "neg2", "neg3", "neg4"] as const).map((key) => (
-                <label className="field-label" key={key}><span>{key}</span><input type="number" min={0} max={1} step={0.01} value={extreme.negativeWinRates[key]} onChange={(event) => patchExtreme({ ...extreme, negativeWinRates: { ...extreme.negativeWinRates, [key]: Number(event.target.value) } })} /></label>
-              ))}
-            </div>
-          </div>
-          <div className="admin-card">
-            <div className="admin-card-title">
-              <strong>整点扣分</strong>
-              <small>default 用于 0 分及负分</small>
-            </div>
-            <div className="config-row">
-              {(["pos4", "pos3", "pos2", "pos1", "default"] as const).map((key) => (
-                <label className="field-label" key={key}><span>{key}</span><input type="number" min={0} max={999} value={extreme.hourlyDecay[key]} onChange={(event) => patchExtreme({ ...extreme, hourlyDecay: { ...extreme.hourlyDecay, [key]: Number(event.target.value) } })} /></label>
-              ))}
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    if (activeSection === "rankedScore") {
-      // 与防多开 accessControl 相同：缺对象时用默认合并，避免 draft.rankedScore 为 undefined 时白屏。
-      const rankedScore = withRankedScoreDefaults(draft.rankedScore);
-      const patchRankedScore = (next: Partial<AppConfig["rankedScore"]>) =>
-        patch({ rankedScore: withRankedScoreDefaults({ ...rankedScore, ...next }) });
-      return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="排位分设置" subtitle="排位积分的存储值永远不设上下限；这里只控制排行榜/个人资料等展示时的封顶值，以及每日衰减比例。" />
-          <div className="admin-preview-card">
-            <span>预览</span>
-            <p>展示上限 {rankedScore.max} 分，普通玩家展示下限 {rankedScore.min} 分，名字争夺战玩家展示下限 {rankedScore.nameWarMin} 分；每天衰减至 {Math.round(rankedScore.dailyDecayRatio * 100)}%。</p>
-          </div>
-          <div className="config-row">
-            <label className="field-label"><span>展示上限</span><input type="number" min={1} value={rankedScore.max} onChange={(event) => patchRankedScore({ max: Number(event.target.value) })} /></label>
-            <label className="field-label"><span>普通玩家展示下限</span><input type="number" max={-1} value={rankedScore.min} onChange={(event) => patchRankedScore({ min: Number(event.target.value) })} /></label>
-            <label className="field-label"><span>名字争夺战展示下限</span><input type="number" value={rankedScore.nameWarMin} onChange={(event) => patchRankedScore({ nameWarMin: Number(event.target.value) })} /></label>
-            <label className="field-label"><span>每日衰减比例</span><input type="number" min={0.01} max={1} step={0.01} value={rankedScore.dailyDecayRatio} onChange={(event) => patchRankedScore({ dailyDecayRatio: Number(event.target.value) })} /></label>
-          </div>
-        </div>
-      );
-    }
-
-    if (activeSection === "accessControl") {
-      const patchAccessControl = (next: Partial<AppConfig["accessControl"]>) =>
-        patch({ accessControl: withAccessControlDefaults({ ...draft.accessControl, ...next }) });
-      return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="新用户注册开关" subtitle="禁止新用户注册，防止批量注册攻击" />
-          <div className={draft.accessControl?.registrationDisabled ? "admin-preview-card admin-preview-card-warning" : "admin-preview-card"}>
-            <Toggle
-              label="禁止新用户注册"
-              value={!!draft.accessControl?.registrationDisabled}
-              onChange={(value) => patchAccessControl({ registrationDisabled: value })}
-            />
-            {draft.accessControl?.registrationDisabled ? <p>当前已禁止新用户注册，新玩家会看到「暂停新用户注册」提示，无法进入游戏。</p> : null}
-          </div>
-          <AdminSectionHeader title="指纹 + IP 限制策略" subtitle="按「出口 IP + 浏览器指纹」组合限流，仅用于防止用户自己多开。" />
-          <div className="config-row">
-            <label className="field-label">
-              <span>同指纹同时在线人数上限</span>
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={draft.accessControl?.maxOnlinePerIp ?? ""}
-                onChange={(event) => patchAccessControl({ maxOnlinePerIp: Number(event.target.value) || 1 })}
-              />
-            </label>
-            <label className="field-label">
-              <span>同指纹 10 分钟内新建玩家上限</span>
-              <input
-                type="number"
-                min={1}
-                max={200}
-                value={draft.accessControl?.maxCreatesPer10Min ?? ""}
-                onChange={(event) => patchAccessControl({ maxCreatesPer10Min: Number(event.target.value) || 1 })}
-              />
-            </label>
-          </div>
-          <p className="hint">指纹由 FingerprintJS 在浏览器生成，与 IP 一起哈希为设备键。</p>
-          <AdminSectionHeader title="IP 限制策略" subtitle="按请求者 IP 限流，用于防止攻击者伪造浏览器指纹批量攻击。" />
-          <div className="config-row">
-            <label className="field-label">
-              <span>同 IP 同时在线人数上限</span>
-              <input
-                type="number"
-                min={1}
-                max={500}
-                value={draft.accessControl?.maxOnlinePerIpTotal ?? ""}
-                onChange={(event) => patchAccessControl({ maxOnlinePerIpTotal: Number(event.target.value) || 1 })}
-              />
-            </label>
-            <label className="field-label">
-              <span>同 IP 10 分钟内新建玩家上限</span>
-              <input
-                type="number"
-                min={1}
-                max={500}
-                value={draft.accessControl?.maxCreatesPerIp ?? ""}
-                onChange={(event) => patchAccessControl({ maxCreatesPerIp: Number(event.target.value) || 1 })}
-              />
-            </label>
-            <label className="field-label">
-              <span>同 IP 10 分钟内签发会话上限</span>
-              <input
-                type="number"
-                min={1}
-                max={500}
-                value={draft.accessControl?.maxSessionIssuePerIp ?? ""}
-                onChange={(event) => patchAccessControl({ maxSessionIssuePerIp: Number(event.target.value) || 1 })}
-              />
-            </label>
-          </div>
-          <div className="config-row">
-            <label className="field-label">
-              <span>单个操作的 IP 兜底倍数</span>
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={draft.accessControl?.ipBackstopMultiplier ?? ""}
-                onChange={(event) => patchAccessControl({ ipBackstopMultiplier: Number(event.target.value) || 1 })}
-              />
-            </label>
-            <label className="field-label">
-              <span>IP 兜底最低下限（次/窗口）</span>
-              <input
-                type="number"
-                min={1}
-                max={1000}
-                value={draft.accessControl?.ipBackstopMinLimit ?? ""}
-                onChange={(event) => patchAccessControl({ ipBackstopMinLimit: Number(event.target.value) || 1 })}
-              />
-            </label>
-          </div>
-          <p className="hint">建房、出招、提交惩罚证明等每种操作各自的频率上限，会按这个倍数换算出一个「同一 IP 总量」上限（不管换了多少个会话/指纹），并保证不低于最低下限——这样即使脚本不断重新登录换身份，同一出口 IP 的总请求量仍会被卡住。</p>
-
-          <AdminSectionHeader title="房间与证明图片" subtitle="限制单个玩家同时占用房间数量、上传证明图片速率，防止恶意消耗服务器资源。" />
-          <div className="config-row">
-            <label className="field-label">
-              <span>单玩家同时开房数量上限</span>
-              <input
-                type="number"
-                min={1}
-                max={50}
-                value={draft.accessControl?.maxActiveRoomsPerOwner ?? ""}
-                onChange={(event) => patchAccessControl({ maxActiveRoomsPerOwner: Number(event.target.value) || 1 })}
-              />
-            </label>
-            <label className="field-label">
-              <span>单玩家 10 分钟内证明图上传上限</span>
-              <input
-                type="number"
-                min={1}
-                max={200}
-                value={draft.accessControl?.maxProofUploadsPerPlayer ?? ""}
-                onChange={(event) => patchAccessControl({ maxProofUploadsPerPlayer: Number(event.target.value) || 1 })}
-              />
-            </label>
-          </div>
-        </div>
-      );
-    }
-
-    if (activeSection === "roomTags") {
-      return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="房间标签" subtitle="玩家创建房间时，可以开启并选择这里配置好的标签。最多显示 5 个。" />
-          <div className="admin-preview-card">
-            <span>预览</span>
-            <RoomTagList tags={draft.roomTags.slice(0, 5)} />
-            <p>点下面标签可以删除；在输入框里输入文字后回车可以添加。</p>
-          </div>
-          <TagListEditor label="房间 Tag 池" placeholder="输入房间 Tag 后回车" values={draft.roomTags} onChange={(roomTags) => patch({ roomTags })} />
-        </div>
-      );
-    }
-
-    if (activeSection === "roomInfoTags") {
-      return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="房间信息标签" subtitle="修改房间顶部规则标签的名字和颜色。" />
-          <div className="admin-preview-card">
-            <span>预览</span>
-            <RoomInfoTagList tags={roomInfoTagOrder.slice(0, 6).map((item) => {
-              const style = draft.roomInfoTags?.[item.key] || defaultRoomInfoTagStyle(item.label);
-              return { key: item.key, text: style.label, style };
-            })} />
-            <p>这些标签会显示在房间信息卡里，部分也会显示在大厅房间卡上。</p>
-          </div>
-          <div className="room-info-tag-admin-grid">
-            {roomInfoTagOrder.map((item) => {
-              const style = draft.roomInfoTags?.[item.key] || defaultRoomInfoTagStyle(item.label);
-              const nextTags = draft.roomInfoTags || {};
-              const update = (nextStyle: RoomInfoTagStyle) => patch({ roomInfoTags: { ...nextTags, [item.key]: nextStyle } });
-              return (
-                <div className="mini-card room-info-tag-admin-card" key={item.key}>
-                  <div className="admin-card-title">
-                    <strong>{item.label}</strong>
-                    <small>{item.key}</small>
-                  </div>
-                  <span className="room-info-tag preview" style={roomInfoTagStyle(style)}>{style.label}</span>
-                  <label className="field-label"><span>显示名字</span><input value={style.label} onChange={(event) => update({ ...style, label: event.target.value })} /></label>
-                  <div className="color-grid">
-                    <ColorInput label="文字颜色" value={style.textColor} onChange={(textColor) => update({ ...style, textColor })} />
-                    <ColorInput label="背景颜色" value={style.backgroundColor} onChange={(backgroundColor) => update({ ...style, backgroundColor })} />
-                    <ColorInput label="边框颜色" value={style.borderColor} onChange={(borderColor) => update({ ...style, borderColor })} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      );
-    }
-
-    if (activeSection === "messages") {
-      return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="系统提示" subtitle="修改公告板、密码错误、名字校验、保存提示等系统文案。" />
-          <div className="admin-announcement-card">
-            <div className="admin-card-title">
-              <strong>公告板</strong>
-              <small>展示在顶栏「关于」面板里，不再是弹窗</small>
-            </div>
-            <Toggle
-              label="开启公告板"
-              value={draft.announcementBoard.enabled ?? false}
-              onChange={(enabled) => patch({ announcementBoard: { ...draft.announcementBoard, enabled } })}
-            />
-            <label className="field-label">
-              <span>公告标题</span>
-              <input value={draft.announcementBoard.title} maxLength={32} onChange={(event) => patch({ announcementBoard: { ...draft.announcementBoard, title: event.target.value } })} placeholder="今日公告" />
-            </label>
-            <label className="field-label">
-              <span>公告内容</span>
-              <textarea value={draft.announcementBoard.content} maxLength={800} onChange={(event) => patch({ announcementBoard: { ...draft.announcementBoard, content: event.target.value } })} placeholder="写下想让玩家看到的内容" />
-            </label>
-          </div>
-          <div className="admin-announcement-card">
-            <div className="admin-card-title">
-              <strong>安全与免责声明</strong>
-              <small>每天每个浏览器显示一次，建角色前也会显示；文案固定，仅可整体开关</small>
-            </div>
-            <Toggle
-              label="开启安全声明"
-              value={draft.securityDisclaimer.enabled ?? false}
-              onChange={(enabled) => patch({ securityDisclaimer: { enabled } })}
-            />
-          </div>
-          <div className="config-row">
-            {Object.entries(draft.messages).map(([key, value]) => (
-              <label className="field-label" key={key}>
-                <span>{key}</span>
-                <input value={value} onChange={(event) => patch({ messages: { ...draft.messages, [key]: event.target.value } })} />
-              </label>
-            ))}
-          </div>
-        </div>
-      );
-    }
-
-    if (activeSection === "actions") {
-      const stats = lobby.serverStats;
-      const onlinePlayers = lobby.players.filter((player) => player.connected);
-      const offlinePlayers = lobby.players.filter((player) => !player.connected);
-      return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="管理操作" subtitle="管理当前服务器运行期间的房间、玩家和聊天内容。" />
-          <div className="admin-preview-card">
-            <span>运行状态</span>
-            <p>在线 {lobby.onlineCount} 人 · 房间 {lobby.rooms.length} 个 · 运行 {formatDuration(Date.now() - stats.startedAt)}</p>
-            <p>房间广播 {stats.roomBroadcasts} 次 · 大厅广播 {stats.lobbyBroadcasts} 次</p>
-            <p>最近 1 分钟：房间 {stats.recentRoomBroadcasts} 次 · 大厅 {stats.recentLobbyBroadcasts} 次</p>
-            <p>断线 {stats.disconnects} 次 · 重连 {stats.reconnects} 次</p>
-            <p>最近房间快照 {formatBytes(stats.lastRoomSnapshotBytes)} · 最近大厅快照 {formatBytes(stats.lastLobbySnapshotBytes)}</p>
-            <p>平均快照：房间 {formatBytes(stats.averageRoomSnapshotBytes)} · 大厅 {formatBytes(stats.averageLobbySnapshotBytes)}</p>
-          </div>
-          <div className="admin-action-tabs">
-            {[
-              { id: "online", label: "在线", count: onlinePlayers.length },
-              { id: "offline", label: "离线", count: offlinePlayers.length },
-              { id: "rooms", label: "房间", count: lobby.rooms.length },
-              { id: "announcement", label: "公告", count: 0 }
-            ].map((tab) => (
-              <button
-                type="button"
-                className={activeActionTab === tab.id ? "active" : ""}
-                key={tab.id}
-                onClick={() => setActiveActionTab(tab.id as AdminActionTab)}
-              >
-                <span>{tab.label}</span>
-                {tab.count > 0 && <em>{tab.count}</em>}
-              </button>
-            ))}
-          </div>
-          {activeActionTab === "announcement" && (
-            <>
-              <div className="admin-action-row">
-                <button className="danger-button" onClick={() => action("clearSuggestions")}>清空留言板</button>
-                <button className="danger-button" onClick={() => action("clearLobbyChat")}>清空大厅聊天</button>
-              </div>
-              <div className="admin-announcement-card">
-                <div className="admin-card-title">
-                  <strong>发送全服公告</strong>
-                  <small>当前在线玩家和后台页面会立即弹出</small>
-                </div>
-                <textarea
-                  value={announcementMessage}
-                  maxLength={200}
-                  onChange={(event) => setAnnouncementMessage(event.target.value)}
-                  placeholder="输入公告内容，最多 200 字"
-                />
-                <div className="admin-announcement-actions">
-                  <label className="field-label">
-                    <span>显示秒数</span>
-                    <input type="number" min={3} max={60} value={announcementSeconds} onChange={(event) => setAnnouncementSeconds(event.target.value)} />
-                  </label>
-                  <button className="primary" onClick={sendAnnouncement}>发送公告</button>
-                </div>
-              </div>
-            </>
-          )}
-          {activeActionTab === "online" && (
-            <div className="admin-list-section">
-              <div className="admin-list-heading">
-                <h3>在线玩家</h3>
-                <span>{onlinePlayers.length} 人</span>
-              </div>
-              {onlinePlayers.map((player) => (
-                <AdminPlayerEditor key={player.id} player={player} onSave={(payload) => action("editPlayer", payload)} onKick={() => action("kick", { playerId: player.id })} />
-              ))}
-              {onlinePlayers.length === 0 && <p className="empty">当前没有在线玩家</p>}
-            </div>
-          )}
-          {activeActionTab === "offline" && (
-            <div className="admin-list-section">
-              <div className="admin-list-heading">
-                <h3>离线玩家</h3>
-                <span>{offlinePlayers.length} 人</span>
-              </div>
-              {offlinePlayers.map((player) => (
-                <AdminPlayerEditor key={player.id} player={player} onSave={(payload) => action("editPlayer", payload)} onKick={() => action("kick", { playerId: player.id })} />
-              ))}
-              {offlinePlayers.length === 0 && <p className="empty">当前没有离线保留玩家</p>}
-            </div>
-          )}
-          {activeActionTab === "rooms" && (
-            <div className="admin-list-section">
-              <div className="admin-list-heading">
-                <h3>房间管理</h3>
-                <span>{lobby.rooms.length} 间</span>
-              </div>
-              {lobby.rooms.map((room) => (
-                <div className="admin-room" key={room.id}>
-                  <div className="admin-card-title">
-                    <strong>{room.name}</strong>
-                    <small>{room.id} · {roomStatusText(room.status)} · {room.players}/2 战斗席 · {room.spectators} 观战</small>
-                  </div>
-                  <div className="admin-action-row">
-                    <button className="danger-button" onClick={() => action("closeRoom", { roomId: room.id })}>关闭房间</button>
-                    <button onClick={() => action("clearRoomChat", { roomId: room.id })}>清空房间聊天</button>
-                    <button onClick={() => action("forceNext", { roomId: room.id })}>强制下一局</button>
-                  </div>
-                  {room.gameId === "othello" && (
-                    <div className="admin-action-row othello-admin-actions">
-                      <button onClick={() => action("forceOthelloRestart", { roomId: room.id })}>黑白棋重开</button>
-                      <button onClick={() => action("forceOthelloEnd", { roomId: room.id, othelloResult: "A" })}>判黑方胜</button>
-                      <button onClick={() => action("forceOthelloEnd", { roomId: room.id, othelloResult: "B" })}>判白方胜</button>
-                      <button onClick={() => action("forceOthelloEnd", { roomId: room.id, othelloResult: "draw" })}>判平局</button>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {lobby.rooms.length === 0 && <p className="empty">暂无房间</p>}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    return (
-      <div className="config-section admin-section-card">
-        <AdminSectionHeader title="高级 JSON" subtitle="适合批量复制和细调。保存前会走服务器校验。" />
-        <textarea className="advanced-json" value={configText} onChange={(event) => { setDirty(true); setConfigText(event.target.value); }} />
-      </div>
-    );
-  }
-
-  return (
-    <section className="admin-page">
-      <div className="panel admin-login-card">
-        <h2><Shield size={18} /> 管理员与文本工具</h2>
-        <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="管理员口令" />
-        <button className="primary" onClick={login}>进入管理</button>
-        <button onClick={onBack}>返回</button>
-      </div>
-      {logged && (
-        <div className="admin-tool-shell">
-          <nav className="admin-sidebar" aria-label="后台配置分类">
-            {navItems.map((item) => (
-              <button className={activeSection === item.id ? "active" : ""} key={item.id} onClick={() => switchSection(item.id)}>
-                <span>{item.label}</span>
-                <small>{item.detail}</small>
-              </button>
-            ))}
-          </nav>
-          <div className="panel visual-config admin-editor-panel">
-            <div className="admin-editor-head">
-              <div>
-                <h2><Settings size={18} /> {currentNav.label}</h2>
-                <p className="hint">{currentNav.detail}</p>
-              </div>
-              <div className="admin-edit-status">
-                {dirty && <span>有未保存修改</span>}
-                {serverConfigChanged && <small>服务器配置已更新，保存会覆盖当前服务器配置。</small>}
-              </div>
-            </div>
-            {renderSection()}
-            <div className="admin-sticky-actions">
-              <button className="primary" onClick={save}><Save size={16} /> 保存配置</button>
-              <button onClick={resetDefault} title="从磁盘重新读取 config/*.json"><RefreshCcw size={16} /> 重新加载</button>
-              <button onClick={exportConfig}><Download size={16} /> 导出配置</button>
-              <button onClick={onBack}>返回</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-export function lines(value: string) {
-  return value.split("\n").map((item) => item.trim()).filter(Boolean);
-}
-
-export function flattenDraftGenders(factions: GenderFaction[]) {
-  return factions.flatMap((faction) => faction.genders.map((gender) => ({ ...gender, factionId: faction.id })));
-}
-
-export function nextAdminId(prefix: string, existingIds: string[]) {
-  const safePrefix = prefix.replace(/[^a-zA-Z0-9_]/g, "_") || "item";
-  const used = new Set(existingIds);
-  let index = 1;
-  while (used.has(`${safePrefix}${index}`)) index += 1;
-  return `${safePrefix}${index}`;
-}
-
 export function punishmentTasks(punishment: AppConfig["punishments"][number], draft: AppConfig): PunishmentTaskConfig[] {
   if (punishment.tasks?.length) return punishment.tasks;
   return [{
@@ -4906,192 +4120,6 @@ export function punishmentTasks(punishment: AppConfig["punishments"][number], dr
       punishment.variants?.[faction.id] || punishment.description || "请完成本局惩罚。"
     ]))
   }];
-}
-
-export function newPunishmentTask(draft: AppConfig, punishment: AppConfig["punishments"][number]): PunishmentTaskConfig {
-  const tasks = punishmentTasks(punishment, draft);
-  const nextIndex = tasks.length + 1;
-  return {
-    id: nextAdminId("task", tasks.map((task) => task.id)),
-    name: `任务 ${nextIndex}`,
-    backgroundImages: [],
-    backgroundOpacity: 0.22,
-    variants: Object.fromEntries(draft.genderFactions.map((faction) => [faction.id, "写下这个阵营专属任务"]))
-  };
-}
-
-export function patchPunishmentTask(patch: (next: Partial<AppConfig>) => void, draft: AppConfig, punishmentIndex: number, taskIndex: number, nextTask: PunishmentTaskConfig) {
-  patch({
-    punishments: draft.punishments.map((punishment, currentPunishmentIndex) => {
-      if (currentPunishmentIndex !== punishmentIndex) return punishment;
-      return {
-        ...punishment,
-        tasks: punishmentTasks(punishment, draft).map((task, currentTaskIndex) => currentTaskIndex === taskIndex ? nextTask : task)
-      };
-    })
-  });
-}
-
-export function AdminSectionHeader({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <div className="admin-section-header">
-      <h3>{title}</h3>
-      <p className="hint">{subtitle}</p>
-    </div>
-  );
-}
-
-export function AdminPlayerEditor({ player, onSave, onKick }: { player: PublicPlayer; onSave: (payload: Record<string, unknown>) => void; onKick: () => void }) {
-  const [name, setName] = useState(player.name);
-  const [rankedPoints, setRankedPoints] = useState(String(safePlayerStats(player).rankedPoints));
-  const [rankedPointsTouched, setRankedPointsTouched] = useState(false);
-  const [title, setTitle] = useState(safePlayerStats(player).title);
-
-  useEffect(() => {
-    const stats = safePlayerStats(player);
-    setName(player.name);
-    setRankedPoints(String(stats.rankedPoints));
-    setRankedPointsTouched(false);
-    setTitle(stats.title);
-  }, [player.id, player.name, player.stats.rankedPoints, player.stats.title]);
-
-  const statusText = player.nameWarEnabled
-    ? player.nameWarPunished
-      ? `名字争夺战中：${player.nameWarPenaltyName || "惩罚名生效"}`
-      : "名字争夺战已开启"
-    : "未开启名字争夺战";
-  const displayStats = safePlayerStats(player);
-
-  return (
-    <div className="admin-player-editor">
-      <div className="admin-player-head">
-        <PlayerBadge player={player} compact />
-        <span className={`admin-name-war-status ${player.nameWarEnabled ? "active" : ""}`}>{statusText}</span>
-      </div>
-      <div className="config-row compact">
-        <label className="field-label">
-          <span>名字</span>
-          <input value={name} maxLength={12} onChange={(event) => setName(event.target.value)} />
-        </label>
-        <label className="field-label">
-          <span>积分</span>
-          <input
-            type="number"
-            value={rankedPoints}
-            onChange={(event) => {
-              setRankedPoints(event.target.value);
-              setRankedPointsTouched(true);
-            }}
-          />
-        </label>
-        <label className="field-label">
-          <span>称号</span>
-          <input value={title} maxLength={18} onChange={(event) => setTitle(event.target.value)} />
-        </label>
-      </div>
-      <p className="hint">当前：{displayStats.rankedPoints} 分（按后台展示上下限封顶，真实存储分数可能更高或更低）· {player.nameWarPunished ? "性别/称号显示已隐藏" : `显示称号：${displayStats.title}`}</p>
-      <div className="admin-action-row">
-        <button
-          className="primary"
-          onClick={() =>
-            onSave({
-              playerId: player.id,
-              name,
-              title,
-              ...(rankedPointsTouched ? { rankedPoints: Number(rankedPoints) } : {})
-            })
-          }
-        >
-          保存玩家资料
-        </button>
-        <button className="danger-button" onClick={onKick}>踢出</button>
-      </div>
-    </div>
-  );
-}
-
-export function sampleRoomName(pool?: RoomNamePool) {
-  const target = pool || defaultAdminRoomNamePool();
-  const adjective = target.adjectives[0] || "";
-  const subject = target.subjects[0] || "任务";
-  const roomWord = target.roomWords[0] || "房间";
-  return `${adjective}${subject}${roomWord}`;
-}
-
-export function RoomNamePoolEditor({ title, pool, onChange }: { title: string; pool: RoomNamePool; onChange: (pool: RoomNamePool) => void }) {
-  return (
-    <div className="room-name-pool-editor">
-      <b>{title}</b>
-      <TagListEditor label="形容词（可为空）" placeholder="输入形容词后回车" values={pool.adjectives} onChange={(adjectives) => onChange({ ...pool, adjectives })} />
-      <TagListEditor label="名词/动词" placeholder="输入名词或动词后回车" values={pool.subjects} onChange={(subjects) => onChange({ ...pool, subjects })} />
-      <TagListEditor label="房间词" placeholder="输入房间词后回车" values={pool.roomWords} onChange={(roomWords) => onChange({ ...pool, roomWords })} />
-    </div>
-  );
-}
-
-export function AdminImageUpload({ label, upload, onUploaded, onError }: { label: string; upload: (file: File) => Promise<string>; onUploaded: (imageUrl: string) => void; onError: (message: string) => void }) {
-  return (
-    <label className="admin-image-upload">
-      <Upload size={15} /> {label}
-      <input
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          event.target.value = "";
-          if (!file) return;
-          upload(file).then(onUploaded).catch((error) => onError(error instanceof Error ? error.message : "上传失败"));
-        }}
-      />
-    </label>
-  );
-}
-
-export function TagListEditor({ label, placeholder, values, onChange }: { label: string; placeholder: string; values: string[]; onChange: (values: string[]) => void }) {
-  const [draftTag, setDraftTag] = useState("");
-
-  function addTag() {
-    const next = draftTag.trim();
-    if (!next) return;
-    if (!values.includes(next)) onChange([...values, next]);
-    setDraftTag("");
-  }
-
-  return (
-    <div className="tag-list-editor">
-      <span>{label}</span>
-      <div className="tag-list">
-        {values.map((value) => (
-          <button type="button" className="tag-chip" key={value} onClick={() => onChange(values.filter((item) => item !== value))}>
-            {value}<small>×</small>
-          </button>
-        ))}
-        {values.length === 0 && <em>暂无词条</em>}
-      </div>
-      <div className="tag-input-row">
-        <input value={draftTag} onChange={(event) => setDraftTag(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTag(); } }} placeholder={placeholder} />
-        <button type="button" onClick={addTag}>添加</button>
-      </div>
-    </div>
-  );
-}
-
-export function emptyRoomNamePool(): RoomNamePool {
-  return { adjectives: [], subjects: [], roomWords: [] };
-}
-
-export function defaultAdminRoomNamePool(): RoomNamePool {
-  return { adjectives: ["粉蓝", "闪亮", "神秘"], subjects: ["任务", "挑战", "惩罚"], roomWords: ["小屋", "房间", "擂台"] };
-}
-
-export function ColorInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return (
-    <label className="color-input">
-      <span>{label}</span>
-      <input type="color" value={value} onChange={(event) => onChange(event.target.value)} />
-      <input value={value} onChange={(event) => onChange(event.target.value)} placeholder="#RRGGBB" />
-    </label>
-  );
 }
 
 export function Toggle({ label, value, onChange, disabled = false }: { label: string; value: boolean; onChange: (value: boolean) => void; disabled?: boolean }) {

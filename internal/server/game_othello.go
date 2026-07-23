@@ -211,6 +211,9 @@ func (s *Server) clearOthelloSettlementTimer(roomID string) {
 }
 
 func (s *Server) resetOthelloRoom(room *RoomState) {
+	// 和 forceEndOthelloGame/applyOthelloDisconnectForfeit 一样，重置前必须先把还没定
+	// 型的白给/上贡结算 flush 掉，否则那笔待结算的排位分/回合记录会被下面的置空直接吞掉。
+	s.flushOthelloPendingSettlement(room)
 	s.clearOthelloSettlementTimer(room.ID)
 	s.clearOthelloClockTimer(room.ID)
 	room.Othello = nil
@@ -906,6 +909,7 @@ func (s *Server) applyOthelloDisconnectForfeit(room *RoomState, forfeit Disconne
 	}
 	recordGameOutcome(winner, types.GameOthello, "win")
 	recordGameOutcome(loser, types.GameOthello, "loss")
+	s.applyGiveawayWinPenalty(winner)
 	rankedFloorText := s.applyOthelloForfeitRankedFloor(room, forfeit.WinnerSeat, forfeit.LoserSeat)
 	fullForfeitText := s.applyOthelloEscapeRankedPenalty(room, forfeit.WinnerSeat, forfeit.LoserSeat, 1, "断线全输")
 	rankedDelta := map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}

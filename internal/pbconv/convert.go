@@ -191,6 +191,8 @@ func LobbyToProto(snap types.LobbySnapshot) (*wire.LobbySnapshot, error) {
 		}
 		out.Players = append(out.Players, &wire.LobbyPlayerEntry{Id: id, Player: pp})
 	}
+	// 同上：map 遍历顺序是随机的，不排序的话在线/离线玩家列表会在每次广播时乱跳；按 id 稳定排序。
+	sort.Slice(out.Players, func(i, j int) bool { return out.Players[i].Id < out.Players[j].Id })
 	for id, r := range snap.Rooms {
 		rr, err := lobbyRoomToProto(r)
 		if err != nil {
@@ -506,6 +508,8 @@ func liarsDiceToProto(s *types.LiarsDiceState) (*wire.LiarsDiceState, error) {
 	for k, v := range s.DiceCounts {
 		m.DiceCounts = append(m.DiceCounts, &wire.IntPair{Key: k, Value: int32(v)})
 	}
+	// map 遍历顺序是随机的，不排序的话骰子计数会在每次广播时乱跳；按 key 稳定排序。
+	sort.Slice(m.DiceCounts, func(i, j int) bool { return m.DiceCounts[i].Key < m.DiceCounts[j].Key })
 	if s.CurrentBid != nil {
 		m.CurrentBid = &wire.LiarsDiceBid{
 			PlayerId: s.CurrentBid.PlayerID, Count: int32(s.CurrentBid.Count),
@@ -520,6 +524,8 @@ func liarsDiceToProto(s *types.LiarsDiceState) (*wire.LiarsDiceState, error) {
 	for k, v := range s.RevealedHands {
 		m.RevealedHands = append(m.RevealedHands, &wire.LiarsDiceHandsPair{Key: k, Value: int32List(v)})
 	}
+	// map 遍历顺序是随机的，不排序的话开牌列表会在每次广播时乱跳；按 key 稳定排序。
+	sort.Slice(m.RevealedHands, func(i, j int) bool { return m.RevealedHands[i].Key < m.RevealedHands[j].Key })
 	return m, nil
 }
 
@@ -589,9 +595,12 @@ func historyToProto(h types.RoundHistoryItem) (*wire.RoundHistoryItem, error) {
 	for k, v := range h.LiarsDiceHands {
 		m.LiarsDiceHands = append(m.LiarsDiceHands, &wire.LiarsDiceHandsPair{Key: k, Value: int32List(v)})
 	}
+	// map 遍历顺序是随机的，不排序的话历史记录里的开牌/参战者列表会每次读取都乱跳；按 key 稳定排序。
+	sort.Slice(m.LiarsDiceHands, func(i, j int) bool { return m.LiarsDiceHands[i].Key < m.LiarsDiceHands[j].Key })
 	for k, v := range h.LiarsDiceNames {
 		m.LiarsDiceNames = append(m.LiarsDiceNames, &wire.StringPair{Key: k, Value: v})
 	}
+	sort.Slice(m.LiarsDiceNames, func(i, j int) bool { return m.LiarsDiceNames[i].Key < m.LiarsDiceNames[j].Key })
 	return m, nil
 }
 
@@ -605,6 +614,7 @@ func othelloToProto(s *types.OthelloState) (*wire.OthelloState, error) {
 	for k, v := range s.ClockRemaining {
 		m.ClockRemaining = append(m.ClockRemaining, &wire.IntPair{Key: string(k), Value: int32(v)})
 	}
+	sort.Slice(m.ClockRemaining, func(i, j int) bool { return m.ClockRemaining[i].Key < m.ClockRemaining[j].Key })
 	for _, row := range s.Board {
 		br := &wire.BoardRow{}
 		for _, cell := range row {
@@ -622,6 +632,7 @@ func othelloToProto(s *types.OthelloState) (*wire.OthelloState, error) {
 	for k, v := range s.RankedDelta {
 		m.RankedDelta = append(m.RankedDelta, &wire.IntPair{Key: string(k), Value: int32(v)})
 	}
+	sort.Slice(m.RankedDelta, func(i, j int) bool { return m.RankedDelta[i].Key < m.RankedDelta[j].Key })
 	if s.PendingSettlement != nil {
 		ps := s.PendingSettlement
 		m.PendingSettlement = &wire.OthelloPendingSettlement{
@@ -661,6 +672,7 @@ func tictactoeToProto(s *types.TicTacToeState) (*wire.TicTacToeState, error) {
 	for k, v := range s.RankedDelta {
 		m.RankedDelta = append(m.RankedDelta, &wire.IntPair{Key: string(k), Value: int32(v)})
 	}
+	sort.Slice(m.RankedDelta, func(i, j int) bool { return m.RankedDelta[i].Key < m.RankedDelta[j].Key })
 	if s.GiveawayPrompt != nil {
 		m.GiveawayPrompt = &wire.TicTacToeGiveawayPrompt{
 			Seat: string(s.GiveawayPrompt.Seat), Forced: s.GiveawayPrompt.Forced,
@@ -679,6 +691,7 @@ func gomokuToProto(s *types.GomokuState) (*wire.GomokuState, error) {
 	for k, v := range s.ClockRemaining {
 		m.ClockRemaining = append(m.ClockRemaining, &wire.IntPair{Key: string(k), Value: int32(v)})
 	}
+	sort.Slice(m.ClockRemaining, func(i, j int) bool { return m.ClockRemaining[i].Key < m.ClockRemaining[j].Key })
 	for _, row := range s.Board {
 		br := &wire.BoardRow{}
 		for _, cell := range row {
@@ -699,9 +712,11 @@ func gomokuToProto(s *types.GomokuState) (*wire.GomokuState, error) {
 	for k, v := range s.RankedDelta {
 		m.RankedDelta = append(m.RankedDelta, &wire.IntPair{Key: string(k), Value: int32(v)})
 	}
+	sort.Slice(m.RankedDelta, func(i, j int) bool { return m.RankedDelta[i].Key < m.RankedDelta[j].Key })
 	for k, v := range s.UndoCount {
 		m.UndoCount = append(m.UndoCount, &wire.IntPair{Key: string(k), Value: int32(v)})
 	}
+	sort.Slice(m.UndoCount, func(i, j int) bool { return m.UndoCount[i].Key < m.UndoCount[j].Key })
 	if s.UndoRequest != nil {
 		m.UndoRequest = &wire.GomokuUndoRequest{
 			FromSeat: string(s.UndoRequest.FromSeat), ToSeat: string(s.UndoRequest.ToSeat),

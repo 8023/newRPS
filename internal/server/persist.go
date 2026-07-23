@@ -17,6 +17,8 @@ type persistedPlayer struct {
 	ClaimKey                     string            `json:"claimKey,omitempty"`
 	Name                         string            `json:"name"`
 	GenderID                     string            `json:"genderId"`
+	CustomGenderLabel            string            `json:"customGenderLabel,omitempty"`
+	FactionID                    string            `json:"factionId"`
 	AvatarURL                    string            `json:"avatarUrl,omitempty"`
 	NameWarEnabled               *bool             `json:"nameWarEnabled,omitempty"`
 	NameWarAllowRename           *bool             `json:"nameWarAllowRename,omitempty"`
@@ -55,10 +57,14 @@ func (s *Server) serializePlayers() []persistedPlayer {
 			continue
 		}
 		p.SyncTotalsFromGameStats()
+		customGenderLabel := ""
+		if p.GenderID == "" {
+			customGenderLabel = p.GenderLabel
+		}
 		out = append(out, persistedPlayer{
 			ID: p.ID, PlayerID: p.PlayerID,
 			PlayerSecrets: p.PlayerSecrets, ClaimKey: p.ClaimKey,
-			Name: p.Name, GenderID: p.GenderID, AvatarURL: p.AvatarURL,
+			Name: p.Name, GenderID: p.GenderID, CustomGenderLabel: customGenderLabel, FactionID: p.FactionID, AvatarURL: p.AvatarURL,
 			NameWarEnabled: p.NameWarEnabled, NameWarAllowRename: p.NameWarAllowRename,
 			NameWarToggledAt: p.NameWarToggledAt, NameWarOriginalName: p.NameWarOriginalName,
 			NameWarPenaltyName: p.NameWarPenaltyName, NameWarPunished: p.NameWarPunished,
@@ -114,10 +120,10 @@ func (s *Server) ingestPersistedPlayer(item persistedPlayer) bool {
 		name = "玩家"
 	}
 	genderID := item.GenderID
-	if genderID == "" {
+	if genderID == "" && item.CustomGenderLabel == "" {
 		genderID = "male"
 	}
-	gender := s.genderInfo(genderID)
+	gender := s.resolveGender(genderID, item.CustomGenderLabel, item.FactionID)
 	title := item.Stats.Title
 	if title == "" {
 		title = s.randomTitleFromSegment(s.titleSegmentFor(0), gender.FactionID)
@@ -173,7 +179,7 @@ func (s *Server) ingestPersistedPlayer(item persistedPlayer) bool {
 				Wins: totalW, Losses: totalL, Draws: totalD,
 				Punishments: item.Stats.Punishments, RankedPoints: item.Stats.RankedPoints,
 				HighestScore: item.Stats.HighestScore, LowestScore: item.Stats.LowestScore,
-				Title: title, TitleSegmentID: item.Stats.TitleSegmentID,
+				Title: title, TitleSegmentID: item.Stats.TitleSegmentID, TitleCustom: item.Stats.TitleCustom,
 			},
 			GameStats: gameStats,
 		},

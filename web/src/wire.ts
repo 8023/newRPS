@@ -367,7 +367,8 @@ function materializePublicStats(stats: any): any {
     title: title || "暂无称号",
     ...(s.titleSegmentId != null && s.titleSegmentId !== ""
       ? { titleSegmentId: s.titleSegmentId }
-      : {})
+      : {}),
+    ...(s.titleCustom ? { titleCustom: true } : {})
   };
 }
 

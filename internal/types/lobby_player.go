@@ -63,6 +63,7 @@ type LobbyStats struct {
 	SortHighestScore int    `json:"sortHighestScore"`
 	SortLowestScore  int    `json:"sortLowestScore"`
 	Title            string `json:"title"`
+	TitleCustom      bool   `json:"titleCustom,omitempty"`
 }
 
 // ToLobbyPlayer 从完整公开资料裁剪。
@@ -108,7 +109,7 @@ func ToLobbyPlayer(p PublicPlayer) LobbyPlayer {
 			Punishments: p.Stats.Punishments, RankedPoints: p.Stats.RankedPoints, Title: p.Stats.Title,
 			HighestScore: p.Stats.HighestScore, LowestScore: p.Stats.LowestScore,
 			SortRankedPoints: p.Stats.SortRankedPoints, SortHighestScore: p.Stats.SortHighestScore,
-			SortLowestScore: p.Stats.SortLowestScore,
+			SortLowestScore: p.Stats.SortLowestScore, TitleCustom: p.Stats.TitleCustom,
 		},
 		GameStats: p.GameStats,
 	}
@@ -138,7 +139,7 @@ func (p LobbyPlayer) AsPublicPlayer() PublicPlayer {
 			Punishments: p.Stats.Punishments, RankedPoints: p.Stats.RankedPoints, Title: p.Stats.Title,
 			HighestScore: p.Stats.HighestScore, LowestScore: p.Stats.LowestScore,
 			SortRankedPoints: p.Stats.SortRankedPoints, SortHighestScore: p.Stats.SortHighestScore,
-			SortLowestScore: p.Stats.SortLowestScore,
+			SortLowestScore: p.Stats.SortLowestScore, TitleCustom: p.Stats.TitleCustom,
 		},
 		GameStats: p.GameStats,
 	}

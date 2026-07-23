@@ -159,7 +159,8 @@ func tictactoeRankedText(state *types.TicTacToeState) string {
 	return fmt.Sprintf("X %s，O %s", formatSigned(xDelta), formatSigned(oDelta))
 }
 
-func (s *Server) finishTicTacToeGame(room *RoomState, result types.RoundResult, winningLine []types.Pos) {
+// finishTicTacToeGame 结束对局；note 非空时会作为「（认输）」这类后缀追加到结果文案与历史记录。
+func (s *Server) finishTicTacToeGame(room *RoomState, result types.RoundResult, winningLine []types.Pos, note string) {
 	if room.TicTacToe == nil {
 		return
 	}
@@ -200,10 +201,14 @@ func (s *Server) finishTicTacToeGame(room *RoomState, result types.RoundResult, 
 	room.TicTacToe.Winner = result
 	room.Phase = types.PhaseResult
 	room.Status = "playing"
+	noteSuffix := ""
+	if note != "" {
+		noteSuffix = "（" + note + "）"
+	}
 	if result == types.ResultDraw {
-		room.ResultText = "井字棋平局" + rankedText
+		room.ResultText = "井字棋平局" + rankedText + noteSuffix
 	} else {
-		room.ResultText = occupantName(room.Seats[types.SeatKey(result)]) + " 井字棋胜利" + rankedText + streakText
+		room.ResultText = occupantName(room.Seats[types.SeatKey(result)]) + " 井字棋胜利" + rankedText + streakText + noteSuffix
 	}
 	s.refreshHumans(playerA, playerB)
 	resultLabel := "井字棋平局"
@@ -356,9 +361,9 @@ func (s *Server) applyTicTacToeMove(room *RoomState, seat types.SeatKey, row, co
 	room.TicTacToe.Turn = oppositeSeat(seat)
 	room.TicTacToe.GiveawayPrompt = nil
 	if winningLine != nil {
-		s.finishTicTacToeGame(room, types.RoundResult(tictactoeSeatForMark(room.TicTacToe, mark)), winningLine)
+		s.finishTicTacToeGame(room, types.RoundResult(tictactoeSeatForMark(room.TicTacToe, mark)), winningLine, "")
 	} else if moveCount >= 9 {
-		s.finishTicTacToeGame(room, types.ResultDraw, nil)
+		s.finishTicTacToeGame(room, types.ResultDraw, nil, "")
 	} else {
 		playerName := occupantName(room.Seats[seat])
 		if mode == "giveaway" {
@@ -410,6 +415,7 @@ func (s *Server) applyTicTacToeDisconnectForfeit(room *RoomState, forfeit Discon
 	}
 	recordGameOutcome(winner, types.GameTicTacToe, "win")
 	recordGameOutcome(loser, types.GameTicTacToe, "loss")
+	s.applyGiveawayWinPenalty(winner)
 	room.Score[forfeit.WinnerSeat]++
 	room.SeatedScore[forfeit.WinnerSeat]++
 	ssW := room.SeatStats[forfeit.WinnerSeat]

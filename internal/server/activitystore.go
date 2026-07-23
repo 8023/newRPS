@@ -12,7 +12,9 @@ import (
 // player_activity_events：低频、user-initiated 事件（改名/头像/性别阵营/大话骰名战/送礼/
 // 极限模式开关等），调用点都在 s.mu 持锁期间，写入量级和 eventStore 的房间/惩罚事件相当，
 // 沿用其同步加锁写模式。new_value/old_value 是泛化后的"变更后/变更前"值，具体含义随 action
-// 变化：rename 存昵称，avatar_change/avatar_clear 存头像 URL，gender_change 存 genderId；
+// 变化：rename 存昵称，avatar_change/avatar_clear 存头像 URL，gender_change 存性别展示文本
+// （genderLabel，预设/自定义都适用；阵营变化不影响是否记录，只要 genderId+genderLabel+
+// factionId 组合有变化就算一次 gender_change）；
 // 不适用新旧值对比的 action（如 nameWar_enable、giveaway_board_submit）只填 new_value 或都留空。
 //
 // connection_events：一条连接一行，但只在连接结束（正常断连 / 进程优雅关停）时才一次性

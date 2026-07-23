@@ -3,7 +3,7 @@
 //
 // 文件一览（相对 config/）：
 //
-//	site.json, announcement-board.json, security-disclaimer.json, gender-factions.json,
+//	site.json, announcement-board.json, security-disclaimer.json, genders.json, gender-factions.json,
 //	titles.json, punishments.json, player-punishment-room-name-pool.json, room-tags.json,
 //	room-info-tags.json, access-control.json, name-war.json, giveaway.json,
 //	extreme-mode.json, ranked-score.json, bots.json, games.json, messages.json
@@ -29,6 +29,7 @@ var splitConfigFiles = []string{
 	"site.json",
 	"announcement-board.json",
 	"security-disclaimer.json",
+	"genders.json",
 	"gender-factions.json",
 	"titles.json",
 	"punishments.json",
@@ -139,17 +140,6 @@ func writeJSONFile(filePath string, value any) error {
 	return nil
 }
 
-func flattenGenders(factions []types.GenderFaction) []types.GenderOption {
-	var out []types.GenderOption
-	for _, faction := range factions {
-		for _, g := range faction.Genders {
-			g.FactionID = faction.ID
-			out = append(out, g)
-		}
-	}
-	return out
-}
-
 func cleanLines(values []string) []string {
 	items := make([]string, 0, len(values))
 	for _, v := range values {
@@ -240,7 +230,25 @@ func normalizeNumberRecord(input map[string]float64, min, max float64) map[strin
 	return out
 }
 
-func normalizePunishmentTasks(punishment types.PunishmentConfig, factions []types.GenderFaction) []types.PunishmentTaskConfig {
+// distinctTaskGroups 按出现顺序去重收集当前配置里用到的任务分组（生理男/生理女/默认兜底）。
+func distinctTaskGroups(factions []types.GenderFaction) []string {
+	seen := map[string]struct{}{}
+	var out []string
+	for _, faction := range factions {
+		group := faction.TaskGroup
+		if group == "" {
+			continue
+		}
+		if _, ok := seen[group]; ok {
+			continue
+		}
+		seen[group] = struct{}{}
+		out = append(out, group)
+	}
+	return out
+}
+
+func normalizePunishmentTasks(punishment types.PunishmentConfig, groups []string) []types.PunishmentTaskConfig {
 	out := make([]types.PunishmentTaskConfig, 0, len(punishment.Tasks))
 	for i, task := range punishment.Tasks {
 		id := strings.TrimSpace(task.ID)
@@ -249,12 +257,12 @@ func normalizePunishmentTasks(punishment types.PunishmentConfig, factions []type
 		}
 		name := strings.TrimSpace(task.Name)
 		variants := make(map[string]string)
-		for _, faction := range factions {
+		for _, group := range groups {
 			v := ""
 			if task.Variants != nil {
-				v = strings.TrimSpace(task.Variants[faction.ID])
+				v = strings.TrimSpace(task.Variants[group])
 			}
-			variants[faction.ID] = v
+			variants[group] = v
 		}
 		out = append(out, types.PunishmentTaskConfig{
 			ID:                id,
@@ -269,32 +277,38 @@ func normalizePunishmentTasks(punishment types.PunishmentConfig, factions []type
 
 // normalizeConfig 只做清洗（trim、空切片、数值夹紧），不注入代码内默认文案。
 func normalizeConfig(input types.AppConfig) types.AppConfig {
+	genders := make([]types.GenderOption, 0, len(input.Genders))
+	for _, g := range input.Genders {
+		g.ID = strings.TrimSpace(g.ID)
+		g.Label = strings.TrimSpace(g.Label)
+		g.FactionID = strings.TrimSpace(g.FactionID)
+		genders = append(genders, g)
+	}
+
 	genderFactions := make([]types.GenderFaction, 0, len(input.GenderFactions))
 	for _, faction := range input.GenderFactions {
-		genders := make([]types.GenderOption, 0, len(faction.Genders))
-		for _, g := range faction.Genders {
-			g.ID = strings.TrimSpace(g.ID)
-			g.Label = strings.TrimSpace(g.Label)
-			g.FactionID = faction.ID
-			genders = append(genders, g)
-		}
 		faction.ID = strings.TrimSpace(faction.ID)
 		faction.Label = strings.TrimSpace(faction.Label)
-		faction.Genders = genders
+		faction.TaskGroup = strings.TrimSpace(faction.TaskGroup)
+		if faction.TaskGroup == "" {
+			faction.TaskGroup = "default"
+		}
 		genderFactions = append(genderFactions, faction)
 	}
+
+	groups := distinctTaskGroups(genderFactions)
 
 	titles := make([]types.TitleSegment, 0, len(input.Titles))
 	for _, segment := range input.Titles {
 		segment.ID = strings.TrimSpace(segment.ID)
 		segment.Names = cleanLines(segment.Names)
 		factionNames := make(map[string][]string)
-		for _, faction := range genderFactions {
+		for _, group := range groups {
 			var src []string
 			if segment.FactionNames != nil {
-				src = segment.FactionNames[faction.ID]
+				src = segment.FactionNames[group]
 			}
-			factionNames[faction.ID] = cleanLines(src)
+			factionNames[group] = cleanLines(src)
 		}
 		segment.FactionNames = factionNames
 		titles = append(titles, segment)
@@ -307,7 +321,7 @@ func normalizeConfig(input types.AppConfig) types.AppConfig {
 		punishment.Description = strings.TrimSpace(punishment.Description)
 		punishment.CardImageOpacity = clampOpacity(punishment.CardImageOpacity)
 		punishment.RoomBackgroundImages = cleanLines(punishment.RoomBackgroundImages)
-		punishment.Tasks = normalizePunishmentTasks(punishment, genderFactions)
+		punishment.Tasks = normalizePunishmentTasks(punishment, groups)
 		punishment.RoomNamePool = normalizeRoomNamePool(punishment.RoomNamePool)
 		punishments = append(punishments, punishment)
 	}
@@ -386,7 +400,7 @@ func normalizeConfig(input types.AppConfig) types.AppConfig {
 	out.Site.AdminPassword = adminPass
 	out.AnnouncementBoard = ab
 	out.GenderFactions = genderFactions
-	out.Genders = flattenGenders(genderFactions)
+	out.Genders = genders
 	out.Titles = titles
 	out.Punishments = punishments
 	out.Bots.Names = cleanLines(input.Bots.Names)
@@ -470,12 +484,32 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 	if err := assertUnique(genderIDs, "性别 ID"); err != nil {
 		return input, err
 	}
+	factionIDSet := make(map[string]struct{}, len(factionIDs))
+	for _, id := range factionIDs {
+		factionIDSet[id] = struct{}{}
+	}
+	genderLabels := make(map[string]struct{}, len(input.Genders))
+	for _, g := range input.Genders {
+		if g.Label == "" {
+			return input, fmt.Errorf("性别显示文字不能为空")
+		}
+		if _, dup := genderLabels[g.Label]; dup {
+			return input, fmt.Errorf("性别显示文字 %s 重复", g.Label)
+		}
+		genderLabels[g.Label] = struct{}{}
+		if g.FactionID == "" {
+			return input, fmt.Errorf("性别 %s 必须归属一个阵营", g.Label)
+		}
+		if _, ok := factionIDSet[g.FactionID]; !ok {
+			return input, fmt.Errorf("性别 %s 所属阵营 %s 不存在", g.Label, g.FactionID)
+		}
+	}
 	for _, faction := range input.GenderFactions {
 		if faction.Label == "" {
 			return input, fmt.Errorf("阵营名称不能为空")
 		}
-		if len(faction.Genders) == 0 {
-			return input, fmt.Errorf("%s 至少需要一个性别", faction.Label)
+		if faction.TaskGroup != "male" && faction.TaskGroup != "female" && faction.TaskGroup != "default" {
+			return input, fmt.Errorf("%s 的任务分组必须是生理男/生理女/默认兜底之一", faction.Label)
 		}
 		if err := assertHexColor(faction.TextColor, faction.Label+" 文字颜色"); err != nil {
 			return input, err
@@ -490,6 +524,7 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 	if len(input.Titles) == 0 {
 		return input, fmt.Errorf("至少需要一个称号段位")
 	}
+	taskGroups := distinctTaskGroups(input.GenderFactions)
 	for _, segment := range input.Titles {
 		if segment.MinPercent < -100 || segment.MaxPercent > 100 {
 			return input, fmt.Errorf("%s 的百分比范围必须在 -100 到 100 之间", segment.ID)
@@ -500,9 +535,9 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 		if len(segment.Names) == 0 {
 			return input, fmt.Errorf("%s 至少需要一个通用称号", segment.ID)
 		}
-		for _, faction := range input.GenderFactions {
-			if len(segment.FactionNames[faction.ID]) == 0 {
-				return input, fmt.Errorf("%s 缺少 %s 专属称号", segment.ID, faction.Label)
+		for _, group := range taskGroups {
+			if len(segment.FactionNames[group]) == 0 {
+				return input, fmt.Errorf("%s 缺少 %s 分组专属称号", segment.ID, group)
 			}
 		}
 	}
@@ -536,9 +571,9 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 			if task.BackgroundOpacity < 0 || task.BackgroundOpacity > 1 {
 				return input, fmt.Errorf("%s / %s 的任务背景透明率必须在 0 到 1 之间", punishment.Name, task.Name)
 			}
-			for _, faction := range input.GenderFactions {
-				if strings.TrimSpace(task.Variants[faction.ID]) == "" {
-					return input, fmt.Errorf("%s / %s 缺少 %s 任务版本", punishment.Name, task.Name, faction.Label)
+			for _, group := range taskGroups {
+				if strings.TrimSpace(task.Variants[group]) == "" {
+					return input, fmt.Errorf("%s / %s 缺少 %s 分组任务版本", punishment.Name, task.Name, group)
 				}
 			}
 		}
@@ -598,6 +633,24 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 	}
 	if strings.TrimSpace(input.Giveaway.EmptyText) == "" {
 		return input, fmt.Errorf("白给模式空状态文案不能为空")
+	}
+	if input.Giveaway.ActiveBoostValue <= 0 || input.Giveaway.ActiveBoostValue > 100 {
+		return input, fmt.Errorf("主动白给增量必须在 0（不含）到 100 之间")
+	}
+	if input.Giveaway.WinPenaltyValue <= 0 || input.Giveaway.WinPenaltyValue > 100 {
+		return input, fmt.Errorf("胜利白给扣减值必须在 0（不含）到 100 之间")
+	}
+	if input.Giveaway.LikeVoteLimitPerHour < 1 {
+		return input, fmt.Errorf("点赞每小时次数上限至少为 1")
+	}
+	if input.Giveaway.LikeVoteValue <= 0 || input.Giveaway.LikeVoteValue > 100 {
+		return input, fmt.Errorf("点赞降低值必须在 0（不含）到 100 之间")
+	}
+	if input.Giveaway.DislikeVoteLimitPerHour < 1 {
+		return input, fmt.Errorf("倒赞每小时次数上限至少为 1")
+	}
+	if input.Giveaway.DislikeVoteValue <= 0 || input.Giveaway.DislikeVoteValue > 100 {
+		return input, fmt.Errorf("倒赞增加值必须在 0（不含）到 100 之间")
 	}
 	if strings.TrimSpace(input.ExtremeMode.Label) == "" {
 		return input, fmt.Errorf("极限模式名称不能为空")
@@ -711,6 +764,9 @@ func LoadConfig() (types.AppConfig, error) {
 	if err := ensureSecurityDisclaimerFile(); err != nil {
 		return types.AppConfig{}, err
 	}
+	if err := migrateGendersFile(); err != nil {
+		return types.AppConfig{}, err
+	}
 	cfg, err := readSplitConfig()
 	if err != nil {
 		return types.AppConfig{}, err
@@ -771,6 +827,90 @@ func ensureSecurityDisclaimerFile() error {
 	return writeJSONFile(path, types.SecurityDisclaimerConfig{Enabled: true})
 }
 
+// legacyFactionTaskGroups 仅用于旧库升级时的一次性回填：性别/阵营解耦前，只有这 4 个默认
+// 阵营 ID，升级后它们的任务分组按当时的语义映射（femboy_faction→生理男、other_faction→默认兜底）。
+// 管理员之后自建的阵营不在这张表里，一律归入 default，需要管理员自己在后台调整任务分组。
+var legacyFactionTaskGroups = map[string]string{
+	"male_faction":   "male",
+	"femboy_faction": "male",
+	"female_faction": "female",
+	"other_faction":  "default",
+}
+
+// migrateGendersFile 把解耦前"性别嵌套在阵营里"的旧版 gender-factions.json 拆成新版
+// genders.json（扁平性别预设）+ gender-factions.json（阵营不再带 genders，改带 taskGroup）。
+// genders.json 已存在时视为已完成迁移（含全新安装：仓库自带的默认 genders.json），直接跳过。
+func migrateGendersFile() error {
+	gendersPath := configPath("genders.json")
+	if _, err := os.Stat(gendersPath); err == nil {
+		return nil
+	}
+	factionsPath := configPath("gender-factions.json")
+	data, err := os.ReadFile(factionsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// gender-factions.json 也不存在：交给 readSplitConfig 报出统一的缺文件错误。
+			return nil
+		}
+		return err
+	}
+	type legacyGenderOption struct {
+		ID    string `json:"id"`
+		Label string `json:"label"`
+	}
+	type legacyGenderFaction struct {
+		types.GenderColors
+		ID      string               `json:"id"`
+		Label   string               `json:"label"`
+		Genders []legacyGenderOption `json:"genders"`
+	}
+	var legacy []legacyGenderFaction
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return fmt.Errorf("解析旧版性别阵营配置失败 %s: %w", factionsPath, err)
+	}
+	hasNested := false
+	for _, f := range legacy {
+		if len(f.Genders) > 0 {
+			hasNested = true
+			break
+		}
+	}
+	if !hasNested {
+		// 已经是新格式（没有嵌套 genders），只是 genders.json 意外丢失：写空文件，
+		// 交给 ValidateConfig 报"至少需要一个性别选项"，而不是在这里静默造数据。
+		return writeJSONFile(gendersPath, []types.GenderOption{})
+	}
+	var genders []types.GenderOption
+	seen := map[string]struct{}{}
+	factions := make([]types.GenderFaction, 0, len(legacy))
+	for _, f := range legacy {
+		for _, g := range f.Genders {
+			if _, ok := seen[g.ID]; ok {
+				continue
+			}
+			seen[g.ID] = struct{}{}
+			genders = append(genders, types.GenderOption{ID: g.ID, Label: g.Label, FactionID: f.ID})
+		}
+		group := legacyFactionTaskGroups[f.ID]
+		if group == "" {
+			group = "default"
+		}
+		factions = append(factions, types.GenderFaction{
+			GenderColors: f.GenderColors,
+			ID:           f.ID,
+			Label:        f.Label,
+			TaskGroup:    group,
+		})
+	}
+	if err := writeJSONFile(gendersPath, genders); err != nil {
+		return fmt.Errorf("迁移性别预设配置失败: %w", err)
+	}
+	if err := writeJSONFile(factionsPath, factions); err != nil {
+		return fmt.Errorf("迁移性别阵营配置失败: %w", err)
+	}
+	return nil
+}
+
 func ensureSplitConfig() error {
 	if _, err := os.Stat(configPath("site.json")); err == nil {
 		return nil
@@ -810,6 +950,7 @@ func readSplitConfig() (types.AppConfig, error) {
 		{"site.json", &cfg.Site},
 		{"announcement-board.json", &cfg.AnnouncementBoard},
 		{"security-disclaimer.json", &cfg.SecurityDisclaimer},
+		{"genders.json", &cfg.Genders},
 		{"gender-factions.json", &cfg.GenderFactions},
 		{"titles.json", &cfg.Titles},
 		{"punishments.json", &cfg.Punishments},
@@ -830,8 +971,6 @@ func readSplitConfig() (types.AppConfig, error) {
 			return types.AppConfig{}, err
 		}
 	}
-	// genders 由阵营展开，不单独存文件
-	cfg.Genders = flattenGenders(cfg.GenderFactions)
 	return cfg, nil
 }
 
@@ -848,6 +987,7 @@ func writeSplitConfig(cfg types.AppConfig) error {
 		{"site.json", cfg.Site},
 		{"announcement-board.json", cfg.AnnouncementBoard},
 		{"security-disclaimer.json", cfg.SecurityDisclaimer},
+		{"genders.json", cfg.Genders},
 		{"gender-factions.json", cfg.GenderFactions},
 		{"titles.json", cfg.Titles},
 		{"punishments.json", cfg.Punishments},

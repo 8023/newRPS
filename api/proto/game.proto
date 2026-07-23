@@ -15,18 +15,23 @@ message GenderColors {
 }
 
 message GenderOption {
+  reserved 3; // was faction_id at this number; moved to 4 below, freeing 3 here
   string id = 1;
   string label = 2;
-  string faction_id = 3;
+  // 该性别预设归属的阵营 id；空表示不限阵营都能选（兼容历史/测试数据）。
+  string faction_id = 4;
 }
 
 message GenderFaction {
+  reserved 6;
+  reserved "genders";
   string id = 1;
   string label = 2;
   string text_color = 3;
   string background_color = 4;
   string border_color = 5;
-  repeated GenderOption genders = 6;
+  // 任务分组：male（生理男）/ female（生理女）/ default（默认兜底），决定系统任务/称号取哪份文案。
+  string task_group = 7;
 }
 
 message Pos {
@@ -48,6 +53,8 @@ message PublicStats {
   int32 sort_ranked_points = 10;
   int32 sort_highest_score = 11;
   int32 sort_lowest_score = 12;
+  // 管理员在后台手动设置过称号（不随排位分档位变化自动改写），见 title_custom 相关后端逻辑。
+  bool title_custom = 13;
 }
 
 message LobbyStats {
@@ -62,6 +69,7 @@ message LobbyStats {
   int32 sort_ranked_points = 9;
   int32 sort_highest_score = 10;
   int32 sort_lowest_score = 11;
+  bool title_custom = 12;
 }
 
 message GameWLD {

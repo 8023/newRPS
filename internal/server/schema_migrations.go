@@ -17,7 +17,7 @@ import (
 //
 // 是 var 不是 const，只是为了让测试能临时替换掉去验证迁移机制本身；正常代码路径里
 // 把它当常量对待，不要在业务逻辑里修改它。
-var currentSchemaVersion = 6
+var currentSchemaVersion = 8
 
 // schemaVersionSchema：只有一行的版本表，openDatabase 每次启动都会先确保它存在。
 const schemaVersionSchema = `
@@ -97,6 +97,21 @@ var migrations = []schemaMigration{
 	// 明文 PlayerSecrets 列表，见 identity.go；此列不再被任何代码读写）。
 	{version: 6, migrate: func(db sqlExecer) error {
 		return dropColumnIfExists(db, "players", "player_secret_hash")
+	}},
+	// v7：新增 players.title_custom——标记称号是否由管理员在后台手动设置（不随排位分
+	// 档位变化自动改写），见 player.go 的 syncTitleForRankSegment。旧数据一律视为非自定义。
+	{version: 7, migrate: func(db sqlExecer) error {
+		return addColumnIfMissing(db, "players", "title_custom", "INTEGER NOT NULL DEFAULT 0")
+	}},
+	// v8：性别与阵营解耦——新增 players.faction_id（阵营现在独立于性别选择，不能再从
+	// gender_id 反推，必须落库）和 players.custom_gender_label（自定义性别文本，1-9
+	// 字符；预设性别时留空，展示文案从当前配置的 genders.json 里查）。旧数据两列都是
+	// 空字符串，由 persist.go 的 ingestPersistedPlayer 按旧默认阵营 ID 一次性回填。
+	{version: 8, migrate: func(db sqlExecer) error {
+		if err := addColumnIfMissing(db, "players", "faction_id", "TEXT NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
+		return addColumnIfMissing(db, "players", "custom_gender_label", "TEXT NOT NULL DEFAULT ''")
 	}},
 }
 

@@ -1,5 +1,7 @@
 package server
 
+import "strings"
+
 // 多端身份认领：认领密钥（ClaimKey）与长期设备凭据（PlayerSecrets）是两个不同的东西。
 //   - PlayerSecrets：每台已登录设备一条，明文，永久有效（除非登出时撤销），
 //     player:join 每次重连都要带上其中一条才能证明身份。
@@ -11,6 +13,13 @@ package server
 // 一致视为「同设备刷新/重连」，不一致视为「换了一台设备」。
 func isSameDevice(recordedDeviceKey, newDeviceKey string) bool {
 	return recordedDeviceKey != "" && recordedDeviceKey == newDeviceKey
+}
+
+// isLegacySecretFormat 识别前端早期版本生成的双 UUID 拼接格式（36+1+36=73 字符、
+// 9 个 "-"）；新格式统一为单个 randomID()/UUID，不再拼接两段。命中旧格式时
+// onPlayerJoin 会顺手静默换发一个新格式 secret，不强制、不影响旧格式继续使用。
+func isLegacySecretFormat(secret string) bool {
+	return len(secret) == 73 && strings.Count(secret, "-") == 9
 }
 
 // needsKickConfirm 判断是否要先弹「已在其他设备登录」确认，而不是直接顶替。
@@ -83,7 +92,7 @@ func (s *Server) onIdentityClaim(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "认领密钥无效或已过期")
 		return
 	}
-	newSecret := randomID() + "-" + randomID()
+	newSecret := randomID()
 	evicted := player.addPlayerSecret(newSecret)
 	// 用过即作废：认领成功后立即轮换，旧密钥不能再用第二次。
 	player.ClaimKey = randomID()
@@ -91,13 +100,20 @@ func (s *Server) onIdentityClaim(client *Client, env wsEnvelope) {
 	if evicted != "" {
 		s.notifyDeviceEvicted(player, evicted)
 	}
-	// 顺带把当前名字/性别带回去，前端接着重新 player:join 时要用这份真实值，
-	// 不能用输入框里随手打的名字，否则会把认领回来的账号名字覆盖掉。
+	// 顺带把当前名字/性别/阵营带回去，前端接着重新 player:join 时要用这份真实值，
+	// 不能用输入框里随手打的名字，否则会把认领回来的账号名字/阵营覆盖掉——阵营现在独立
+	// 于性别选择，join 时不传 factionId 会被 applyGender 兜底成第一个已配置阵营。
+	customGenderLabel := ""
+	if player.GenderID == "" {
+		customGenderLabel = player.GenderLabel
+	}
 	client.reply(env.ID, map[string]any{
-		"playerId":     player.PlayerID,
-		"playerSecret": newSecret,
-		"name":         player.Name,
-		"genderId":     player.GenderID,
+		"playerId":          player.PlayerID,
+		"playerSecret":      newSecret,
+		"name":              player.Name,
+		"genderId":          player.GenderID,
+		"customGenderLabel": customGenderLabel,
+		"factionId":         player.FactionID,
 	}, "")
 }
 

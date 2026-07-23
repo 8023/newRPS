@@ -96,3 +96,73 @@ func TestLoadConfigMigratesLegacyDeployDir(t *testing.T) {
 		t.Fatalf("second LoadConfig should be idempotent, got error: %v", err)
 	}
 }
+
+// TestLoadConfigMigratesLegacyGenderFactionsFile 模拟性别/阵营解耦前的旧版部署：
+// gender-factions.json 是"性别嵌套在阵营里"的旧格式（没有 taskGroup），且没有独立的
+// genders.json（那时候性别是从阵营展开得到的，不单独存文件）。LoadConfig 必须能在这种
+// 目录状态下自愈：拆出扁平的 genders.json，并把 gender-factions.json 改写成新格式。
+func TestLoadConfigMigratesLegacyGenderFactionsFile(t *testing.T) {
+	dir := copyConfigDirForTest(t)
+	cfgDir := filepath.Join(dir, "config")
+
+	legacy := `[
+		{
+			"textColor": "#225c8d", "backgroundColor": "#dff2ff", "borderColor": "#92cdf2",
+			"id": "male_faction", "label": "男性阵营",
+			"genders": [
+				{"id": "boy", "label": "男生", "factionId": "male_faction"},
+				{"id": "male", "label": "男性", "factionId": "male_faction"}
+			]
+		},
+		{
+			"textColor": "#6650a4", "backgroundColor": "#eee9ff", "borderColor": "#c7b5ff",
+			"id": "femboy_faction", "label": "男娘阵营",
+			"genders": [
+				{"id": "femboy", "label": "男娘", "factionId": "femboy_faction"}
+			]
+		}
+	]`
+	if err := os.WriteFile(filepath.Join(cfgDir, "gender-factions.json"), []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(cfgDir, "genders.json")); err != nil {
+		t.Fatal(err)
+	}
+
+	withRootDir(t, dir)
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig should self-heal a legacy gender-factions.json, got error: %v", err)
+	}
+	if len(cfg.Genders) != 3 {
+		t.Fatalf("expected 3 flattened genders (boy/male/femboy), got %d: %+v", len(cfg.Genders), cfg.Genders)
+	}
+	genderIDs := map[string]bool{}
+	for _, g := range cfg.Genders {
+		genderIDs[g.ID] = true
+	}
+	for _, want := range []string{"boy", "male", "femboy"} {
+		if !genderIDs[want] {
+			t.Fatalf("expected gender %q to survive migration, got %+v", want, cfg.Genders)
+		}
+	}
+	groupByFaction := map[string]string{}
+	for _, f := range cfg.GenderFactions {
+		groupByFaction[f.ID] = f.TaskGroup
+	}
+	if groupByFaction["male_faction"] != "male" {
+		t.Fatalf("male_faction taskGroup = %q, want male", groupByFaction["male_faction"])
+	}
+	if groupByFaction["femboy_faction"] != "male" {
+		t.Fatalf("femboy_faction taskGroup = %q, want male", groupByFaction["femboy_faction"])
+	}
+	if _, err := os.Stat(filepath.Join(cfgDir, "genders.json")); err != nil {
+		t.Fatalf("genders.json should have been written: %v", err)
+	}
+
+	// 幂等：genders.json 已存在后，第二次加载不应再改写 gender-factions.json。
+	if _, err := LoadConfig(); err != nil {
+		t.Fatalf("second LoadConfig should be idempotent, got error: %v", err)
+	}
+}

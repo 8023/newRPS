@@ -14,11 +14,13 @@ type GenderOption struct {
 	FactionID string `json:"factionId"`
 }
 
+// TaskGroup 决定系统任务/称号取哪一份阵营专属文案，固定三选一：
+// "male"（生理男：顺性别男、男跨女）、"female"（生理女：顺性别女、女跨男）、"default"（默认兜底：无性别）。
 type GenderFaction struct {
 	GenderColors
-	ID      string         `json:"id"`
-	Label   string         `json:"label"`
-	Genders []GenderOption `json:"genders"`
+	ID        string `json:"id"`
+	Label     string `json:"label"`
+	TaskGroup string `json:"taskGroup"`
 }
 
 type Move string
@@ -110,6 +112,9 @@ type PublicStats struct {
 	SortLowestScore  int    `json:"sortLowestScore"`
 	Title            string `json:"title"`
 	TitleSegmentID   string `json:"titleSegmentId,omitempty"`
+	// TitleCustom：true 表示 Title 是管理员在后台手动设置的，syncTitleForRankSegment
+	// 不会因排位分变动/跨档而自动改写；管理员把称号清空即可清除该标记、恢复自动计算。
+	TitleCustom bool `json:"titleCustom,omitempty"`
 }
 
 // GameWLD 单游戏胜/负/平。
@@ -743,6 +748,17 @@ type AppConfig struct {
 		PanelDescription  string `json:"panelDescription"`
 		SubmitPlaceholder string `json:"submitPlaceholder"`
 		EmptyText         string `json:"emptyText"`
+		// ActiveBoostValue：主动白给（手动选白给 / 点击白给按钮 / RPS 概率强制白给）
+		// 每次增加的白给值百分比，默认 2。
+		ActiveBoostValue float64 `json:"activeBoostValue"`
+		// WinPenaltyValue：白给已开启的玩家每赢一局（含断线判负），白给值减少的百分比，默认 1。
+		WinPenaltyValue float64 `json:"winPenaltyValue"`
+		// LikeVoteLimitPerHour / LikeVoteValue：自救板点赞每小时可投次数上限、每次降低的百分比。
+		LikeVoteLimitPerHour int     `json:"likeVoteLimitPerHour"`
+		LikeVoteValue        float64 `json:"likeVoteValue"`
+		// DislikeVoteLimitPerHour / DislikeVoteValue：自救板倒赞每小时可投次数上限、每次增加的百分比。
+		DislikeVoteLimitPerHour int     `json:"dislikeVoteLimitPerHour"`
+		DislikeVoteValue        float64 `json:"dislikeVoteValue"`
 	} `json:"giveaway"`
 	ExtremeMode ExtremeModeConfig `json:"extremeMode"`
 	RankedScore RankedScoreConfig `json:"rankedScore"`

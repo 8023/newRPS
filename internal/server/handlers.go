@@ -149,6 +149,8 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{40, 60_000, 10_000}, s.onChatLoadOlder
 	case "admin:action":
 		return RateLimitOptions{30, 60_000, 60_000}, s.onAdminAction
+	case "admin:listPlayers":
+		return RateLimitOptions{30, 60_000, 15_000}, s.onAdminListPlayers
 	case "identity:showClaimKey":
 		return RateLimitOptions{10, 60_000, 15_000}, s.onIdentityShowClaimKey
 	case "identity:refreshClaimKey":
@@ -172,12 +174,14 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 
 func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 	var p struct {
-		Name         string `json:"name"`
-		GenderID     string `json:"genderId"`
-		PlayerID     string `json:"playerId"`
-		PlayerSecret string `json:"playerSecret"`
-		Fingerprint  string `json:"fingerprint"`
-		ForceKick    bool   `json:"forceKick"`
+		Name              string `json:"name"`
+		GenderID          string `json:"genderId"`
+		CustomGenderLabel string `json:"customGenderLabel"`
+		FactionID         string `json:"factionId"`
+		PlayerID          string `json:"playerId"`
+		PlayerSecret      string `json:"playerSecret"`
+		Fingerprint       string `json:"fingerprint"`
+		ForceKick         bool   `json:"forceKick"`
 	}
 	_ = decodeD(env, &p)
 	cleanName := cleanText(p.Name, 12)
@@ -217,11 +221,19 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 	} else {
 		player = s.players[sid]
 	}
+	reissuedSecret := ""
 	if player != nil && player.Persistent {
 		if !s.verifyPlayerSecret(player, p.PlayerSecret) {
 			s.securityLog("player_identity_invalid", map[string]any{"sid": sid, "ip": ipAddress, "device": device, "userAgent": client.userAgent})
 			client.reply(env.ID, nil, "玩家身份校验失败")
 			return
+		}
+		// 旧版前端曾用双 UUID 拼接生成 secret，新版统一成单个 token；验证通过后顺手
+		// 静默换发一条新格式凭据，原地替换（先删后加，不占用/挤掉设备槽位）。
+		if isLegacySecretFormat(p.PlayerSecret) {
+			reissuedSecret = randomID()
+			player.removePlayerSecret(p.PlayerSecret)
+			player.addPlayerSecret(reissuedSecret)
 		}
 	}
 	if player == nil {
@@ -245,7 +257,7 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 			client.reply(env.ID, nil, "当前网络环境 10 分钟内新建玩家过多，请稍后再试")
 			return
 		}
-		player = s.createPlayer(cleanName, p.GenderID, client.token, p.PlayerID, p.PlayerSecret)
+		player = s.createPlayer(cleanName, p.GenderID, p.CustomGenderLabel, p.FactionID, client.token, p.PlayerID, p.PlayerSecret)
 		s.logPlayerActivity("create", player.ID, cleanName, "", ipAddress, device, client.fingerprint, "")
 	}
 	wasDisconnected := !player.Connected
@@ -272,6 +284,9 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 	}
 	if player.Persistent && p.PlayerSecret != "" {
 		player.ActiveSecret = p.PlayerSecret
+		if reissuedSecret != "" {
+			player.ActiveSecret = reissuedSecret
+		}
 	}
 	player.SocketID = client.id
 	player.IPAddress = ipAddress
@@ -302,7 +317,7 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 		player.Name = cleanName
 		player.NameWarOriginalName = cleanName
 	}
-	s.applyGender(player, p.GenderID)
+	s.applyGender(player, p.GenderID, p.CustomGenderLabel, p.FactionID)
 	s.refreshNameWarState(player, nowMs())
 	s.clearDisconnectHold(player)
 	s.clearDisconnectForfeit(player)
@@ -330,12 +345,16 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 			roomSnap = s.roomSnapshot(room, true, true)
 		}
 	}
-	client.reply(env.ID, map[string]any{
+	joinReply := map[string]any{
 		"player": s.publicPlayer(player),
 		"token":  sessionToken,
 		"roomId": player.RoomID,
 		"room":   roomSnap,
-	}, "")
+	}
+	if reissuedSecret != "" {
+		joinReply["reissuedSecret"] = reissuedSecret
+	}
+	client.reply(env.ID, joinReply, "")
 	if player.Persistent {
 		s.requestPersist("lazy")
 	}
@@ -413,6 +432,8 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 	var p struct {
 		Name               string `json:"name"`
 		GenderID           string `json:"genderId"`
+		CustomGenderLabel  string `json:"customGenderLabel"`
+		FactionID          string `json:"factionId"`
 		NameWarEnabled     *bool  `json:"nameWarEnabled"`
 		NameWarAllowRename *bool  `json:"nameWarAllowRename"`
 		GiveawayEnabled    *bool  `json:"giveawayEnabled"`
@@ -462,6 +483,10 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "白给值归零前不能关闭白给模式")
 		return
 	}
+	if ok, reason := s.validGenderSubmission(p.GenderID, p.CustomGenderLabel, p.FactionID); !ok {
+		client.reply(env.ID, nil, reason)
+		return
+	}
 	if extremeModeChanged && nextExtremeModeEnabled {
 		if player.ExtremeModeCooldownUntil != nil && *player.ExtremeModeCooldownUntil > now {
 			hours := int(math.Ceil(float64(*player.ExtremeModeCooldownUntil-now) / 3_600_000))
@@ -498,10 +523,11 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 			s.logPlayerActivity(action, player.ID, player.Name, "", client.ipAddress, client.deviceKey, client.fingerprint, "")
 		}
 	}
-	oldGenderID := player.GenderID
-	s.applyGender(player, p.GenderID)
-	if player.GenderID != oldGenderID {
-		s.logPlayerActivity("gender_change", player.ID, player.GenderID, oldGenderID, client.ipAddress, client.deviceKey, client.fingerprint, "")
+	oldGenderSignature := player.GenderID + "|" + player.GenderLabel + "|" + player.FactionID
+	oldGenderLabel := player.GenderLabel
+	s.applyGender(player, p.GenderID, p.CustomGenderLabel, p.FactionID)
+	if newSignature := player.GenderID + "|" + player.GenderLabel + "|" + player.FactionID; newSignature != oldGenderSignature {
+		s.logPlayerActivity("gender_change", player.ID, player.GenderLabel, oldGenderLabel, client.ipAddress, client.deviceKey, client.fingerprint, "")
 	}
 	s.refreshNameWarState(player, now)
 	if exitedHardMode {
@@ -511,6 +537,11 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 		}
 	}
 	player.GiveawayEnabled = boolPtr(nextGiveawayEnabled)
+	if giveawayChanged && nextGiveawayEnabled {
+		// 打开白给玩法时白给值从 0 起步，固定给到 0.1%（能关闭的前提是值必须先降到 0，
+		// 所以走到这里之前 GiveawayValue 必然是 0，直接赋值不用再和旧值比较）。
+		player.GiveawayValue = floatPtr(0.1)
+	}
 	if giveawayChanged {
 		action := "giveaway_disable"
 		if nextGiveawayEnabled {
@@ -578,7 +609,7 @@ func (s *Server) onGiveawayBoost(client *Client, env wsEnvelope) {
 		return
 	}
 	player.GiveawayClicks = intPtr(ptrInt(player.GiveawayClicks) + 1)
-	s.addGiveawayValue(player, 2)
+	s.addGiveawayValue(player, s.cfg.Giveaway.ActiveBoostValue)
 	client.reply(env.ID, map[string]any{"player": s.publicPlayer(player)}, "")
 	s.broadcastRoom(room.ID, false)
 }
@@ -655,26 +686,26 @@ func (s *Server) onGiveawayVote(client *Client, env wsEnvelope) {
 		actor.GiveawayVoteDislikesThisHour = intPtr(0)
 	}
 	if p.Vote == "like" {
-		if ptrInt(actor.GiveawayVoteLikesThisHour) >= 3 {
+		if ptrInt(actor.GiveawayVoteLikesThisHour) >= s.cfg.Giveaway.LikeVoteLimitPerHour {
 			client.reply(env.ID, nil, "你本小时点赞降值次数已满")
 			return
 		}
 		actor.GiveawayVoteLikesThisHour = intPtr(ptrInt(actor.GiveawayVoteLikesThisHour) + 1)
 		target.GiveawayBoardLikes = intPtr(ptrInt(target.GiveawayBoardLikes) + 1)
-		s.addGiveawayValue(target, -1)
+		s.addGiveawayValue(target, -s.cfg.Giveaway.LikeVoteValue)
 		if ptrFloat(target.GiveawayValue) <= 0 {
 			target.GiveawayBoardText = ""
 			target.GiveawayBoardSubmittedAt = nil
 			target.GiveawayBoardExpiresAt = nil
 		}
 	} else {
-		if ptrInt(actor.GiveawayVoteDislikesThisHour) >= 10 {
+		if ptrInt(actor.GiveawayVoteDislikesThisHour) >= s.cfg.Giveaway.DislikeVoteLimitPerHour {
 			client.reply(env.ID, nil, "你本小时倒赞加值次数已满")
 			return
 		}
 		actor.GiveawayVoteDislikesThisHour = intPtr(ptrInt(actor.GiveawayVoteDislikesThisHour) + 1)
 		target.GiveawayBoardDislikes = intPtr(ptrInt(target.GiveawayBoardDislikes) + 1)
-		s.addGiveawayValue(target, 0.1)
+		s.addGiveawayValue(target, s.cfg.Giveaway.DislikeVoteValue)
 	}
 	actor.GiveawayVoteCount = intPtr(ptrInt(actor.GiveawayVoteCount) + 1)
 	s.broadcastPlayerUpdate(actor)

@@ -9,22 +9,17 @@
       "逆风大师"
     ],
     "factionNames": {
-      "female_faction": [
+      "default": [
         "反向传奇",
         "倒霉拳王",
         "逆风大师"
       ],
-      "femboy_faction": [
+      "female": [
         "反向传奇",
         "倒霉拳王",
         "逆风大师"
       ],
-      "male_faction": [
-        "反向传奇",
-        "倒霉拳王",
-        "逆风大师"
-      ],
-      "other_faction": [
+      "male": [
         "反向传奇",
         "倒霉拳王",
         "逆风大师"
@@ -41,22 +36,17 @@
       "低谷挑战者"
     ],
     "factionNames": {
-      "female_faction": [
+      "default": [
         "失误专家",
         "惜败旅人",
         "低谷挑战者"
       ],
-      "femboy_faction": [
+      "female": [
         "失误专家",
         "惜败旅人",
         "低谷挑战者"
       ],
-      "male_faction": [
-        "失误专家",
-        "惜败旅人",
-        "低谷挑战者"
-      ],
-      "other_faction": [
+      "male": [
         "失误专家",
         "惜败旅人",
         "低谷挑战者"
@@ -73,22 +63,17 @@
       "翻盘预备役"
     ],
     "factionNames": {
-      "female_faction": [
+      "default": [
         "再来一局",
         "慢热选手",
         "翻盘预备役"
       ],
-      "femboy_faction": [
+      "female": [
         "再来一局",
         "慢热选手",
         "翻盘预备役"
       ],
-      "male_faction": [
-        "再来一局",
-        "慢热选手",
-        "翻盘预备役"
-      ],
-      "other_faction": [
+      "male": [
         "再来一局",
         "慢热选手",
         "翻盘预备役"
@@ -105,22 +90,17 @@
       "手感寻找中"
     ],
     "factionNames": {
-      "female_faction": [
+      "default": [
         "新手保护期",
         "粉蓝练习生",
         "手感寻找中"
       ],
-      "femboy_faction": [
+      "female": [
         "新手保护期",
         "粉蓝练习生",
         "手感寻找中"
       ],
-      "male_faction": [
-        "新手保护期",
-        "粉蓝练习生",
-        "手感寻找中"
-      ],
-      "other_faction": [
+      "male": [
         "新手保护期",
         "粉蓝练习生",
         "手感寻找中"
@@ -137,22 +117,17 @@
       "蓝白新人"
     ],
     "factionNames": {
-      "female_faction": [
+      "default": [
         "初心拳手",
         "轻松玩家",
         "蓝白新人"
       ],
-      "femboy_faction": [
+      "female": [
         "初心拳手",
         "轻松玩家",
         "蓝白新人"
       ],
-      "male_faction": [
-        "初心拳手",
-        "轻松玩家",
-        "蓝白新人"
-      ],
-      "other_faction": [
+      "male": [
         "初心拳手",
         "轻松玩家",
         "蓝白新人"
@@ -169,22 +144,17 @@
       "稳步前进"
     ],
     "factionNames": {
-      "female_faction": [
+      "default": [
         "小有手感",
         "粉蓝上分中",
         "稳步前进"
       ],
-      "femboy_faction": [
+      "female": [
         "小有手感",
         "粉蓝上分中",
         "稳步前进"
       ],
-      "male_faction": [
-        "小有手感",
-        "粉蓝上分中",
-        "稳步前进"
-      ],
-      "other_faction": [
+      "male": [
         "小有手感",
         "粉蓝上分中",
         "稳步前进"
@@ -201,22 +171,17 @@
       "布阵高手"
     ],
     "factionNames": {
-      "female_faction": [
+      "default": [
         "稳定发挥",
         "剪刀灵感家",
         "布阵高手"
       ],
-      "femboy_faction": [
+      "female": [
         "稳定发挥",
         "剪刀灵感家",
         "布阵高手"
       ],
-      "male_faction": [
-        "稳定发挥",
-        "剪刀灵感家",
-        "布阵高手"
-      ],
-      "other_faction": [
+      "male": [
         "稳定发挥",
         "剪刀灵感家",
         "布阵高手"
@@ -233,22 +198,17 @@
       "胜场收集者"
     ],
     "factionNames": {
-      "female_faction": [
+      "default": [
         "读心高手",
         "节奏大师",
         "胜场收集者"
       ],
-      "femboy_faction": [
+      "female": [
         "读心高手",
         "节奏大师",
         "胜场收集者"
       ],
-      "male_faction": [
-        "读心高手",
-        "节奏大师",
-        "胜场收集者"
-      ],
-      "other_faction": [
+      "male": [
         "读心高手",
         "节奏大师",
         "胜场收集者"
@@ -265,22 +225,17 @@
       "粉蓝传说"
     ],
     "factionNames": {
-      "female_faction": [
+      "default": [
         "常胜拳王",
         "天选之手",
         "粉蓝传说"
       ],
-      "femboy_faction": [
+      "female": [
         "常胜拳王",
         "天选之手",
         "粉蓝传说"
       ],
-      "male_faction": [
-        "常胜拳王",
-        "天选之手",
-        "粉蓝传说"
-      ],
-      "other_faction": [
+      "male": [
         "常胜拳王",
         "天选之手",
         "粉蓝传说"

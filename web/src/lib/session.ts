@@ -21,7 +21,7 @@ export function ensurePlayerIdentity() {
   let playerSecret = localStorage.getItem(playerSecretKey);
   if (!playerId || !playerSecret) {
     playerId = randomUuid();
-    playerSecret = `${randomUuid()}-${randomUuid()}`;
+    playerSecret = randomUuid();
     localStorage.setItem(playerIdKey, playerId);
     localStorage.setItem(playerSecretKey, playerSecret);
   }
@@ -108,6 +108,17 @@ export async function joinIdentityPayload() {
   return { ...ensurePlayerIdentity(), fingerprint };
 }
 
+/**
+ * 清掉本地缓存的长期身份（playerId/playerSecret）。用于服务端明确回应"玩家身份校验
+ * 失败"时——这条本地凭据服务端已经不认，留着只会让下一次 player:join 用同一对
+ * playerId/playerSecret 再挂一次。清掉后 ensurePlayerIdentity() 会在下次调用时
+ * 生成一对全新的身份，相当于自动执行"清 localStorage 重新注册"这个此前只能手动做的操作。
+ */
+export function clearPlayerIdentity() {
+  localStorage.removeItem(playerIdKey);
+  localStorage.removeItem(playerSecretKey);
+}
+
 /** 认领密钥（展示/分享用）编码成一个字符串：playerId 和 claimKey 都是 URL-safe 字符集，用 "." 拼接不会冲突。 */
 export function encodeClaimCode(playerId: string, claimKey: string) {
   return `${playerId}.${claimKey}`;
@@ -130,13 +141,13 @@ export async function refreshClaimKey(): Promise<{ playerId: string; claimKey: s
 
 /**
  * 用另一台设备的认领码认领身份：成功后覆写本地 playerId/playerSecret，调用方需要接着
- * 重新 player:join——务必用返回的 name/genderId（认领回来的账号真实值），不要用输入框里
- * 随手打的名字，否则会把认领回来的账号名字覆盖掉。
+ * 重新 player:join——务必用返回的 name/genderId/customGenderLabel/factionId（认领回来的
+ * 账号真实值），不要用输入框里随手打的名字/性别/阵营，否则会把认领回来的账号资料覆盖掉。
  */
-export async function claimIdentity(code: string): Promise<{ playerId: string; playerSecret: string; name: string; genderId: string }> {
+export async function claimIdentity(code: string): Promise<{ playerId: string; playerSecret: string; name: string; genderId: string; customGenderLabel: string; factionId: string }> {
   const parsed = decodeClaimCode(code);
   if (!parsed) throw new Error("认领码格式不对");
-  const result = await ask<{ playerId: string; playerSecret: string; name: string; genderId: string }>("identity:claim", parsed);
+  const result = await ask<{ playerId: string; playerSecret: string; name: string; genderId: string; customGenderLabel: string; factionId: string }>("identity:claim", parsed);
   localStorage.setItem(playerIdKey, result.playerId);
   localStorage.setItem(playerSecretKey, result.playerSecret);
   return result;
@@ -155,4 +166,6 @@ export async function logout() {
   localStorage.removeItem(tokenKey);
   localStorage.removeItem("rps-online-name");
   localStorage.removeItem("rps-online-gender");
+  localStorage.removeItem("rps-online-custom-gender");
+  localStorage.removeItem("rps-online-faction");
 }

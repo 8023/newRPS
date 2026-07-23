@@ -244,7 +244,8 @@ docker compose up -d
 | `site.json` | 站点名、简介、管理员口令 |
 | `announcement-board.json` | 公告板（展示于顶栏「关于」面板，不再是弹窗） |
 | `security-disclaimer.json` | 安全与免责声明开关（内容固定写在前端，仅一个 `enabled`） |
-| `gender-factions.json` | 性别阵营（genders 由阵营展开） |
+| `gender-factions.json` | 阵营（配色、`taskGroup`），不再嵌套性别列表 |
+| `genders.json` | 性别预设扁平列表，每项通过 `factionId` 归属某个阵营 |
 | `titles.json` | 称号段 |
 | `punishments.json` | 系统惩罚池 |
 | `player-punishment-room-name-pool.json` | 玩家发布任务房名词库 |
@@ -286,6 +287,7 @@ docker compose up -d
 - **每日衰减**：`scheduleRankedDailyDecay`/`applyRankedDailyDecay`（`internal/server/player.go`）每 24 小时（对齐到 UTC 天边界，`time.AfterFunc` 定位到下一个边界后切换为 `time.Ticker`，与「极限模式」整点衰减是完全独立的两套机制）把每个玩家的真实 `RankedPoints` 乘以 `dailyDecayRatio`（默认 `0.98`）并向 0 截断小数——正负分都会朝 0 方向收缩。每个玩家用 `RankedLastDecayDay` 记录已衰减到的"天桶"，防止服务重启后重复衰减。
 - **历史最高/最低分**：`recordRankedExtremes` 持续记录真实极值（存储永不回退）；下发展示时与当前分一样按 `max`/`min`/`nameWarMin` 封顶。排行榜排序使用 `sortRankedPoints`/`sortHighestScore`/`sortLowestScore` 真实分，避免一堆人显示 4999 时名次乱序。
 - **称号分段用百分比**：`config/titles.json` 的 `minPercent`/`maxPercent`（-100～100）相对 `ranked-score.json` 的展示上下限换算真实分所属段；改展示上下限无需改称号绝对分。极限模式的 pos/neg 系数表与同一百分比刻度对齐。
+- **管理员自定义称号**：后台「玩家管理」可直接给某个玩家填一个不在 `titles.json` 池里的称号（`editPlayer` action，`internal/server/handlers_room.go`），此时会置位 `PublicStats.TitleCustom`；`syncTitleForRankSegment`（`internal/server/player.go`）一旦发现该标记就直接跳过重算，不再随排位分升降、跨档、改性别/阵营、后台调整 `ranked-score.json` 的 `max`/`min` 而被自动改写。把后台称号输入框清空并保存会清掉该标记、立即按当前排位分重算回自动称号。前端输入框此时会用黄色边框区分，`web/src/ui/AdminViews.tsx`。
 - 「名字争夺战」失格线：`config/name-war.json` 的 `penaltyThreshold`（默认 `-4999`，后台可调），按**真实存储分**判定，与展示封顶无关。
 
 ## 构建与测试
@@ -300,6 +302,19 @@ npm run test           # go test + 前端 build
 ```
 
 ## 最近更新记录
+
+### v2.2.5（2026-07-23）
+
+- **性别与阵营解耦，新增自定义性别与「女跨男」阵营**：`config/genders.json`（新增，性别预设扁平列表，每项只带 `factionId` 归属）与 `config/gender-factions.json`（阵营，含配色与 `taskGroup`）拆成两个独立配置文件，阵营不再嵌套 `genders` 数组；后台「性别与阵营」面板分别管理两者。阵营从 4 个扩到 5 个并重新命名（`男性阵营`→`顺性别男`、`女性阵营`→`顺性别女`、`男娘阵营`→`男跨女`，新增`女跨男`，`其他阵营`→`无性别`），称号/惩罚任务仍按 `taskGroup`（male/female/default）取文案，与阵营具体是哪几个、叫什么名字解耦。个人资料页/建号页新增「自定义…」选项，可填 1-9 字符的自定义性别文本（不占用预设性别名额，不能与已有性别文案重复），阵营选择与性别选择彻底独立，不再由性别反推阵营。
+- **后台新增「玩家管理」面板**：可按在线 / 名争开启 / 白给值降序 / 积分降序 / 最近 7 天登录 / 积分非零筛选并分页浏览全体玩家（默认 200 条上限，硬上限 500），支持编辑名字、排位积分、称号（含「自定义称号」标记，见下方「排位积分」章节）、性别/阵营、白给值（数字输入框，>0 直接设置并开启，其余视为清空并关闭白给），以及代玩家查看认领密钥（帮玩家找回账号，无需玩家提供设备）。
+- **白给值新增「胜利递减」机制**：白给已开启的玩家每赢一局（含各游戏的断线判负）都会按 `config/giveaway.json` 的 `winPenaltyValue`（默认 1）扣减白给值，五款游戏统一生效——此前只有点赞会降低白给值，赢局本身完全不影响白给值。主动加成、点赞/倒赞增减值与每小时次数上限等原先硬编码的数值，一并改为 `config/giveaway.json` 可调（`activeBoostValue`/`likeVoteValue`/`likeVoteLimitPerHour`/`dislikeVoteValue`/`dislikeVoteLimitPerHour`）。
+- **管理员自定义称号**：见下方「排位积分」章节。
+- **通用强制判定胜负**：黑白棋专属的强制结束/重开操作，改为覆盖 RPS/井字棋/五子棋/黑白棋四种座位制游戏的通用后台操作（`forceSeatOutcome`：判 A 胜/判 B 胜/判平，`forceNext`：重开）。
+- **房间生命周期事件统一记录**：`rooms`/`room_join_events` 两张旧表冻结不再写入，改为单张 `room_events` 追加日志（`action` 取 create/join/close 一行一事件），创建事件额外记录房间密码的无盐 SHA256 哈希（供事后审计追溯，不落明文），历史行不做迁移搬迁。
+- **手机端模块折叠记忆**：房间玩家列表、对局历史、聊天面板、排行榜、白给自救板、名字争夺战败方看板等区块在手机端新增折叠三角，展开/折叠状态按模块记入 `localStorage`，跨大厅/房间重进沿用；桌面端不受影响，始终展开。
+- **后台管理面板按需加载**：拆分为独立的 `AdminViews.tsx` 模块，普通玩家不再下载这部分代码，减小首屏包体积。
+- 旧版前端双 UUID 拼接格式的身份凭据（`playerSecret`）在校验通过后会被静默换发为新版单 token 格式，原地替换、用户无感知。
+- schema v7/v8：`players` 表新增 `title_custom`（管理员自定义称号标记）、`faction_id`/`custom_gender_label`（性别/阵营解耦后各自独立存储）列。
 
 ### v2.2.2（2026-07-21）
 

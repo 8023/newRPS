@@ -4,75 +4,39 @@
     "backgroundColor": "#dff2ff",
     "borderColor": "#92cdf2",
     "id": "male_faction",
-    "label": "男性阵营",
-    "genders": [
-      {
-        "id": "boy",
-        "label": "男生",
-        "factionId": "male_faction"
-      },
-      {
-        "id": "male",
-        "label": "男性",
-        "factionId": "male_faction"
-      }
-    ]
+    "label": "顺性别男",
+    "taskGroup": "male"
   },
   {
     "textColor": "#8a3158",
     "backgroundColor": "#ffe2ef",
     "borderColor": "#f3a9ca",
     "id": "female_faction",
-    "label": "女性阵营",
-    "genders": [
-      {
-        "id": "girl",
-        "label": "女生",
-        "factionId": "female_faction"
-      },
-      {
-        "id": "female",
-        "label": "女性",
-        "factionId": "female_faction"
-      }
-    ]
+    "label": "顺性别女",
+    "taskGroup": "female"
   },
   {
     "textColor": "#6650a4",
     "backgroundColor": "#eee9ff",
     "borderColor": "#c7b5ff",
     "id": "femboy_faction",
-    "label": "男娘阵营",
-    "genders": [
-      {
-        "id": "femboy",
-        "label": "男娘",
-        "factionId": "femboy_faction"
-      },
-      {
-        "id": "transgirl",
-        "label": "药娘",
-        "factionId": "femboy_faction"
-      }
-    ]
+    "label": "男跨女",
+    "taskGroup": "male"
+  },
+  {
+    "textColor": "#8a5a12",
+    "backgroundColor": "#fff2da",
+    "borderColor": "#ffb75e",
+    "id": "trans_male_faction",
+    "label": "女跨男",
+    "taskGroup": "female"
   },
   {
     "textColor": "#4d5c6f",
     "backgroundColor": "#eef3f8",
     "borderColor": "#c9d6e4",
     "id": "other_faction",
-    "label": "其他阵营",
-    "genders": [
-      {
-        "id": "attack_helicopter",
-        "label": "武装直升机",
-        "factionId": "other_faction"
-      },
-      {
-        "id": "walmart_bag",
-        "label": "沃尔玛购物袋",
-        "factionId": "other_faction"
-      }
-    ]
+    "label": "无性别",
+    "taskGroup": "default"
   }
 ]

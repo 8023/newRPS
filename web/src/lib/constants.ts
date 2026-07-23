@@ -40,10 +40,16 @@ export const moveSecondsOptions = [0, 30, 45, 60, 90, 120, 180] as const;
 /** 黑白棋/五子棋建房「每局时长」下拉选项（分钟），0 = 不限时 */
 export const gameMinutesOptions = [0, 5, 10, 15, 20, 30, 45, 60] as const;
 
-export const sponsorLinks = [
-  { id: "x", label: "X", title: "关注 X 账号", description: "看更新、吐槽和临时公告。", href: "https://x.com/home", icon: "𝕏", tone: "#111827" },
+export const doumiaoLinks = [
+  { id: "x", label: "X", title: "关注 X 账号", description: "看更新、吐槽和临时公告。", href: "https://x.com/doumiaojiang", icon: "𝕏", tone: "#111827" },
   { id: "telegram", label: "TG", title: "加入 TG 群", description: "一起聊天、反馈 bug、催新玩法。", href: "https://t.me/+X1Jr4GPxgIwzOWY1", icon: "✈", tone: "#229ed9" },
   { id: "afdian", label: "爱发电", title: "爱发电支持", description: "国内赞助入口，支持一点服务器电费。", href: "https://afdian.com/a/doumiaojiang", icon: "⚡", tone: "#946cff" },
   { id: "patreon", label: "Patreon", title: "Patreon", description: "海外赞助入口，适合长期支持。", href: "https://www.patreon.com/customize?step=navigation", icon: "P", tone: "#ff424d" },
   { id: "coffee", label: "Coffee", title: "来一杯咖啡", description: "请作者喝杯咖啡，继续加玩法。", href: "https://buymeacoffee.com/doumiaojiang", icon: "☕", tone: "#f2b84b" }
+] as const;
+
+export const luv4uLinks = [
+  { id: "x", label: "X", title: "关注 X 账号", description: "看看腐竹的日常", href: "https://x.com/0x8023", icon: "𝕏", tone: "#111827" },
+  { id: "x", label: "X", title: "关注 X 账号", description: "看看腐竹的色图。", href: "https://x.com/YukiHoshikawa", icon: "𝕏", tone: "#111827" },
+  { id: "telegram", label: "TG", title: "TG 私聊", description: "与腐竹说点悄悄话", href: "https://t.me/+X1Jr4GPxgIwzOWY1", icon: "✈", tone: "#229ed9" }
 ] as const;

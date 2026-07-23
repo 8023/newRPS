@@ -364,6 +364,60 @@ export const wire = $root.wire = (() => {
         };
 
         /**
+         * Verifies an Envelope message.
+         * @function verify
+         * @memberof wire.Envelope
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Envelope.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.event != null && $Object.hasOwnProperty.call(message, "event"))
+                if (!$util.isString(message.event))
+                    return "event: string expected";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isInteger(message.id) && !(message.id && $util.isInteger(message.id.low) && $util.isInteger(message.id.high)))
+                    return "id: integer|Long expected";
+            if (message.err != null && $Object.hasOwnProperty.call(message, "err"))
+                if (!$util.isString(message.err))
+                    return "err: string expected";
+            if (message.kind != null && $Object.hasOwnProperty.call(message, "kind"))
+                if (typeof message.kind !== "number" || (message.kind | 0) !== message.kind)
+                    return "kind: enum value expected";
+            if (message.channel != null && $Object.hasOwnProperty.call(message, "channel"))
+                if (!$util.isString(message.channel))
+                    return "channel: string expected";
+            if (message.seq != null && $Object.hasOwnProperty.call(message, "seq"))
+                if (!$util.isInteger(message.seq) && !(message.seq && $util.isInteger(message.seq.low) && $util.isInteger(message.seq.high)))
+                    return "seq: integer|Long expected";
+            if (message.hash != null && $Object.hasOwnProperty.call(message, "hash"))
+                if (!$util.isString(message.hash))
+                    return "hash: string expected";
+            if (message.fullState != null && $Object.hasOwnProperty.call(message, "fullState")) {
+                let error = $root.game.StateDocument.verify(message.fullState, _depth + 1);
+                if (error)
+                    return "fullState." + error;
+            }
+            if (message.delta != null && $Object.hasOwnProperty.call(message, "delta")) {
+                let error = $root.wire.StateDelta.verify(message.delta, _depth + 1);
+                if (error)
+                    return "delta." + error;
+            }
+            if (message.rawBody != null && $Object.hasOwnProperty.call(message, "rawBody")) {
+                let error = $root.game.RawBody.verify(message.rawBody, _depth + 1);
+                if (error)
+                    return "rawBody." + error;
+            }
+            return null;
+        };
+
+        /**
          * Creates an Envelope message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof wire.Envelope
@@ -731,6 +785,33 @@ export const wire = $root.wire = (() => {
         };
 
         /**
+         * Verifies a StateDelta message.
+         * @function verify
+         * @memberof wire.StateDelta
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StateDelta.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.ops != null && $Object.hasOwnProperty.call(message, "ops")) {
+                if (!$Array.isArray(message.ops))
+                    return "ops: array expected";
+                for (let i = 0; i < message.ops.length; ++i) {
+                    let error = $root.wire.PatchOp.verify(message.ops[i], _depth + 1);
+                    if (error)
+                        return "ops." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
          * Creates a StateDelta message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof wire.StateDelta
@@ -1019,6 +1100,35 @@ export const wire = $root.wire = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PatchOp message.
+         * @function verify
+         * @memberof wire.PatchOp
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PatchOp.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.path != null && $Object.hasOwnProperty.call(message, "path"))
+                if (!$util.isString(message.path))
+                    return "path: string expected";
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value")) {
+                let error = $root.google.protobuf.Value.verify(message.value, _depth + 1);
+                if (error)
+                    return "value." + error;
+            }
+            if (message.remove != null && $Object.hasOwnProperty.call(message, "remove"))
+                if (typeof message.remove !== "boolean")
+                    return "remove: boolean expected";
+            return null;
         };
 
         /**
@@ -1328,6 +1438,33 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a GenderColors message.
+         * @function verify
+         * @memberof game.GenderColors
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GenderColors.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.textColor != null && $Object.hasOwnProperty.call(message, "textColor"))
+                if (!$util.isString(message.textColor))
+                    return "textColor: string expected";
+            if (message.backgroundColor != null && $Object.hasOwnProperty.call(message, "backgroundColor"))
+                if (!$util.isString(message.backgroundColor))
+                    return "backgroundColor: string expected";
+            if (message.borderColor != null && $Object.hasOwnProperty.call(message, "borderColor"))
+                if (!$util.isString(message.borderColor))
+                    return "borderColor: string expected";
+            return null;
+        };
+
+        /**
          * Creates a GenderColors message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.GenderColors
@@ -1516,7 +1653,7 @@ export const game = $root.game = (() => {
             if (message.label != null && $Object.hasOwnProperty.call(message, "label") && message.label !== "")
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.label);
             if (message.factionId != null && $Object.hasOwnProperty.call(message, "factionId") && message.factionId !== "")
-                writer.uint32(/* id 3, wireType 2 =*/26).string(message.factionId);
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.factionId);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -1582,7 +1719,7 @@ export const game = $root.game = (() => {
                             delete message.label;
                         continue;
                     }
-                case 3: {
+                case 4: {
                         if (wireType !== 2)
                             break;
                         if ((value = reader.stringVerify()).length)
@@ -1617,6 +1754,33 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GenderOption message.
+         * @function verify
+         * @memberof game.GenderOption
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GenderOption.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.label != null && $Object.hasOwnProperty.call(message, "label"))
+                if (!$util.isString(message.label))
+                    return "label: string expected";
+            if (message.factionId != null && $Object.hasOwnProperty.call(message, "factionId"))
+                if (!$util.isString(message.factionId))
+                    return "factionId: string expected";
+            return null;
         };
 
         /**
@@ -1718,7 +1882,7 @@ export const game = $root.game = (() => {
          * @property {string|null} [textColor] GenderFaction textColor
          * @property {string|null} [backgroundColor] GenderFaction backgroundColor
          * @property {string|null} [borderColor] GenderFaction borderColor
-         * @property {Array.<game.GenderOption.$Properties>|null} [genders] GenderFaction genders
+         * @property {string|null} [taskGroup] GenderFaction taskGroup
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -1744,7 +1908,6 @@ export const game = $root.game = (() => {
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GenderFaction = function (properties) {
-            this.genders = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -1792,12 +1955,12 @@ export const game = $root.game = (() => {
         GenderFaction.prototype.borderColor = "";
 
         /**
-         * GenderFaction genders.
-         * @member {Array.<game.GenderOption.$Properties>} genders
+         * GenderFaction taskGroup.
+         * @member {string} taskGroup
          * @memberof game.GenderFaction
          * @instance
          */
-        GenderFaction.prototype.genders = $util.emptyArray;
+        GenderFaction.prototype.taskGroup = "";
 
         /**
          * Creates a new GenderFaction instance using the specified properties.
@@ -1841,9 +2004,8 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.backgroundColor);
             if (message.borderColor != null && $Object.hasOwnProperty.call(message, "borderColor") && message.borderColor !== "")
                 writer.uint32(/* id 5, wireType 2 =*/42).string(message.borderColor);
-            if (message.genders != null && message.genders.length)
-                for (let i = 0; i < message.genders.length; ++i)
-                    $root.game.GenderOption.encode(message.genders[i], writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
+            if (message.taskGroup != null && $Object.hasOwnProperty.call(message, "taskGroup") && message.taskGroup !== "")
+                writer.uint32(/* id 7, wireType 2 =*/58).string(message.taskGroup);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -1936,12 +2098,13 @@ export const game = $root.game = (() => {
                             delete message.borderColor;
                         continue;
                     }
-                case 6: {
+                case 7: {
                         if (wireType !== 2)
                             break;
-                        if (!(message.genders && message.genders.length))
-                            message.genders = [];
-                        message.genders.push($root.game.GenderOption.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        if ((value = reader.stringVerify()).length)
+                            message.taskGroup = value;
+                        else
+                            delete message.taskGroup;
                         continue;
                     }
                 }
@@ -1970,6 +2133,42 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GenderFaction message.
+         * @function verify
+         * @memberof game.GenderFaction
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GenderFaction.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.label != null && $Object.hasOwnProperty.call(message, "label"))
+                if (!$util.isString(message.label))
+                    return "label: string expected";
+            if (message.textColor != null && $Object.hasOwnProperty.call(message, "textColor"))
+                if (!$util.isString(message.textColor))
+                    return "textColor: string expected";
+            if (message.backgroundColor != null && $Object.hasOwnProperty.call(message, "backgroundColor"))
+                if (!$util.isString(message.backgroundColor))
+                    return "backgroundColor: string expected";
+            if (message.borderColor != null && $Object.hasOwnProperty.call(message, "borderColor"))
+                if (!$util.isString(message.borderColor))
+                    return "borderColor: string expected";
+            if (message.taskGroup != null && $Object.hasOwnProperty.call(message, "taskGroup"))
+                if (!$util.isString(message.taskGroup))
+                    return "taskGroup: string expected";
+            return null;
         };
 
         /**
@@ -2005,16 +2204,9 @@ export const game = $root.game = (() => {
             if (object.borderColor != null)
                 if (typeof object.borderColor !== "string" || object.borderColor.length)
                     message.borderColor = $String(object.borderColor);
-            if (object.genders) {
-                if (!$Array.isArray(object.genders))
-                    throw $TypeError(".game.GenderFaction.genders: array expected");
-                message.genders = $Array(object.genders.length);
-                for (let i = 0; i < object.genders.length; ++i) {
-                    if (!$util.isObject(object.genders[i]))
-                        throw $TypeError(".game.GenderFaction.genders: object expected");
-                    message.genders[i] = $root.game.GenderOption.fromObject(object.genders[i], _depth + 1);
-                }
-            }
+            if (object.taskGroup != null)
+                if (typeof object.taskGroup !== "string" || object.taskGroup.length)
+                    message.taskGroup = $String(object.taskGroup);
             return message;
         };
 
@@ -2035,14 +2227,13 @@ export const game = $root.game = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let object = {};
-            if (options.arrays || options.defaults)
-                object.genders = [];
             if (options.defaults) {
                 object.id = "";
                 object.label = "";
                 object.textColor = "";
                 object.backgroundColor = "";
                 object.borderColor = "";
+                object.taskGroup = "";
             }
             if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
                 object.id = message.id;
@@ -2054,11 +2245,8 @@ export const game = $root.game = (() => {
                 object.backgroundColor = message.backgroundColor;
             if (message.borderColor != null && $Object.hasOwnProperty.call(message, "borderColor"))
                 object.borderColor = message.borderColor;
-            if (message.genders && message.genders.length) {
-                object.genders = $Array(message.genders.length);
-                for (let j = 0; j < message.genders.length; ++j)
-                    object.genders[j] = $root.game.GenderOption.toObject(message.genders[j], options, _depth + 1);
-            }
+            if (message.taskGroup != null && $Object.hasOwnProperty.call(message, "taskGroup"))
+                object.taskGroup = message.taskGroup;
             return object;
         };
 
@@ -2274,6 +2462,30 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a Pos message.
+         * @function verify
+         * @memberof game.Pos
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Pos.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.row != null && $Object.hasOwnProperty.call(message, "row"))
+                if (!$util.isInteger(message.row))
+                    return "row: integer expected";
+            if (message.col != null && $Object.hasOwnProperty.call(message, "col"))
+                if (!$util.isInteger(message.col))
+                    return "col: integer expected";
+            return null;
+        };
+
+        /**
          * Creates a Pos message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.Pos
@@ -2373,6 +2585,7 @@ export const game = $root.game = (() => {
          * @property {number|null} [sortRankedPoints] PublicStats sortRankedPoints
          * @property {number|null} [sortHighestScore] PublicStats sortHighestScore
          * @property {number|null} [sortLowestScore] PublicStats sortLowestScore
+         * @property {boolean|null} [titleCustom] PublicStats titleCustom
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -2501,6 +2714,14 @@ export const game = $root.game = (() => {
         PublicStats.prototype.sortLowestScore = 0;
 
         /**
+         * PublicStats titleCustom.
+         * @member {boolean} titleCustom
+         * @memberof game.PublicStats
+         * @instance
+         */
+        PublicStats.prototype.titleCustom = false;
+
+        /**
          * Creates a new PublicStats instance using the specified properties.
          * @function create
          * @memberof game.PublicStats
@@ -2556,6 +2777,8 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 11, wireType 0 =*/88).int32(message.sortHighestScore);
             if (message.sortLowestScore != null && $Object.hasOwnProperty.call(message, "sortLowestScore") && message.sortLowestScore !== 0)
                 writer.uint32(/* id 12, wireType 0 =*/96).int32(message.sortLowestScore);
+            if (message.titleCustom != null && $Object.hasOwnProperty.call(message, "titleCustom") && message.titleCustom !== false)
+                writer.uint32(/* id 13, wireType 0 =*/104).bool(message.titleCustom);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -2711,6 +2934,15 @@ export const game = $root.game = (() => {
                             delete message.sortLowestScore;
                         continue;
                     }
+                case 13: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.titleCustom = value;
+                        else
+                            delete message.titleCustom;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -2737,6 +2969,63 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PublicStats message.
+         * @function verify
+         * @memberof game.PublicStats
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PublicStats.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.wins != null && $Object.hasOwnProperty.call(message, "wins"))
+                if (!$util.isInteger(message.wins))
+                    return "wins: integer expected";
+            if (message.losses != null && $Object.hasOwnProperty.call(message, "losses"))
+                if (!$util.isInteger(message.losses))
+                    return "losses: integer expected";
+            if (message.draws != null && $Object.hasOwnProperty.call(message, "draws"))
+                if (!$util.isInteger(message.draws))
+                    return "draws: integer expected";
+            if (message.punishments != null && $Object.hasOwnProperty.call(message, "punishments"))
+                if (!$util.isInteger(message.punishments))
+                    return "punishments: integer expected";
+            if (message.rankedPoints != null && $Object.hasOwnProperty.call(message, "rankedPoints"))
+                if (!$util.isInteger(message.rankedPoints))
+                    return "rankedPoints: integer expected";
+            if (message.title != null && $Object.hasOwnProperty.call(message, "title"))
+                if (!$util.isString(message.title))
+                    return "title: string expected";
+            if (message.titleSegmentId != null && $Object.hasOwnProperty.call(message, "titleSegmentId"))
+                if (!$util.isString(message.titleSegmentId))
+                    return "titleSegmentId: string expected";
+            if (message.highestScore != null && $Object.hasOwnProperty.call(message, "highestScore"))
+                if (!$util.isInteger(message.highestScore))
+                    return "highestScore: integer expected";
+            if (message.lowestScore != null && $Object.hasOwnProperty.call(message, "lowestScore"))
+                if (!$util.isInteger(message.lowestScore))
+                    return "lowestScore: integer expected";
+            if (message.sortRankedPoints != null && $Object.hasOwnProperty.call(message, "sortRankedPoints"))
+                if (!$util.isInteger(message.sortRankedPoints))
+                    return "sortRankedPoints: integer expected";
+            if (message.sortHighestScore != null && $Object.hasOwnProperty.call(message, "sortHighestScore"))
+                if (!$util.isInteger(message.sortHighestScore))
+                    return "sortHighestScore: integer expected";
+            if (message.sortLowestScore != null && $Object.hasOwnProperty.call(message, "sortLowestScore"))
+                if (!$util.isInteger(message.sortLowestScore))
+                    return "sortLowestScore: integer expected";
+            if (message.titleCustom != null && $Object.hasOwnProperty.call(message, "titleCustom"))
+                if (typeof message.titleCustom !== "boolean")
+                    return "titleCustom: boolean expected";
+            return null;
         };
 
         /**
@@ -2793,6 +3082,9 @@ export const game = $root.game = (() => {
             if (object.sortLowestScore != null)
                 if ($Number(object.sortLowestScore) !== 0)
                     message.sortLowestScore = object.sortLowestScore | 0;
+            if (object.titleCustom != null)
+                if (object.titleCustom)
+                    message.titleCustom = $Boolean(object.titleCustom);
             return message;
         };
 
@@ -2826,6 +3118,7 @@ export const game = $root.game = (() => {
                 object.sortRankedPoints = 0;
                 object.sortHighestScore = 0;
                 object.sortLowestScore = 0;
+                object.titleCustom = false;
             }
             if (message.wins != null && $Object.hasOwnProperty.call(message, "wins"))
                 object.wins = message.wins;
@@ -2851,6 +3144,8 @@ export const game = $root.game = (() => {
                 object.sortHighestScore = message.sortHighestScore;
             if (message.sortLowestScore != null && $Object.hasOwnProperty.call(message, "sortLowestScore"))
                 object.sortLowestScore = message.sortLowestScore;
+            if (message.titleCustom != null && $Object.hasOwnProperty.call(message, "titleCustom"))
+                object.titleCustom = message.titleCustom;
             return object;
         };
 
@@ -2898,6 +3193,7 @@ export const game = $root.game = (() => {
          * @property {number|null} [sortRankedPoints] LobbyStats sortRankedPoints
          * @property {number|null} [sortHighestScore] LobbyStats sortHighestScore
          * @property {number|null} [sortLowestScore] LobbyStats sortLowestScore
+         * @property {boolean|null} [titleCustom] LobbyStats titleCustom
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -3018,6 +3314,14 @@ export const game = $root.game = (() => {
         LobbyStats.prototype.sortLowestScore = 0;
 
         /**
+         * LobbyStats titleCustom.
+         * @member {boolean} titleCustom
+         * @memberof game.LobbyStats
+         * @instance
+         */
+        LobbyStats.prototype.titleCustom = false;
+
+        /**
          * Creates a new LobbyStats instance using the specified properties.
          * @function create
          * @memberof game.LobbyStats
@@ -3071,6 +3375,8 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 10, wireType 0 =*/80).int32(message.sortHighestScore);
             if (message.sortLowestScore != null && $Object.hasOwnProperty.call(message, "sortLowestScore") && message.sortLowestScore !== 0)
                 writer.uint32(/* id 11, wireType 0 =*/88).int32(message.sortLowestScore);
+            if (message.titleCustom != null && $Object.hasOwnProperty.call(message, "titleCustom") && message.titleCustom !== false)
+                writer.uint32(/* id 12, wireType 0 =*/96).bool(message.titleCustom);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -3217,6 +3523,15 @@ export const game = $root.game = (() => {
                             delete message.sortLowestScore;
                         continue;
                     }
+                case 12: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.titleCustom = value;
+                        else
+                            delete message.titleCustom;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -3243,6 +3558,60 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a LobbyStats message.
+         * @function verify
+         * @memberof game.LobbyStats
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        LobbyStats.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.wins != null && $Object.hasOwnProperty.call(message, "wins"))
+                if (!$util.isInteger(message.wins))
+                    return "wins: integer expected";
+            if (message.losses != null && $Object.hasOwnProperty.call(message, "losses"))
+                if (!$util.isInteger(message.losses))
+                    return "losses: integer expected";
+            if (message.draws != null && $Object.hasOwnProperty.call(message, "draws"))
+                if (!$util.isInteger(message.draws))
+                    return "draws: integer expected";
+            if (message.punishments != null && $Object.hasOwnProperty.call(message, "punishments"))
+                if (!$util.isInteger(message.punishments))
+                    return "punishments: integer expected";
+            if (message.rankedPoints != null && $Object.hasOwnProperty.call(message, "rankedPoints"))
+                if (!$util.isInteger(message.rankedPoints))
+                    return "rankedPoints: integer expected";
+            if (message.title != null && $Object.hasOwnProperty.call(message, "title"))
+                if (!$util.isString(message.title))
+                    return "title: string expected";
+            if (message.highestScore != null && $Object.hasOwnProperty.call(message, "highestScore"))
+                if (!$util.isInteger(message.highestScore))
+                    return "highestScore: integer expected";
+            if (message.lowestScore != null && $Object.hasOwnProperty.call(message, "lowestScore"))
+                if (!$util.isInteger(message.lowestScore))
+                    return "lowestScore: integer expected";
+            if (message.sortRankedPoints != null && $Object.hasOwnProperty.call(message, "sortRankedPoints"))
+                if (!$util.isInteger(message.sortRankedPoints))
+                    return "sortRankedPoints: integer expected";
+            if (message.sortHighestScore != null && $Object.hasOwnProperty.call(message, "sortHighestScore"))
+                if (!$util.isInteger(message.sortHighestScore))
+                    return "sortHighestScore: integer expected";
+            if (message.sortLowestScore != null && $Object.hasOwnProperty.call(message, "sortLowestScore"))
+                if (!$util.isInteger(message.sortLowestScore))
+                    return "sortLowestScore: integer expected";
+            if (message.titleCustom != null && $Object.hasOwnProperty.call(message, "titleCustom"))
+                if (typeof message.titleCustom !== "boolean")
+                    return "titleCustom: boolean expected";
+            return null;
         };
 
         /**
@@ -3296,6 +3665,9 @@ export const game = $root.game = (() => {
             if (object.sortLowestScore != null)
                 if ($Number(object.sortLowestScore) !== 0)
                     message.sortLowestScore = object.sortLowestScore | 0;
+            if (object.titleCustom != null)
+                if (object.titleCustom)
+                    message.titleCustom = $Boolean(object.titleCustom);
             return message;
         };
 
@@ -3328,6 +3700,7 @@ export const game = $root.game = (() => {
                 object.sortRankedPoints = 0;
                 object.sortHighestScore = 0;
                 object.sortLowestScore = 0;
+                object.titleCustom = false;
             }
             if (message.wins != null && $Object.hasOwnProperty.call(message, "wins"))
                 object.wins = message.wins;
@@ -3351,6 +3724,8 @@ export const game = $root.game = (() => {
                 object.sortHighestScore = message.sortHighestScore;
             if (message.sortLowestScore != null && $Object.hasOwnProperty.call(message, "sortLowestScore"))
                 object.sortLowestScore = message.sortLowestScore;
+            if (message.titleCustom != null && $Object.hasOwnProperty.call(message, "titleCustom"))
+                object.titleCustom = message.titleCustom;
             return object;
         };
 
@@ -3583,6 +3958,33 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GameWLD message.
+         * @function verify
+         * @memberof game.GameWLD
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GameWLD.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.wins != null && $Object.hasOwnProperty.call(message, "wins"))
+                if (!$util.isInteger(message.wins))
+                    return "wins: integer expected";
+            if (message.losses != null && $Object.hasOwnProperty.call(message, "losses"))
+                if (!$util.isInteger(message.losses))
+                    return "losses: integer expected";
+            if (message.draws != null && $Object.hasOwnProperty.call(message, "draws"))
+                if (!$util.isInteger(message.draws))
+                    return "draws: integer expected";
+            return null;
         };
 
         /**
@@ -3900,6 +4302,49 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GameStats message.
+         * @function verify
+         * @memberof game.GameStats
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GameStats.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.rps != null && $Object.hasOwnProperty.call(message, "rps")) {
+                let error = $root.game.GameWLD.verify(message.rps, _depth + 1);
+                if (error)
+                    return "rps." + error;
+            }
+            if (message.othello != null && $Object.hasOwnProperty.call(message, "othello")) {
+                let error = $root.game.GameWLD.verify(message.othello, _depth + 1);
+                if (error)
+                    return "othello." + error;
+            }
+            if (message.tictactoe != null && $Object.hasOwnProperty.call(message, "tictactoe")) {
+                let error = $root.game.GameWLD.verify(message.tictactoe, _depth + 1);
+                if (error)
+                    return "tictactoe." + error;
+            }
+            if (message.gomoku != null && $Object.hasOwnProperty.call(message, "gomoku")) {
+                let error = $root.game.GameWLD.verify(message.gomoku, _depth + 1);
+                if (error)
+                    return "gomoku." + error;
+            }
+            if (message.liarsdice != null && $Object.hasOwnProperty.call(message, "liarsdice")) {
+                let error = $root.game.GameWLD.verify(message.liarsdice, _depth + 1);
+                if (error)
+                    return "liarsdice." + error;
+            }
+            return null;
         };
 
         /**
@@ -5205,6 +5650,189 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PublicPlayer message.
+         * @function verify
+         * @memberof game.PublicPlayer
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PublicPlayer.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.genderId != null && $Object.hasOwnProperty.call(message, "genderId"))
+                if (!$util.isString(message.genderId))
+                    return "genderId: string expected";
+            if (message.genderLabel != null && $Object.hasOwnProperty.call(message, "genderLabel"))
+                if (!$util.isString(message.genderLabel))
+                    return "genderLabel: string expected";
+            if (message.factionId != null && $Object.hasOwnProperty.call(message, "factionId"))
+                if (!$util.isString(message.factionId))
+                    return "factionId: string expected";
+            if (message.avatarUrl != null && $Object.hasOwnProperty.call(message, "avatarUrl"))
+                if (!$util.isString(message.avatarUrl))
+                    return "avatarUrl: string expected";
+            if (message.factionLabel != null && $Object.hasOwnProperty.call(message, "factionLabel"))
+                if (!$util.isString(message.factionLabel))
+                    return "factionLabel: string expected";
+            if (message.factionColors != null && $Object.hasOwnProperty.call(message, "factionColors")) {
+                let error = $root.game.GenderColors.verify(message.factionColors, _depth + 1);
+                if (error)
+                    return "factionColors." + error;
+            }
+            if (message.displayName != null && $Object.hasOwnProperty.call(message, "displayName"))
+                if (!$util.isString(message.displayName))
+                    return "displayName: string expected";
+            if (message.connected != null && $Object.hasOwnProperty.call(message, "connected"))
+                if (typeof message.connected !== "boolean")
+                    return "connected: boolean expected";
+            if (message.disconnectedAt != null && $Object.hasOwnProperty.call(message, "disconnectedAt"))
+                if (!$util.isInteger(message.disconnectedAt) && !(message.disconnectedAt && $util.isInteger(message.disconnectedAt.low) && $util.isInteger(message.disconnectedAt.high)))
+                    return "disconnectedAt: integer|Long expected";
+            if (message.disconnectExpiresAt != null && $Object.hasOwnProperty.call(message, "disconnectExpiresAt"))
+                if (!$util.isInteger(message.disconnectExpiresAt) && !(message.disconnectExpiresAt && $util.isInteger(message.disconnectExpiresAt.low) && $util.isInteger(message.disconnectExpiresAt.high)))
+                    return "disconnectExpiresAt: integer|Long expected";
+            if (message.profileUpdatedAt != null && $Object.hasOwnProperty.call(message, "profileUpdatedAt"))
+                if (!$util.isInteger(message.profileUpdatedAt) && !(message.profileUpdatedAt && $util.isInteger(message.profileUpdatedAt.low) && $util.isInteger(message.profileUpdatedAt.high)))
+                    return "profileUpdatedAt: integer|Long expected";
+            if (message.nameWarEnabled != null && $Object.hasOwnProperty.call(message, "nameWarEnabled"))
+                if (typeof message.nameWarEnabled !== "boolean")
+                    return "nameWarEnabled: boolean expected";
+            if (message.nameWarToggledAt != null && $Object.hasOwnProperty.call(message, "nameWarToggledAt"))
+                if (!$util.isInteger(message.nameWarToggledAt) && !(message.nameWarToggledAt && $util.isInteger(message.nameWarToggledAt.low) && $util.isInteger(message.nameWarToggledAt.high)))
+                    return "nameWarToggledAt: integer|Long expected";
+            if (message.nameWarOriginalName != null && $Object.hasOwnProperty.call(message, "nameWarOriginalName"))
+                if (!$util.isString(message.nameWarOriginalName))
+                    return "nameWarOriginalName: string expected";
+            if (message.nameWarPenaltyName != null && $Object.hasOwnProperty.call(message, "nameWarPenaltyName"))
+                if (!$util.isString(message.nameWarPenaltyName))
+                    return "nameWarPenaltyName: string expected";
+            if (message.nameWarPunished != null && $Object.hasOwnProperty.call(message, "nameWarPunished"))
+                if (typeof message.nameWarPunished !== "boolean")
+                    return "nameWarPunished: boolean expected";
+            if (message.nameWarAllowRename != null && $Object.hasOwnProperty.call(message, "nameWarAllowRename"))
+                if (typeof message.nameWarAllowRename !== "boolean")
+                    return "nameWarAllowRename: boolean expected";
+            if (message.nameWarRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "nameWarRenameProtectedUntil"))
+                if (!$util.isInteger(message.nameWarRenameProtectedUntil) && !(message.nameWarRenameProtectedUntil && $util.isInteger(message.nameWarRenameProtectedUntil.low) && $util.isInteger(message.nameWarRenameProtectedUntil.high)))
+                    return "nameWarRenameProtectedUntil: integer|Long expected";
+            if (message.nameWarRenamedBy != null && $Object.hasOwnProperty.call(message, "nameWarRenamedBy"))
+                if (!$util.isString(message.nameWarRenamedBy))
+                    return "nameWarRenamedBy: string expected";
+            if (message.nameWarRenamedByName != null && $Object.hasOwnProperty.call(message, "nameWarRenamedByName"))
+                if (!$util.isString(message.nameWarRenamedByName))
+                    return "nameWarRenamedByName: string expected";
+            if (message.nameWarRenameWindowStartedAt != null && $Object.hasOwnProperty.call(message, "nameWarRenameWindowStartedAt"))
+                if (!$util.isInteger(message.nameWarRenameWindowStartedAt) && !(message.nameWarRenameWindowStartedAt && $util.isInteger(message.nameWarRenameWindowStartedAt.low) && $util.isInteger(message.nameWarRenameWindowStartedAt.high)))
+                    return "nameWarRenameWindowStartedAt: integer|Long expected";
+            if (message.nameWarRenameCount != null && $Object.hasOwnProperty.call(message, "nameWarRenameCount"))
+                if (!$util.isInteger(message.nameWarRenameCount))
+                    return "nameWarRenameCount: integer expected";
+            if (message.giveawayEnabled != null && $Object.hasOwnProperty.call(message, "giveawayEnabled"))
+                if (typeof message.giveawayEnabled !== "boolean")
+                    return "giveawayEnabled: boolean expected";
+            if (message.giveawayValue != null && $Object.hasOwnProperty.call(message, "giveawayValue"))
+                if (typeof message.giveawayValue !== "number")
+                    return "giveawayValue: number expected";
+            if (message.giveawayClicks != null && $Object.hasOwnProperty.call(message, "giveawayClicks"))
+                if (!$util.isInteger(message.giveawayClicks))
+                    return "giveawayClicks: integer expected";
+            if (message.giveawayBoardText != null && $Object.hasOwnProperty.call(message, "giveawayBoardText"))
+                if (!$util.isString(message.giveawayBoardText))
+                    return "giveawayBoardText: string expected";
+            if (message.giveawayBoardSubmittedAt != null && $Object.hasOwnProperty.call(message, "giveawayBoardSubmittedAt"))
+                if (!$util.isInteger(message.giveawayBoardSubmittedAt) && !(message.giveawayBoardSubmittedAt && $util.isInteger(message.giveawayBoardSubmittedAt.low) && $util.isInteger(message.giveawayBoardSubmittedAt.high)))
+                    return "giveawayBoardSubmittedAt: integer|Long expected";
+            if (message.giveawayBoardExpiresAt != null && $Object.hasOwnProperty.call(message, "giveawayBoardExpiresAt"))
+                if (!$util.isInteger(message.giveawayBoardExpiresAt) && !(message.giveawayBoardExpiresAt && $util.isInteger(message.giveawayBoardExpiresAt.low) && $util.isInteger(message.giveawayBoardExpiresAt.high)))
+                    return "giveawayBoardExpiresAt: integer|Long expected";
+            if (message.giveawayBoardLikes != null && $Object.hasOwnProperty.call(message, "giveawayBoardLikes"))
+                if (!$util.isInteger(message.giveawayBoardLikes))
+                    return "giveawayBoardLikes: integer expected";
+            if (message.giveawayBoardDislikes != null && $Object.hasOwnProperty.call(message, "giveawayBoardDislikes"))
+                if (!$util.isInteger(message.giveawayBoardDislikes))
+                    return "giveawayBoardDislikes: integer expected";
+            if (message.giveawayBoardLikesThisHour != null && $Object.hasOwnProperty.call(message, "giveawayBoardLikesThisHour"))
+                if (!$util.isInteger(message.giveawayBoardLikesThisHour))
+                    return "giveawayBoardLikesThisHour: integer expected";
+            if (message.giveawayBoardLikeWindowStartedAt != null && $Object.hasOwnProperty.call(message, "giveawayBoardLikeWindowStartedAt"))
+                if (!$util.isInteger(message.giveawayBoardLikeWindowStartedAt) && !(message.giveawayBoardLikeWindowStartedAt && $util.isInteger(message.giveawayBoardLikeWindowStartedAt.low) && $util.isInteger(message.giveawayBoardLikeWindowStartedAt.high)))
+                    return "giveawayBoardLikeWindowStartedAt: integer|Long expected";
+            if (message.giveawayVoteWindowStartedAt != null && $Object.hasOwnProperty.call(message, "giveawayVoteWindowStartedAt"))
+                if (!$util.isInteger(message.giveawayVoteWindowStartedAt) && !(message.giveawayVoteWindowStartedAt && $util.isInteger(message.giveawayVoteWindowStartedAt.low) && $util.isInteger(message.giveawayVoteWindowStartedAt.high)))
+                    return "giveawayVoteWindowStartedAt: integer|Long expected";
+            if (message.giveawayVoteCount != null && $Object.hasOwnProperty.call(message, "giveawayVoteCount"))
+                if (!$util.isInteger(message.giveawayVoteCount))
+                    return "giveawayVoteCount: integer expected";
+            if (message.giveawayVoteLikesThisHour != null && $Object.hasOwnProperty.call(message, "giveawayVoteLikesThisHour"))
+                if (!$util.isInteger(message.giveawayVoteLikesThisHour))
+                    return "giveawayVoteLikesThisHour: integer expected";
+            if (message.giveawayVoteDislikesThisHour != null && $Object.hasOwnProperty.call(message, "giveawayVoteDislikesThisHour"))
+                if (!$util.isInteger(message.giveawayVoteDislikesThisHour))
+                    return "giveawayVoteDislikesThisHour: integer expected";
+            if (message.rankMultiplierUnlocked != null && $Object.hasOwnProperty.call(message, "rankMultiplierUnlocked"))
+                if (typeof message.rankMultiplierUnlocked !== "boolean")
+                    return "rankMultiplierUnlocked: boolean expected";
+            if (message.extremeModeEnabled != null && $Object.hasOwnProperty.call(message, "extremeModeEnabled"))
+                if (typeof message.extremeModeEnabled !== "boolean")
+                    return "extremeModeEnabled: boolean expected";
+            if (message.extremeModeToggledAt != null && $Object.hasOwnProperty.call(message, "extremeModeToggledAt"))
+                if (!$util.isInteger(message.extremeModeToggledAt) && !(message.extremeModeToggledAt && $util.isInteger(message.extremeModeToggledAt.low) && $util.isInteger(message.extremeModeToggledAt.high)))
+                    return "extremeModeToggledAt: integer|Long expected";
+            if (message.extremeModeCooldownUntil != null && $Object.hasOwnProperty.call(message, "extremeModeCooldownUntil"))
+                if (!$util.isInteger(message.extremeModeCooldownUntil) && !(message.extremeModeCooldownUntil && $util.isInteger(message.extremeModeCooldownUntil.low) && $util.isInteger(message.extremeModeCooldownUntil.high)))
+                    return "extremeModeCooldownUntil: integer|Long expected";
+            if (message.extremeWinStreak != null && $Object.hasOwnProperty.call(message, "extremeWinStreak"))
+                if (!$util.isInteger(message.extremeWinStreak))
+                    return "extremeWinStreak: integer expected";
+            if (message.extremeLastDecayHour != null && $Object.hasOwnProperty.call(message, "extremeLastDecayHour"))
+                if (!$util.isInteger(message.extremeLastDecayHour) && !(message.extremeLastDecayHour && $util.isInteger(message.extremeLastDecayHour.low) && $util.isInteger(message.extremeLastDecayHour.high)))
+                    return "extremeLastDecayHour: integer|Long expected";
+            if (message.extremeForceClosed != null && $Object.hasOwnProperty.call(message, "extremeForceClosed"))
+                if (typeof message.extremeForceClosed !== "boolean")
+                    return "extremeForceClosed: boolean expected";
+            if (message.extremeForceClosedAt != null && $Object.hasOwnProperty.call(message, "extremeForceClosedAt"))
+                if (!$util.isInteger(message.extremeForceClosedAt) && !(message.extremeForceClosedAt && $util.isInteger(message.extremeForceClosedAt.low) && $util.isInteger(message.extremeForceClosedAt.high)))
+                    return "extremeForceClosedAt: integer|Long expected";
+            if (message.extremeRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "extremeRenameProtectedUntil"))
+                if (!$util.isInteger(message.extremeRenameProtectedUntil) && !(message.extremeRenameProtectedUntil && $util.isInteger(message.extremeRenameProtectedUntil.low) && $util.isInteger(message.extremeRenameProtectedUntil.high)))
+                    return "extremeRenameProtectedUntil: integer|Long expected";
+            if (message.extremeRenamedBy != null && $Object.hasOwnProperty.call(message, "extremeRenamedBy"))
+                if (!$util.isString(message.extremeRenamedBy))
+                    return "extremeRenamedBy: string expected";
+            if (message.extremeRenamedByName != null && $Object.hasOwnProperty.call(message, "extremeRenamedByName"))
+                if (!$util.isString(message.extremeRenamedByName))
+                    return "extremeRenamedByName: string expected";
+            if (message.roomId != null && $Object.hasOwnProperty.call(message, "roomId"))
+                if (!$util.isString(message.roomId))
+                    return "roomId: string expected";
+            if (message.isAdmin != null && $Object.hasOwnProperty.call(message, "isAdmin"))
+                if (typeof message.isAdmin !== "boolean")
+                    return "isAdmin: boolean expected";
+            if (message.stats != null && $Object.hasOwnProperty.call(message, "stats")) {
+                let error = $root.game.PublicStats.verify(message.stats, _depth + 1);
+                if (error)
+                    return "stats." + error;
+            }
+            if (message.gameStats != null && $Object.hasOwnProperty.call(message, "gameStats")) {
+                let error = $root.game.GameStats.verify(message.gameStats, _depth + 1);
+                if (error)
+                    return "gameStats." + error;
+            }
+            return null;
         };
 
         /**
@@ -6657,6 +7285,132 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a LobbyPlayer message.
+         * @function verify
+         * @memberof game.LobbyPlayer
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        LobbyPlayer.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.genderId != null && $Object.hasOwnProperty.call(message, "genderId"))
+                if (!$util.isString(message.genderId))
+                    return "genderId: string expected";
+            if (message.genderLabel != null && $Object.hasOwnProperty.call(message, "genderLabel"))
+                if (!$util.isString(message.genderLabel))
+                    return "genderLabel: string expected";
+            if (message.factionId != null && $Object.hasOwnProperty.call(message, "factionId"))
+                if (!$util.isString(message.factionId))
+                    return "factionId: string expected";
+            if (message.factionLabel != null && $Object.hasOwnProperty.call(message, "factionLabel"))
+                if (!$util.isString(message.factionLabel))
+                    return "factionLabel: string expected";
+            if (message.factionColors != null && $Object.hasOwnProperty.call(message, "factionColors")) {
+                let error = $root.game.GenderColors.verify(message.factionColors, _depth + 1);
+                if (error)
+                    return "factionColors." + error;
+            }
+            if (message.displayName != null && $Object.hasOwnProperty.call(message, "displayName"))
+                if (!$util.isString(message.displayName))
+                    return "displayName: string expected";
+            if (message.connected != null && $Object.hasOwnProperty.call(message, "connected"))
+                if (typeof message.connected !== "boolean")
+                    return "connected: boolean expected";
+            if (message.disconnectedAt != null && $Object.hasOwnProperty.call(message, "disconnectedAt"))
+                if (!$util.isInteger(message.disconnectedAt) && !(message.disconnectedAt && $util.isInteger(message.disconnectedAt.low) && $util.isInteger(message.disconnectedAt.high)))
+                    return "disconnectedAt: integer|Long expected";
+            if (message.disconnectExpiresAt != null && $Object.hasOwnProperty.call(message, "disconnectExpiresAt"))
+                if (!$util.isInteger(message.disconnectExpiresAt) && !(message.disconnectExpiresAt && $util.isInteger(message.disconnectExpiresAt.low) && $util.isInteger(message.disconnectExpiresAt.high)))
+                    return "disconnectExpiresAt: integer|Long expected";
+            if (message.nameWarEnabled != null && $Object.hasOwnProperty.call(message, "nameWarEnabled"))
+                if (typeof message.nameWarEnabled !== "boolean")
+                    return "nameWarEnabled: boolean expected";
+            if (message.nameWarPenaltyName != null && $Object.hasOwnProperty.call(message, "nameWarPenaltyName"))
+                if (!$util.isString(message.nameWarPenaltyName))
+                    return "nameWarPenaltyName: string expected";
+            if (message.nameWarPunished != null && $Object.hasOwnProperty.call(message, "nameWarPunished"))
+                if (typeof message.nameWarPunished !== "boolean")
+                    return "nameWarPunished: boolean expected";
+            if (message.nameWarAllowRename != null && $Object.hasOwnProperty.call(message, "nameWarAllowRename"))
+                if (typeof message.nameWarAllowRename !== "boolean")
+                    return "nameWarAllowRename: boolean expected";
+            if (message.nameWarRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "nameWarRenameProtectedUntil"))
+                if (!$util.isInteger(message.nameWarRenameProtectedUntil) && !(message.nameWarRenameProtectedUntil && $util.isInteger(message.nameWarRenameProtectedUntil.low) && $util.isInteger(message.nameWarRenameProtectedUntil.high)))
+                    return "nameWarRenameProtectedUntil: integer|Long expected";
+            if (message.nameWarRenamedByName != null && $Object.hasOwnProperty.call(message, "nameWarRenamedByName"))
+                if (!$util.isString(message.nameWarRenamedByName))
+                    return "nameWarRenamedByName: string expected";
+            if (message.giveawayEnabled != null && $Object.hasOwnProperty.call(message, "giveawayEnabled"))
+                if (typeof message.giveawayEnabled !== "boolean")
+                    return "giveawayEnabled: boolean expected";
+            if (message.giveawayValue != null && $Object.hasOwnProperty.call(message, "giveawayValue"))
+                if (typeof message.giveawayValue !== "number")
+                    return "giveawayValue: number expected";
+            if (message.giveawayBoardText != null && $Object.hasOwnProperty.call(message, "giveawayBoardText"))
+                if (!$util.isString(message.giveawayBoardText))
+                    return "giveawayBoardText: string expected";
+            if (message.giveawayBoardExpiresAt != null && $Object.hasOwnProperty.call(message, "giveawayBoardExpiresAt"))
+                if (!$util.isInteger(message.giveawayBoardExpiresAt) && !(message.giveawayBoardExpiresAt && $util.isInteger(message.giveawayBoardExpiresAt.low) && $util.isInteger(message.giveawayBoardExpiresAt.high)))
+                    return "giveawayBoardExpiresAt: integer|Long expected";
+            if (message.giveawayBoardLikes != null && $Object.hasOwnProperty.call(message, "giveawayBoardLikes"))
+                if (!$util.isInteger(message.giveawayBoardLikes))
+                    return "giveawayBoardLikes: integer expected";
+            if (message.giveawayBoardDislikes != null && $Object.hasOwnProperty.call(message, "giveawayBoardDislikes"))
+                if (!$util.isInteger(message.giveawayBoardDislikes))
+                    return "giveawayBoardDislikes: integer expected";
+            if (message.rankMultiplierUnlocked != null && $Object.hasOwnProperty.call(message, "rankMultiplierUnlocked"))
+                if (typeof message.rankMultiplierUnlocked !== "boolean")
+                    return "rankMultiplierUnlocked: boolean expected";
+            if (message.extremeModeEnabled != null && $Object.hasOwnProperty.call(message, "extremeModeEnabled"))
+                if (typeof message.extremeModeEnabled !== "boolean")
+                    return "extremeModeEnabled: boolean expected";
+            if (message.extremeWinStreak != null && $Object.hasOwnProperty.call(message, "extremeWinStreak"))
+                if (!$util.isInteger(message.extremeWinStreak))
+                    return "extremeWinStreak: integer expected";
+            if (message.extremeForceClosed != null && $Object.hasOwnProperty.call(message, "extremeForceClosed"))
+                if (typeof message.extremeForceClosed !== "boolean")
+                    return "extremeForceClosed: boolean expected";
+            if (message.extremeForceClosedAt != null && $Object.hasOwnProperty.call(message, "extremeForceClosedAt"))
+                if (!$util.isInteger(message.extremeForceClosedAt) && !(message.extremeForceClosedAt && $util.isInteger(message.extremeForceClosedAt.low) && $util.isInteger(message.extremeForceClosedAt.high)))
+                    return "extremeForceClosedAt: integer|Long expected";
+            if (message.extremeRenameProtectedUntil != null && $Object.hasOwnProperty.call(message, "extremeRenameProtectedUntil"))
+                if (!$util.isInteger(message.extremeRenameProtectedUntil) && !(message.extremeRenameProtectedUntil && $util.isInteger(message.extremeRenameProtectedUntil.low) && $util.isInteger(message.extremeRenameProtectedUntil.high)))
+                    return "extremeRenameProtectedUntil: integer|Long expected";
+            if (message.extremeRenamedByName != null && $Object.hasOwnProperty.call(message, "extremeRenamedByName"))
+                if (!$util.isString(message.extremeRenamedByName))
+                    return "extremeRenamedByName: string expected";
+            if (message.roomId != null && $Object.hasOwnProperty.call(message, "roomId"))
+                if (!$util.isString(message.roomId))
+                    return "roomId: string expected";
+            if (message.stats != null && $Object.hasOwnProperty.call(message, "stats")) {
+                let error = $root.game.LobbyStats.verify(message.stats, _depth + 1);
+                if (error)
+                    return "stats." + error;
+            }
+            if (message.gameStats != null && $Object.hasOwnProperty.call(message, "gameStats")) {
+                let error = $root.game.GameStats.verify(message.gameStats, _depth + 1);
+                if (error)
+                    return "gameStats." + error;
+            }
+            if (message.avatarUrl != null && $Object.hasOwnProperty.call(message, "avatarUrl"))
+                if (!$util.isString(message.avatarUrl))
+                    return "avatarUrl: string expected";
+            return null;
+        };
+
+        /**
          * Creates a LobbyPlayer message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.LobbyPlayer
@@ -7257,6 +8011,36 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a BotPlayer message.
+         * @function verify
+         * @memberof game.BotPlayer
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        BotPlayer.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.difficulty != null && $Object.hasOwnProperty.call(message, "difficulty"))
+                if (!$util.isString(message.difficulty))
+                    return "difficulty: string expected";
+            if (message.isBot != null && $Object.hasOwnProperty.call(message, "isBot"))
+                if (typeof message.isBot !== "boolean")
+                    return "isBot: boolean expected";
+            return null;
+        };
+
+        /**
          * Creates a BotPlayer message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.BotPlayer
@@ -7549,6 +8333,43 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a SeatOccupant message.
+         * @function verify
+         * @memberof game.SeatOccupant
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SeatOccupant.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            let properties = {};
+            if (message.player != null && $Object.hasOwnProperty.call(message, "player")) {
+                properties.kind = 1;
+                {
+                    let error = $root.game.PublicPlayer.verify(message.player, _depth + 1);
+                    if (error)
+                        return "player." + error;
+                }
+            }
+            if (message.bot != null && $Object.hasOwnProperty.call(message, "bot")) {
+                if (properties.kind === 1)
+                    return "kind: multiple values";
+                properties.kind = 1;
+                {
+                    let error = $root.game.BotPlayer.verify(message.bot, _depth + 1);
+                    if (error)
+                        return "bot." + error;
+                }
+            }
+            return null;
         };
 
         /**
@@ -7984,6 +8805,54 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a ChatMessage message.
+         * @function verify
+         * @memberof game.ChatMessage
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ChatMessage.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.roomId != null && $Object.hasOwnProperty.call(message, "roomId"))
+                if (!$util.isString(message.roomId))
+                    return "roomId: string expected";
+            if (message.playerId != null && $Object.hasOwnProperty.call(message, "playerId"))
+                if (!$util.isString(message.playerId))
+                    return "playerId: string expected";
+            if (message.author != null && $Object.hasOwnProperty.call(message, "author"))
+                if (!$util.isString(message.author))
+                    return "author: string expected";
+            if (message.authorRole != null && $Object.hasOwnProperty.call(message, "authorRole"))
+                if (!$util.isString(message.authorRole))
+                    return "authorRole: string expected";
+            if (message.text != null && $Object.hasOwnProperty.call(message, "text"))
+                if (!$util.isString(message.text))
+                    return "text: string expected";
+            if (message.at != null && $Object.hasOwnProperty.call(message, "at"))
+                if (!$util.isInteger(message.at) && !(message.at && $util.isInteger(message.at.low) && $util.isInteger(message.at.high)))
+                    return "at: integer|Long expected";
+            if (message.system != null && $Object.hasOwnProperty.call(message, "system"))
+                if (typeof message.system !== "boolean")
+                    return "system: boolean expected";
+            if (message.transient != null && $Object.hasOwnProperty.call(message, "transient"))
+                if (typeof message.transient !== "boolean")
+                    return "transient: boolean expected";
+            if (message.expiresAt != null && $Object.hasOwnProperty.call(message, "expiresAt"))
+                if (!$util.isInteger(message.expiresAt) && !(message.expiresAt && $util.isInteger(message.expiresAt.low) && $util.isInteger(message.expiresAt.high)))
+                    return "expiresAt: integer|Long expected";
+            return null;
+        };
+
+        /**
          * Creates a ChatMessage message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.ChatMessage
@@ -8404,6 +9273,44 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Suggestion message.
+         * @function verify
+         * @memberof game.Suggestion
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Suggestion.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.playerId != null && $Object.hasOwnProperty.call(message, "playerId"))
+                if (!$util.isString(message.playerId))
+                    return "playerId: string expected";
+            if (message.author != null && $Object.hasOwnProperty.call(message, "author"))
+                if (!$util.isString(message.author))
+                    return "author: string expected";
+            if (message.authorPlayer != null && $Object.hasOwnProperty.call(message, "authorPlayer")) {
+                let error = $root.game.PublicPlayer.verify(message.authorPlayer, _depth + 1);
+                if (error)
+                    return "authorPlayer." + error;
+            }
+            if (message.text != null && $Object.hasOwnProperty.call(message, "text"))
+                if (!$util.isString(message.text))
+                    return "text: string expected";
+            if (message.at != null && $Object.hasOwnProperty.call(message, "at"))
+                if (!$util.isInteger(message.at) && !(message.at && $util.isInteger(message.at.low) && $util.isInteger(message.at.high)))
+                    return "at: integer|Long expected";
+            return null;
         };
 
         /**
@@ -9277,6 +10184,122 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a RoomSettings message.
+         * @function verify
+         * @memberof game.RoomSettings
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RoomSettings.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.password != null && $Object.hasOwnProperty.call(message, "password"))
+                if (!$util.isString(message.password))
+                    return "password: string expected";
+            if (message.gameId != null && $Object.hasOwnProperty.call(message, "gameId"))
+                if (!$util.isString(message.gameId))
+                    return "gameId: string expected";
+            if (message.enableBot != null && $Object.hasOwnProperty.call(message, "enableBot"))
+                if (typeof message.enableBot !== "boolean")
+                    return "enableBot: boolean expected";
+            if (message.botDifficulty != null && $Object.hasOwnProperty.call(message, "botDifficulty"))
+                if (!$util.isString(message.botDifficulty))
+                    return "botDifficulty: string expected";
+            if (message.enablePunishment != null && $Object.hasOwnProperty.call(message, "enablePunishment"))
+                if (typeof message.enablePunishment !== "boolean")
+                    return "enablePunishment: boolean expected";
+            if (message.punishmentSource != null && $Object.hasOwnProperty.call(message, "punishmentSource"))
+                if (!$util.isString(message.punishmentSource))
+                    return "punishmentSource: string expected";
+            if (message.punishmentId != null && $Object.hasOwnProperty.call(message, "punishmentId"))
+                if (!$util.isString(message.punishmentId))
+                    return "punishmentId: string expected";
+            if (message.punishmentIds != null && $Object.hasOwnProperty.call(message, "punishmentIds")) {
+                if (!$Array.isArray(message.punishmentIds))
+                    return "punishmentIds: array expected";
+                for (let i = 0; i < message.punishmentIds.length; ++i)
+                    if (!$util.isString(message.punishmentIds[i]))
+                        return "punishmentIds: string[] expected";
+            }
+            if (message.roomBackgroundImage != null && $Object.hasOwnProperty.call(message, "roomBackgroundImage"))
+                if (!$util.isString(message.roomBackgroundImage))
+                    return "roomBackgroundImage: string expected";
+            if (message.enableTags != null && $Object.hasOwnProperty.call(message, "enableTags"))
+                if (typeof message.enableTags !== "boolean")
+                    return "enableTags: boolean expected";
+            if (message.tags != null && $Object.hasOwnProperty.call(message, "tags")) {
+                if (!$Array.isArray(message.tags))
+                    return "tags: array expected";
+                for (let i = 0; i < message.tags.length; ++i)
+                    if (!$util.isString(message.tags[i]))
+                        return "tags: string[] expected";
+            }
+            if (message.allowProofImage != null && $Object.hasOwnProperty.call(message, "allowProofImage"))
+                if (typeof message.allowProofImage !== "boolean")
+                    return "allowProofImage: boolean expected";
+            if (message.tieDoublePunish != null && $Object.hasOwnProperty.call(message, "tieDoublePunish"))
+                if (typeof message.tieDoublePunish !== "boolean")
+                    return "tieDoublePunish: boolean expected";
+            if (message.requireOpponentConfirm != null && $Object.hasOwnProperty.call(message, "requireOpponentConfirm"))
+                if (typeof message.requireOpponentConfirm !== "boolean")
+                    return "requireOpponentConfirm: boolean expected";
+            if (message.enableRanked != null && $Object.hasOwnProperty.call(message, "enableRanked"))
+                if (typeof message.enableRanked !== "boolean")
+                    return "enableRanked: boolean expected";
+            if (message.stake != null && $Object.hasOwnProperty.call(message, "stake"))
+                if (!$util.isInteger(message.stake))
+                    return "stake: integer expected";
+            if (message.enableRankMultiplier != null && $Object.hasOwnProperty.call(message, "enableRankMultiplier"))
+                if (typeof message.enableRankMultiplier !== "boolean")
+                    return "enableRankMultiplier: boolean expected";
+            if (message.rankMultiplier != null && $Object.hasOwnProperty.call(message, "rankMultiplier"))
+                if (!$util.isInteger(message.rankMultiplier))
+                    return "rankMultiplier: integer expected";
+            if (message.enableExtremeRanked != null && $Object.hasOwnProperty.call(message, "enableExtremeRanked"))
+                if (typeof message.enableExtremeRanked !== "boolean")
+                    return "enableExtremeRanked: boolean expected";
+            if (message.othelloBoardTheme != null && $Object.hasOwnProperty.call(message, "othelloBoardTheme"))
+                if (!$util.isString(message.othelloBoardTheme))
+                    return "othelloBoardTheme: string expected";
+            if (message.tictactoeBoardTheme != null && $Object.hasOwnProperty.call(message, "tictactoeBoardTheme"))
+                if (!$util.isString(message.tictactoeBoardTheme))
+                    return "tictactoeBoardTheme: string expected";
+            if (message.liarsDiceMinPlayers != null && $Object.hasOwnProperty.call(message, "liarsDiceMinPlayers"))
+                if (!$util.isInteger(message.liarsDiceMinPlayers))
+                    return "liarsDiceMinPlayers: integer expected";
+            if (message.liarsDiceMaxPlayers != null && $Object.hasOwnProperty.call(message, "liarsDiceMaxPlayers"))
+                if (!$util.isInteger(message.liarsDiceMaxPlayers))
+                    return "liarsDiceMaxPlayers: integer expected";
+            if (message.gomokuBoardTheme != null && $Object.hasOwnProperty.call(message, "gomokuBoardTheme"))
+                if (!$util.isString(message.gomokuBoardTheme))
+                    return "gomokuBoardTheme: string expected";
+            if (message.gomokuUndoLimit != null && $Object.hasOwnProperty.call(message, "gomokuUndoLimit"))
+                if (!$util.isInteger(message.gomokuUndoLimit))
+                    return "gomokuUndoLimit: integer expected";
+            if (message.othelloMoveSeconds != null && $Object.hasOwnProperty.call(message, "othelloMoveSeconds"))
+                if (!$util.isInteger(message.othelloMoveSeconds))
+                    return "othelloMoveSeconds: integer expected";
+            if (message.othelloGameMinutes != null && $Object.hasOwnProperty.call(message, "othelloGameMinutes"))
+                if (!$util.isInteger(message.othelloGameMinutes))
+                    return "othelloGameMinutes: integer expected";
+            if (message.gomokuMoveSeconds != null && $Object.hasOwnProperty.call(message, "gomokuMoveSeconds"))
+                if (!$util.isInteger(message.gomokuMoveSeconds))
+                    return "gomokuMoveSeconds: integer expected";
+            if (message.gomokuGameMinutes != null && $Object.hasOwnProperty.call(message, "gomokuGameMinutes"))
+                if (!$util.isInteger(message.gomokuGameMinutes))
+                    return "gomokuGameMinutes: integer expected";
+            return null;
+        };
+
+        /**
          * Creates a RoomSettings message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.RoomSettings
@@ -9767,6 +10790,36 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a GomokuUndoRequest message.
+         * @function verify
+         * @memberof game.GomokuUndoRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GomokuUndoRequest.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat"))
+                if (!$util.isString(message.fromSeat))
+                    return "fromSeat: string expected";
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat"))
+                if (!$util.isString(message.toSeat))
+                    return "toSeat: string expected";
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt"))
+                if (!$util.isInteger(message.createdAt) && !(message.createdAt && $util.isInteger(message.createdAt.low) && $util.isInteger(message.createdAt.high)))
+                    return "createdAt: integer|Long expected";
+            if (message.expiresAt != null && $Object.hasOwnProperty.call(message, "expiresAt"))
+                if (!$util.isInteger(message.expiresAt) && !(message.expiresAt && $util.isInteger(message.expiresAt.low) && $util.isInteger(message.expiresAt.high)))
+                    return "expiresAt: integer|Long expected";
+            return null;
+        };
+
+        /**
          * Creates a GomokuUndoRequest message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.GomokuUndoRequest
@@ -10094,6 +11147,33 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GomokuResignRequest message.
+         * @function verify
+         * @memberof game.GomokuResignRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GomokuResignRequest.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat"))
+                if (!$util.isString(message.fromSeat))
+                    return "fromSeat: string expected";
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat"))
+                if (!$util.isString(message.toSeat))
+                    return "toSeat: string expected";
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt"))
+                if (!$util.isInteger(message.createdAt) && !(message.createdAt && $util.isInteger(message.createdAt.low) && $util.isInteger(message.createdAt.high)))
+                    return "createdAt: integer|Long expected";
+            return null;
         };
 
         /**
@@ -10642,6 +11722,109 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GomokuState message.
+         * @function verify
+         * @memberof game.GomokuState
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GomokuState.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.board != null && $Object.hasOwnProperty.call(message, "board")) {
+                if (!$Array.isArray(message.board))
+                    return "board: array expected";
+                for (let i = 0; i < message.board.length; ++i) {
+                    let error = $root.game.BoardRow.verify(message.board[i], _depth + 1);
+                    if (error)
+                        return "board." + error;
+                }
+            }
+            if (message.turn != null && $Object.hasOwnProperty.call(message, "turn"))
+                if (!$util.isString(message.turn))
+                    return "turn: string expected";
+            if (message.blackSeat != null && $Object.hasOwnProperty.call(message, "blackSeat"))
+                if (!$util.isString(message.blackSeat))
+                    return "blackSeat: string expected";
+            if (message.moveCount != null && $Object.hasOwnProperty.call(message, "moveCount"))
+                if (!$util.isInteger(message.moveCount))
+                    return "moveCount: integer expected";
+            if (message.moves != null && $Object.hasOwnProperty.call(message, "moves")) {
+                if (!$Array.isArray(message.moves))
+                    return "moves: array expected";
+                for (let i = 0; i < message.moves.length; ++i) {
+                    let error = $root.game.Pos.verify(message.moves[i], _depth + 1);
+                    if (error)
+                        return "moves." + error;
+                }
+            }
+            if (message.winningLine != null && $Object.hasOwnProperty.call(message, "winningLine")) {
+                if (!$Array.isArray(message.winningLine))
+                    return "winningLine: array expected";
+                for (let i = 0; i < message.winningLine.length; ++i) {
+                    let error = $root.game.Pos.verify(message.winningLine[i], _depth + 1);
+                    if (error)
+                        return "winningLine." + error;
+                }
+            }
+            if (message.rankedDelta != null && $Object.hasOwnProperty.call(message, "rankedDelta")) {
+                if (!$Array.isArray(message.rankedDelta))
+                    return "rankedDelta: array expected";
+                for (let i = 0; i < message.rankedDelta.length; ++i) {
+                    let error = $root.game.IntPair.verify(message.rankedDelta[i], _depth + 1);
+                    if (error)
+                        return "rankedDelta." + error;
+                }
+            }
+            if (message.undoCount != null && $Object.hasOwnProperty.call(message, "undoCount")) {
+                if (!$Array.isArray(message.undoCount))
+                    return "undoCount: array expected";
+                for (let i = 0; i < message.undoCount.length; ++i) {
+                    let error = $root.game.IntPair.verify(message.undoCount[i], _depth + 1);
+                    if (error)
+                        return "undoCount." + error;
+                }
+            }
+            if (message.undoRequest != null && $Object.hasOwnProperty.call(message, "undoRequest")) {
+                let error = $root.game.GomokuUndoRequest.verify(message.undoRequest, _depth + 1);
+                if (error)
+                    return "undoRequest." + error;
+            }
+            if (message.resignRequest != null && $Object.hasOwnProperty.call(message, "resignRequest")) {
+                let error = $root.game.GomokuResignRequest.verify(message.resignRequest, _depth + 1);
+                if (error)
+                    return "resignRequest." + error;
+            }
+            if (message.ended != null && $Object.hasOwnProperty.call(message, "ended"))
+                if (typeof message.ended !== "boolean")
+                    return "ended: boolean expected";
+            if (message.winner != null && $Object.hasOwnProperty.call(message, "winner"))
+                if (!$util.isString(message.winner))
+                    return "winner: string expected";
+            if (message.moveDeadlineAt != null && $Object.hasOwnProperty.call(message, "moveDeadlineAt"))
+                if (!$util.isInteger(message.moveDeadlineAt) && !(message.moveDeadlineAt && $util.isInteger(message.moveDeadlineAt.low) && $util.isInteger(message.moveDeadlineAt.high)))
+                    return "moveDeadlineAt: integer|Long expected";
+            if (message.clockDeadlineAt != null && $Object.hasOwnProperty.call(message, "clockDeadlineAt"))
+                if (!$util.isInteger(message.clockDeadlineAt) && !(message.clockDeadlineAt && $util.isInteger(message.clockDeadlineAt.low) && $util.isInteger(message.clockDeadlineAt.high)))
+                    return "clockDeadlineAt: integer|Long expected";
+            if (message.clockRemaining != null && $Object.hasOwnProperty.call(message, "clockRemaining")) {
+                if (!$Array.isArray(message.clockRemaining))
+                    return "clockRemaining: array expected";
+                for (let i = 0; i < message.clockRemaining.length; ++i) {
+                    let error = $root.game.IntPair.verify(message.clockRemaining[i], _depth + 1);
+                    if (error)
+                        return "clockRemaining." + error;
+                }
+            }
+            return null;
         };
 
         /**
@@ -11267,6 +12450,57 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a PunishmentProof message.
+         * @function verify
+         * @memberof game.PunishmentProof
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PunishmentProof.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.playerId != null && $Object.hasOwnProperty.call(message, "playerId"))
+                if (!$util.isString(message.playerId))
+                    return "playerId: string expected";
+            if (message.text != null && $Object.hasOwnProperty.call(message, "text"))
+                if (!$util.isString(message.text))
+                    return "text: string expected";
+            if (message.imageUrl != null && $Object.hasOwnProperty.call(message, "imageUrl"))
+                if (!$util.isString(message.imageUrl))
+                    return "imageUrl: string expected";
+            if (message.taskText != null && $Object.hasOwnProperty.call(message, "taskText"))
+                if (!$util.isString(message.taskText))
+                    return "taskText: string expected";
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+                if (!$util.isString(message.status))
+                    return "status: string expected";
+            if (message.confirmedBy != null && $Object.hasOwnProperty.call(message, "confirmedBy"))
+                if (!$util.isString(message.confirmedBy))
+                    return "confirmedBy: string expected";
+            if (message.reviewedBy != null && $Object.hasOwnProperty.call(message, "reviewedBy"))
+                if (!$util.isString(message.reviewedBy))
+                    return "reviewedBy: string expected";
+            if (message.reviewedAt != null && $Object.hasOwnProperty.call(message, "reviewedAt"))
+                if (!$util.isInteger(message.reviewedAt) && !(message.reviewedAt && $util.isInteger(message.reviewedAt.low) && $util.isInteger(message.reviewedAt.high)))
+                    return "reviewedAt: integer|Long expected";
+            if (message.rejectReason != null && $Object.hasOwnProperty.call(message, "rejectReason"))
+                if (!$util.isString(message.rejectReason))
+                    return "rejectReason: string expected";
+            if (message.redoTaskText != null && $Object.hasOwnProperty.call(message, "redoTaskText"))
+                if (!$util.isString(message.redoTaskText))
+                    return "redoTaskText: string expected";
+            if (message.submittedAt != null && $Object.hasOwnProperty.call(message, "submittedAt"))
+                if (!$util.isInteger(message.submittedAt) && !(message.submittedAt && $util.isInteger(message.submittedAt.low) && $util.isInteger(message.submittedAt.high)))
+                    return "submittedAt: integer|Long expected";
+            return null;
+        };
+
+        /**
          * Creates a PunishmentProof message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.PunishmentProof
@@ -11659,6 +12893,36 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a SeatStats message.
+         * @function verify
+         * @memberof game.SeatStats
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SeatStats.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.wins != null && $Object.hasOwnProperty.call(message, "wins"))
+                if (!$util.isInteger(message.wins))
+                    return "wins: integer expected";
+            if (message.losses != null && $Object.hasOwnProperty.call(message, "losses"))
+                if (!$util.isInteger(message.losses))
+                    return "losses: integer expected";
+            if (message.draws != null && $Object.hasOwnProperty.call(message, "draws"))
+                if (!$util.isInteger(message.draws))
+                    return "draws: integer expected";
+            if (message.punishments != null && $Object.hasOwnProperty.call(message, "punishments"))
+                if (!$util.isInteger(message.punishments))
+                    return "punishments: integer expected";
+            return null;
+        };
+
+        /**
          * Creates a SeatStats message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.SeatStats
@@ -11934,6 +13198,30 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies an OthelloScore message.
+         * @function verify
+         * @memberof game.OthelloScore
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        OthelloScore.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.black != null && $Object.hasOwnProperty.call(message, "black"))
+                if (!$util.isInteger(message.black))
+                    return "black: integer expected";
+            if (message.white != null && $Object.hasOwnProperty.call(message, "white"))
+                if (!$util.isInteger(message.white))
+                    return "white: integer expected";
+            return null;
         };
 
         /**
@@ -12340,6 +13628,51 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PunishmentTask message.
+         * @function verify
+         * @memberof game.PunishmentTask
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PunishmentTask.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.playerId != null && $Object.hasOwnProperty.call(message, "playerId"))
+                if (!$util.isString(message.playerId))
+                    return "playerId: string expected";
+            if (message.playerName != null && $Object.hasOwnProperty.call(message, "playerName"))
+                if (!$util.isString(message.playerName))
+                    return "playerName: string expected";
+            if (message.factionId != null && $Object.hasOwnProperty.call(message, "factionId"))
+                if (!$util.isString(message.factionId))
+                    return "factionId: string expected";
+            if (message.factionLabel != null && $Object.hasOwnProperty.call(message, "factionLabel"))
+                if (!$util.isString(message.factionLabel))
+                    return "factionLabel: string expected";
+            if (message.taskText != null && $Object.hasOwnProperty.call(message, "taskText"))
+                if (!$util.isString(message.taskText))
+                    return "taskText: string expected";
+            if (message.backgroundImage != null && $Object.hasOwnProperty.call(message, "backgroundImage"))
+                if (!$util.isString(message.backgroundImage))
+                    return "backgroundImage: string expected";
+            if (message.backgroundOpacity != null && $Object.hasOwnProperty.call(message, "backgroundOpacity"))
+                if (typeof message.backgroundOpacity !== "number")
+                    return "backgroundOpacity: number expected";
+            if (message.assignedBy != null && $Object.hasOwnProperty.call(message, "assignedBy"))
+                if (!$util.isString(message.assignedBy))
+                    return "assignedBy: string expected";
+            if (message.assignedByName != null && $Object.hasOwnProperty.call(message, "assignedByName"))
+                if (!$util.isString(message.assignedByName))
+                    return "assignedByName: string expected";
+            return null;
         };
 
         /**
@@ -12828,6 +14161,57 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a HistoryProof message.
+         * @function verify
+         * @memberof game.HistoryProof
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        HistoryProof.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.playerId != null && $Object.hasOwnProperty.call(message, "playerId"))
+                if (!$util.isString(message.playerId))
+                    return "playerId: string expected";
+            if (message.playerName != null && $Object.hasOwnProperty.call(message, "playerName"))
+                if (!$util.isString(message.playerName))
+                    return "playerName: string expected";
+            if (message.text != null && $Object.hasOwnProperty.call(message, "text"))
+                if (!$util.isString(message.text))
+                    return "text: string expected";
+            if (message.imageUrl != null && $Object.hasOwnProperty.call(message, "imageUrl"))
+                if (!$util.isString(message.imageUrl))
+                    return "imageUrl: string expected";
+            if (message.taskText != null && $Object.hasOwnProperty.call(message, "taskText"))
+                if (!$util.isString(message.taskText))
+                    return "taskText: string expected";
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+                if (!$util.isString(message.status))
+                    return "status: string expected";
+            if (message.reviewedBy != null && $Object.hasOwnProperty.call(message, "reviewedBy"))
+                if (!$util.isString(message.reviewedBy))
+                    return "reviewedBy: string expected";
+            if (message.reviewedAt != null && $Object.hasOwnProperty.call(message, "reviewedAt"))
+                if (!$util.isInteger(message.reviewedAt) && !(message.reviewedAt && $util.isInteger(message.reviewedAt.low) && $util.isInteger(message.reviewedAt.high)))
+                    return "reviewedAt: integer|Long expected";
+            if (message.rejectReason != null && $Object.hasOwnProperty.call(message, "rejectReason"))
+                if (!$util.isString(message.rejectReason))
+                    return "rejectReason: string expected";
+            if (message.redoTaskText != null && $Object.hasOwnProperty.call(message, "redoTaskText"))
+                if (!$util.isString(message.redoTaskText))
+                    return "redoTaskText: string expected";
+            if (message.submittedAt != null && $Object.hasOwnProperty.call(message, "submittedAt"))
+                if (!$util.isInteger(message.submittedAt) && !(message.submittedAt && $util.isInteger(message.submittedAt.low) && $util.isInteger(message.submittedAt.high)))
+                    return "submittedAt: integer|Long expected";
+            return null;
         };
 
         /**
@@ -13848,6 +15232,175 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a RoundHistoryItem message.
+         * @function verify
+         * @memberof game.RoundHistoryItem
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RoundHistoryItem.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.round != null && $Object.hasOwnProperty.call(message, "round"))
+                if (!$util.isInteger(message.round))
+                    return "round: integer expected";
+            if (message.at != null && $Object.hasOwnProperty.call(message, "at"))
+                if (!$util.isInteger(message.at) && !(message.at && $util.isInteger(message.at.low) && $util.isInteger(message.at.high)))
+                    return "at: integer|Long expected";
+            if (message.playerA != null && $Object.hasOwnProperty.call(message, "playerA"))
+                if (!$util.isString(message.playerA))
+                    return "playerA: string expected";
+            if (message.playerB != null && $Object.hasOwnProperty.call(message, "playerB"))
+                if (!$util.isString(message.playerB))
+                    return "playerB: string expected";
+            if (message.moveA != null && $Object.hasOwnProperty.call(message, "moveA"))
+                if (!$util.isString(message.moveA))
+                    return "moveA: string expected";
+            if (message.moveB != null && $Object.hasOwnProperty.call(message, "moveB"))
+                if (!$util.isString(message.moveB))
+                    return "moveB: string expected";
+            if (message.result != null && $Object.hasOwnProperty.call(message, "result"))
+                if (!$util.isString(message.result))
+                    return "result: string expected";
+            if (message.resultLabel != null && $Object.hasOwnProperty.call(message, "resultLabel"))
+                if (!$util.isString(message.resultLabel))
+                    return "resultLabel: string expected";
+            if (message.resultText != null && $Object.hasOwnProperty.call(message, "resultText"))
+                if (!$util.isString(message.resultText))
+                    return "resultText: string expected";
+            if (message.gameId != null && $Object.hasOwnProperty.call(message, "gameId"))
+                if (!$util.isString(message.gameId))
+                    return "gameId: string expected";
+            if (message.othelloScore != null && $Object.hasOwnProperty.call(message, "othelloScore")) {
+                let error = $root.game.OthelloScore.verify(message.othelloScore, _depth + 1);
+                if (error)
+                    return "othelloScore." + error;
+            }
+            if (message.othelloBlackSeat != null && $Object.hasOwnProperty.call(message, "othelloBlackSeat"))
+                if (!$util.isString(message.othelloBlackSeat))
+                    return "othelloBlackSeat: string expected";
+            if (message.tictactoeXSeat != null && $Object.hasOwnProperty.call(message, "tictactoeXSeat"))
+                if (!$util.isString(message.tictactoeXSeat))
+                    return "tictactoeXSeat: string expected";
+            if (message.tictactoeLine != null && $Object.hasOwnProperty.call(message, "tictactoeLine")) {
+                if (!$Array.isArray(message.tictactoeLine))
+                    return "tictactoeLine: array expected";
+                for (let i = 0; i < message.tictactoeLine.length; ++i) {
+                    let error = $root.game.Pos.verify(message.tictactoeLine[i], _depth + 1);
+                    if (error)
+                        return "tictactoeLine." + error;
+                }
+            }
+            if (message.ranked != null && $Object.hasOwnProperty.call(message, "ranked"))
+                if (typeof message.ranked !== "boolean")
+                    return "ranked: boolean expected";
+            if (message.stake != null && $Object.hasOwnProperty.call(message, "stake"))
+                if (!$util.isInteger(message.stake))
+                    return "stake: integer expected";
+            if (message.rankMultiplier != null && $Object.hasOwnProperty.call(message, "rankMultiplier"))
+                if (!$util.isInteger(message.rankMultiplier))
+                    return "rankMultiplier: integer expected";
+            if (message.effectiveStake != null && $Object.hasOwnProperty.call(message, "effectiveStake"))
+                if (!$util.isInteger(message.effectiveStake))
+                    return "effectiveStake: integer expected";
+            if (message.extremeRanked != null && $Object.hasOwnProperty.call(message, "extremeRanked"))
+                if (typeof message.extremeRanked !== "boolean")
+                    return "extremeRanked: boolean expected";
+            if (message.punishmentName != null && $Object.hasOwnProperty.call(message, "punishmentName"))
+                if (!$util.isString(message.punishmentName))
+                    return "punishmentName: string expected";
+            if (message.punishmentDescription != null && $Object.hasOwnProperty.call(message, "punishmentDescription"))
+                if (!$util.isString(message.punishmentDescription))
+                    return "punishmentDescription: string expected";
+            if (message.punishmentTasks != null && $Object.hasOwnProperty.call(message, "punishmentTasks")) {
+                if (!$Array.isArray(message.punishmentTasks))
+                    return "punishmentTasks: array expected";
+                for (let i = 0; i < message.punishmentTasks.length; ++i) {
+                    let error = $root.game.PunishmentTask.verify(message.punishmentTasks[i], _depth + 1);
+                    if (error)
+                        return "punishmentTasks." + error;
+                }
+            }
+            if (message.punishedNames != null && $Object.hasOwnProperty.call(message, "punishedNames")) {
+                if (!$Array.isArray(message.punishedNames))
+                    return "punishedNames: array expected";
+                for (let i = 0; i < message.punishedNames.length; ++i)
+                    if (!$util.isString(message.punishedNames[i]))
+                        return "punishedNames: string[] expected";
+            }
+            if (message.proofs != null && $Object.hasOwnProperty.call(message, "proofs")) {
+                if (!$Array.isArray(message.proofs))
+                    return "proofs: array expected";
+                for (let i = 0; i < message.proofs.length; ++i) {
+                    let error = $root.game.HistoryProof.verify(message.proofs[i], _depth + 1);
+                    if (error)
+                        return "proofs." + error;
+                }
+            }
+            if (message.liarsDiceWinnerId != null && $Object.hasOwnProperty.call(message, "liarsDiceWinnerId"))
+                if (!$util.isString(message.liarsDiceWinnerId))
+                    return "liarsDiceWinnerId: string expected";
+            if (message.liarsDiceLoserId != null && $Object.hasOwnProperty.call(message, "liarsDiceLoserId"))
+                if (!$util.isString(message.liarsDiceLoserId))
+                    return "liarsDiceLoserId: string expected";
+            if (message.liarsDiceBidCount != null && $Object.hasOwnProperty.call(message, "liarsDiceBidCount"))
+                if (!$util.isInteger(message.liarsDiceBidCount))
+                    return "liarsDiceBidCount: integer expected";
+            if (message.liarsDiceBidFace != null && $Object.hasOwnProperty.call(message, "liarsDiceBidFace"))
+                if (!$util.isInteger(message.liarsDiceBidFace))
+                    return "liarsDiceBidFace: integer expected";
+            if (message.liarsDiceActualCount != null && $Object.hasOwnProperty.call(message, "liarsDiceActualCount"))
+                if (!$util.isInteger(message.liarsDiceActualCount))
+                    return "liarsDiceActualCount: integer expected";
+            if (message.liarsDiceHands != null && $Object.hasOwnProperty.call(message, "liarsDiceHands")) {
+                if (!$Array.isArray(message.liarsDiceHands))
+                    return "liarsDiceHands: array expected";
+                for (let i = 0; i < message.liarsDiceHands.length; ++i) {
+                    let error = $root.game.LiarsDiceHandsPair.verify(message.liarsDiceHands[i], _depth + 1);
+                    if (error)
+                        return "liarsDiceHands." + error;
+                }
+            }
+            if (message.liarsDiceHandOrder != null && $Object.hasOwnProperty.call(message, "liarsDiceHandOrder")) {
+                if (!$Array.isArray(message.liarsDiceHandOrder))
+                    return "liarsDiceHandOrder: array expected";
+                for (let i = 0; i < message.liarsDiceHandOrder.length; ++i)
+                    if (!$util.isString(message.liarsDiceHandOrder[i]))
+                        return "liarsDiceHandOrder: string[] expected";
+            }
+            if (message.liarsDiceNames != null && $Object.hasOwnProperty.call(message, "liarsDiceNames")) {
+                if (!$Array.isArray(message.liarsDiceNames))
+                    return "liarsDiceNames: array expected";
+                for (let i = 0; i < message.liarsDiceNames.length; ++i) {
+                    let error = $root.game.StringPair.verify(message.liarsDiceNames[i], _depth + 1);
+                    if (error)
+                        return "liarsDiceNames." + error;
+                }
+            }
+            if (message.gomokuBlackSeat != null && $Object.hasOwnProperty.call(message, "gomokuBlackSeat"))
+                if (!$util.isString(message.gomokuBlackSeat))
+                    return "gomokuBlackSeat: string expected";
+            if (message.gomokuLine != null && $Object.hasOwnProperty.call(message, "gomokuLine")) {
+                if (!$Array.isArray(message.gomokuLine))
+                    return "gomokuLine: array expected";
+                for (let i = 0; i < message.gomokuLine.length; ++i) {
+                    let error = $root.game.Pos.verify(message.gomokuLine[i], _depth + 1);
+                    if (error)
+                        return "gomokuLine." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
          * Creates a RoundHistoryItem message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.RoundHistoryItem
@@ -14392,6 +15945,31 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies an Int32List message.
+         * @function verify
+         * @memberof game.Int32List
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Int32List.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.values != null && $Object.hasOwnProperty.call(message, "values")) {
+                if (!$Array.isArray(message.values))
+                    return "values: array expected";
+                for (let i = 0; i < message.values.length; ++i)
+                    if (!$util.isInteger(message.values[i]))
+                        return "values: integer[] expected";
+            }
+            return null;
+        };
+
+        /**
          * Creates an Int32List message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.Int32List
@@ -14652,6 +16230,32 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a LiarsDiceHandsPair message.
+         * @function verify
+         * @memberof game.LiarsDiceHandsPair
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        LiarsDiceHandsPair.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.key != null && $Object.hasOwnProperty.call(message, "key"))
+                if (!$util.isString(message.key))
+                    return "key: string expected";
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value")) {
+                let error = $root.game.Int32List.verify(message.value, _depth + 1);
+                if (error)
+                    return "value." + error;
+            }
+            return null;
         };
 
         /**
@@ -14960,6 +16564,36 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a LiarsDiceBid message.
+         * @function verify
+         * @memberof game.LiarsDiceBid
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        LiarsDiceBid.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.playerId != null && $Object.hasOwnProperty.call(message, "playerId"))
+                if (!$util.isString(message.playerId))
+                    return "playerId: string expected";
+            if (message.count != null && $Object.hasOwnProperty.call(message, "count"))
+                if (!$util.isInteger(message.count))
+                    return "count: integer expected";
+            if (message.face != null && $Object.hasOwnProperty.call(message, "face"))
+                if (!$util.isInteger(message.face))
+                    return "face: integer expected";
+            if (message.at != null && $Object.hasOwnProperty.call(message, "at"))
+                if (!$util.isInteger(message.at) && !(message.at && $util.isInteger(message.at.low) && $util.isInteger(message.at.high)))
+                    return "at: integer|Long expected";
+            return null;
         };
 
         /**
@@ -15519,6 +17153,97 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a LiarsDiceState message.
+         * @function verify
+         * @memberof game.LiarsDiceState
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        LiarsDiceState.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.participantIds != null && $Object.hasOwnProperty.call(message, "participantIds")) {
+                if (!$Array.isArray(message.participantIds))
+                    return "participantIds: array expected";
+                for (let i = 0; i < message.participantIds.length; ++i)
+                    if (!$util.isString(message.participantIds[i]))
+                        return "participantIds: string[] expected";
+            }
+            if (message.readyPlayerIds != null && $Object.hasOwnProperty.call(message, "readyPlayerIds")) {
+                if (!$Array.isArray(message.readyPlayerIds))
+                    return "readyPlayerIds: array expected";
+                for (let i = 0; i < message.readyPlayerIds.length; ++i)
+                    if (!$util.isString(message.readyPlayerIds[i]))
+                        return "readyPlayerIds: string[] expected";
+            }
+            if (message.diceCounts != null && $Object.hasOwnProperty.call(message, "diceCounts")) {
+                if (!$Array.isArray(message.diceCounts))
+                    return "diceCounts: array expected";
+                for (let i = 0; i < message.diceCounts.length; ++i) {
+                    let error = $root.game.IntPair.verify(message.diceCounts[i], _depth + 1);
+                    if (error)
+                        return "diceCounts." + error;
+                }
+            }
+            if (message.currentTurn != null && $Object.hasOwnProperty.call(message, "currentTurn"))
+                if (!$util.isString(message.currentTurn))
+                    return "currentTurn: string expected";
+            if (message.currentBid != null && $Object.hasOwnProperty.call(message, "currentBid")) {
+                let error = $root.game.LiarsDiceBid.verify(message.currentBid, _depth + 1);
+                if (error)
+                    return "currentBid." + error;
+            }
+            if (message.bidHistory != null && $Object.hasOwnProperty.call(message, "bidHistory")) {
+                if (!$Array.isArray(message.bidHistory))
+                    return "bidHistory: array expected";
+                for (let i = 0; i < message.bidHistory.length; ++i) {
+                    let error = $root.game.LiarsDiceBid.verify(message.bidHistory[i], _depth + 1);
+                    if (error)
+                        return "bidHistory." + error;
+                }
+            }
+            if (message.onesWildDisabled != null && $Object.hasOwnProperty.call(message, "onesWildDisabled"))
+                if (typeof message.onesWildDisabled !== "boolean")
+                    return "onesWildDisabled: boolean expected";
+            if (message.roundNumber != null && $Object.hasOwnProperty.call(message, "roundNumber"))
+                if (!$util.isInteger(message.roundNumber))
+                    return "roundNumber: integer expected";
+            if (message.ended != null && $Object.hasOwnProperty.call(message, "ended"))
+                if (typeof message.ended !== "boolean")
+                    return "ended: boolean expected";
+            if (message.winnerId != null && $Object.hasOwnProperty.call(message, "winnerId"))
+                if (!$util.isString(message.winnerId))
+                    return "winnerId: string expected";
+            if (message.loserId != null && $Object.hasOwnProperty.call(message, "loserId"))
+                if (!$util.isString(message.loserId))
+                    return "loserId: string expected";
+            if (message.revealedHands != null && $Object.hasOwnProperty.call(message, "revealedHands")) {
+                if (!$Array.isArray(message.revealedHands))
+                    return "revealedHands: array expected";
+                for (let i = 0; i < message.revealedHands.length; ++i) {
+                    let error = $root.game.LiarsDiceHandsPair.verify(message.revealedHands[i], _depth + 1);
+                    if (error)
+                        return "revealedHands." + error;
+                }
+            }
+            if (message.actualCount != null && $Object.hasOwnProperty.call(message, "actualCount"))
+                if (!$util.isInteger(message.actualCount))
+                    return "actualCount: integer expected";
+            if (message.minPlayers != null && $Object.hasOwnProperty.call(message, "minPlayers"))
+                if (!$util.isInteger(message.minPlayers))
+                    return "minPlayers: integer expected";
+            if (message.maxPlayers != null && $Object.hasOwnProperty.call(message, "maxPlayers"))
+                if (!$util.isInteger(message.maxPlayers))
+                    return "maxPlayers: integer expected";
+            return null;
+        };
+
+        /**
          * Creates a LiarsDiceState message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.LiarsDiceState
@@ -16051,6 +17776,51 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies an OthelloPendingSettlement message.
+         * @function verify
+         * @memberof game.OthelloPendingSettlement
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        OthelloPendingSettlement.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.seat != null && $Object.hasOwnProperty.call(message, "seat"))
+                if (!$util.isString(message.seat))
+                    return "seat: string expected";
+            if (message.opponentSeat != null && $Object.hasOwnProperty.call(message, "opponentSeat"))
+                if (!$util.isString(message.opponentSeat))
+                    return "opponentSeat: string expected";
+            if (message.flips != null && $Object.hasOwnProperty.call(message, "flips"))
+                if (!$util.isInteger(message.flips))
+                    return "flips: integer expected";
+            if (message.stake != null && $Object.hasOwnProperty.call(message, "stake"))
+                if (!$util.isInteger(message.stake))
+                    return "stake: integer expected";
+            if (message.nextTurn != null && $Object.hasOwnProperty.call(message, "nextTurn"))
+                if (!$util.isString(message.nextTurn))
+                    return "nextTurn: string expected";
+            if (message.expiresAt != null && $Object.hasOwnProperty.call(message, "expiresAt"))
+                if (!$util.isInteger(message.expiresAt) && !(message.expiresAt && $util.isInteger(message.expiresAt.low) && $util.isInteger(message.expiresAt.high)))
+                    return "expiresAt: integer|Long expected";
+            if (message.forced != null && $Object.hasOwnProperty.call(message, "forced"))
+                if (!$util.isString(message.forced))
+                    return "forced: string expected";
+            if (message.resolvedAs != null && $Object.hasOwnProperty.call(message, "resolvedAs"))
+                if (!$util.isString(message.resolvedAs))
+                    return "resolvedAs: string expected";
+            return null;
+        };
+
+        /**
          * Creates an OthelloPendingSettlement message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.OthelloPendingSettlement
@@ -16395,6 +18165,33 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies an OthelloSurrenderRequest message.
+         * @function verify
+         * @memberof game.OthelloSurrenderRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        OthelloSurrenderRequest.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat"))
+                if (!$util.isString(message.fromSeat))
+                    return "fromSeat: string expected";
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat"))
+                if (!$util.isString(message.toSeat))
+                    return "toSeat: string expected";
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt"))
+                if (!$util.isInteger(message.createdAt) && !(message.createdAt && $util.isInteger(message.createdAt.low) && $util.isInteger(message.createdAt.high)))
+                    return "createdAt: integer|Long expected";
+            return null;
+        };
+
+        /**
          * Creates an OthelloSurrenderRequest message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.OthelloSurrenderRequest
@@ -16664,6 +18461,31 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a BoardRow message.
+         * @function verify
+         * @memberof game.BoardRow
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        BoardRow.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.cells != null && $Object.hasOwnProperty.call(message, "cells")) {
+                if (!$Array.isArray(message.cells))
+                    return "cells: array expected";
+                for (let i = 0; i < message.cells.length; ++i)
+                    if (!$util.isString(message.cells[i]))
+                        return "cells: string[] expected";
+            }
+            return null;
+        };
+
+        /**
          * Creates a BoardRow message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.BoardRow
@@ -16927,6 +18749,30 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies an IntPair message.
+         * @function verify
+         * @memberof game.IntPair
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        IntPair.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.key != null && $Object.hasOwnProperty.call(message, "key"))
+                if (!$util.isString(message.key))
+                    return "key: string expected";
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
+                if (!$util.isInteger(message.value))
+                    return "value: integer expected";
+            return null;
         };
 
         /**
@@ -17475,6 +19321,104 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies an OthelloState message.
+         * @function verify
+         * @memberof game.OthelloState
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        OthelloState.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.board != null && $Object.hasOwnProperty.call(message, "board")) {
+                if (!$Array.isArray(message.board))
+                    return "board: array expected";
+                for (let i = 0; i < message.board.length; ++i) {
+                    let error = $root.game.BoardRow.verify(message.board[i], _depth + 1);
+                    if (error)
+                        return "board." + error;
+                }
+            }
+            if (message.turn != null && $Object.hasOwnProperty.call(message, "turn"))
+                if (!$util.isString(message.turn))
+                    return "turn: string expected";
+            if (message.blackSeat != null && $Object.hasOwnProperty.call(message, "blackSeat"))
+                if (!$util.isString(message.blackSeat))
+                    return "blackSeat: string expected";
+            if (message.legalMoves != null && $Object.hasOwnProperty.call(message, "legalMoves")) {
+                if (!$Array.isArray(message.legalMoves))
+                    return "legalMoves: array expected";
+                for (let i = 0; i < message.legalMoves.length; ++i) {
+                    let error = $root.game.Pos.verify(message.legalMoves[i], _depth + 1);
+                    if (error)
+                        return "legalMoves." + error;
+                }
+            }
+            if (message.passCount != null && $Object.hasOwnProperty.call(message, "passCount"))
+                if (!$util.isInteger(message.passCount))
+                    return "passCount: integer expected";
+            if (message.blackCount != null && $Object.hasOwnProperty.call(message, "blackCount"))
+                if (!$util.isInteger(message.blackCount))
+                    return "blackCount: integer expected";
+            if (message.whiteCount != null && $Object.hasOwnProperty.call(message, "whiteCount"))
+                if (!$util.isInteger(message.whiteCount))
+                    return "whiteCount: integer expected";
+            if (message.rankedDelta != null && $Object.hasOwnProperty.call(message, "rankedDelta")) {
+                if (!$Array.isArray(message.rankedDelta))
+                    return "rankedDelta: array expected";
+                for (let i = 0; i < message.rankedDelta.length; ++i) {
+                    let error = $root.game.IntPair.verify(message.rankedDelta[i], _depth + 1);
+                    if (error)
+                        return "rankedDelta." + error;
+                }
+            }
+            if (message.settlementEvents != null && $Object.hasOwnProperty.call(message, "settlementEvents")) {
+                if (!$Array.isArray(message.settlementEvents))
+                    return "settlementEvents: array expected";
+                for (let i = 0; i < message.settlementEvents.length; ++i)
+                    if (!$util.isString(message.settlementEvents[i]))
+                        return "settlementEvents: string[] expected";
+            }
+            if (message.pendingSettlement != null && $Object.hasOwnProperty.call(message, "pendingSettlement")) {
+                let error = $root.game.OthelloPendingSettlement.verify(message.pendingSettlement, _depth + 1);
+                if (error)
+                    return "pendingSettlement." + error;
+            }
+            if (message.surrenderRequest != null && $Object.hasOwnProperty.call(message, "surrenderRequest")) {
+                let error = $root.game.OthelloSurrenderRequest.verify(message.surrenderRequest, _depth + 1);
+                if (error)
+                    return "surrenderRequest." + error;
+            }
+            if (message.ended != null && $Object.hasOwnProperty.call(message, "ended"))
+                if (typeof message.ended !== "boolean")
+                    return "ended: boolean expected";
+            if (message.winner != null && $Object.hasOwnProperty.call(message, "winner"))
+                if (!$util.isString(message.winner))
+                    return "winner: string expected";
+            if (message.moveDeadlineAt != null && $Object.hasOwnProperty.call(message, "moveDeadlineAt"))
+                if (!$util.isInteger(message.moveDeadlineAt) && !(message.moveDeadlineAt && $util.isInteger(message.moveDeadlineAt.low) && $util.isInteger(message.moveDeadlineAt.high)))
+                    return "moveDeadlineAt: integer|Long expected";
+            if (message.clockDeadlineAt != null && $Object.hasOwnProperty.call(message, "clockDeadlineAt"))
+                if (!$util.isInteger(message.clockDeadlineAt) && !(message.clockDeadlineAt && $util.isInteger(message.clockDeadlineAt.low) && $util.isInteger(message.clockDeadlineAt.high)))
+                    return "clockDeadlineAt: integer|Long expected";
+            if (message.clockRemaining != null && $Object.hasOwnProperty.call(message, "clockRemaining")) {
+                if (!$Array.isArray(message.clockRemaining))
+                    return "clockRemaining: array expected";
+                for (let i = 0; i < message.clockRemaining.length; ++i) {
+                    let error = $root.game.IntPair.verify(message.clockRemaining[i], _depth + 1);
+                    if (error)
+                        return "clockRemaining." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
          * Creates an OthelloState message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.OthelloState
@@ -17950,6 +19894,36 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a TicTacToeGiveawayPrompt message.
+         * @function verify
+         * @memberof game.TicTacToeGiveawayPrompt
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        TicTacToeGiveawayPrompt.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.seat != null && $Object.hasOwnProperty.call(message, "seat"))
+                if (!$util.isString(message.seat))
+                    return "seat: string expected";
+            if (message.forced != null && $Object.hasOwnProperty.call(message, "forced"))
+                if (typeof message.forced !== "boolean")
+                    return "forced: boolean expected";
+            if (message.startedAt != null && $Object.hasOwnProperty.call(message, "startedAt"))
+                if (!$util.isInteger(message.startedAt) && !(message.startedAt && $util.isInteger(message.startedAt.low) && $util.isInteger(message.startedAt.high)))
+                    return "startedAt: integer|Long expected";
+            if (message.expiresAt != null && $Object.hasOwnProperty.call(message, "expiresAt"))
+                if (!$util.isInteger(message.expiresAt) && !(message.expiresAt && $util.isInteger(message.expiresAt.low) && $util.isInteger(message.expiresAt.high)))
+                    return "expiresAt: integer|Long expected";
+            return null;
+        };
+
+        /**
          * Creates a TicTacToeGiveawayPrompt message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.TicTacToeGiveawayPrompt
@@ -18400,6 +20374,71 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a TicTacToeState message.
+         * @function verify
+         * @memberof game.TicTacToeState
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        TicTacToeState.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.board != null && $Object.hasOwnProperty.call(message, "board")) {
+                if (!$Array.isArray(message.board))
+                    return "board: array expected";
+                for (let i = 0; i < message.board.length; ++i) {
+                    let error = $root.game.BoardRow.verify(message.board[i], _depth + 1);
+                    if (error)
+                        return "board." + error;
+                }
+            }
+            if (message.turn != null && $Object.hasOwnProperty.call(message, "turn"))
+                if (!$util.isString(message.turn))
+                    return "turn: string expected";
+            if (message.xSeat != null && $Object.hasOwnProperty.call(message, "xSeat"))
+                if (!$util.isString(message.xSeat))
+                    return "xSeat: string expected";
+            if (message.moveCount != null && $Object.hasOwnProperty.call(message, "moveCount"))
+                if (!$util.isInteger(message.moveCount))
+                    return "moveCount: integer expected";
+            if (message.giveawayPrompt != null && $Object.hasOwnProperty.call(message, "giveawayPrompt")) {
+                let error = $root.game.TicTacToeGiveawayPrompt.verify(message.giveawayPrompt, _depth + 1);
+                if (error)
+                    return "giveawayPrompt." + error;
+            }
+            if (message.winningLine != null && $Object.hasOwnProperty.call(message, "winningLine")) {
+                if (!$Array.isArray(message.winningLine))
+                    return "winningLine: array expected";
+                for (let i = 0; i < message.winningLine.length; ++i) {
+                    let error = $root.game.Pos.verify(message.winningLine[i], _depth + 1);
+                    if (error)
+                        return "winningLine." + error;
+                }
+            }
+            if (message.rankedDelta != null && $Object.hasOwnProperty.call(message, "rankedDelta")) {
+                if (!$Array.isArray(message.rankedDelta))
+                    return "rankedDelta: array expected";
+                for (let i = 0; i < message.rankedDelta.length; ++i) {
+                    let error = $root.game.IntPair.verify(message.rankedDelta[i], _depth + 1);
+                    if (error)
+                        return "rankedDelta." + error;
+                }
+            }
+            if (message.ended != null && $Object.hasOwnProperty.call(message, "ended"))
+                if (typeof message.ended !== "boolean")
+                    return "ended: boolean expected";
+            if (message.winner != null && $Object.hasOwnProperty.call(message, "winner"))
+                if (!$util.isString(message.winner))
+                    return "winner: string expected";
+            return null;
+        };
+
+        /**
          * Creates a TicTacToeState message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.TicTacToeState
@@ -18742,6 +20781,30 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a BoolPair message.
+         * @function verify
+         * @memberof game.BoolPair
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        BoolPair.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.key != null && $Object.hasOwnProperty.call(message, "key"))
+                if (!$util.isString(message.key))
+                    return "key: string expected";
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
+                if (typeof message.value !== "boolean")
+                    return "value: boolean expected";
+            return null;
+        };
+
+        /**
          * Creates a BoolPair message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.BoolPair
@@ -19005,6 +21068,30 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a StringPair message.
+         * @function verify
+         * @memberof game.StringPair
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StringPair.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.key != null && $Object.hasOwnProperty.call(message, "key"))
+                if (!$util.isString(message.key))
+                    return "key: string expected";
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
+                if (!$util.isString(message.value))
+                    return "value: string expected";
+            return null;
         };
 
         /**
@@ -19275,6 +21362,32 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a SeatOccupantPair message.
+         * @function verify
+         * @memberof game.SeatOccupantPair
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SeatOccupantPair.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.key != null && $Object.hasOwnProperty.call(message, "key"))
+                if (!$util.isString(message.key))
+                    return "key: string expected";
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value")) {
+                let error = $root.game.SeatOccupant.verify(message.value, _depth + 1);
+                if (error)
+                    return "value." + error;
+            }
+            return null;
+        };
+
+        /**
          * Creates a SeatOccupantPair message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.SeatOccupantPair
@@ -19537,6 +21650,32 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a SeatStatsPair message.
+         * @function verify
+         * @memberof game.SeatStatsPair
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SeatStatsPair.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.key != null && $Object.hasOwnProperty.call(message, "key"))
+                if (!$util.isString(message.key))
+                    return "key: string expected";
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value")) {
+                let error = $root.game.SeatStats.verify(message.value, _depth + 1);
+                if (error)
+                    return "value." + error;
+            }
+            return null;
         };
 
         /**
@@ -20292,6 +22431,179 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a RoomSnapshot message.
+         * @function verify
+         * @memberof game.RoomSnapshot
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RoomSnapshot.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.updatedAt != null && $Object.hasOwnProperty.call(message, "updatedAt"))
+                if (!$util.isInteger(message.updatedAt) && !(message.updatedAt && $util.isInteger(message.updatedAt.low) && $util.isInteger(message.updatedAt.high)))
+                    return "updatedAt: integer|Long expected";
+            if (message.settings != null && $Object.hasOwnProperty.call(message, "settings")) {
+                let error = $root.game.RoomSettings.verify(message.settings, _depth + 1);
+                if (error)
+                    return "settings." + error;
+            }
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+                if (!$util.isString(message.status))
+                    return "status: string expected";
+            if (message.phase != null && $Object.hasOwnProperty.call(message, "phase"))
+                if (!$util.isString(message.phase))
+                    return "phase: string expected";
+            if (message.seats != null && $Object.hasOwnProperty.call(message, "seats")) {
+                if (!$Array.isArray(message.seats))
+                    return "seats: array expected";
+                for (let i = 0; i < message.seats.length; ++i) {
+                    let error = $root.game.SeatOccupantPair.verify(message.seats[i], _depth + 1);
+                    if (error)
+                        return "seats." + error;
+                }
+            }
+            if (message.spectators != null && $Object.hasOwnProperty.call(message, "spectators")) {
+                if (!$Array.isArray(message.spectators))
+                    return "spectators: array expected";
+                for (let i = 0; i < message.spectators.length; ++i) {
+                    let error = $root.game.PublicPlayer.verify(message.spectators[i], _depth + 1);
+                    if (error)
+                        return "spectators." + error;
+                }
+            }
+            if (message.ready != null && $Object.hasOwnProperty.call(message, "ready")) {
+                if (!$Array.isArray(message.ready))
+                    return "ready: array expected";
+                for (let i = 0; i < message.ready.length; ++i) {
+                    let error = $root.game.BoolPair.verify(message.ready[i], _depth + 1);
+                    if (error)
+                        return "ready." + error;
+                }
+            }
+            if (message.choices != null && $Object.hasOwnProperty.call(message, "choices")) {
+                if (!$Array.isArray(message.choices))
+                    return "choices: array expected";
+                for (let i = 0; i < message.choices.length; ++i) {
+                    let error = $root.game.StringPair.verify(message.choices[i], _depth + 1);
+                    if (error)
+                        return "choices." + error;
+                }
+            }
+            if (message.revealedChoices != null && $Object.hasOwnProperty.call(message, "revealedChoices")) {
+                if (!$Array.isArray(message.revealedChoices))
+                    return "revealedChoices: array expected";
+                for (let i = 0; i < message.revealedChoices.length; ++i) {
+                    let error = $root.game.StringPair.verify(message.revealedChoices[i], _depth + 1);
+                    if (error)
+                        return "revealedChoices." + error;
+                }
+            }
+            if (message.othello != null && $Object.hasOwnProperty.call(message, "othello")) {
+                let error = $root.game.OthelloState.verify(message.othello, _depth + 1);
+                if (error)
+                    return "othello." + error;
+            }
+            if (message.tictactoe != null && $Object.hasOwnProperty.call(message, "tictactoe")) {
+                let error = $root.game.TicTacToeState.verify(message.tictactoe, _depth + 1);
+                if (error)
+                    return "tictactoe." + error;
+            }
+            if (message.liarsDice != null && $Object.hasOwnProperty.call(message, "liarsDice")) {
+                let error = $root.game.LiarsDiceState.verify(message.liarsDice, _depth + 1);
+                if (error)
+                    return "liarsDice." + error;
+            }
+            if (message.gomoku != null && $Object.hasOwnProperty.call(message, "gomoku")) {
+                let error = $root.game.GomokuState.verify(message.gomoku, _depth + 1);
+                if (error)
+                    return "gomoku." + error;
+            }
+            if (message.resultText != null && $Object.hasOwnProperty.call(message, "resultText"))
+                if (!$util.isString(message.resultText))
+                    return "resultText: string expected";
+            if (message.punishedPlayerIds != null && $Object.hasOwnProperty.call(message, "punishedPlayerIds")) {
+                if (!$Array.isArray(message.punishedPlayerIds))
+                    return "punishedPlayerIds: array expected";
+                for (let i = 0; i < message.punishedPlayerIds.length; ++i)
+                    if (!$util.isString(message.punishedPlayerIds[i]))
+                        return "punishedPlayerIds: string[] expected";
+            }
+            if (message.proofs != null && $Object.hasOwnProperty.call(message, "proofs")) {
+                if (!$Array.isArray(message.proofs))
+                    return "proofs: array expected";
+                for (let i = 0; i < message.proofs.length; ++i) {
+                    let error = $root.game.PunishmentProof.verify(message.proofs[i], _depth + 1);
+                    if (error)
+                        return "proofs." + error;
+                }
+            }
+            if (message.score != null && $Object.hasOwnProperty.call(message, "score")) {
+                if (!$Array.isArray(message.score))
+                    return "score: array expected";
+                for (let i = 0; i < message.score.length; ++i) {
+                    let error = $root.game.IntPair.verify(message.score[i], _depth + 1);
+                    if (error)
+                        return "score." + error;
+                }
+            }
+            if (message.seatedScore != null && $Object.hasOwnProperty.call(message, "seatedScore")) {
+                if (!$Array.isArray(message.seatedScore))
+                    return "seatedScore: array expected";
+                for (let i = 0; i < message.seatedScore.length; ++i) {
+                    let error = $root.game.IntPair.verify(message.seatedScore[i], _depth + 1);
+                    if (error)
+                        return "seatedScore." + error;
+                }
+            }
+            if (message.seatStats != null && $Object.hasOwnProperty.call(message, "seatStats")) {
+                if (!$Array.isArray(message.seatStats))
+                    return "seatStats: array expected";
+                for (let i = 0; i < message.seatStats.length; ++i) {
+                    let error = $root.game.SeatStatsPair.verify(message.seatStats[i], _depth + 1);
+                    if (error)
+                        return "seatStats." + error;
+                }
+            }
+            if (message.roundHistory != null && $Object.hasOwnProperty.call(message, "roundHistory")) {
+                if (!$Array.isArray(message.roundHistory))
+                    return "roundHistory: array expected";
+                for (let i = 0; i < message.roundHistory.length; ++i) {
+                    let error = $root.game.RoundHistoryItem.verify(message.roundHistory[i], _depth + 1);
+                    if (error)
+                        return "roundHistory." + error;
+                }
+            }
+            if (message.roundHistoryTotal != null && $Object.hasOwnProperty.call(message, "roundHistoryTotal"))
+                if (!$util.isInteger(message.roundHistoryTotal))
+                    return "roundHistoryTotal: integer expected";
+            if (message.chat != null && $Object.hasOwnProperty.call(message, "chat")) {
+                if (!$Array.isArray(message.chat))
+                    return "chat: array expected";
+                for (let i = 0; i < message.chat.length; ++i) {
+                    let error = $root.game.ChatMessage.verify(message.chat[i], _depth + 1);
+                    if (error)
+                        return "chat." + error;
+                }
+            }
+            if (message.forgiveAdvantageTargetId != null && $Object.hasOwnProperty.call(message, "forgiveAdvantageTargetId"))
+                if (!$util.isString(message.forgiveAdvantageTargetId))
+                    return "forgiveAdvantageTargetId: string expected";
+            if (message.forgiveAdvantageBeneficiaryId != null && $Object.hasOwnProperty.call(message, "forgiveAdvantageBeneficiaryId"))
+                if (!$util.isString(message.forgiveAdvantageBeneficiaryId))
+                    return "forgiveAdvantageBeneficiaryId: string expected";
+            return null;
+        };
+
+        /**
          * Creates a RoomSnapshot message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.RoomSnapshot
@@ -21021,6 +23333,57 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a ServerStats message.
+         * @function verify
+         * @memberof game.ServerStats
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ServerStats.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.startedAt != null && $Object.hasOwnProperty.call(message, "startedAt"))
+                if (!$util.isInteger(message.startedAt) && !(message.startedAt && $util.isInteger(message.startedAt.low) && $util.isInteger(message.startedAt.high)))
+                    return "startedAt: integer|Long expected";
+            if (message.roomBroadcasts != null && $Object.hasOwnProperty.call(message, "roomBroadcasts"))
+                if (!$util.isInteger(message.roomBroadcasts))
+                    return "roomBroadcasts: integer expected";
+            if (message.lobbyBroadcasts != null && $Object.hasOwnProperty.call(message, "lobbyBroadcasts"))
+                if (!$util.isInteger(message.lobbyBroadcasts))
+                    return "lobbyBroadcasts: integer expected";
+            if (message.disconnects != null && $Object.hasOwnProperty.call(message, "disconnects"))
+                if (!$util.isInteger(message.disconnects))
+                    return "disconnects: integer expected";
+            if (message.reconnects != null && $Object.hasOwnProperty.call(message, "reconnects"))
+                if (!$util.isInteger(message.reconnects))
+                    return "reconnects: integer expected";
+            if (message.lastRoomSnapshotBytes != null && $Object.hasOwnProperty.call(message, "lastRoomSnapshotBytes"))
+                if (!$util.isInteger(message.lastRoomSnapshotBytes))
+                    return "lastRoomSnapshotBytes: integer expected";
+            if (message.lastLobbySnapshotBytes != null && $Object.hasOwnProperty.call(message, "lastLobbySnapshotBytes"))
+                if (!$util.isInteger(message.lastLobbySnapshotBytes))
+                    return "lastLobbySnapshotBytes: integer expected";
+            if (message.recentRoomBroadcasts != null && $Object.hasOwnProperty.call(message, "recentRoomBroadcasts"))
+                if (!$util.isInteger(message.recentRoomBroadcasts))
+                    return "recentRoomBroadcasts: integer expected";
+            if (message.recentLobbyBroadcasts != null && $Object.hasOwnProperty.call(message, "recentLobbyBroadcasts"))
+                if (!$util.isInteger(message.recentLobbyBroadcasts))
+                    return "recentLobbyBroadcasts: integer expected";
+            if (message.averageRoomSnapshotBytes != null && $Object.hasOwnProperty.call(message, "averageRoomSnapshotBytes"))
+                if (!$util.isInteger(message.averageRoomSnapshotBytes))
+                    return "averageRoomSnapshotBytes: integer expected";
+            if (message.averageLobbySnapshotBytes != null && $Object.hasOwnProperty.call(message, "averageLobbySnapshotBytes"))
+                if (!$util.isInteger(message.averageLobbySnapshotBytes))
+                    return "averageLobbySnapshotBytes: integer expected";
+            return null;
+        };
+
+        /**
          * Creates a ServerStats message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.ServerStats
@@ -21351,6 +23714,34 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a VersusSeat message.
+         * @function verify
+         * @memberof game.VersusSeat
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        VersusSeat.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.player != null && $Object.hasOwnProperty.call(message, "player")) {
+                let error = $root.game.PublicPlayer.verify(message.player, _depth + 1);
+                if (error)
+                    return "player." + error;
+            }
+            if (message.bot != null && $Object.hasOwnProperty.call(message, "bot")) {
+                let error = $root.game.BotPlayer.verify(message.bot, _depth + 1);
+                if (error)
+                    return "bot." + error;
+            }
+            return null;
+        };
+
+        /**
          * Creates a VersusSeat message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.VersusSeat
@@ -21615,6 +24006,32 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a VersusPair message.
+         * @function verify
+         * @memberof game.VersusPair
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        VersusPair.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.key != null && $Object.hasOwnProperty.call(message, "key"))
+                if (!$util.isString(message.key))
+                    return "key: string expected";
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value")) {
+                let error = $root.game.VersusSeat.verify(message.value, _depth + 1);
+                if (error)
+                    return "value." + error;
+            }
+            return null;
         };
 
         /**
@@ -22429,6 +24846,125 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a LobbyRoomInfo message.
+         * @function verify
+         * @memberof game.LobbyRoomInfo
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        LobbyRoomInfo.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.gameId != null && $Object.hasOwnProperty.call(message, "gameId"))
+                if (!$util.isString(message.gameId))
+                    return "gameId: string expected";
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.hasPassword != null && $Object.hasOwnProperty.call(message, "hasPassword"))
+                if (typeof message.hasPassword !== "boolean")
+                    return "hasPassword: boolean expected";
+            if (message.players != null && $Object.hasOwnProperty.call(message, "players"))
+                if (!$util.isInteger(message.players))
+                    return "players: integer expected";
+            if (message.spectators != null && $Object.hasOwnProperty.call(message, "spectators"))
+                if (!$util.isInteger(message.spectators))
+                    return "spectators: integer expected";
+            if (message.versus != null && $Object.hasOwnProperty.call(message, "versus")) {
+                if (!$Array.isArray(message.versus))
+                    return "versus: array expected";
+                for (let i = 0; i < message.versus.length; ++i) {
+                    let error = $root.game.VersusPair.verify(message.versus[i], _depth + 1);
+                    if (error)
+                        return "versus." + error;
+                }
+            }
+            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
+                if (!$util.isString(message.status))
+                    return "status: string expected";
+            if (message.roomBackgroundImage != null && $Object.hasOwnProperty.call(message, "roomBackgroundImage"))
+                if (!$util.isString(message.roomBackgroundImage))
+                    return "roomBackgroundImage: string expected";
+            if (message.enableBot != null && $Object.hasOwnProperty.call(message, "enableBot"))
+                if (typeof message.enableBot !== "boolean")
+                    return "enableBot: boolean expected";
+            if (message.botDifficulty != null && $Object.hasOwnProperty.call(message, "botDifficulty"))
+                if (!$util.isString(message.botDifficulty))
+                    return "botDifficulty: string expected";
+            if (message.enablePunishment != null && $Object.hasOwnProperty.call(message, "enablePunishment"))
+                if (typeof message.enablePunishment !== "boolean")
+                    return "enablePunishment: boolean expected";
+            if (message.punishmentIds != null && $Object.hasOwnProperty.call(message, "punishmentIds")) {
+                if (!$Array.isArray(message.punishmentIds))
+                    return "punishmentIds: array expected";
+                for (let i = 0; i < message.punishmentIds.length; ++i)
+                    if (!$util.isString(message.punishmentIds[i]))
+                        return "punishmentIds: string[] expected";
+            }
+            if (message.punishmentId != null && $Object.hasOwnProperty.call(message, "punishmentId"))
+                if (!$util.isString(message.punishmentId))
+                    return "punishmentId: string expected";
+            if (message.tieDoublePunish != null && $Object.hasOwnProperty.call(message, "tieDoublePunish"))
+                if (typeof message.tieDoublePunish !== "boolean")
+                    return "tieDoublePunish: boolean expected";
+            if (message.requireOpponentConfirm != null && $Object.hasOwnProperty.call(message, "requireOpponentConfirm"))
+                if (typeof message.requireOpponentConfirm !== "boolean")
+                    return "requireOpponentConfirm: boolean expected";
+            if (message.enableRanked != null && $Object.hasOwnProperty.call(message, "enableRanked"))
+                if (typeof message.enableRanked !== "boolean")
+                    return "enableRanked: boolean expected";
+            if (message.stake != null && $Object.hasOwnProperty.call(message, "stake"))
+                if (!$util.isInteger(message.stake))
+                    return "stake: integer expected";
+            if (message.enableRankMultiplier != null && $Object.hasOwnProperty.call(message, "enableRankMultiplier"))
+                if (typeof message.enableRankMultiplier !== "boolean")
+                    return "enableRankMultiplier: boolean expected";
+            if (message.rankMultiplier != null && $Object.hasOwnProperty.call(message, "rankMultiplier"))
+                if (!$util.isInteger(message.rankMultiplier))
+                    return "rankMultiplier: integer expected";
+            if (message.enableExtremeRanked != null && $Object.hasOwnProperty.call(message, "enableExtremeRanked"))
+                if (typeof message.enableExtremeRanked !== "boolean")
+                    return "enableExtremeRanked: boolean expected";
+            if (message.tags != null && $Object.hasOwnProperty.call(message, "tags")) {
+                if (!$Array.isArray(message.tags))
+                    return "tags: array expected";
+                for (let i = 0; i < message.tags.length; ++i)
+                    if (!$util.isString(message.tags[i]))
+                        return "tags: string[] expected";
+            }
+            if (message.liarsDiceMinPlayers != null && $Object.hasOwnProperty.call(message, "liarsDiceMinPlayers"))
+                if (!$util.isInteger(message.liarsDiceMinPlayers))
+                    return "liarsDiceMinPlayers: integer expected";
+            if (message.liarsDiceMaxPlayers != null && $Object.hasOwnProperty.call(message, "liarsDiceMaxPlayers"))
+                if (!$util.isInteger(message.liarsDiceMaxPlayers))
+                    return "liarsDiceMaxPlayers: integer expected";
+            if (message.othelloMoveSeconds != null && $Object.hasOwnProperty.call(message, "othelloMoveSeconds"))
+                if (!$util.isInteger(message.othelloMoveSeconds))
+                    return "othelloMoveSeconds: integer expected";
+            if (message.othelloGameMinutes != null && $Object.hasOwnProperty.call(message, "othelloGameMinutes"))
+                if (!$util.isInteger(message.othelloGameMinutes))
+                    return "othelloGameMinutes: integer expected";
+            if (message.gomokuMoveSeconds != null && $Object.hasOwnProperty.call(message, "gomokuMoveSeconds"))
+                if (!$util.isInteger(message.gomokuMoveSeconds))
+                    return "gomokuMoveSeconds: integer expected";
+            if (message.gomokuGameMinutes != null && $Object.hasOwnProperty.call(message, "gomokuGameMinutes"))
+                if (!$util.isInteger(message.gomokuGameMinutes))
+                    return "gomokuGameMinutes: integer expected";
+            if (message.gomokuUndoLimit != null && $Object.hasOwnProperty.call(message, "gomokuUndoLimit"))
+                if (!$util.isInteger(message.gomokuUndoLimit))
+                    return "gomokuUndoLimit: integer expected";
+            return null;
+        };
+
+        /**
          * Creates a LobbyRoomInfo message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.LobbyRoomInfo
@@ -22880,6 +25416,32 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a LobbyPlayerEntry message.
+         * @function verify
+         * @memberof game.LobbyPlayerEntry
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        LobbyPlayerEntry.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.player != null && $Object.hasOwnProperty.call(message, "player")) {
+                let error = $root.game.LobbyPlayer.verify(message.player, _depth + 1);
+                if (error)
+                    return "player." + error;
+            }
+            return null;
+        };
+
+        /**
          * Creates a LobbyPlayerEntry message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.LobbyPlayerEntry
@@ -23142,6 +25704,32 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a LobbyRoomEntry message.
+         * @function verify
+         * @memberof game.LobbyRoomEntry
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        LobbyRoomEntry.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.room != null && $Object.hasOwnProperty.call(message, "room")) {
+                let error = $root.game.LobbyRoomInfo.verify(message.room, _depth + 1);
+                if (error)
+                    return "room." + error;
+            }
+            return null;
         };
 
         /**
@@ -23553,6 +26141,91 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a LobbySnapshot message.
+         * @function verify
+         * @memberof game.LobbySnapshot
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        LobbySnapshot.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.config != null && $Object.hasOwnProperty.call(message, "config")) {
+                let error = $root.game.AppConfig.verify(message.config, _depth + 1);
+                if (error)
+                    return "config." + error;
+            }
+            if (message.onlineCount != null && $Object.hasOwnProperty.call(message, "onlineCount"))
+                if (!$util.isInteger(message.onlineCount))
+                    return "onlineCount: integer expected";
+            if (message.players != null && $Object.hasOwnProperty.call(message, "players")) {
+                if (!$Array.isArray(message.players))
+                    return "players: array expected";
+                for (let i = 0; i < message.players.length; ++i) {
+                    let error = $root.game.LobbyPlayerEntry.verify(message.players[i], _depth + 1);
+                    if (error)
+                        return "players." + error;
+                }
+            }
+            if (message.rooms != null && $Object.hasOwnProperty.call(message, "rooms")) {
+                if (!$Array.isArray(message.rooms))
+                    return "rooms: array expected";
+                for (let i = 0; i < message.rooms.length; ++i) {
+                    let error = $root.game.LobbyRoomEntry.verify(message.rooms[i], _depth + 1);
+                    if (error)
+                        return "rooms." + error;
+                }
+            }
+            if (message.normalLeaderboard != null && $Object.hasOwnProperty.call(message, "normalLeaderboard")) {
+                if (!$Array.isArray(message.normalLeaderboard))
+                    return "normalLeaderboard: array expected";
+                for (let i = 0; i < message.normalLeaderboard.length; ++i) {
+                    let error = $root.game.LobbyPlayer.verify(message.normalLeaderboard[i], _depth + 1);
+                    if (error)
+                        return "normalLeaderboard." + error;
+                }
+            }
+            if (message.rankedLeaderboard != null && $Object.hasOwnProperty.call(message, "rankedLeaderboard")) {
+                if (!$Array.isArray(message.rankedLeaderboard))
+                    return "rankedLeaderboard: array expected";
+                for (let i = 0; i < message.rankedLeaderboard.length; ++i) {
+                    let error = $root.game.LobbyPlayer.verify(message.rankedLeaderboard[i], _depth + 1);
+                    if (error)
+                        return "rankedLeaderboard." + error;
+                }
+            }
+            if (message.suggestions != null && $Object.hasOwnProperty.call(message, "suggestions")) {
+                if (!$Array.isArray(message.suggestions))
+                    return "suggestions: array expected";
+                for (let i = 0; i < message.suggestions.length; ++i) {
+                    let error = $root.game.Suggestion.verify(message.suggestions[i], _depth + 1);
+                    if (error)
+                        return "suggestions." + error;
+                }
+            }
+            if (message.lobbyChat != null && $Object.hasOwnProperty.call(message, "lobbyChat")) {
+                if (!$Array.isArray(message.lobbyChat))
+                    return "lobbyChat: array expected";
+                for (let i = 0; i < message.lobbyChat.length; ++i) {
+                    let error = $root.game.ChatMessage.verify(message.lobbyChat[i], _depth + 1);
+                    if (error)
+                        return "lobbyChat." + error;
+                }
+            }
+            if (message.serverStats != null && $Object.hasOwnProperty.call(message, "serverStats")) {
+                let error = $root.game.ServerStats.verify(message.serverStats, _depth + 1);
+                if (error)
+                    return "serverStats." + error;
+            }
+            return null;
+        };
+
+        /**
          * Creates a LobbySnapshot message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.LobbySnapshot
@@ -23950,6 +26623,45 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a RoomNamePool message.
+         * @function verify
+         * @memberof game.RoomNamePool
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RoomNamePool.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.adjectives != null && $Object.hasOwnProperty.call(message, "adjectives")) {
+                if (!$Array.isArray(message.adjectives))
+                    return "adjectives: array expected";
+                for (let i = 0; i < message.adjectives.length; ++i)
+                    if (!$util.isString(message.adjectives[i]))
+                        return "adjectives: string[] expected";
+            }
+            if (message.subjects != null && $Object.hasOwnProperty.call(message, "subjects")) {
+                if (!$Array.isArray(message.subjects))
+                    return "subjects: array expected";
+                for (let i = 0; i < message.subjects.length; ++i)
+                    if (!$util.isString(message.subjects[i]))
+                        return "subjects: string[] expected";
+            }
+            if (message.roomWords != null && $Object.hasOwnProperty.call(message, "roomWords")) {
+                if (!$Array.isArray(message.roomWords))
+                    return "roomWords: array expected";
+                for (let i = 0; i < message.roomWords.length; ++i)
+                    if (!$util.isString(message.roomWords[i]))
+                        return "roomWords: string[] expected";
+            }
+            return null;
+        };
+
+        /**
          * Creates a RoomNamePool message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.RoomNamePool
@@ -24283,6 +26995,36 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a RoomInfoTagStyle message.
+         * @function verify
+         * @memberof game.RoomInfoTagStyle
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RoomInfoTagStyle.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.label != null && $Object.hasOwnProperty.call(message, "label"))
+                if (!$util.isString(message.label))
+                    return "label: string expected";
+            if (message.textColor != null && $Object.hasOwnProperty.call(message, "textColor"))
+                if (!$util.isString(message.textColor))
+                    return "textColor: string expected";
+            if (message.backgroundColor != null && $Object.hasOwnProperty.call(message, "backgroundColor"))
+                if (!$util.isString(message.backgroundColor))
+                    return "backgroundColor: string expected";
+            if (message.borderColor != null && $Object.hasOwnProperty.call(message, "borderColor"))
+                if (!$util.isString(message.borderColor))
+                    return "borderColor: string expected";
+            return null;
+        };
+
+        /**
          * Creates a RoomInfoTagStyle message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.RoomInfoTagStyle
@@ -24555,6 +27297,32 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a RoomInfoTagEntry message.
+         * @function verify
+         * @memberof game.RoomInfoTagEntry
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RoomInfoTagEntry.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.key != null && $Object.hasOwnProperty.call(message, "key"))
+                if (!$util.isString(message.key))
+                    return "key: string expected";
+            if (message.style != null && $Object.hasOwnProperty.call(message, "style")) {
+                let error = $root.game.RoomInfoTagStyle.verify(message.style, _depth + 1);
+                if (error)
+                    return "style." + error;
+            }
+            return null;
         };
 
         /**
@@ -24885,6 +27653,49 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PunishmentTaskConfig message.
+         * @function verify
+         * @memberof game.PunishmentTaskConfig
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PunishmentTaskConfig.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.variants != null && $Object.hasOwnProperty.call(message, "variants")) {
+                if (!$Array.isArray(message.variants))
+                    return "variants: array expected";
+                for (let i = 0; i < message.variants.length; ++i) {
+                    let error = $root.game.StringPair.verify(message.variants[i], _depth + 1);
+                    if (error)
+                        return "variants." + error;
+                }
+            }
+            if (message.backgroundImages != null && $Object.hasOwnProperty.call(message, "backgroundImages")) {
+                if (!$Array.isArray(message.backgroundImages))
+                    return "backgroundImages: array expected";
+                for (let i = 0; i < message.backgroundImages.length; ++i)
+                    if (!$util.isString(message.backgroundImages[i]))
+                        return "backgroundImages: string[] expected";
+            }
+            if (message.backgroundOpacity != null && $Object.hasOwnProperty.call(message, "backgroundOpacity"))
+                if (typeof message.backgroundOpacity !== "number")
+                    return "backgroundOpacity: number expected";
+            return null;
         };
 
         /**
@@ -25253,6 +28064,49 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a TitleSegment message.
+         * @function verify
+         * @memberof game.TitleSegment
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        TitleSegment.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.minPercent != null && $Object.hasOwnProperty.call(message, "minPercent"))
+                if (typeof message.minPercent !== "number")
+                    return "minPercent: number expected";
+            if (message.maxPercent != null && $Object.hasOwnProperty.call(message, "maxPercent"))
+                if (typeof message.maxPercent !== "number")
+                    return "maxPercent: number expected";
+            if (message.names != null && $Object.hasOwnProperty.call(message, "names")) {
+                if (!$Array.isArray(message.names))
+                    return "names: array expected";
+                for (let i = 0; i < message.names.length; ++i)
+                    if (!$util.isString(message.names[i]))
+                        return "names: string[] expected";
+            }
+            if (message.factionNames != null && $Object.hasOwnProperty.call(message, "factionNames")) {
+                if (!$Array.isArray(message.factionNames))
+                    return "factionNames: array expected";
+                for (let i = 0; i < message.factionNames.length; ++i) {
+                    let error = $root.game.TitleSegment.FactionNames.verify(message.factionNames[i], _depth + 1);
+                    if (error)
+                        return "factionNames." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
          * Creates a TitleSegment message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.TitleSegment
@@ -25551,6 +28405,34 @@ export const game = $root.game = (() => {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
                 return this.decode(reader, reader.uint32());
+            };
+
+            /**
+             * Verifies a FactionNames message.
+             * @function verify
+             * @memberof game.TitleSegment.FactionNames
+             * @static
+             * @param {Object.<string,*>} message Plain object to verify
+             * @returns {string|null} `null` if valid, otherwise the reason why it is not
+             */
+            FactionNames.verify = function (message, _depth) {
+                if (typeof message !== "object" || message === null)
+                    return "object expected";
+                if (_depth === $undefined)
+                    _depth = 0;
+                if (_depth > $util.recursionLimit)
+                    return "max depth exceeded";
+                if (message.factionId != null && $Object.hasOwnProperty.call(message, "factionId"))
+                    if (!$util.isString(message.factionId))
+                        return "factionId: string expected";
+                if (message.names != null && $Object.hasOwnProperty.call(message, "names")) {
+                    if (!$Array.isArray(message.names))
+                        return "names: array expected";
+                    for (let i = 0; i < message.names.length; ++i)
+                        if (!$util.isString(message.names[i]))
+                            return "names: string[] expected";
+                }
+                return null;
             };
 
             /**
@@ -25967,6 +28849,69 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PunishmentConfig message.
+         * @function verify
+         * @memberof game.PunishmentConfig
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PunishmentConfig.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.description != null && $Object.hasOwnProperty.call(message, "description"))
+                if (!$util.isString(message.description))
+                    return "description: string expected";
+            if (message.variants != null && $Object.hasOwnProperty.call(message, "variants")) {
+                if (!$Array.isArray(message.variants))
+                    return "variants: array expected";
+                for (let i = 0; i < message.variants.length; ++i) {
+                    let error = $root.game.StringPair.verify(message.variants[i], _depth + 1);
+                    if (error)
+                        return "variants." + error;
+                }
+            }
+            if (message.tasks != null && $Object.hasOwnProperty.call(message, "tasks")) {
+                if (!$Array.isArray(message.tasks))
+                    return "tasks: array expected";
+                for (let i = 0; i < message.tasks.length; ++i) {
+                    let error = $root.game.PunishmentTaskConfig.verify(message.tasks[i], _depth + 1);
+                    if (error)
+                        return "tasks." + error;
+                }
+            }
+            if (message.cardImageUrl != null && $Object.hasOwnProperty.call(message, "cardImageUrl"))
+                if (!$util.isString(message.cardImageUrl))
+                    return "cardImageUrl: string expected";
+            if (message.cardImageOpacity != null && $Object.hasOwnProperty.call(message, "cardImageOpacity"))
+                if (typeof message.cardImageOpacity !== "number")
+                    return "cardImageOpacity: number expected";
+            if (message.roomBackgroundImages != null && $Object.hasOwnProperty.call(message, "roomBackgroundImages")) {
+                if (!$Array.isArray(message.roomBackgroundImages))
+                    return "roomBackgroundImages: array expected";
+                for (let i = 0; i < message.roomBackgroundImages.length; ++i)
+                    if (!$util.isString(message.roomBackgroundImages[i]))
+                        return "roomBackgroundImages: string[] expected";
+            }
+            if (message.roomNamePool != null && $Object.hasOwnProperty.call(message, "roomNamePool")) {
+                let error = $root.game.RoomNamePool.verify(message.roomNamePool, _depth + 1);
+                if (error)
+                    return "roomNamePool." + error;
+            }
+            return null;
         };
 
         /**
@@ -26409,6 +29354,45 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a BotDifficultyConfig message.
+         * @function verify
+         * @memberof game.BotDifficultyConfig
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        BotDifficultyConfig.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.description != null && $Object.hasOwnProperty.call(message, "description"))
+                if (!$util.isString(message.description))
+                    return "description: string expected";
+            if (message.emoji != null && $Object.hasOwnProperty.call(message, "emoji"))
+                if (!$util.isString(message.emoji))
+                    return "emoji: string expected";
+            if (message.level != null && $Object.hasOwnProperty.call(message, "level"))
+                if (!$util.isInteger(message.level))
+                    return "level: integer expected";
+            if (message.strategy != null && $Object.hasOwnProperty.call(message, "strategy"))
+                if (!$util.isString(message.strategy))
+                    return "strategy: string expected";
+            if (message.cardColor != null && $Object.hasOwnProperty.call(message, "cardColor"))
+                if (!$util.isString(message.cardColor))
+                    return "cardColor: string expected";
+            return null;
+        };
+
+        /**
          * Creates a BotDifficultyConfig message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.BotDifficultyConfig
@@ -26725,6 +29709,33 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a GameConfig message.
+         * @function verify
+         * @memberof game.GameConfig
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GameConfig.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.description != null && $Object.hasOwnProperty.call(message, "description"))
+                if (!$util.isString(message.description))
+                    return "description: string expected";
+            return null;
+        };
+
+        /**
          * Creates a GameConfig message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.GameConfig
@@ -27017,6 +30028,33 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies an AnnouncementBoard message.
+         * @function verify
+         * @memberof game.AnnouncementBoard
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        AnnouncementBoard.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.enabled != null && $Object.hasOwnProperty.call(message, "enabled"))
+                if (typeof message.enabled !== "boolean")
+                    return "enabled: boolean expected";
+            if (message.title != null && $Object.hasOwnProperty.call(message, "title"))
+                if (!$util.isString(message.title))
+                    return "title: string expected";
+            if (message.content != null && $Object.hasOwnProperty.call(message, "content"))
+                if (!$util.isString(message.content))
+                    return "content: string expected";
+            return null;
+        };
+
+        /**
          * Creates an AnnouncementBoard message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.AnnouncementBoard
@@ -27266,6 +30304,27 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a SecurityDisclaimerConfig message.
+         * @function verify
+         * @memberof game.SecurityDisclaimerConfig
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SecurityDisclaimerConfig.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.enabled != null && $Object.hasOwnProperty.call(message, "enabled"))
+                if (typeof message.enabled !== "boolean")
+                    return "enabled: boolean expected";
+            return null;
         };
 
         /**
@@ -27525,6 +30584,30 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a DoublePair message.
+         * @function verify
+         * @memberof game.DoublePair
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        DoublePair.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.key != null && $Object.hasOwnProperty.call(message, "key"))
+                if (!$util.isString(message.key))
+                    return "key: string expected";
+            if (message.value != null && $Object.hasOwnProperty.call(message, "value"))
+                if (typeof message.value !== "number")
+                    return "value: number expected";
+            return null;
         };
 
         /**
@@ -27997,6 +31080,78 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies an ExtremeModeConfig message.
+         * @function verify
+         * @memberof game.ExtremeModeConfig
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ExtremeModeConfig.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.label != null && $Object.hasOwnProperty.call(message, "label"))
+                if (!$util.isString(message.label))
+                    return "label: string expected";
+            if (message.emoji != null && $Object.hasOwnProperty.call(message, "emoji"))
+                if (!$util.isString(message.emoji))
+                    return "emoji: string expected";
+            if (message.cooldownHours != null && $Object.hasOwnProperty.call(message, "cooldownHours"))
+                if (!$util.isInteger(message.cooldownHours))
+                    return "cooldownHours: integer expected";
+            if (message.positiveLossRates != null && $Object.hasOwnProperty.call(message, "positiveLossRates")) {
+                if (!$Array.isArray(message.positiveLossRates))
+                    return "positiveLossRates: array expected";
+                for (let i = 0; i < message.positiveLossRates.length; ++i) {
+                    let error = $root.game.DoublePair.verify(message.positiveLossRates[i], _depth + 1);
+                    if (error)
+                        return "positiveLossRates." + error;
+                }
+            }
+            if (message.negativeWinRates != null && $Object.hasOwnProperty.call(message, "negativeWinRates")) {
+                if (!$Array.isArray(message.negativeWinRates))
+                    return "negativeWinRates: array expected";
+                for (let i = 0; i < message.negativeWinRates.length; ++i) {
+                    let error = $root.game.DoublePair.verify(message.negativeWinRates[i], _depth + 1);
+                    if (error)
+                        return "negativeWinRates." + error;
+                }
+            }
+            if (message.hourlyDecay != null && $Object.hasOwnProperty.call(message, "hourlyDecay")) {
+                if (!$Array.isArray(message.hourlyDecay))
+                    return "hourlyDecay: array expected";
+                for (let i = 0; i < message.hourlyDecay.length; ++i) {
+                    let error = $root.game.DoublePair.verify(message.hourlyDecay[i], _depth + 1);
+                    if (error)
+                        return "hourlyDecay." + error;
+                }
+            }
+            if (message.winStreakThreshold != null && $Object.hasOwnProperty.call(message, "winStreakThreshold"))
+                if (!$util.isInteger(message.winStreakThreshold))
+                    return "winStreakThreshold: integer expected";
+            if (message.winStreakCrashChance != null && $Object.hasOwnProperty.call(message, "winStreakCrashChance"))
+                if (typeof message.winStreakCrashChance !== "number")
+                    return "winStreakCrashChance: number expected";
+            if (message.crashTargetPoints != null && $Object.hasOwnProperty.call(message, "crashTargetPoints"))
+                if (!$util.isInteger(message.crashTargetPoints))
+                    return "crashTargetPoints: integer expected";
+            if (message.forceCloseWarning != null && $Object.hasOwnProperty.call(message, "forceCloseWarning"))
+                if (!$util.isString(message.forceCloseWarning))
+                    return "forceCloseWarning: string expected";
+            if (message.forceRenameMinPoints != null && $Object.hasOwnProperty.call(message, "forceRenameMinPoints"))
+                if (!$util.isInteger(message.forceRenameMinPoints))
+                    return "forceRenameMinPoints: integer expected";
+            if (message.forceRenameProtectHours != null && $Object.hasOwnProperty.call(message, "forceRenameProtectHours"))
+                if (!$util.isInteger(message.forceRenameProtectHours))
+                    return "forceRenameProtectHours: integer expected";
+            return null;
+        };
+
+        /**
          * Creates an ExtremeModeConfig message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.ExtremeModeConfig
@@ -28372,6 +31527,33 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a SiteConfig message.
+         * @function verify
+         * @memberof game.SiteConfig
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SiteConfig.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.description != null && $Object.hasOwnProperty.call(message, "description"))
+                if (!$util.isString(message.description))
+                    return "description: string expected";
+            if (message.adminPassword != null && $Object.hasOwnProperty.call(message, "adminPassword"))
+                if (!$util.isString(message.adminPassword))
+                    return "adminPassword: string expected";
+            return null;
         };
 
         /**
@@ -28807,6 +31989,54 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies an AccessControlConfig message.
+         * @function verify
+         * @memberof game.AccessControlConfig
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        AccessControlConfig.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.maxOnlinePerIp != null && $Object.hasOwnProperty.call(message, "maxOnlinePerIp"))
+                if (!$util.isInteger(message.maxOnlinePerIp))
+                    return "maxOnlinePerIp: integer expected";
+            if (message.maxCreatesPer_10Min != null && $Object.hasOwnProperty.call(message, "maxCreatesPer_10Min"))
+                if (!$util.isInteger(message.maxCreatesPer_10Min))
+                    return "maxCreatesPer_10Min: integer expected";
+            if (message.ipBackstopMultiplier != null && $Object.hasOwnProperty.call(message, "ipBackstopMultiplier"))
+                if (!$util.isInteger(message.ipBackstopMultiplier))
+                    return "ipBackstopMultiplier: integer expected";
+            if (message.ipBackstopMinLimit != null && $Object.hasOwnProperty.call(message, "ipBackstopMinLimit"))
+                if (!$util.isInteger(message.ipBackstopMinLimit))
+                    return "ipBackstopMinLimit: integer expected";
+            if (message.maxSessionIssuePerIp != null && $Object.hasOwnProperty.call(message, "maxSessionIssuePerIp"))
+                if (!$util.isInteger(message.maxSessionIssuePerIp))
+                    return "maxSessionIssuePerIp: integer expected";
+            if (message.maxOnlinePerIpTotal != null && $Object.hasOwnProperty.call(message, "maxOnlinePerIpTotal"))
+                if (!$util.isInteger(message.maxOnlinePerIpTotal))
+                    return "maxOnlinePerIpTotal: integer expected";
+            if (message.maxCreatesPerIp != null && $Object.hasOwnProperty.call(message, "maxCreatesPerIp"))
+                if (!$util.isInteger(message.maxCreatesPerIp))
+                    return "maxCreatesPerIp: integer expected";
+            if (message.maxActiveRoomsPerOwner != null && $Object.hasOwnProperty.call(message, "maxActiveRoomsPerOwner"))
+                if (!$util.isInteger(message.maxActiveRoomsPerOwner))
+                    return "maxActiveRoomsPerOwner: integer expected";
+            if (message.maxProofUploadsPerPlayer != null && $Object.hasOwnProperty.call(message, "maxProofUploadsPerPlayer"))
+                if (!$util.isInteger(message.maxProofUploadsPerPlayer))
+                    return "maxProofUploadsPerPlayer: integer expected";
+            if (message.registrationDisabled != null && $Object.hasOwnProperty.call(message, "registrationDisabled"))
+                if (typeof message.registrationDisabled !== "boolean")
+                    return "registrationDisabled: boolean expected";
+            return null;
+        };
+
+        /**
          * Creates an AccessControlConfig message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.AccessControlConfig
@@ -29221,6 +32451,45 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a NameWarConfig message.
+         * @function verify
+         * @memberof game.NameWarConfig
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        NameWarConfig.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.penaltyPrefix != null && $Object.hasOwnProperty.call(message, "penaltyPrefix"))
+                if (!$util.isString(message.penaltyPrefix))
+                    return "penaltyPrefix: string expected";
+            if (message.loserPanelTitle != null && $Object.hasOwnProperty.call(message, "loserPanelTitle"))
+                if (!$util.isString(message.loserPanelTitle))
+                    return "loserPanelTitle: string expected";
+            if (message.escapeTitle != null && $Object.hasOwnProperty.call(message, "escapeTitle"))
+                if (!$util.isString(message.escapeTitle))
+                    return "escapeTitle: string expected";
+            if (message.renamePanelTitle != null && $Object.hasOwnProperty.call(message, "renamePanelTitle"))
+                if (!$util.isString(message.renamePanelTitle))
+                    return "renamePanelTitle: string expected";
+            if (message.nameWarLoserLabel != null && $Object.hasOwnProperty.call(message, "nameWarLoserLabel"))
+                if (!$util.isString(message.nameWarLoserLabel))
+                    return "nameWarLoserLabel: string expected";
+            if (message.extremeForceClosedLabel != null && $Object.hasOwnProperty.call(message, "extremeForceClosedLabel"))
+                if (!$util.isString(message.extremeForceClosedLabel))
+                    return "extremeForceClosedLabel: string expected";
+            if (message.penaltyThreshold != null && $Object.hasOwnProperty.call(message, "penaltyThreshold"))
+                if (!$util.isInteger(message.penaltyThreshold))
+                    return "penaltyThreshold: integer expected";
+            return null;
+        };
+
+        /**
          * Creates a NameWarConfig message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.NameWarConfig
@@ -29557,6 +32826,36 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a GiveawayConfig message.
+         * @function verify
+         * @memberof game.GiveawayConfig
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GiveawayConfig.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.panelTitle != null && $Object.hasOwnProperty.call(message, "panelTitle"))
+                if (!$util.isString(message.panelTitle))
+                    return "panelTitle: string expected";
+            if (message.panelDescription != null && $Object.hasOwnProperty.call(message, "panelDescription"))
+                if (!$util.isString(message.panelDescription))
+                    return "panelDescription: string expected";
+            if (message.submitPlaceholder != null && $Object.hasOwnProperty.call(message, "submitPlaceholder"))
+                if (!$util.isString(message.submitPlaceholder))
+                    return "submitPlaceholder: string expected";
+            if (message.emptyText != null && $Object.hasOwnProperty.call(message, "emptyText"))
+                if (!$util.isString(message.emptyText))
+                    return "emptyText: string expected";
+            return null;
+        };
+
+        /**
          * Creates a GiveawayConfig message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.GiveawayConfig
@@ -29834,6 +33133,40 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a BotsConfig message.
+         * @function verify
+         * @memberof game.BotsConfig
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        BotsConfig.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.names != null && $Object.hasOwnProperty.call(message, "names")) {
+                if (!$Array.isArray(message.names))
+                    return "names: array expected";
+                for (let i = 0; i < message.names.length; ++i)
+                    if (!$util.isString(message.names[i]))
+                        return "names: string[] expected";
+            }
+            if (message.difficulties != null && $Object.hasOwnProperty.call(message, "difficulties")) {
+                if (!$Array.isArray(message.difficulties))
+                    return "difficulties: array expected";
+                for (let i = 0; i < message.difficulties.length; ++i) {
+                    let error = $root.game.BotDifficultyConfig.verify(message.difficulties[i], _depth + 1);
+                    if (error)
+                        return "difficulties." + error;
+                }
+            }
+            return null;
         };
 
         /**
@@ -30418,6 +33751,144 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies an AppConfig message.
+         * @function verify
+         * @memberof game.AppConfig
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        AppConfig.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.site != null && $Object.hasOwnProperty.call(message, "site")) {
+                let error = $root.game.SiteConfig.verify(message.site, _depth + 1);
+                if (error)
+                    return "site." + error;
+            }
+            if (message.announcementBoard != null && $Object.hasOwnProperty.call(message, "announcementBoard")) {
+                let error = $root.game.AnnouncementBoard.verify(message.announcementBoard, _depth + 1);
+                if (error)
+                    return "announcementBoard." + error;
+            }
+            if (message.genders != null && $Object.hasOwnProperty.call(message, "genders")) {
+                if (!$Array.isArray(message.genders))
+                    return "genders: array expected";
+                for (let i = 0; i < message.genders.length; ++i) {
+                    let error = $root.game.GenderOption.verify(message.genders[i], _depth + 1);
+                    if (error)
+                        return "genders." + error;
+                }
+            }
+            if (message.genderFactions != null && $Object.hasOwnProperty.call(message, "genderFactions")) {
+                if (!$Array.isArray(message.genderFactions))
+                    return "genderFactions: array expected";
+                for (let i = 0; i < message.genderFactions.length; ++i) {
+                    let error = $root.game.GenderFaction.verify(message.genderFactions[i], _depth + 1);
+                    if (error)
+                        return "genderFactions." + error;
+                }
+            }
+            if (message.titles != null && $Object.hasOwnProperty.call(message, "titles")) {
+                if (!$Array.isArray(message.titles))
+                    return "titles: array expected";
+                for (let i = 0; i < message.titles.length; ++i) {
+                    let error = $root.game.TitleSegment.verify(message.titles[i], _depth + 1);
+                    if (error)
+                        return "titles." + error;
+                }
+            }
+            if (message.punishments != null && $Object.hasOwnProperty.call(message, "punishments")) {
+                if (!$Array.isArray(message.punishments))
+                    return "punishments: array expected";
+                for (let i = 0; i < message.punishments.length; ++i) {
+                    let error = $root.game.PunishmentConfig.verify(message.punishments[i], _depth + 1);
+                    if (error)
+                        return "punishments." + error;
+                }
+            }
+            if (message.playerPunishmentRoomNamePool != null && $Object.hasOwnProperty.call(message, "playerPunishmentRoomNamePool")) {
+                let error = $root.game.RoomNamePool.verify(message.playerPunishmentRoomNamePool, _depth + 1);
+                if (error)
+                    return "playerPunishmentRoomNamePool." + error;
+            }
+            if (message.roomTags != null && $Object.hasOwnProperty.call(message, "roomTags")) {
+                if (!$Array.isArray(message.roomTags))
+                    return "roomTags: array expected";
+                for (let i = 0; i < message.roomTags.length; ++i)
+                    if (!$util.isString(message.roomTags[i]))
+                        return "roomTags: string[] expected";
+            }
+            if (message.roomInfoTags != null && $Object.hasOwnProperty.call(message, "roomInfoTags")) {
+                if (!$Array.isArray(message.roomInfoTags))
+                    return "roomInfoTags: array expected";
+                for (let i = 0; i < message.roomInfoTags.length; ++i) {
+                    let error = $root.game.RoomInfoTagEntry.verify(message.roomInfoTags[i], _depth + 1);
+                    if (error)
+                        return "roomInfoTags." + error;
+                }
+            }
+            if (message.accessControl != null && $Object.hasOwnProperty.call(message, "accessControl")) {
+                let error = $root.game.AccessControlConfig.verify(message.accessControl, _depth + 1);
+                if (error)
+                    return "accessControl." + error;
+            }
+            if (message.nameWar != null && $Object.hasOwnProperty.call(message, "nameWar")) {
+                let error = $root.game.NameWarConfig.verify(message.nameWar, _depth + 1);
+                if (error)
+                    return "nameWar." + error;
+            }
+            if (message.giveaway != null && $Object.hasOwnProperty.call(message, "giveaway")) {
+                let error = $root.game.GiveawayConfig.verify(message.giveaway, _depth + 1);
+                if (error)
+                    return "giveaway." + error;
+            }
+            if (message.extremeMode != null && $Object.hasOwnProperty.call(message, "extremeMode")) {
+                let error = $root.game.ExtremeModeConfig.verify(message.extremeMode, _depth + 1);
+                if (error)
+                    return "extremeMode." + error;
+            }
+            if (message.bots != null && $Object.hasOwnProperty.call(message, "bots")) {
+                let error = $root.game.BotsConfig.verify(message.bots, _depth + 1);
+                if (error)
+                    return "bots." + error;
+            }
+            if (message.games != null && $Object.hasOwnProperty.call(message, "games")) {
+                if (!$Array.isArray(message.games))
+                    return "games: array expected";
+                for (let i = 0; i < message.games.length; ++i) {
+                    let error = $root.game.GameConfig.verify(message.games[i], _depth + 1);
+                    if (error)
+                        return "games." + error;
+                }
+            }
+            if (message.messages != null && $Object.hasOwnProperty.call(message, "messages")) {
+                if (!$Array.isArray(message.messages))
+                    return "messages: array expected";
+                for (let i = 0; i < message.messages.length; ++i) {
+                    let error = $root.game.StringPair.verify(message.messages[i], _depth + 1);
+                    if (error)
+                        return "messages." + error;
+                }
+            }
+            if (message.securityDisclaimer != null && $Object.hasOwnProperty.call(message, "securityDisclaimer")) {
+                let error = $root.game.SecurityDisclaimerConfig.verify(message.securityDisclaimer, _depth + 1);
+                if (error)
+                    return "securityDisclaimer." + error;
+            }
+            if (message.rankedScore != null && $Object.hasOwnProperty.call(message, "rankedScore")) {
+                let error = $root.game.RankedScoreConfig.verify(message.rankedScore, _depth + 1);
+                if (error)
+                    return "rankedScore." + error;
+            }
+            return null;
+        };
+
+        /**
          * Creates an AppConfig message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.AppConfig
@@ -30919,6 +34390,36 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a RankedScoreConfig message.
+         * @function verify
+         * @memberof game.RankedScoreConfig
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RankedScoreConfig.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.max != null && $Object.hasOwnProperty.call(message, "max"))
+                if (!$util.isInteger(message.max))
+                    return "max: integer expected";
+            if (message.min != null && $Object.hasOwnProperty.call(message, "min"))
+                if (!$util.isInteger(message.min))
+                    return "min: integer expected";
+            if (message.nameWarMin != null && $Object.hasOwnProperty.call(message, "nameWarMin"))
+                if (!$util.isInteger(message.nameWarMin))
+                    return "nameWarMin: integer expected";
+            if (message.dailyDecayRatio != null && $Object.hasOwnProperty.call(message, "dailyDecayRatio"))
+                if (typeof message.dailyDecayRatio !== "number")
+                    return "dailyDecayRatio: number expected";
+            return null;
+        };
+
+        /**
          * Creates a RankedScoreConfig message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.RankedScoreConfig
@@ -31233,6 +34734,53 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a StateDocument message.
+         * @function verify
+         * @memberof game.StateDocument
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StateDocument.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            let properties = {};
+            if (message.lobby != null && $Object.hasOwnProperty.call(message, "lobby")) {
+                properties.doc = 1;
+                {
+                    let error = $root.game.LobbySnapshot.verify(message.lobby, _depth + 1);
+                    if (error)
+                        return "lobby." + error;
+                }
+            }
+            if (message.room != null && $Object.hasOwnProperty.call(message, "room")) {
+                if (properties.doc === 1)
+                    return "doc: multiple values";
+                properties.doc = 1;
+                {
+                    let error = $root.game.RoomSnapshot.verify(message.room, _depth + 1);
+                    if (error)
+                        return "room." + error;
+                }
+            }
+            if (message.config != null && $Object.hasOwnProperty.call(message, "config")) {
+                if (properties.doc === 1)
+                    return "doc: multiple values";
+                properties.doc = 1;
+                {
+                    let error = $root.game.AppConfig.verify(message.config, _depth + 1);
+                    if (error)
+                        return "config." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
          * Creates a StateDocument message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.StateDocument
@@ -31493,6 +35041,33 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PlayerBatch message.
+         * @function verify
+         * @memberof game.PlayerBatch
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PlayerBatch.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.players != null && $Object.hasOwnProperty.call(message, "players")) {
+                if (!$Array.isArray(message.players))
+                    return "players: array expected";
+                for (let i = 0; i < message.players.length; ++i) {
+                    let error = $root.game.PublicPlayer.verify(message.players[i], _depth + 1);
+                    if (error)
+                        return "players." + error;
+                }
+            }
+            return null;
         };
 
         /**
@@ -31802,6 +35377,40 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a MeState message.
+         * @function verify
+         * @memberof game.MeState
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        MeState.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.player != null && $Object.hasOwnProperty.call(message, "player")) {
+                let error = $root.game.PublicPlayer.verify(message.player, _depth + 1);
+                if (error)
+                    return "player." + error;
+            }
+            if (message.token != null && $Object.hasOwnProperty.call(message, "token"))
+                if (!$util.isString(message.token))
+                    return "token: string expected";
+            if (message.roomId != null && $Object.hasOwnProperty.call(message, "roomId"))
+                if (!$util.isString(message.roomId))
+                    return "roomId: string expected";
+            if (message.room != null && $Object.hasOwnProperty.call(message, "room")) {
+                let error = $root.game.RoomSnapshot.verify(message.room, _depth + 1);
+                if (error)
+                    return "room." + error;
+            }
+            return null;
         };
 
         /**
@@ -32127,6 +35736,36 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies an AnnouncementPayload message.
+         * @function verify
+         * @memberof game.AnnouncementPayload
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        AnnouncementPayload.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.message != null && $Object.hasOwnProperty.call(message, "message"))
+                if (!$util.isString(message.message))
+                    return "message: string expected";
+            if (message.durationMs != null && $Object.hasOwnProperty.call(message, "durationMs"))
+                if (!$util.isInteger(message.durationMs))
+                    return "durationMs: integer expected";
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt"))
+                if (!$util.isInteger(message.createdAt) && !(message.createdAt && $util.isInteger(message.createdAt.low) && $util.isInteger(message.createdAt.high)))
+                    return "createdAt: integer|Long expected";
+            return null;
+        };
+
+        /**
          * Creates an AnnouncementPayload message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.AnnouncementPayload
@@ -32398,6 +36037,27 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a RoomClosed message.
+         * @function verify
+         * @memberof game.RoomClosed
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RoomClosed.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.message != null && $Object.hasOwnProperty.call(message, "message"))
+                if (!$util.isString(message.message))
+                    return "message: string expected";
+            return null;
         };
 
         /**
@@ -32677,6 +36337,35 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a HistoryPage message.
+         * @function verify
+         * @memberof game.HistoryPage
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        HistoryPage.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.roomId != null && $Object.hasOwnProperty.call(message, "roomId"))
+                if (!$util.isString(message.roomId))
+                    return "roomId: string expected";
+            if (message.item != null && $Object.hasOwnProperty.call(message, "item")) {
+                let error = $root.game.RoundHistoryItem.verify(message.item, _depth + 1);
+                if (error)
+                    return "item." + error;
+            }
+            if (message.total != null && $Object.hasOwnProperty.call(message, "total"))
+                if (!$util.isInteger(message.total))
+                    return "total: integer expected";
+            return null;
+        };
+
+        /**
          * Creates a HistoryPage message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.HistoryPage
@@ -32931,6 +36620,27 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies an OkResult message.
+         * @function verify
+         * @memberof game.OkResult
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        OkResult.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.ok != null && $Object.hasOwnProperty.call(message, "ok"))
+                if (typeof message.ok !== "boolean")
+                    return "ok: boolean expected";
+            return null;
+        };
+
+        /**
          * Creates an OkResult message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.OkResult
@@ -33164,6 +36874,29 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PlayerResult message.
+         * @function verify
+         * @memberof game.PlayerResult
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PlayerResult.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.player != null && $Object.hasOwnProperty.call(message, "player")) {
+                let error = $root.game.PublicPlayer.verify(message.player, _depth + 1);
+                if (error)
+                    return "player." + error;
+            }
+            return null;
         };
 
         /**
@@ -33406,6 +37139,33 @@ export const game = $root.game = (() => {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a SuggestionsResult message.
+         * @function verify
+         * @memberof game.SuggestionsResult
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SuggestionsResult.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.suggestions != null && $Object.hasOwnProperty.call(message, "suggestions")) {
+                if (!$Array.isArray(message.suggestions))
+                    return "suggestions: array expected";
+                for (let i = 0; i < message.suggestions.length; ++i) {
+                    let error = $root.game.Suggestion.verify(message.suggestions[i], _depth + 1);
+                    if (error)
+                        return "suggestions." + error;
+                }
+            }
+            return null;
         };
 
         /**
@@ -33942,6 +37702,173 @@ export const game = $root.game = (() => {
         };
 
         /**
+         * Verifies a RawBody message.
+         * @function verify
+         * @memberof game.RawBody
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RawBody.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            let properties = {};
+            if (message.dynamic != null && $Object.hasOwnProperty.call(message, "dynamic")) {
+                properties.body = 1;
+                {
+                    let error = $root.google.protobuf.Struct.verify(message.dynamic, _depth + 1);
+                    if (error)
+                        return "dynamic." + error;
+                }
+            }
+            if (message.playerBatch != null && $Object.hasOwnProperty.call(message, "playerBatch")) {
+                if (properties.body === 1)
+                    return "body: multiple values";
+                properties.body = 1;
+                {
+                    let error = $root.game.PlayerBatch.verify(message.playerBatch, _depth + 1);
+                    if (error)
+                        return "playerBatch." + error;
+                }
+            }
+            if (message.chat != null && $Object.hasOwnProperty.call(message, "chat")) {
+                if (properties.body === 1)
+                    return "body: multiple values";
+                properties.body = 1;
+                {
+                    let error = $root.game.ChatMessage.verify(message.chat, _depth + 1);
+                    if (error)
+                        return "chat." + error;
+                }
+            }
+            if (message.suggestion != null && $Object.hasOwnProperty.call(message, "suggestion")) {
+                if (properties.body === 1)
+                    return "body: multiple values";
+                properties.body = 1;
+                {
+                    let error = $root.game.Suggestion.verify(message.suggestion, _depth + 1);
+                    if (error)
+                        return "suggestion." + error;
+                }
+            }
+            if (message.player != null && $Object.hasOwnProperty.call(message, "player")) {
+                if (properties.body === 1)
+                    return "body: multiple values";
+                properties.body = 1;
+                {
+                    let error = $root.game.PublicPlayer.verify(message.player, _depth + 1);
+                    if (error)
+                        return "player." + error;
+                }
+            }
+            if (message.me != null && $Object.hasOwnProperty.call(message, "me")) {
+                if (properties.body === 1)
+                    return "body: multiple values";
+                properties.body = 1;
+                {
+                    let error = $root.game.MeState.verify(message.me, _depth + 1);
+                    if (error)
+                        return "me." + error;
+                }
+            }
+            if (message.announcement != null && $Object.hasOwnProperty.call(message, "announcement")) {
+                if (properties.body === 1)
+                    return "body: multiple values";
+                properties.body = 1;
+                {
+                    let error = $root.game.AnnouncementPayload.verify(message.announcement, _depth + 1);
+                    if (error)
+                        return "announcement." + error;
+                }
+            }
+            if (message.roomClosed != null && $Object.hasOwnProperty.call(message, "roomClosed")) {
+                if (properties.body === 1)
+                    return "body: multiple values";
+                properties.body = 1;
+                {
+                    let error = $root.game.RoomClosed.verify(message.roomClosed, _depth + 1);
+                    if (error)
+                        return "roomClosed." + error;
+                }
+            }
+            if (message.historyPage != null && $Object.hasOwnProperty.call(message, "historyPage")) {
+                if (properties.body === 1)
+                    return "body: multiple values";
+                properties.body = 1;
+                {
+                    let error = $root.game.HistoryPage.verify(message.historyPage, _depth + 1);
+                    if (error)
+                        return "historyPage." + error;
+                }
+            }
+            if (message.ok != null && $Object.hasOwnProperty.call(message, "ok")) {
+                if (properties.body === 1)
+                    return "body: multiple values";
+                properties.body = 1;
+                {
+                    let error = $root.game.OkResult.verify(message.ok, _depth + 1);
+                    if (error)
+                        return "ok." + error;
+                }
+            }
+            if (message.playerResult != null && $Object.hasOwnProperty.call(message, "playerResult")) {
+                if (properties.body === 1)
+                    return "body: multiple values";
+                properties.body = 1;
+                {
+                    let error = $root.game.PlayerResult.verify(message.playerResult, _depth + 1);
+                    if (error)
+                        return "playerResult." + error;
+                }
+            }
+            if (message.suggestions != null && $Object.hasOwnProperty.call(message, "suggestions")) {
+                if (properties.body === 1)
+                    return "body: multiple values";
+                properties.body = 1;
+                {
+                    let error = $root.game.SuggestionsResult.verify(message.suggestions, _depth + 1);
+                    if (error)
+                        return "suggestions." + error;
+                }
+            }
+            if (message.room != null && $Object.hasOwnProperty.call(message, "room")) {
+                if (properties.body === 1)
+                    return "body: multiple values";
+                properties.body = 1;
+                {
+                    let error = $root.game.RoomSnapshot.verify(message.room, _depth + 1);
+                    if (error)
+                        return "room." + error;
+                }
+            }
+            if (message.config != null && $Object.hasOwnProperty.call(message, "config")) {
+                if (properties.body === 1)
+                    return "body: multiple values";
+                properties.body = 1;
+                {
+                    let error = $root.game.AppConfig.verify(message.config, _depth + 1);
+                    if (error)
+                        return "config." + error;
+                }
+            }
+            if (message.lobby != null && $Object.hasOwnProperty.call(message, "lobby")) {
+                if (properties.body === 1)
+                    return "body: multiple values";
+                properties.body = 1;
+                {
+                    let error = $root.game.LobbySnapshot.verify(message.lobby, _depth + 1);
+                    if (error)
+                        return "lobby." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
          * Creates a RawBody message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
          * @memberof game.RawBody
@@ -34373,6 +38300,34 @@ export const google = $root.google = (() => {
             };
 
             /**
+             * Verifies a Struct message.
+             * @function verify
+             * @memberof google.protobuf.Struct
+             * @static
+             * @param {Object.<string,*>} message Plain object to verify
+             * @returns {string|null} `null` if valid, otherwise the reason why it is not
+             */
+            Struct.verify = function (message, _depth) {
+                if (typeof message !== "object" || message === null)
+                    return "object expected";
+                if (_depth === $undefined)
+                    _depth = 0;
+                if (_depth > $util.recursionLimit)
+                    return "max depth exceeded";
+                if (message.fields != null && $Object.hasOwnProperty.call(message, "fields")) {
+                    if (!$util.isObject(message.fields))
+                        return "fields: object expected";
+                    let key = $Object.keys(message.fields);
+                    for (let i = 0; i < key.length; ++i) {
+                        let error = $root.google.protobuf.Value.verify(message.fields[key[i]], _depth + 1);
+                        if (error)
+                            return "fields." + error;
+                    }
+                }
+                return null;
+            };
+
+            /**
              * Creates a Struct message from a plain object. Also converts values to their respective internal types.
              * @function fromObject
              * @memberof google.protobuf.Struct
@@ -34741,6 +38696,71 @@ export const google = $root.google = (() => {
             };
 
             /**
+             * Verifies a Value message.
+             * @function verify
+             * @memberof google.protobuf.Value
+             * @static
+             * @param {Object.<string,*>} message Plain object to verify
+             * @returns {string|null} `null` if valid, otherwise the reason why it is not
+             */
+            Value.verify = function (message, _depth) {
+                if (typeof message !== "object" || message === null)
+                    return "object expected";
+                if (_depth === $undefined)
+                    _depth = 0;
+                if (_depth > $util.recursionLimit)
+                    return "max depth exceeded";
+                let properties = {};
+                if (message.nullValue != null && $Object.hasOwnProperty.call(message, "nullValue")) {
+                    properties.kind = 1;
+                    if (typeof message.nullValue !== "number" || (message.nullValue | 0) !== message.nullValue)
+                        return "nullValue: enum value expected";
+                }
+                if (message.numberValue != null && $Object.hasOwnProperty.call(message, "numberValue")) {
+                    if (properties.kind === 1)
+                        return "kind: multiple values";
+                    properties.kind = 1;
+                    if (typeof message.numberValue !== "number")
+                        return "numberValue: number expected";
+                }
+                if (message.stringValue != null && $Object.hasOwnProperty.call(message, "stringValue")) {
+                    if (properties.kind === 1)
+                        return "kind: multiple values";
+                    properties.kind = 1;
+                    if (!$util.isString(message.stringValue))
+                        return "stringValue: string expected";
+                }
+                if (message.boolValue != null && $Object.hasOwnProperty.call(message, "boolValue")) {
+                    if (properties.kind === 1)
+                        return "kind: multiple values";
+                    properties.kind = 1;
+                    if (typeof message.boolValue !== "boolean")
+                        return "boolValue: boolean expected";
+                }
+                if (message.structValue != null && $Object.hasOwnProperty.call(message, "structValue")) {
+                    if (properties.kind === 1)
+                        return "kind: multiple values";
+                    properties.kind = 1;
+                    {
+                        let error = $root.google.protobuf.Struct.verify(message.structValue, _depth + 1);
+                        if (error)
+                            return "structValue." + error;
+                    }
+                }
+                if (message.listValue != null && $Object.hasOwnProperty.call(message, "listValue")) {
+                    if (properties.kind === 1)
+                        return "kind: multiple values";
+                    properties.kind = 1;
+                    {
+                        let error = $root.google.protobuf.ListValue.verify(message.listValue, _depth + 1);
+                        if (error)
+                            return "listValue." + error;
+                    }
+                }
+                return null;
+            };
+
+            /**
              * Creates a Value message from a plain object. Also converts values to their respective internal types.
              * @function fromObject
              * @memberof google.protobuf.Value
@@ -35041,6 +39061,33 @@ export const google = $root.google = (() => {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
                 return this.decode(reader, reader.uint32());
+            };
+
+            /**
+             * Verifies a ListValue message.
+             * @function verify
+             * @memberof google.protobuf.ListValue
+             * @static
+             * @param {Object.<string,*>} message Plain object to verify
+             * @returns {string|null} `null` if valid, otherwise the reason why it is not
+             */
+            ListValue.verify = function (message, _depth) {
+                if (typeof message !== "object" || message === null)
+                    return "object expected";
+                if (_depth === $undefined)
+                    _depth = 0;
+                if (_depth > $util.recursionLimit)
+                    return "max depth exceeded";
+                if (message.values != null && $Object.hasOwnProperty.call(message, "values")) {
+                    if (!$Array.isArray(message.values))
+                        return "values: array expected";
+                    for (let i = 0; i < message.values.length; ++i) {
+                        let error = $root.google.protobuf.Value.verify(message.values[i], _depth + 1);
+                        if (error)
+                            return "values." + error;
+                    }
+                }
+                return null;
             };
 
             /**

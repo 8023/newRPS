@@ -83,7 +83,7 @@ func (s *Server) titleNamesForSegment(segment *types.TitleSegment, factionID str
 		return []string{"初心拳手"}
 	}
 	if factionID != "" && segment.FactionNames != nil {
-		if names := segment.FactionNames[factionID]; len(names) > 0 {
+		if names := segment.FactionNames[s.taskGroupForFaction(factionID)]; len(names) > 0 {
 			return names
 		}
 	}
@@ -102,6 +102,9 @@ func (s *Server) randomTitleFromSegment(segment *types.TitleSegment, factionID s
 }
 
 func (s *Server) syncTitleForRankSegment(player *PlayerState, force bool) {
+	if player.Stats.TitleCustom {
+		return
+	}
 	segment := s.titleSegmentFor(player.Stats.RankedPoints)
 	if segment == nil {
 		return
@@ -124,37 +127,106 @@ type genderInfoResult struct {
 	FactionColors types.GenderColors
 }
 
-func (s *Server) genderInfo(genderID string) genderInfoResult {
-	fallbackFaction := types.GenderFaction{
-		ID: "unknown_faction", Label: "未知阵营",
+// findGenderPreset 按 id 查预设性别（与阵营无关的扁平列表）；查不到返回 nil。
+func (s *Server) findGenderPreset(genderID string) *types.GenderOption {
+	for i := range s.cfg.Genders {
+		if s.cfg.Genders[i].ID == genderID {
+			return &s.cfg.Genders[i]
+		}
+	}
+	return nil
+}
+
+// findFaction 按 id 查阵营；查不到 / id 为空时退回第一个已配置阵营（配置异常兜底）。
+func (s *Server) findFaction(factionID string) types.GenderFaction {
+	fallback := types.GenderFaction{
+		ID: "unknown_faction", Label: "未知阵营", TaskGroup: "default",
 		GenderColors: types.GenderColors{TextColor: "#4d5c6f", BackgroundColor: "#eef3f8", BorderColor: "#c9d6e4"},
 	}
 	if len(s.cfg.GenderFactions) > 0 {
-		fallbackFaction = s.cfg.GenderFactions[0]
+		fallback = s.cfg.GenderFactions[0]
 	}
-	var gender *types.GenderOption
-	for i := range s.cfg.Genders {
-		if s.cfg.Genders[i].ID == genderID {
-			gender = &s.cfg.Genders[i]
-			break
-		}
-	}
-	if gender == nil && len(s.cfg.Genders) > 0 {
-		gender = &s.cfg.Genders[0]
-	}
-	faction := fallbackFaction
-	if gender != nil {
+	if factionID != "" {
 		for i := range s.cfg.GenderFactions {
-			if s.cfg.GenderFactions[i].ID == gender.FactionID {
-				faction = s.cfg.GenderFactions[i]
-				break
+			if s.cfg.GenderFactions[i].ID == factionID {
+				return s.cfg.GenderFactions[i]
 			}
 		}
 	}
-	gid, glabel := genderID, genderID
-	if gender != nil {
-		gid, glabel = gender.ID, gender.Label
+	return fallback
+}
+
+// taskGroupForFaction 把阵营 id 解析成任务分组（male/female/default），供称号/惩罚按分组取文案。
+func (s *Server) taskGroupForFaction(factionID string) string {
+	group := s.findFaction(factionID).TaskGroup
+	if group == "" {
+		return "default"
 	}
+	return group
+}
+
+// validGenderSubmission 校验一次"明确提交"的性别选择：genderID 命中预设后还要求预设的
+// FactionID 与本次提交的 factionID 一致（预设未设归属阵营时视为不限，兼容测试里手搭的裸配置）；
+// 否则视为选择了"自定义…"，customLabel 清洗后必须落在 1-9 字符内且不能与任何预设性别文案重复
+// ——旧版 resolveGender 对空自定义文本会静默退回第一个预设性别，看起来"提交成功"实则悄悄改写
+// 了用户的选择，掩盖了无效输入。只用在个人资料保存、后台管理员保存这类"改动既有玩家资料"的
+// 主动提交入口；不用于 player:join（无论是首次建号还是常规重连同步）——重连时前端会把本地缓存
+// 的 genderId/customGenderLabel/factionId 原样带上，历史缓存里可能已经存在旧 bug 遗留的空值或
+// 阵营调整前的组合，用这里的严格校验会把老账号锁死在登录页；首次建号允许完全不传性别字段（走
+// resolveGender 自身的默认兜底），这是已有测试覆盖的合法场景，不是"选了自定义又留空"。返回的
+// 第二个值在校验失败时是给用户看的具体原因，成功时为空字符串。
+func (s *Server) validGenderSubmission(genderID, customLabel, factionID string) (bool, string) {
+	if genderID != "" {
+		preset := s.findGenderPreset(genderID)
+		if preset == nil {
+			return false, "所选性别不存在"
+		}
+		if preset.FactionID != "" && preset.FactionID != factionID {
+			return false, "所选性别不属于当前阵营"
+		}
+		return true, ""
+	}
+	trimmed := cleanText(customLabel, 9)
+	n := len([]rune(trimmed))
+	if n < 1 || n > 9 {
+		return false, "请输入 1-9 个字符的自定义性别"
+	}
+	for _, g := range s.cfg.Genders {
+		if g.Label == trimmed {
+			return false, "自定义性别不能与已有性别重复"
+		}
+	}
+	factionExists := false
+	for _, f := range s.cfg.GenderFactions {
+		if f.ID == factionID {
+			factionExists = true
+			break
+		}
+	}
+	if !factionExists {
+		return false, "所选阵营不存在"
+	}
+	return true, ""
+}
+
+// resolveGender 独立解析性别文本与阵营：genderID 命中预设则用预设文案；否则把 customLabel
+// 清洗成 1-9 字符的自定义文本（都拿不到就退回第一个预设）。阵营始终按 factionID 独立查找，
+// 与性别选择无关。
+func (s *Server) resolveGender(genderID, customLabel, factionID string) genderInfoResult {
+	gid, glabel := "", ""
+	if genderID != "" {
+		if preset := s.findGenderPreset(genderID); preset != nil {
+			gid, glabel = preset.ID, preset.Label
+		}
+	}
+	if glabel == "" {
+		if custom := cleanText(customLabel, 9); custom != "" {
+			gid, glabel = "", custom
+		} else if len(s.cfg.Genders) > 0 {
+			gid, glabel = s.cfg.Genders[0].ID, s.cfg.Genders[0].Label
+		}
+	}
+	faction := s.findFaction(factionID)
 	return genderInfoResult{
 		GenderID: gid, GenderLabel: glabel,
 		FactionID: faction.ID, FactionLabel: faction.Label,
@@ -215,11 +287,26 @@ func (s *Server) refreshGiveawayBoard(player *PlayerState, now int64) {
 	player.GiveawayBoardLikeWindowStartedAt = nil
 }
 
+// addGiveawayValue 按 delta 调整白给值（正负皆可，最终钳制到 0-100 且保留 1 位小数）。
+// 白给值归零后自动关闭白给玩法（赢一局的惩罚、被点踩等都会走这里，不用每处调用方各自判断）。
 func (s *Server) addGiveawayValue(player *PlayerState, delta float64) {
 	v := ptrFloat(player.GiveawayValue) + delta
-	player.GiveawayValue = floatPtr(clampGiveawayValue(v))
+	clamped := clampGiveawayValue(v)
+	player.GiveawayValue = floatPtr(clamped)
+	if clamped <= 0 && ptrBool(player.GiveawayEnabled) {
+		player.GiveawayEnabled = boolPtr(false)
+	}
 	s.refreshPlayerSnapshots(player)
 	s.broadcastPlayerUpdate(player)
+}
+
+// applyGiveawayWinPenalty 白给模式已开启的玩家每赢一局（含断线判负）扣减白给值；
+// 未开启白给的玩家不受影响，值本就钳制在 0。
+func (s *Server) applyGiveawayWinPenalty(winner *PlayerState) {
+	if winner == nil || !ptrBool(winner.GiveawayEnabled) {
+		return
+	}
+	s.addGiveawayValue(winner, -s.cfg.Giveaway.WinPenaltyValue)
 }
 
 func (s *Server) refreshNameWarState(player *PlayerState, now int64) bool {
@@ -264,9 +351,9 @@ func (s *Server) refreshNameWarState(player *PlayerState, now int64) bool {
 	return before != after
 }
 
-func (s *Server) applyGender(player *PlayerState, genderID string) {
+func (s *Server) applyGender(player *PlayerState, genderID, customGenderLabel, factionID string) {
 	oldFactionID := player.FactionID
-	next := s.genderInfo(genderID)
+	next := s.resolveGender(genderID, customGenderLabel, factionID)
 	player.GenderID = next.GenderID
 	player.GenderLabel = next.GenderLabel
 	player.FactionID = next.FactionID
@@ -318,7 +405,7 @@ func (s *Server) refreshPlayerSnapshots(player *PlayerState) {
 
 func (s *Server) refreshAllPlayersForConfig() {
 	for _, player := range s.players {
-		s.applyGender(player, player.GenderID)
+		s.applyGender(player, player.GenderID, player.GenderLabel, player.FactionID)
 		s.refreshNameWarState(player, nowMs())
 		s.refreshPlayerSnapshots(player)
 	}
@@ -389,7 +476,7 @@ func (s *Server) canCreateFromKey(attempts map[string][]int64, key string, limit
 	return true
 }
 
-func (s *Server) createPlayer(name, genderID, token string, identityPlayerID, identitySecret string) *PlayerState {
+func (s *Server) createPlayer(name, genderID, customGenderLabel, factionID, token string, identityPlayerID, identitySecret string) *PlayerState {
 	session := s.verifySessionToken(token)
 	persistent := identityPlayerID != "" && identitySecret != ""
 	id := randomID()
@@ -398,7 +485,7 @@ func (s *Server) createPlayer(name, genderID, token string, identityPlayerID, id
 	} else if session != nil {
 		id = session.SID
 	}
-	gender := s.genderInfo(genderID)
+	gender := s.resolveGender(genderID, customGenderLabel, factionID)
 	titleSegment := s.titleSegmentFor(0)
 	title := s.randomTitleFromSegment(titleSegment, gender.FactionID)
 	titleSegID := ""

@@ -4,10 +4,12 @@ export type GenderColors = {
   borderColor: string;
 };
 export type GenderOption = { id: string; label: string; factionId: string };
+// taskGroup 决定系统任务/称号取哪份阵营专属文案，固定三选一：
+// "male"（生理男：顺性别男、男跨女）/ "female"（生理女：顺性别女、女跨男）/ "default"（默认兜底：无性别）。
 export type GenderFaction = GenderColors & {
   id: string;
   label: string;
-  genders: GenderOption[];
+  taskGroup: string;
 };
 export type Move = "rock" | "scissors" | "paper" | "giveaway" | "forfeit" | "noMove";
 export type RoundResult = "A" | "B" | "draw" | "doubleLoss";
@@ -131,6 +133,7 @@ export type PublicStats = {
   sortLowestScore: number;
   title: string;
   titleSegmentId?: string;
+  titleCustom?: boolean;
 };
 
 export type GameWLD = {
@@ -529,6 +532,16 @@ export type AppConfig = {
     panelDescription: string;
     submitPlaceholder: string;
     emptyText: string;
+    /** 主动白给（手动选白给 / 点击白给按钮 / RPS 概率强制白给）每次增加的白给值百分比 */
+    activeBoostValue: number;
+    /** 白给已开启的玩家每赢一局（含断线判负），白给值减少的百分比 */
+    winPenaltyValue: number;
+    /** 自救板点赞每小时可投次数上限、每次降低的百分比 */
+    likeVoteLimitPerHour: number;
+    likeVoteValue: number;
+    /** 自救板倒赞每小时可投次数上限、每次增加的百分比 */
+    dislikeVoteLimitPerHour: number;
+    dislikeVoteValue: number;
   };
   extremeMode: {
     label: string;

@@ -1,7 +1,9 @@
 package server
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"sync"
 )
 
@@ -14,14 +16,9 @@ type eventStore struct {
 	mu sync.Mutex
 }
 
-// rooms：房间生命周期实体表，一房间一行。房间数据在内存里的 RoomState 存活期间只字段
-// 更新，不落盘；直到房间关闭（清空自动回收 / 管理员关闭 / 进程优雅关停）才一次性
-// insertClosedRoom 写入完整一行（创建+关闭字段一起写），不再有"已创建但未关闭"的
-// 中间态行，也就不需要 UPDATE 去补写 closed_at——房间是否还存活，看内存里的 s.rooms
-// 即可，不需要通过这张表的"未关闭行"来判断。
-//
-// room_join_events：可重复发生的加入事件（战斗席/观战都会触发），一次进房一行，
-// 不适合塞进 rooms 单行。
+// rooms / room_join_events：房间事件的旧版两表设计（一房间一行的生命周期表 + 可重复
+// 发生的加入事件表），已被下面的 room_events 统一事件日志取代——新代码不再往这两张
+// 表写入，只保留 CREATE TABLE IF NOT EXISTS 让存量历史行继续留在库里，不做迁移搬迁。
 const roomEventSchema = `
 CREATE TABLE IF NOT EXISTS rooms (
 	room_id      TEXT PRIMARY KEY,
@@ -45,6 +42,44 @@ CREATE TABLE IF NOT EXISTS room_join_events (
 CREATE INDEX IF NOT EXISTS idx_room_join_room   ON room_join_events(room_id, at);
 CREATE INDEX IF NOT EXISTS idx_room_join_player ON room_join_events(player_id, at);
 `
+
+// room_events：房间生命周期的统一事件日志，一个事件一行，纯 append-only，取代上面
+// 已冻结的 rooms/room_join_events 两表。action 取值 "create"/"join"/"close"；
+// role（战斗席 A/战斗席 B/观战）只在 action="join" 时有意义；reason
+// （admin_close/empty_cleanup/server_shutdown）只在 action="close" 时有意义；
+// password_hash（无盐 SHA256，房间无密码则为空字符串——不对空串取哈希，否则所有无
+// 密码房间会得到同一个哈希值）只在 action="create" 时有意义，房间密码整局不变，没必要
+// 等到关闭才记录。user_id/user_name 是这个事件的发起者：create 是创建者、join 是
+// 加入者、close 视原因而定——admin_close 是点击关闭的管理员本人（不是创建者），
+// empty_cleanup/server_shutdown 没有具体操作者，沿用创建者信息占位。
+const roomEventLogSchema = `
+CREATE TABLE IF NOT EXISTS room_events (
+	seq           INTEGER PRIMARY KEY AUTOINCREMENT,
+	at            INTEGER NOT NULL,
+	room_id       TEXT NOT NULL,
+	room_name     TEXT,
+	game_id       TEXT,
+	user_id       TEXT,
+	user_name     TEXT,
+	action        TEXT NOT NULL,
+	role          TEXT,
+	reason        TEXT,
+	password_hash TEXT,
+	ip            TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_room_events_room ON room_events(room_id, at);
+CREATE INDEX IF NOT EXISTS idx_room_events_user ON room_events(user_id, at);
+`
+
+// hashRoomPassword 用无盐 SHA256 对房间密码取哈希；空密码返回空字符串（不哈希空串）。
+// 房间密码只是随手设置的进门口令、不保护敏感信息，合规留痕不需要 bcrypt 之类的慢哈希。
+func hashRoomPassword(password string) string {
+	if password == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(password))
+	return hex.EncodeToString(sum[:])
+}
 
 // punishment_events：一个任务从发布到完成算一行，id 由调用方在任务发布时生成
 // （randomID()），发布时 insert，证明提交/审核通过时按 id UPDATE 回填，而不是另开一行。
@@ -76,34 +111,33 @@ func newEventStore(db *sql.DB) *eventStore {
 	return &eventStore{db: db}
 }
 
-// insertClosedRoom 在房间关闭时一次性写入完整一行（创建时的信息由调用方从内存里的
-// RoomState 带过来，见 room.go/handlers_room.go 的调用点）；reason 如
-// "empty_cleanup"/"admin_close"/"server_shutdown"。
-func (e *eventStore) insertClosedRoom(roomID, roomName, gameID, creatorID, creatorName string, createdAt, closedAt int64, reason string) error {
-	if e == nil || e.db == nil {
-		return nil
-	}
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	_, err := e.db.Exec(
-		`INSERT INTO rooms (room_id, room_name, game_id, creator_id, creator_name, created_at, closed_at, close_reason)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		roomID, roomName, gameID, creatorID, creatorName, createdAt, closedAt, reason,
-	)
-	return err
+// roomEventInput 是 insertRoomEvent 的入参；字段按 action 分组使用（见 room_events
+// 表注释），用具名结构体而不是一长串同类型 string 位置参数，避免调用点传错顺序。
+type roomEventInput struct {
+	At           int64
+	RoomID       string
+	RoomName     string
+	GameID       string
+	UserID       string
+	UserName     string
+	Action       string // create / join / close
+	Role         string // 战斗席 A / 战斗席 B / 观战，仅 join 有意义
+	Reason       string // admin_close / empty_cleanup / server_shutdown，仅 close 有意义
+	PasswordHash string // 仅 create 有意义
+	IP           string
 }
 
-// insertRoomJoinEvent 记录一次进房（战斗席或观战）；role 建议传 "战斗席A"/"战斗席B"/"观战"。
-func (e *eventStore) insertRoomJoinEvent(at int64, roomID, playerID, playerName, role, ip string) error {
+// insertRoomEvent 写入 room_events 的一行；对应房间生命周期里的一个事件（创建/加入/关闭）。
+func (e *eventStore) insertRoomEvent(in roomEventInput) error {
 	if e == nil || e.db == nil {
 		return nil
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	_, err := e.db.Exec(
-		`INSERT INTO room_join_events (at, room_id, player_id, player_name, role, ip)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		at, roomID, playerID, playerName, role, ip,
+		`INSERT INTO room_events (at, room_id, room_name, game_id, user_id, user_name, action, role, reason, password_hash, ip)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		in.At, in.RoomID, in.RoomName, in.GameID, in.UserID, in.UserName, in.Action, in.Role, in.Reason, in.PasswordHash, in.IP,
 	)
 	return err
 }

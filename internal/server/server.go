@@ -306,10 +306,10 @@ func (s *Server) closeLiveStateOnShutdown() {
 	}
 	if s.eventDB != nil {
 		for _, r := range rooms {
-			if err := s.eventDB.insertClosedRoom(
-				r.id, r.name, r.gameID, r.ownerID, r.creatorName,
-				r.createdAt, now, "server_shutdown",
-			); err != nil {
+			if err := s.eventDB.insertRoomEvent(roomEventInput{
+				At: now, RoomID: r.id, RoomName: r.name, GameID: r.gameID,
+				UserID: r.ownerID, UserName: r.creatorName, Action: "close", Reason: "server_shutdown",
+			}); err != nil {
 				s.errorLog("room_event_close_failed", err.Error())
 			}
 		}
