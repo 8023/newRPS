@@ -34,11 +34,6 @@ export function crc32Hex(doc: unknown): string {
   return sum.toString(16).padStart(8, "0");
 }
 
-/** @deprecated 使用 crc32Hex；保留别名避免旧引用 */
-export async function sha256Hex(doc: unknown): Promise<string> {
-  return crc32Hex(doc);
-}
-
 function normalize(v: unknown): unknown {
   if (v === null || typeof v !== "object") return v;
   if (Array.isArray(v)) return v.map(normalize);
@@ -94,8 +89,4 @@ export function applyOps(base: unknown, ops: PatchOp[]): unknown {
     }
   }
   return doc;
-}
-
-export function deepClone<T>(v: T): T {
-  return structuredClone(v);
 }

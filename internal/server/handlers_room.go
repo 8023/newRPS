@@ -24,7 +24,7 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	}
 	settings := p.Settings
 	gameID := settings.GameID
-	if gameID != types.GameOthello && gameID != types.GameTicTacToe && gameID != types.GameLiarsDice && gameID != types.GameGomoku {
+	if gameID != types.GameOthello && gameID != types.GameTicTacToe && gameID != types.GameLiarsDice && gameID != types.GameGomoku && gameID != types.GameJungle {
 		gameID = types.GameRPS
 	}
 	settings.GameID = gameID
@@ -102,6 +102,19 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		}
 		settings.GomokuMoveSeconds = clampMoveSeconds(settings.GomokuMoveSeconds)
 		settings.GomokuGameMinutes = clampGameMinutes(settings.GomokuGameMinutes)
+	} else if settings.GameID == types.GameJungle {
+		switch settings.Stake {
+		case 5, 10, 20:
+		default:
+			settings.Stake = 5
+		}
+		switch settings.JungleBoardTheme {
+		case "forest", "bamboo", "river", "dusk", "night":
+		default:
+			settings.JungleBoardTheme = "forest"
+		}
+		settings.JungleMoveSeconds = clampMoveSeconds(settings.JungleMoveSeconds)
+		settings.JungleGameMinutes = clampGameMinutes(settings.JungleGameMinutes)
 	} else {
 		switch settings.Stake {
 		case 5, 10, 20:
@@ -352,6 +365,10 @@ func (s *Server) onRoomSit(client *Client, env wsEnvelope) {
 	}
 	if hasOld && room.Settings.GameID == types.GameGomoku && room.Phase == types.PhaseChoosing {
 		client.reply(env.ID, nil, "五子棋对局进行中不能换座")
+		return
+	}
+	if hasOld && room.Settings.GameID == types.GameJungle && room.Phase == types.PhaseChoosing {
+		client.reply(env.ID, nil, "斗兽棋对局进行中不能换座")
 		return
 	}
 	if hasOld && room.Phase == types.PhaseChoosing && (room.Choices[types.SeatA] != "" || room.Choices[types.SeatB] != "") {
@@ -1098,6 +1115,148 @@ func (s *Server) onGomokuRestart(client *Client, env wsEnvelope) {
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
+func (s *Server) onJungleReady(client *Client, env wsEnvelope) {
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameJungle {
+		client.reply(env.ID, nil, "当前房间不是斗兽棋")
+		return
+	}
+	seat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以准备")
+		return
+	}
+	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
+		client.reply(env.ID, nil, "需要双方都坐下才能准备")
+		return
+	}
+	if room.Phase != types.PhaseReady {
+		client.reply(env.ID, nil, "当前不能准备")
+		return
+	}
+	room.Ready[seat] = true
+	s.roomNotice(room, playerShortName(player)+" 已准备斗兽棋。")
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	s.scheduleJungleReadyStart(room)
+	s.broadcastRoom(room.ID, true)
+}
+
+func (s *Server) onJungleMove(client *Client, env wsEnvelope) {
+	var p struct {
+		FromRow int `json:"fromRow"`
+		FromCol int `json:"fromCol"`
+		ToRow   int `json:"toRow"`
+		ToCol   int `json:"toCol"`
+	}
+	_ = decodeD(env, &p)
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameJungle {
+		client.reply(env.ID, nil, "当前房间不是斗兽棋")
+		return
+	}
+	seat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以走子")
+		return
+	}
+	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
+		client.reply(env.ID, nil, "需要双方都坐下才能开始")
+		return
+	}
+	ok2, errMsg := s.applyJungleMove(room, seat, p.FromRow, p.FromCol, p.ToRow, p.ToCol)
+	if !ok2 {
+		client.reply(env.ID, nil, errMsg)
+		return
+	}
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	s.broadcastRoom(room.ID, true)
+}
+
+func (s *Server) onJungleResignRequest(client *Client, env wsEnvelope) {
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameJungle {
+		client.reply(env.ID, nil, "当前房间不是斗兽棋")
+		return
+	}
+	seat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以申请认输")
+		return
+	}
+	ok2, errMsg := s.requestJungleResign(room, seat)
+	if !ok2 {
+		client.reply(env.ID, nil, errMsg)
+		return
+	}
+	s.roomNotice(room, playerShortName(player)+" 申请认输，等待对方确认。")
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	s.broadcastRoom(room.ID, true)
+}
+
+func (s *Server) onJungleResignRespond(client *Client, env wsEnvelope) {
+	var p struct {
+		Accept *bool `json:"accept"`
+	}
+	_ = decodeD(env, &p)
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameJungle {
+		client.reply(env.ID, nil, "当前房间不是斗兽棋")
+		return
+	}
+	seat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以处理认输请求")
+		return
+	}
+	accept := p.Accept != nil && *p.Accept
+	ok2, errMsg := s.respondJungleResign(room, seat, accept)
+	if !ok2 {
+		client.reply(env.ID, nil, errMsg)
+		return
+	}
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	s.broadcastRoom(room.ID, true)
+}
+
+func (s *Server) onJungleRestart(client *Client, env wsEnvelope) {
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameJungle {
+		client.reply(env.ID, nil, "当前房间不是斗兽棋")
+		return
+	}
+	if _, ok := s.seatOf(room, player.ID); !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以重新开始")
+		return
+	}
+	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
+		client.reply(env.ID, nil, "需要双方都坐下才能重新开始")
+		return
+	}
+	if room.Phase == types.PhasePunishment {
+		client.reply(env.ID, nil, "惩罚完成前不能重新开始")
+		return
+	}
+	s.resetJungleRoom(room)
+	s.roomNotice(room, playerShortName(player)+" 发起斗兽棋再来一局，请双方准备。")
+	s.broadcastRoom(room.ID, true)
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+}
+
 func (s *Server) onPunishmentSubmit(client *Client, env wsEnvelope) {
 	var p struct {
 		Text     string `json:"text"`
@@ -1583,7 +1742,8 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 	_ = decodeD(env, &p)
 	admin := s.getPlayerByClient(client)
 	_, isAdminSocket := s.adminClientIDs[client.id]
-	if (admin == nil || !ptrBool(admin.IsAdmin)) && !isAdminSocket {
+	// 只认本 socket 的 admin:login 会话，不认粘滞的 player.IsAdmin。
+	if !isAdminSocket {
 		client.reply(env.ID, nil, "需要管理员权限")
 		return
 	}
@@ -1704,6 +1864,12 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 				return
 			}
 			s.finishGomokuGame(room, p.Result, nil, "管理员判定")
+		case types.GameJungle:
+			if room.Jungle == nil || room.Jungle.Ended {
+				client.reply(env.ID, nil, "对局尚未开始或已经结束")
+				return
+			}
+			s.finishJungleGame(room, p.Result, "管理员判定")
 		case types.GameRPS:
 			ok, errMsg := s.forceEndRpsRound(room, p.Result)
 			if !ok {
@@ -1728,7 +1894,7 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 			return
 		}
 		if pl.ClaimKey == "" {
-			pl.ClaimKey = randomID()
+			pl.ClaimKey = randomClaimKey()
 			s.requestPersist("lazy")
 		}
 		client.reply(env.ID, map[string]any{"claimKey": pl.ClaimKey, "playerId": pl.PlayerID}, "")

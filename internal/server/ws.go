@@ -179,6 +179,15 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			delete(s.clients, prev.id)
 			delete(s.clientIDToSID, prev.id)
 			delete(s.sidToClientID, session.SID)
+			delete(s.adminClientIDs, prev.id)
+			// 同 SID 顶替：旧连接不再走 onClientDisconnect 的玩家清理，这里顺手清展示用 IsAdmin。
+			if pid := prev.playerID; pid != "" {
+				if pl := s.players[pid]; pl != nil && pl.SocketID == prev.id && ptrBool(pl.IsAdmin) {
+					pl.IsAdmin = boolPtr(false)
+					s.refreshPlayerSnapshots(pl)
+					s.broadcastPlayerUpdate(pl)
+				}
+			}
 			prev.replaced = true
 			prevConn := prev.conn
 			prev.shutdown()
@@ -466,6 +475,12 @@ func (s *Server) onClientDisconnect(client *Client) {
 	playerID := ""
 	if player != nil {
 		playerID = player.ID
+		// 管理权限绑定 socket：断线后不再凭粘滞的 IsAdmin 调用 admin:action。
+		if ptrBool(player.IsAdmin) {
+			player.IsAdmin = boolPtr(false)
+			s.refreshPlayerSnapshots(player)
+			s.broadcastPlayerUpdate(player)
+		}
 	}
 	// 一次性写完整一条 connection_events 行（见 activitylog.go），不再重复打到 stdout；
 	// 即使这条连接从没关联到玩家（playerID 为空，比如连上就断的游客）也照样记一行。
@@ -515,6 +530,8 @@ func (s *Server) onClientDisconnect(client *Client) {
 		}
 		s.broadcastPlayerUpdate(current)
 		s.broadcastLobby()
+		// 宠物乐园候选/关系图依赖在线状态。
+		s.notifyAllOnlinePetBondStates()
 
 		current.timerGen++
 		tgen := current.timerGen

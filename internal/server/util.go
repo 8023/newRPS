@@ -23,6 +23,26 @@ func randomID() string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
+// randomClaimKey 生成认领密钥（ClaimKey）：12 字节 ≈ 96 bit，base64url 约 16 字符。
+// 与 randomID（房间/消息等非秘密短 ID）刻意分开，避免把弱熵 ID 复用到安全边界上。
+// 展示认领码时前端会把 playerId 从 UUID 压成 base64；库内 playerId 仍存 UUID，不变。
+// Claim 用后即轮换，熵可略低于长期设备凭据 randomPlayerSecret。
+func randomClaimKey() string {
+	b := make([]byte, 12)
+	_, _ = rand.Read(b)
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// randomPlayerSecret 生成服务端签发的设备凭据（PlayerSecrets 条目）：16 字节 ≈ 128 bit，
+// base64url 约 22 字符。用于认领换发、旧格式 secret 静默换发等路径。
+// 前端首次注册仍可用 UUID；本函数只约束「服务端新签发」的强度。比 ClaimKey 更长，
+// 因为 secret 长期有效、反复用于 player:join，而 claim 是一次性的。
+func randomPlayerSecret() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
 func generatePublicID() string {
 	b := make([]byte, 9)
 	_, _ = rand.Read(b)
@@ -133,18 +153,6 @@ func randomFromF[T any](values []T) T {
 	return randomFrom(values)
 }
 
-func escapeRegExp(value string) string {
-	special := `.*+?^${}()|[]\`
-	var b strings.Builder
-	for _, r := range value {
-		if strings.ContainsRune(special, r) {
-			b.WriteByte('\\')
-		}
-		b.WriteRune(r)
-	}
-	return b.String()
-}
-
 func oppositeSeat(seat types.SeatKey) types.SeatKey {
 	if seat == types.SeatA {
 		return types.SeatB
@@ -208,17 +216,4 @@ func containsString(list []string, s string) bool {
 		}
 	}
 	return false
-}
-
-func uniqueStrings(in []string) []string {
-	seen := map[string]struct{}{}
-	var out []string
-	for _, s := range in {
-		if _, ok := seen[s]; ok {
-			continue
-		}
-		seen[s] = struct{}{}
-		out = append(out, s)
-	}
-	return out
 }

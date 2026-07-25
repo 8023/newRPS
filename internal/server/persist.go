@@ -44,6 +44,9 @@ type persistedPlayer struct {
 	PushMentionEnabled           *bool             `json:"pushMentionEnabled,omitempty"`
 	PushTurnEnabled              *bool             `json:"pushTurnEnabled,omitempty"`
 	PushSeatEnabled              *bool             `json:"pushSeatEnabled,omitempty"`
+	BondMasterEnabled            *bool             `json:"bondMasterEnabled,omitempty"`
+	BondPetEnabled               *bool             `json:"bondPetEnabled,omitempty"`
+	BondPublicDisplay            *bool             `json:"bondPublicDisplay,omitempty"`
 	Stats                        types.PublicStats `json:"stats"`
 	GameStats                    types.GameStats   `json:"gameStats"`
 	CreatedAt                    int64             `json:"createdAt,omitempty"`
@@ -79,6 +82,7 @@ func (s *Server) serializePlayers() []persistedPlayer {
 			ExtremeLastDecayHour: p.ExtremeLastDecayHour,
 			RankedLastDecayDay:   p.RankedLastDecayDay,
 			PushMentionEnabled:   p.PushMentionEnabled, PushTurnEnabled: p.PushTurnEnabled, PushSeatEnabled: p.PushSeatEnabled,
+			BondMasterEnabled: p.BondMasterEnabled, BondPetEnabled: p.BondPetEnabled, BondPublicDisplay: p.BondPublicDisplay,
 			Stats: p.Stats, GameStats: p.GameStats,
 			CreatedAt: p.CreatedAt, LastSeenAt: p.LastSeenAt,
 		})
@@ -175,6 +179,9 @@ func (s *Server) ingestPersistedPlayer(item persistedPlayer) bool {
 			ExtremeWinStreak:             orInt(item.ExtremeWinStreak, 0),
 			ExtremeLastDecayHour:         orInt64(item.ExtremeLastDecayHour, currentExtremeDecayHour(now)),
 			RankedLastDecayDay:           orInt64(item.RankedLastDecayDay, currentRankedDecayDay(now)),
+			BondMasterEnabled:            item.BondMasterEnabled,
+			BondPetEnabled:               item.BondPetEnabled,
+			BondPublicDisplay:            item.BondPublicDisplay,
 			Stats: types.PublicStats{
 				Wins: totalW, Losses: totalL, Draws: totalD,
 				Punishments: item.Stats.Punishments, RankedPoints: item.Stats.RankedPoints,
@@ -195,7 +202,7 @@ func (s *Server) ingestPersistedPlayer(item persistedPlayer) bool {
 		LastSeenAt:         lastSeenAt,
 	}
 	if player.ClaimKey == "" {
-		player.ClaimKey = randomID()
+		player.ClaimKey = randomClaimKey()
 	}
 	player.DisplayName = formatDisplayName(player)
 	// 旧版 players.json 迁移进库时没有历史最高/最低分字段：以当前排位分兜底，

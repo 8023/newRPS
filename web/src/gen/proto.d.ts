@@ -1,6 +1,460 @@
 import * as $protobuf from "protobufjs";
 import Long = require("long");
 
+/** Namespace wire. */
+export namespace wire {
+
+    /**
+     * Properties of an Envelope.
+     * @deprecated Use wire.Envelope.$Properties instead.
+     */
+    interface IEnvelope extends wire.Envelope.$Properties {
+    }
+
+    /** Represents an Envelope. */
+    class Envelope {
+
+        /**
+         * Constructs a new Envelope.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: wire.Envelope.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** Envelope event. */
+        event: string;
+
+        /** Envelope id. */
+        id: (number|Long);
+
+        /** Envelope err. */
+        err: string;
+
+        /** Envelope kind. */
+        kind: wire.PayloadKind;
+
+        /** Envelope channel. */
+        channel: string;
+
+        /** Envelope seq. */
+        seq: (number|Long);
+
+        /** Envelope hash. */
+        hash: string;
+
+        /** Envelope fullState. */
+        fullState?: (game.StateDocument.$Properties|null);
+
+        /** Envelope delta. */
+        delta?: (wire.StateDelta.$Properties|null);
+
+        /** Envelope rawBody. */
+        rawBody?: (game.RawBody.$Properties|null);
+
+        /**
+         * Creates a new Envelope instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Envelope instance
+         */
+        static create(properties: wire.Envelope.$Shape): wire.Envelope & wire.Envelope.$Shape;
+        static create(properties?: wire.Envelope.$Properties): wire.Envelope;
+
+        /**
+         * Encodes the specified Envelope message. Does not implicitly {@link wire.Envelope.verify|verify} messages.
+         * @param message Envelope message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: wire.Envelope.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Envelope message, length delimited. Does not implicitly {@link wire.Envelope.verify|verify} messages.
+         * @param message Envelope message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: wire.Envelope.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an Envelope message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {wire.Envelope & wire.Envelope.$Shape} Envelope
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): wire.Envelope & wire.Envelope.$Shape;
+
+        /**
+         * Decodes an Envelope message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {wire.Envelope & wire.Envelope.$Shape} Envelope
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): wire.Envelope & wire.Envelope.$Shape;
+
+        /**
+         * Verifies an Envelope message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an Envelope message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Envelope
+         */
+        static fromObject(object: { [k: string]: any }): wire.Envelope;
+
+        /**
+         * Creates a plain object from an Envelope message. Also converts values to other types if specified.
+         * @param message Envelope
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: wire.Envelope, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Envelope to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for Envelope
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace Envelope {
+
+        /** Properties of an Envelope. */
+        interface $Properties {
+
+            /** Envelope event */
+            event?: (string|null);
+
+            /** Envelope id */
+            id?: (number|Long|null);
+
+            /** Envelope err */
+            err?: (string|null);
+
+            /** Envelope kind */
+            kind?: (wire.PayloadKind|null);
+
+            /** Envelope channel */
+            channel?: (string|null);
+
+            /** Envelope seq */
+            seq?: (number|Long|null);
+
+            /** Envelope hash */
+            hash?: (string|null);
+
+            /** Envelope fullState */
+            fullState?: (game.StateDocument.$Properties|null);
+
+            /** Envelope delta */
+            delta?: (wire.StateDelta.$Properties|null);
+
+            /** Envelope rawBody */
+            rawBody?: (game.RawBody.$Properties|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of an Envelope. */
+        type $Shape = {
+          event?: string|null;
+          id?: number|Long|null;
+          err?: string|null;
+          kind?: wire.PayloadKind|null;
+          channel?: string|null;
+          seq?: number|Long|null;
+          hash?: string|null;
+          fullState?: game.StateDocument.$Shape|null;
+          delta?: wire.StateDelta.$Shape|null;
+          rawBody?: game.RawBody.$Shape|null;
+          $unknowns?: Uint8Array[];
+        };
+    }
+
+    /** PayloadKind enum. */
+    enum PayloadKind {
+
+        /** KIND_RAW value */
+        KIND_RAW = 0,
+
+        /** KIND_FULL value */
+        KIND_FULL = 1,
+
+        /** KIND_DELTA value */
+        KIND_DELTA = 2
+    }
+
+    /**
+     * Properties of a StateDelta.
+     * @deprecated Use wire.StateDelta.$Properties instead.
+     */
+    interface IStateDelta extends wire.StateDelta.$Properties {
+    }
+
+    /** Represents a StateDelta. */
+    class StateDelta {
+
+        /**
+         * Constructs a new StateDelta.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: wire.StateDelta.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** StateDelta ops. */
+        ops: wire.PatchOp.$Properties[];
+
+        /**
+         * Creates a new StateDelta instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StateDelta instance
+         */
+        static create(properties: wire.StateDelta.$Shape): wire.StateDelta & wire.StateDelta.$Shape;
+        static create(properties?: wire.StateDelta.$Properties): wire.StateDelta;
+
+        /**
+         * Encodes the specified StateDelta message. Does not implicitly {@link wire.StateDelta.verify|verify} messages.
+         * @param message StateDelta message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: wire.StateDelta.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StateDelta message, length delimited. Does not implicitly {@link wire.StateDelta.verify|verify} messages.
+         * @param message StateDelta message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: wire.StateDelta.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StateDelta message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {wire.StateDelta & wire.StateDelta.$Shape} StateDelta
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): wire.StateDelta & wire.StateDelta.$Shape;
+
+        /**
+         * Decodes a StateDelta message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {wire.StateDelta & wire.StateDelta.$Shape} StateDelta
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): wire.StateDelta & wire.StateDelta.$Shape;
+
+        /**
+         * Verifies a StateDelta message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StateDelta message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StateDelta
+         */
+        static fromObject(object: { [k: string]: any }): wire.StateDelta;
+
+        /**
+         * Creates a plain object from a StateDelta message. Also converts values to other types if specified.
+         * @param message StateDelta
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: wire.StateDelta, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StateDelta to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for StateDelta
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace StateDelta {
+
+        /** Properties of a StateDelta. */
+        interface $Properties {
+
+            /** StateDelta ops */
+            ops?: (wire.PatchOp.$Properties[]|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a StateDelta. */
+        type $Shape = {
+          ops?: wire.PatchOp.$Shape[]|null;
+          $unknowns?: Uint8Array[];
+        };
+    }
+
+    /**
+     * Properties of a PatchOp.
+     * @deprecated Use wire.PatchOp.$Properties instead.
+     */
+    interface IPatchOp extends wire.PatchOp.$Properties {
+    }
+
+    /** Represents a PatchOp. */
+    class PatchOp {
+
+        /**
+         * Constructs a new PatchOp.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: wire.PatchOp.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** PatchOp path. */
+        path: string;
+
+        /** PatchOp value. */
+        value?: (google.protobuf.Value.$Properties|null);
+
+        /** PatchOp remove. */
+        remove: boolean;
+
+        /**
+         * Creates a new PatchOp instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PatchOp instance
+         */
+        static create(properties: wire.PatchOp.$Shape): wire.PatchOp & wire.PatchOp.$Shape;
+        static create(properties?: wire.PatchOp.$Properties): wire.PatchOp;
+
+        /**
+         * Encodes the specified PatchOp message. Does not implicitly {@link wire.PatchOp.verify|verify} messages.
+         * @param message PatchOp message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: wire.PatchOp.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PatchOp message, length delimited. Does not implicitly {@link wire.PatchOp.verify|verify} messages.
+         * @param message PatchOp message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: wire.PatchOp.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PatchOp message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {wire.PatchOp & wire.PatchOp.$Shape} PatchOp
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): wire.PatchOp & wire.PatchOp.$Shape;
+
+        /**
+         * Decodes a PatchOp message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {wire.PatchOp & wire.PatchOp.$Shape} PatchOp
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): wire.PatchOp & wire.PatchOp.$Shape;
+
+        /**
+         * Verifies a PatchOp message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PatchOp message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PatchOp
+         */
+        static fromObject(object: { [k: string]: any }): wire.PatchOp;
+
+        /**
+         * Creates a plain object from a PatchOp message. Also converts values to other types if specified.
+         * @param message PatchOp
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: wire.PatchOp, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PatchOp to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for PatchOp
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace PatchOp {
+
+        /** Properties of a PatchOp. */
+        interface $Properties {
+
+            /** PatchOp path */
+            path?: (string|null);
+
+            /** PatchOp value */
+            value?: (google.protobuf.Value.$Properties|null);
+
+            /** PatchOp remove */
+            remove?: (boolean|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a PatchOp. */
+        type $Shape = {
+          path?: string|null;
+          value?: google.protobuf.Value.$Shape|null;
+          remove?: boolean|null;
+          $unknowns?: Uint8Array[];
+        };
+    }
+}
+
 /** Namespace game. */
 export namespace game {
 
@@ -1079,6 +1533,9 @@ export namespace game {
         /** GameStats liarsdice. */
         liarsdice?: (game.GameWLD.$Properties|null);
 
+        /** GameStats jungle. */
+        jungle?: (game.GameWLD.$Properties|null);
+
         /**
          * Creates a new GameStats instance using the specified properties.
          * @param [properties] Properties to set
@@ -1177,6 +1634,9 @@ export namespace game {
 
             /** GameStats liarsdice */
             liarsdice?: (game.GameWLD.$Properties|null);
+
+            /** GameStats jungle */
+            jungle?: (game.GameWLD.$Properties|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -1363,6 +1823,15 @@ export namespace game {
 
         /** PublicPlayer gameStats. */
         gameStats?: (game.GameStats.$Properties|null);
+
+        /** PublicPlayer bondMasterEnabled. */
+        bondMasterEnabled: boolean;
+
+        /** PublicPlayer bondPetEnabled. */
+        bondPetEnabled: boolean;
+
+        /** PublicPlayer bondPublicDisplay. */
+        bondPublicDisplay: boolean;
 
         /**
          * Creates a new PublicPlayer instance using the specified properties.
@@ -1607,6 +2076,15 @@ export namespace game {
             /** PublicPlayer gameStats */
             gameStats?: (game.GameStats.$Properties|null);
 
+            /** PublicPlayer bondMasterEnabled */
+            bondMasterEnabled?: (boolean|null);
+
+            /** PublicPlayer bondPetEnabled */
+            bondPetEnabled?: (boolean|null);
+
+            /** PublicPlayer bondPublicDisplay */
+            bondPublicDisplay?: (boolean|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
@@ -1744,6 +2222,15 @@ export namespace game {
 
         /** LobbyPlayer avatarUrl. */
         avatarUrl: string;
+
+        /** LobbyPlayer bondMasterEnabled. */
+        bondMasterEnabled: boolean;
+
+        /** LobbyPlayer bondPetEnabled. */
+        bondPetEnabled: boolean;
+
+        /** LobbyPlayer bondPublicDisplay. */
+        bondPublicDisplay: boolean;
 
         /**
          * Creates a new LobbyPlayer instance using the specified properties.
@@ -1939,6 +2426,15 @@ export namespace game {
 
             /** LobbyPlayer avatarUrl */
             avatarUrl?: (string|null);
+
+            /** LobbyPlayer bondMasterEnabled */
+            bondMasterEnabled?: (boolean|null);
+
+            /** LobbyPlayer bondPetEnabled */
+            bondPetEnabled?: (boolean|null);
+
+            /** LobbyPlayer bondPublicDisplay */
+            bondPublicDisplay?: (boolean|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -2509,6 +3005,15 @@ export namespace game {
         /** RoomSettings gomokuGameMinutes. */
         gomokuGameMinutes: number;
 
+        /** RoomSettings jungleBoardTheme. */
+        jungleBoardTheme: string;
+
+        /** RoomSettings jungleMoveSeconds. */
+        jungleMoveSeconds: number;
+
+        /** RoomSettings jungleGameMinutes. */
+        jungleGameMinutes: number;
+
         /**
          * Creates a new RoomSettings instance using the specified properties.
          * @param [properties] Properties to set
@@ -2676,6 +3181,15 @@ export namespace game {
 
             /** RoomSettings gomokuGameMinutes */
             gomokuGameMinutes?: (number|null);
+
+            /** RoomSettings jungleBoardTheme */
+            jungleBoardTheme?: (string|null);
+
+            /** RoomSettings jungleMoveSeconds */
+            jungleMoveSeconds?: (number|null);
+
+            /** RoomSettings jungleGameMinutes */
+            jungleGameMinutes?: (number|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -3148,6 +3662,318 @@ export namespace game {
 
         /** Shape of a GomokuState. */
         type $Shape = game.GomokuState.$Properties;
+    }
+
+    /**
+     * Properties of a JungleResignRequest.
+     * @deprecated Use game.JungleResignRequest.$Properties instead.
+     */
+    interface IJungleResignRequest extends game.JungleResignRequest.$Properties {
+    }
+
+    /** Represents a JungleResignRequest. */
+    class JungleResignRequest {
+
+        /**
+         * Constructs a new JungleResignRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: game.JungleResignRequest.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** JungleResignRequest fromSeat. */
+        fromSeat: string;
+
+        /** JungleResignRequest toSeat. */
+        toSeat: string;
+
+        /** JungleResignRequest createdAt. */
+        createdAt: (number|Long);
+
+        /**
+         * Creates a new JungleResignRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns JungleResignRequest instance
+         */
+        static create(properties: game.JungleResignRequest.$Shape): game.JungleResignRequest & game.JungleResignRequest.$Shape;
+        static create(properties?: game.JungleResignRequest.$Properties): game.JungleResignRequest;
+
+        /**
+         * Encodes the specified JungleResignRequest message. Does not implicitly {@link game.JungleResignRequest.verify|verify} messages.
+         * @param message JungleResignRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: game.JungleResignRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified JungleResignRequest message, length delimited. Does not implicitly {@link game.JungleResignRequest.verify|verify} messages.
+         * @param message JungleResignRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: game.JungleResignRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a JungleResignRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {game.JungleResignRequest & game.JungleResignRequest.$Shape} JungleResignRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.JungleResignRequest & game.JungleResignRequest.$Shape;
+
+        /**
+         * Decodes a JungleResignRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {game.JungleResignRequest & game.JungleResignRequest.$Shape} JungleResignRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.JungleResignRequest & game.JungleResignRequest.$Shape;
+
+        /**
+         * Verifies a JungleResignRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a JungleResignRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns JungleResignRequest
+         */
+        static fromObject(object: { [k: string]: any }): game.JungleResignRequest;
+
+        /**
+         * Creates a plain object from a JungleResignRequest message. Also converts values to other types if specified.
+         * @param message JungleResignRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: game.JungleResignRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this JungleResignRequest to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for JungleResignRequest
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace JungleResignRequest {
+
+        /** Properties of a JungleResignRequest. */
+        interface $Properties {
+
+            /** JungleResignRequest fromSeat */
+            fromSeat?: (string|null);
+
+            /** JungleResignRequest toSeat */
+            toSeat?: (string|null);
+
+            /** JungleResignRequest createdAt */
+            createdAt?: (number|Long|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a JungleResignRequest. */
+        type $Shape = game.JungleResignRequest.$Properties;
+    }
+
+    /**
+     * Properties of a JungleState.
+     * @deprecated Use game.JungleState.$Properties instead.
+     */
+    interface IJungleState extends game.JungleState.$Properties {
+    }
+
+    /** Represents a JungleState. */
+    class JungleState {
+
+        /**
+         * Constructs a new JungleState.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: game.JungleState.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** JungleState board. */
+        board: game.BoardRow.$Properties[];
+
+        /** JungleState turn. */
+        turn: string;
+
+        /** JungleState moveCount. */
+        moveCount: number;
+
+        /** JungleState lastFrom. */
+        lastFrom?: (game.Pos.$Properties|null);
+
+        /** JungleState lastTo. */
+        lastTo?: (game.Pos.$Properties|null);
+
+        /** JungleState rankedDelta. */
+        rankedDelta: game.IntPair.$Properties[];
+
+        /** JungleState resignRequest. */
+        resignRequest?: (game.JungleResignRequest.$Properties|null);
+
+        /** JungleState ended. */
+        ended: boolean;
+
+        /** JungleState winner. */
+        winner: string;
+
+        /** JungleState moveDeadlineAt. */
+        moveDeadlineAt: (number|Long);
+
+        /** JungleState clockDeadlineAt. */
+        clockDeadlineAt: (number|Long);
+
+        /** JungleState clockRemaining. */
+        clockRemaining: game.IntPair.$Properties[];
+
+        /**
+         * Creates a new JungleState instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns JungleState instance
+         */
+        static create(properties: game.JungleState.$Shape): game.JungleState & game.JungleState.$Shape;
+        static create(properties?: game.JungleState.$Properties): game.JungleState;
+
+        /**
+         * Encodes the specified JungleState message. Does not implicitly {@link game.JungleState.verify|verify} messages.
+         * @param message JungleState message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: game.JungleState.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified JungleState message, length delimited. Does not implicitly {@link game.JungleState.verify|verify} messages.
+         * @param message JungleState message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: game.JungleState.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a JungleState message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {game.JungleState & game.JungleState.$Shape} JungleState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.JungleState & game.JungleState.$Shape;
+
+        /**
+         * Decodes a JungleState message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {game.JungleState & game.JungleState.$Shape} JungleState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.JungleState & game.JungleState.$Shape;
+
+        /**
+         * Verifies a JungleState message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a JungleState message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns JungleState
+         */
+        static fromObject(object: { [k: string]: any }): game.JungleState;
+
+        /**
+         * Creates a plain object from a JungleState message. Also converts values to other types if specified.
+         * @param message JungleState
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: game.JungleState, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this JungleState to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for JungleState
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace JungleState {
+
+        /** Properties of a JungleState. */
+        interface $Properties {
+
+            /** JungleState board */
+            board?: (game.BoardRow.$Properties[]|null);
+
+            /** JungleState turn */
+            turn?: (string|null);
+
+            /** JungleState moveCount */
+            moveCount?: (number|null);
+
+            /** JungleState lastFrom */
+            lastFrom?: (game.Pos.$Properties|null);
+
+            /** JungleState lastTo */
+            lastTo?: (game.Pos.$Properties|null);
+
+            /** JungleState rankedDelta */
+            rankedDelta?: (game.IntPair.$Properties[]|null);
+
+            /** JungleState resignRequest */
+            resignRequest?: (game.JungleResignRequest.$Properties|null);
+
+            /** JungleState ended */
+            ended?: (boolean|null);
+
+            /** JungleState winner */
+            winner?: (string|null);
+
+            /** JungleState moveDeadlineAt */
+            moveDeadlineAt?: (number|Long|null);
+
+            /** JungleState clockDeadlineAt */
+            clockDeadlineAt?: (number|Long|null);
+
+            /** JungleState clockRemaining */
+            clockRemaining?: (game.IntPair.$Properties[]|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a JungleState. */
+        type $Shape = game.JungleState.$Properties;
     }
 
     /**
@@ -6422,6 +7248,9 @@ export namespace game {
         /** RoomSnapshot gomoku. */
         gomoku?: (game.GomokuState.$Properties|null);
 
+        /** RoomSnapshot jungle. */
+        jungle?: (game.JungleState.$Properties|null);
+
         /** RoomSnapshot resultText. */
         resultText: string;
 
@@ -6581,6 +7410,9 @@ export namespace game {
             /** RoomSnapshot gomoku */
             gomoku?: (game.GomokuState.$Properties|null);
 
+            /** RoomSnapshot jungle */
+            jungle?: (game.JungleState.$Properties|null);
+
             /** RoomSnapshot resultText */
             resultText?: (string|null);
 
@@ -6634,6 +7466,7 @@ export namespace game {
           tictactoe?: game.TicTacToeState.$Shape|null;
           liarsDice?: game.LiarsDiceState.$Shape|null;
           gomoku?: game.GomokuState.$Shape|null;
+          jungle?: game.JungleState.$Shape|null;
           resultText?: string|null;
           punishedPlayerIds?: string[]|null;
           proofs?: game.PunishmentProof.$Shape[]|null;
@@ -7166,6 +7999,12 @@ export namespace game {
         /** LobbyRoomInfo gomokuUndoLimit. */
         gomokuUndoLimit: number;
 
+        /** LobbyRoomInfo jungleMoveSeconds. */
+        jungleMoveSeconds: number;
+
+        /** LobbyRoomInfo jungleGameMinutes. */
+        jungleGameMinutes: number;
+
         /**
          * Creates a new LobbyRoomInfo instance using the specified properties.
          * @param [properties] Properties to set
@@ -7330,6 +8169,12 @@ export namespace game {
 
             /** LobbyRoomInfo gomokuUndoLimit */
             gomokuUndoLimit?: (number|null);
+
+            /** LobbyRoomInfo jungleMoveSeconds */
+            jungleMoveSeconds?: (number|null);
+
+            /** LobbyRoomInfo jungleGameMinutes */
+            jungleGameMinutes?: (number|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -7586,6 +8431,135 @@ export namespace game {
     }
 
     /**
+     * Properties of a PetBondEdge.
+     * @deprecated Use game.PetBondEdge.$Properties instead.
+     */
+    interface IPetBondEdge extends game.PetBondEdge.$Properties {
+    }
+
+    /** Represents a PetBondEdge. */
+    class PetBondEdge {
+
+        /**
+         * Constructs a new PetBondEdge.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: game.PetBondEdge.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** PetBondEdge masterId. */
+        masterId: string;
+
+        /** PetBondEdge petId. */
+        petId: string;
+
+        /** PetBondEdge petTitle. */
+        petTitle: string;
+
+        /**
+         * Creates a new PetBondEdge instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PetBondEdge instance
+         */
+        static create(properties: game.PetBondEdge.$Shape): game.PetBondEdge & game.PetBondEdge.$Shape;
+        static create(properties?: game.PetBondEdge.$Properties): game.PetBondEdge;
+
+        /**
+         * Encodes the specified PetBondEdge message. Does not implicitly {@link game.PetBondEdge.verify|verify} messages.
+         * @param message PetBondEdge message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: game.PetBondEdge.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PetBondEdge message, length delimited. Does not implicitly {@link game.PetBondEdge.verify|verify} messages.
+         * @param message PetBondEdge message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: game.PetBondEdge.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PetBondEdge message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {game.PetBondEdge & game.PetBondEdge.$Shape} PetBondEdge
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.PetBondEdge & game.PetBondEdge.$Shape;
+
+        /**
+         * Decodes a PetBondEdge message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {game.PetBondEdge & game.PetBondEdge.$Shape} PetBondEdge
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.PetBondEdge & game.PetBondEdge.$Shape;
+
+        /**
+         * Verifies a PetBondEdge message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PetBondEdge message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PetBondEdge
+         */
+        static fromObject(object: { [k: string]: any }): game.PetBondEdge;
+
+        /**
+         * Creates a plain object from a PetBondEdge message. Also converts values to other types if specified.
+         * @param message PetBondEdge
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: game.PetBondEdge, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PetBondEdge to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for PetBondEdge
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace PetBondEdge {
+
+        /** Properties of a PetBondEdge. */
+        interface $Properties {
+
+            /** PetBondEdge masterId */
+            masterId?: (string|null);
+
+            /** PetBondEdge petId */
+            petId?: (string|null);
+
+            /** PetBondEdge petTitle */
+            petTitle?: (string|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a PetBondEdge. */
+        type $Shape = game.PetBondEdge.$Properties;
+    }
+
+    /**
      * Properties of a LobbySnapshot.
      * @deprecated Use game.LobbySnapshot.$Properties instead.
      */
@@ -7630,6 +8604,9 @@ export namespace game {
 
         /** LobbySnapshot serverStats. */
         serverStats?: (game.ServerStats.$Properties|null);
+
+        /** LobbySnapshot petBonds. */
+        petBonds: game.PetBondEdge.$Properties[];
 
         /**
          * Creates a new LobbySnapshot instance using the specified properties.
@@ -7741,6 +8718,9 @@ export namespace game {
 
             /** LobbySnapshot serverStats */
             serverStats?: (game.ServerStats.$Properties|null);
+
+            /** LobbySnapshot petBonds */
+            petBonds?: (game.PetBondEdge.$Properties[]|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -10013,6 +10993,141 @@ export namespace game {
     }
 
     /**
+     * Properties of a PetBondConfig.
+     * @deprecated Use game.PetBondConfig.$Properties instead.
+     */
+    interface IPetBondConfig extends game.PetBondConfig.$Properties {
+    }
+
+    /** Represents a PetBondConfig. */
+    class PetBondConfig {
+
+        /**
+         * Constructs a new PetBondConfig.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: game.PetBondConfig.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** PetBondConfig panelTitle. */
+        panelTitle: string;
+
+        /** PetBondConfig maxPetsPerMaster. */
+        maxPetsPerMaster: number;
+
+        /** PetBondConfig maxMastersPerPet. */
+        maxMastersPerPet: number;
+
+        /** PetBondConfig maxTitleLength. */
+        maxTitleLength: number;
+
+        /**
+         * Creates a new PetBondConfig instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PetBondConfig instance
+         */
+        static create(properties: game.PetBondConfig.$Shape): game.PetBondConfig & game.PetBondConfig.$Shape;
+        static create(properties?: game.PetBondConfig.$Properties): game.PetBondConfig;
+
+        /**
+         * Encodes the specified PetBondConfig message. Does not implicitly {@link game.PetBondConfig.verify|verify} messages.
+         * @param message PetBondConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: game.PetBondConfig.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PetBondConfig message, length delimited. Does not implicitly {@link game.PetBondConfig.verify|verify} messages.
+         * @param message PetBondConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: game.PetBondConfig.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PetBondConfig message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {game.PetBondConfig & game.PetBondConfig.$Shape} PetBondConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.PetBondConfig & game.PetBondConfig.$Shape;
+
+        /**
+         * Decodes a PetBondConfig message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {game.PetBondConfig & game.PetBondConfig.$Shape} PetBondConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.PetBondConfig & game.PetBondConfig.$Shape;
+
+        /**
+         * Verifies a PetBondConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PetBondConfig message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PetBondConfig
+         */
+        static fromObject(object: { [k: string]: any }): game.PetBondConfig;
+
+        /**
+         * Creates a plain object from a PetBondConfig message. Also converts values to other types if specified.
+         * @param message PetBondConfig
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: game.PetBondConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PetBondConfig to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for PetBondConfig
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace PetBondConfig {
+
+        /** Properties of a PetBondConfig. */
+        interface $Properties {
+
+            /** PetBondConfig panelTitle */
+            panelTitle?: (string|null);
+
+            /** PetBondConfig maxPetsPerMaster */
+            maxPetsPerMaster?: (number|null);
+
+            /** PetBondConfig maxMastersPerPet */
+            maxMastersPerPet?: (number|null);
+
+            /** PetBondConfig maxTitleLength */
+            maxTitleLength?: (number|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a PetBondConfig. */
+        type $Shape = game.PetBondConfig.$Properties;
+    }
+
+    /**
      * Properties of an AppConfig.
      * @deprecated Use game.AppConfig.$Properties instead.
      */
@@ -10081,6 +11196,9 @@ export namespace game {
 
         /** AppConfig rankedScore. */
         rankedScore?: (game.RankedScoreConfig.$Properties|null);
+
+        /** AppConfig petBond. */
+        petBond?: (game.PetBondConfig.$Properties|null);
 
         /**
          * Creates a new AppConfig instance using the specified properties.
@@ -10216,6 +11334,9 @@ export namespace game {
 
             /** AppConfig rankedScore */
             rankedScore?: (game.RankedScoreConfig.$Properties|null);
+
+            /** AppConfig petBond */
+            petBond?: (game.PetBondConfig.$Properties|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -12134,459 +13255,5 @@ export namespace google {
               $unknowns?: Uint8Array[];
             };
         }
-    }
-}
-
-/** Namespace wire. */
-export namespace wire {
-
-    /**
-     * Properties of an Envelope.
-     * @deprecated Use wire.Envelope.$Properties instead.
-     */
-    interface IEnvelope extends wire.Envelope.$Properties {
-    }
-
-    /** Represents an Envelope. */
-    class Envelope {
-
-        /**
-         * Constructs a new Envelope.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: wire.Envelope.$Properties);
-
-        /** Unknown fields preserved while decoding when enabled */
-        $unknowns?: Uint8Array[];
-
-        /** Envelope event. */
-        event: string;
-
-        /** Envelope id. */
-        id: (number|Long);
-
-        /** Envelope err. */
-        err: string;
-
-        /** Envelope kind. */
-        kind: wire.PayloadKind;
-
-        /** Envelope channel. */
-        channel: string;
-
-        /** Envelope seq. */
-        seq: (number|Long);
-
-        /** Envelope hash. */
-        hash: string;
-
-        /** Envelope fullState. */
-        fullState?: (game.StateDocument.$Properties|null);
-
-        /** Envelope delta. */
-        delta?: (wire.StateDelta.$Properties|null);
-
-        /** Envelope rawBody. */
-        rawBody?: (game.RawBody.$Properties|null);
-
-        /**
-         * Creates a new Envelope instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns Envelope instance
-         */
-        static create(properties: wire.Envelope.$Shape): wire.Envelope & wire.Envelope.$Shape;
-        static create(properties?: wire.Envelope.$Properties): wire.Envelope;
-
-        /**
-         * Encodes the specified Envelope message. Does not implicitly {@link wire.Envelope.verify|verify} messages.
-         * @param message Envelope message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        static encode(message: wire.Envelope.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified Envelope message, length delimited. Does not implicitly {@link wire.Envelope.verify|verify} messages.
-         * @param message Envelope message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        static encodeDelimited(message: wire.Envelope.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes an Envelope message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns {wire.Envelope & wire.Envelope.$Shape} Envelope
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): wire.Envelope & wire.Envelope.$Shape;
-
-        /**
-         * Decodes an Envelope message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns {wire.Envelope & wire.Envelope.$Shape} Envelope
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): wire.Envelope & wire.Envelope.$Shape;
-
-        /**
-         * Verifies an Envelope message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates an Envelope message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns Envelope
-         */
-        static fromObject(object: { [k: string]: any }): wire.Envelope;
-
-        /**
-         * Creates a plain object from an Envelope message. Also converts values to other types if specified.
-         * @param message Envelope
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        static toObject(message: wire.Envelope, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this Envelope to JSON.
-         * @returns JSON object
-         */
-        toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the type url for Envelope
-         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
-         * @returns The type url
-         */
-        static getTypeUrl(prefix?: string): string;
-    }
-
-    namespace Envelope {
-
-        /** Properties of an Envelope. */
-        interface $Properties {
-
-            /** Envelope event */
-            event?: (string|null);
-
-            /** Envelope id */
-            id?: (number|Long|null);
-
-            /** Envelope err */
-            err?: (string|null);
-
-            /** Envelope kind */
-            kind?: (wire.PayloadKind|null);
-
-            /** Envelope channel */
-            channel?: (string|null);
-
-            /** Envelope seq */
-            seq?: (number|Long|null);
-
-            /** Envelope hash */
-            hash?: (string|null);
-
-            /** Envelope fullState */
-            fullState?: (game.StateDocument.$Properties|null);
-
-            /** Envelope delta */
-            delta?: (wire.StateDelta.$Properties|null);
-
-            /** Envelope rawBody */
-            rawBody?: (game.RawBody.$Properties|null);
-
-            /** Unknown fields preserved while decoding when enabled */
-            $unknowns?: Uint8Array[];
-        }
-
-        /** Shape of an Envelope. */
-        type $Shape = {
-          event?: string|null;
-          id?: number|Long|null;
-          err?: string|null;
-          kind?: wire.PayloadKind|null;
-          channel?: string|null;
-          seq?: number|Long|null;
-          hash?: string|null;
-          fullState?: game.StateDocument.$Shape|null;
-          delta?: wire.StateDelta.$Shape|null;
-          rawBody?: game.RawBody.$Shape|null;
-          $unknowns?: Uint8Array[];
-        };
-    }
-
-    /** PayloadKind enum. */
-    enum PayloadKind {
-
-        /** KIND_RAW value */
-        KIND_RAW = 0,
-
-        /** KIND_FULL value */
-        KIND_FULL = 1,
-
-        /** KIND_DELTA value */
-        KIND_DELTA = 2
-    }
-
-    /**
-     * Properties of a StateDelta.
-     * @deprecated Use wire.StateDelta.$Properties instead.
-     */
-    interface IStateDelta extends wire.StateDelta.$Properties {
-    }
-
-    /** Represents a StateDelta. */
-    class StateDelta {
-
-        /**
-         * Constructs a new StateDelta.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: wire.StateDelta.$Properties);
-
-        /** Unknown fields preserved while decoding when enabled */
-        $unknowns?: Uint8Array[];
-
-        /** StateDelta ops. */
-        ops: wire.PatchOp.$Properties[];
-
-        /**
-         * Creates a new StateDelta instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns StateDelta instance
-         */
-        static create(properties: wire.StateDelta.$Shape): wire.StateDelta & wire.StateDelta.$Shape;
-        static create(properties?: wire.StateDelta.$Properties): wire.StateDelta;
-
-        /**
-         * Encodes the specified StateDelta message. Does not implicitly {@link wire.StateDelta.verify|verify} messages.
-         * @param message StateDelta message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        static encode(message: wire.StateDelta.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified StateDelta message, length delimited. Does not implicitly {@link wire.StateDelta.verify|verify} messages.
-         * @param message StateDelta message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        static encodeDelimited(message: wire.StateDelta.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a StateDelta message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns {wire.StateDelta & wire.StateDelta.$Shape} StateDelta
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): wire.StateDelta & wire.StateDelta.$Shape;
-
-        /**
-         * Decodes a StateDelta message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns {wire.StateDelta & wire.StateDelta.$Shape} StateDelta
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): wire.StateDelta & wire.StateDelta.$Shape;
-
-        /**
-         * Verifies a StateDelta message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a StateDelta message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns StateDelta
-         */
-        static fromObject(object: { [k: string]: any }): wire.StateDelta;
-
-        /**
-         * Creates a plain object from a StateDelta message. Also converts values to other types if specified.
-         * @param message StateDelta
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        static toObject(message: wire.StateDelta, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this StateDelta to JSON.
-         * @returns JSON object
-         */
-        toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the type url for StateDelta
-         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
-         * @returns The type url
-         */
-        static getTypeUrl(prefix?: string): string;
-    }
-
-    namespace StateDelta {
-
-        /** Properties of a StateDelta. */
-        interface $Properties {
-
-            /** StateDelta ops */
-            ops?: (wire.PatchOp.$Properties[]|null);
-
-            /** Unknown fields preserved while decoding when enabled */
-            $unknowns?: Uint8Array[];
-        }
-
-        /** Shape of a StateDelta. */
-        type $Shape = {
-          ops?: wire.PatchOp.$Shape[]|null;
-          $unknowns?: Uint8Array[];
-        };
-    }
-
-    /**
-     * Properties of a PatchOp.
-     * @deprecated Use wire.PatchOp.$Properties instead.
-     */
-    interface IPatchOp extends wire.PatchOp.$Properties {
-    }
-
-    /** Represents a PatchOp. */
-    class PatchOp {
-
-        /**
-         * Constructs a new PatchOp.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: wire.PatchOp.$Properties);
-
-        /** Unknown fields preserved while decoding when enabled */
-        $unknowns?: Uint8Array[];
-
-        /** PatchOp path. */
-        path: string;
-
-        /** PatchOp value. */
-        value?: (google.protobuf.Value.$Properties|null);
-
-        /** PatchOp remove. */
-        remove: boolean;
-
-        /**
-         * Creates a new PatchOp instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns PatchOp instance
-         */
-        static create(properties: wire.PatchOp.$Shape): wire.PatchOp & wire.PatchOp.$Shape;
-        static create(properties?: wire.PatchOp.$Properties): wire.PatchOp;
-
-        /**
-         * Encodes the specified PatchOp message. Does not implicitly {@link wire.PatchOp.verify|verify} messages.
-         * @param message PatchOp message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        static encode(message: wire.PatchOp.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified PatchOp message, length delimited. Does not implicitly {@link wire.PatchOp.verify|verify} messages.
-         * @param message PatchOp message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        static encodeDelimited(message: wire.PatchOp.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a PatchOp message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns {wire.PatchOp & wire.PatchOp.$Shape} PatchOp
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): wire.PatchOp & wire.PatchOp.$Shape;
-
-        /**
-         * Decodes a PatchOp message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns {wire.PatchOp & wire.PatchOp.$Shape} PatchOp
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): wire.PatchOp & wire.PatchOp.$Shape;
-
-        /**
-         * Verifies a PatchOp message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a PatchOp message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns PatchOp
-         */
-        static fromObject(object: { [k: string]: any }): wire.PatchOp;
-
-        /**
-         * Creates a plain object from a PatchOp message. Also converts values to other types if specified.
-         * @param message PatchOp
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        static toObject(message: wire.PatchOp, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this PatchOp to JSON.
-         * @returns JSON object
-         */
-        toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the type url for PatchOp
-         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
-         * @returns The type url
-         */
-        static getTypeUrl(prefix?: string): string;
-    }
-
-    namespace PatchOp {
-
-        /** Properties of a PatchOp. */
-        interface $Properties {
-
-            /** PatchOp path */
-            path?: (string|null);
-
-            /** PatchOp value */
-            value?: (google.protobuf.Value.$Properties|null);
-
-            /** PatchOp remove */
-            remove?: (boolean|null);
-
-            /** Unknown fields preserved while decoding when enabled */
-            $unknowns?: Uint8Array[];
-        }
-
-        /** Shape of a PatchOp. */
-        type $Shape = {
-          path?: string|null;
-          value?: google.protobuf.Value.$Shape|null;
-          remove?: boolean|null;
-          $unknowns?: Uint8Array[];
-        };
     }
 }

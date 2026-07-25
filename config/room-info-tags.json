@@ -17,6 +17,12 @@
     "borderColor": "#b7cf8a",
     "label": "五子棋"
   },
+  "gameJungle": {
+    "textColor": "#2f5c3a",
+    "backgroundColor": "#e4f5e8",
+    "borderColor": "#8fc9a0",
+    "label": "斗兽棋"
+  },
   "gameLiarsDice": {
     "textColor": "#7a4a1e",
     "backgroundColor": "#fdecd2",

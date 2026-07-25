@@ -12,7 +12,7 @@ import {
   roomInfoTagOrder, roomInfoTagStyle, roomStatusText, safePlayerStats
 } from "./AppViews";
 
-export type AdminSection = "site" | "factions" | "titles" | "punishments" | "roomTags" | "roomInfoTags" | "nameWar" | "giveaway" | "extremeMode" | "rankedScore" | "accessControl" | "messages" | "users" | "rooms";
+export type AdminSection = "site" | "factions" | "titles" | "punishments" | "roomTags" | "roomInfoTags" | "nameWar" | "giveaway" | "petBond" | "extremeMode" | "rankedScore" | "accessControl" | "messages" | "users" | "rooms";
 export type AdminRoomTab = "rooms" | "announcement";
 
 /** 用户管理的筛选/排序开关（与后端 admin:listPlayers 字段对应）。 */
@@ -286,6 +286,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
     { id: "roomInfoTags", label: "房间信息标签", detail: "房间头部彩色标签" },
     { id: "nameWar", label: "名字争夺战", detail: draft.nameWar.penaltyPrefix },
     { id: "giveaway", label: "白给模式", detail: draft.giveaway.panelTitle },
+    { id: "petBond", label: "宠物乐园", detail: draft.petBond?.panelTitle || "宠物乐园" },
     { id: "extremeMode", label: "极限模式", detail: `${draft.extremeMode.emoji} ${draft.extremeMode.label}` },
     { id: "rankedScore", label: "排位分设置", detail: (() => { const rs = withRankedScoreDefaults(draft.rankedScore); return `积分显示上下限`; })() },
     { id: "accessControl", label: "防多开", detail: (() => { const ac = withAccessControlDefaults(draft.accessControl); return ac.registrationDisabled ? "已禁止新用户注册" : `同指纹 ${ac.maxOnlinePerIp} 在线 / ${ac.maxCreatesPer10Min} 新建`; })() },
@@ -738,6 +739,41 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
       );
     }
 
+    if (activeSection === "petBond") {
+      const pb = draft.petBond || { panelTitle: "宠物乐园", maxPetsPerMaster: 3, maxMastersPerPet: 3, maxTitleLength: 12 };
+      return (
+        <div className="config-section admin-section-card">
+          <AdminSectionHeader title="宠物乐园（认主/认宠）" subtitle="配置大厅面板标题、主人/宠物数量上限与称号长度。" />
+          <div className="admin-preview-card">
+            <span>预览</span>
+            <strong>🐾 {pb.panelTitle}</strong>
+            <p>主人最多 {pb.maxPetsPerMaster} 宠 · 宠物最多 {pb.maxMastersPerPet} 主 · 称号 {pb.maxTitleLength} 字</p>
+          </div>
+          <div className="config-row">
+            <label className="field-label">
+              <span>大厅面板标题</span>
+              <input value={pb.panelTitle} maxLength={24} onChange={(event) => patch({ petBond: { ...pb, panelTitle: event.target.value } })} placeholder="宠物乐园" />
+            </label>
+            <label className="field-label">
+              <span>宠物称号最大字数</span>
+              <input type="number" min={1} max={24} step={1} value={pb.maxTitleLength} onChange={(event) => patch({ petBond: { ...pb, maxTitleLength: Number(event.target.value) } })} />
+            </label>
+          </div>
+          <div className="config-row">
+            <label className="field-label">
+              <span>每名主人最多宠物数</span>
+              <input type="number" min={1} max={20} step={1} value={pb.maxPetsPerMaster} onChange={(event) => patch({ petBond: { ...pb, maxPetsPerMaster: Number(event.target.value) } })} />
+            </label>
+            <label className="field-label">
+              <span>每名宠物最多主人数</span>
+              <input type="number" min={1} max={20} step={1} value={pb.maxMastersPerPet} onChange={(event) => patch({ petBond: { ...pb, maxMastersPerPet: Number(event.target.value) } })} />
+            </label>
+          </div>
+          <p className="hint">关闭玩家侧「开启认主/认宠」不会解除已有关系，只禁止新增；关闭「公开展示」则不出现在大厅关系图。</p>
+        </div>
+      );
+    }
+
     if (activeSection === "extremeMode") {
       const extreme = draft.extremeMode;
       const patchExtreme = (nextExtreme: AppConfig["extremeMode"]) => patch({ extremeMode: nextExtreme });
@@ -960,7 +996,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
           <AdminSectionHeader title="房间信息标签" subtitle="修改房间顶部规则标签的名字和颜色。" />
           <div className="admin-preview-card">
             <span>预览</span>
-            <RoomInfoTagList tags={roomInfoTagOrder.slice(0, 6).map((item) => {
+            <RoomInfoTagList tags={roomInfoTagOrder.slice(0, 7).map((item) => {
               const style = draft.roomInfoTags?.[item.key] || defaultRoomInfoTagStyle(item.label);
               return { key: item.key, text: style.label, style };
             })} />
@@ -1228,10 +1264,6 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
       )}
     </section>
   );
-}
-
-export function lines(value: string) {
-  return value.split("\n").map((item) => item.trim()).filter(Boolean);
 }
 
 export function nextAdminId(prefix: string, existingIds: string[]) {

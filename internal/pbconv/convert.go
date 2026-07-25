@@ -233,6 +233,11 @@ func LobbyToProto(snap types.LobbySnapshot) (*wire.LobbySnapshot, error) {
 		}
 		out.LobbyChat = append(out.LobbyChat, cc)
 	}
+	for _, e := range snap.PetBonds {
+		out.PetBonds = append(out.PetBonds, &wire.PetBondEdge{
+			MasterId: e.MasterID, PetId: e.PetID, PetTitle: e.PetTitle,
+		})
+	}
 	out.ServerStats = serverStatsToProto(snap.ServerStats)
 	return out, nil
 }
@@ -335,6 +340,7 @@ func lobbyRoomToProto(r types.LobbyRoomInfo) (*wire.LobbyRoomInfo, error) {
 		OthelloMoveSeconds: int32(r.OthelloMoveSeconds), OthelloGameMinutes: int32(r.OthelloGameMinutes),
 		GomokuMoveSeconds: int32(r.GomokuMoveSeconds), GomokuGameMinutes: int32(r.GomokuGameMinutes),
 		GomokuUndoLimit: int32(r.GomokuUndoLimit),
+		JungleMoveSeconds: int32(r.JungleMoveSeconds), JungleGameMinutes: int32(r.JungleGameMinutes),
 	}
 	for _, seat := range []types.SeatKey{types.SeatA, types.SeatB} {
 		vs := &wire.VersusSeat{}
@@ -478,6 +484,13 @@ func RoomToProto(snap types.RoomSnapshot) (*wire.RoomSnapshot, error) {
 			return nil, err
 		}
 		m.Gomoku = g
+	}
+	if snap.Jungle != nil {
+		j, err := jungleToProto(snap.Jungle)
+		if err != nil {
+			return nil, err
+		}
+		m.Jungle = j
 	}
 	return m, nil
 }
@@ -708,6 +721,46 @@ func gomokuToProto(s *types.GomokuState) (*wire.GomokuState, error) {
 	return m, nil
 }
 
+func jungleToProto(s *types.JungleState) (*wire.JungleState, error) {
+	m := &wire.JungleState{
+		Turn: string(s.Turn), MoveCount: int32(s.MoveCount),
+		Ended: s.Ended, Winner: string(s.Winner),
+		MoveDeadlineAt: s.MoveDeadlineAt, ClockDeadlineAt: s.ClockDeadlineAt,
+	}
+	for k, v := range s.ClockRemaining {
+		m.ClockRemaining = append(m.ClockRemaining, &wire.IntPair{Key: string(k), Value: int32(v)})
+	}
+	sort.Slice(m.ClockRemaining, func(i, j int) bool { return m.ClockRemaining[i].Key < m.ClockRemaining[j].Key })
+	for _, row := range s.Board {
+		br := &wire.BoardRow{}
+		for _, cell := range row {
+			if cell == nil {
+				br.Cells = append(br.Cells, "")
+			} else {
+				br.Cells = append(br.Cells, string(*cell))
+			}
+		}
+		m.Board = append(m.Board, br)
+	}
+	for k, v := range s.RankedDelta {
+		m.RankedDelta = append(m.RankedDelta, &wire.IntPair{Key: string(k), Value: int32(v)})
+	}
+	sort.Slice(m.RankedDelta, func(i, j int) bool { return m.RankedDelta[i].Key < m.RankedDelta[j].Key })
+	if s.LastFrom != nil {
+		m.LastFrom = &wire.Pos{Row: int32(s.LastFrom.Row), Col: int32(s.LastFrom.Col)}
+	}
+	if s.LastTo != nil {
+		m.LastTo = &wire.Pos{Row: int32(s.LastTo.Row), Col: int32(s.LastTo.Col)}
+	}
+	if s.ResignRequest != nil {
+		m.ResignRequest = &wire.JungleResignRequest{
+			FromSeat: string(s.ResignRequest.FromSeat), ToSeat: string(s.ResignRequest.ToSeat),
+			CreatedAt: s.ResignRequest.CreatedAt,
+		}
+	}
+	return m, nil
+}
+
 // ConfigToProto 应用配置。
 func ConfigToProto(cfg types.AppConfig) (*wire.AppConfig, error) {
 	// maps → pairs intermediate
@@ -884,6 +937,7 @@ var playerBoolFields = []string{
 	"nameWarEnabled", "nameWarPunished", "nameWarAllowRename",
 	"giveawayEnabled", "rankMultiplierUnlocked", "extremeModeEnabled",
 	"extremeForceClosed", "isAdmin",
+	"bondMasterEnabled", "bondPetEnabled", "bondPublicDisplay",
 }
 var playerNumFields = []string{
 	"disconnectedAt", "disconnectExpiresAt", "profileUpdatedAt",
@@ -913,7 +967,54 @@ func fillPlayerDefaults(p any) any {
 	if _, exists := pm["genderId"]; !exists {
 		pm["genderId"] = ""
 	}
+	// 与前端 materializePublicStats / materializeGameStats 对齐，避免 DELTA 哈希因补零键分叉。
+	pm["stats"] = fillPublicStatsDefaults(pm["stats"])
+	pm["gameStats"] = fillGameStatsDefaults(pm["gameStats"])
 	return pm
+}
+
+func fillPublicStatsDefaults(s any) any {
+	sm, _ := s.(map[string]any)
+	if sm == nil {
+		sm = map[string]any{}
+	}
+	for _, k := range []string{
+		"wins", "losses", "draws", "punishments", "rankedPoints",
+		"highestScore", "lowestScore", "sortRankedPoints", "sortHighestScore", "sortLowestScore",
+		"totalOnlineMs",
+	} {
+		if _, exists := sm[k]; !exists {
+			sm[k] = float64(0)
+		}
+	}
+	if _, exists := sm["title"]; !exists {
+		sm["title"] = "暂无称号"
+	}
+	return sm
+}
+
+func fillGameWLDDefaults(s any) any {
+	sm, _ := s.(map[string]any)
+	if sm == nil {
+		sm = map[string]any{}
+	}
+	for _, k := range []string{"wins", "losses", "draws"} {
+		if _, exists := sm[k]; !exists {
+			sm[k] = float64(0)
+		}
+	}
+	return sm
+}
+
+func fillGameStatsDefaults(s any) any {
+	sm, _ := s.(map[string]any)
+	if sm == nil {
+		sm = map[string]any{}
+	}
+	for _, g := range []string{"rps", "othello", "tictactoe", "gomoku", "liarsdice", "jungle"} {
+		sm[g] = fillGameWLDDefaults(sm[g])
+	}
+	return sm
 }
 
 // allowProofImage 对应 *bool 指针，但 handlers_room.go 建房时已把 nil 归一化成
@@ -931,6 +1032,12 @@ func fillRoomSettingsDefaults(s any) any {
 	}
 	if _, exists := sm["gomokuUndoLimit"]; !exists {
 		sm["gomokuUndoLimit"] = float64(0)
+	}
+	// 0 = 不限时；protojson 会丢掉数值 0，与前端 fillRoomSettingsDefaults 对齐。
+	for _, k := range []string{"othelloMoveSeconds", "othelloGameMinutes", "gomokuMoveSeconds", "gomokuGameMinutes", "jungleMoveSeconds", "jungleGameMinutes"} {
+		if _, exists := sm[k]; !exists {
+			sm[k] = float64(0)
+		}
 	}
 	return sm
 }
@@ -1104,6 +1211,12 @@ func RoomProtoToFront(pb *wire.RoomSnapshot) (map[string]any, error) {
 		g["undoCount"] = pairsToIntMap(g["undoCount"])
 		g["clockRemaining"] = pairsToIntMap(g["clockRemaining"])
 		m["gomoku"] = g
+	}
+	if j, ok := m["jungle"].(map[string]any); ok {
+		j["board"] = boardRowsToMatrix(j["board"])
+		j["rankedDelta"] = pairsToIntMap(j["rankedDelta"])
+		j["clockRemaining"] = pairsToIntMap(j["clockRemaining"])
+		m["jungle"] = j
 	}
 	if hist, ok := m["roundHistory"].([]any); ok {
 		for i, item := range hist {
@@ -1570,6 +1683,8 @@ func NormalizeFrontTree(v any) any {
 			othello["blackCount"] = numAny(othello["blackCount"], 0)
 			othello["whiteCount"] = numAny(othello["whiteCount"], 0)
 			othello["passCount"] = numAny(othello["passCount"], 0)
+			othello["moveDeadlineAt"] = numAny(othello["moveDeadlineAt"], 0)
+			othello["clockDeadlineAt"] = numAny(othello["clockDeadlineAt"], 0)
 			if othello["settlementEvents"] == nil {
 				othello["settlementEvents"] = []any{}
 			}
@@ -1580,6 +1695,33 @@ func NormalizeFrontTree(v any) any {
 			ttt["winningLine"] = normalizePosListAny(ttt["winningLine"])
 			ttt["moveCount"] = numAny(ttt["moveCount"], 0)
 			out["tictactoe"] = ttt
+		}
+		if gomoku, ok := out["gomoku"].(map[string]any); ok {
+			gomoku["board"] = padBoardAny(gomoku["board"], 15)
+			gomoku["moves"] = normalizePosListAny(gomoku["moves"])
+			gomoku["winningLine"] = normalizePosListAny(gomoku["winningLine"])
+			gomoku["moveCount"] = numAny(gomoku["moveCount"], 0)
+			gomoku["moveDeadlineAt"] = numAny(gomoku["moveDeadlineAt"], 0)
+			gomoku["clockDeadlineAt"] = numAny(gomoku["clockDeadlineAt"], 0)
+			out["gomoku"] = gomoku
+		}
+		if jungle, ok := out["jungle"].(map[string]any); ok {
+			jungle["board"] = padBoardRectAny(jungle["board"], 9, 7)
+			jungle["moveCount"] = numAny(jungle["moveCount"], 0)
+			jungle["moveDeadlineAt"] = numAny(jungle["moveDeadlineAt"], 0)
+			jungle["clockDeadlineAt"] = numAny(jungle["clockDeadlineAt"], 0)
+			out["jungle"] = jungle
+		}
+		if ss, ok := out["serverStats"].(map[string]any); ok {
+			for _, k := range []string{
+				"startedAt", "roomBroadcasts", "lobbyBroadcasts", "disconnects", "reconnects",
+				"lastRoomSnapshotBytes", "lastLobbySnapshotBytes",
+				"recentRoomBroadcasts", "recentLobbyBroadcasts",
+				"averageRoomSnapshotBytes", "averageLobbySnapshotBytes",
+			} {
+				ss[k] = numAny(ss[k], 0)
+			}
+			out["serverStats"] = ss
 		}
 		for _, arrKey := range []string{"players", "rooms", "spectators", "proofs", "roundHistory", "chat", "punishedPlayerIds", "suggestions", "lobbyChat", "normalLeaderboard", "rankedLeaderboard"} {
 			if out[arrKey] == nil {
@@ -1611,6 +1753,7 @@ func NormalizeFrontTree(v any) any {
 			for i := range hist {
 				if hm, ok := hist[i].(map[string]any); ok {
 					hm["tictactoeLine"] = normalizePosListAny(hm["tictactoeLine"])
+					hm["gomokuLine"] = normalizePosListAny(hm["gomokuLine"])
 					if hm["punishmentTasks"] == nil {
 						hm["punishmentTasks"] = []any{}
 					}
@@ -1624,6 +1767,10 @@ func NormalizeFrontTree(v any) any {
 				}
 			}
 			out["roundHistory"] = hist
+		}
+		// 房间 settings 再走一次计时字段补零（DELTA 可能只补丁部分字段）。
+		if settings, ok := out["settings"]; ok {
+			out["settings"] = fillRoomSettingsDefaults(settings)
 		}
 		return out
 	case []any:
@@ -1641,15 +1788,19 @@ func NormalizeFrontTree(v any) any {
 }
 
 func padBoardAny(v any, n int) []any {
+	return padBoardRectAny(v, n, n)
+}
+
+func padBoardRectAny(v any, rows, cols int) []any {
 	src, _ := v.([]any)
-	out := make([]any, n)
-	for r := 0; r < n; r++ {
+	out := make([]any, rows)
+	for r := 0; r < rows; r++ {
 		var rowSrc []any
 		if r < len(src) {
 			rowSrc, _ = src[r].([]any)
 		}
-		row := make([]any, n)
-		for c := 0; c < n; c++ {
+		row := make([]any, cols)
+		for c := 0; c < cols; c++ {
 			if c < len(rowSrc) {
 				row[c] = rowSrc[c]
 			} else {

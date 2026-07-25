@@ -1,0 +1,6 @@
+{
+  "panelTitle": "宠物乐园",
+  "maxPetsPerMaster": 3,
+  "maxMastersPerPet": 3,
+  "maxTitleLength": 12
+}

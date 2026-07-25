@@ -478,13 +478,34 @@ func (s *Server) handleConfigExport(w http.ResponseWriter, r *http.Request) {
 // exportConfigText is wired in persist/server from config package
 var exportConfigText = func() (string, error) { return "", fmt.Errorf("not wired") }
 
+// noDirListingFS 禁止目录列表：只允许打开具体文件，访问 /uploads/ 或子目录本身返回 404。
+type noDirListingFS struct{ root http.FileSystem }
+
+func (fs noDirListingFS) Open(name string) (http.File, error) {
+	f, err := fs.root.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	stat, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	if stat.IsDir() {
+		_ = f.Close()
+		return nil, os.ErrNotExist
+	}
+	return f, nil
+}
+
 func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/uploads/") {
 		// security headers for uploads
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src 'self';")
 		w.Header().Set("Cache-Control", "public, max-age=2592000, immutable")
-		http.StripPrefix("/uploads/", http.FileServer(http.Dir(s.uploadsDir))).ServeHTTP(w, r)
+		// 禁止目录列出：只能用已知文件名访问单文件（证明图/头像 URL）。
+		http.StripPrefix("/uploads/", http.FileServer(noDirListingFS{root: http.Dir(s.uploadsDir)})).ServeHTTP(w, r)
 		return
 	}
 	if s.distDir == "" {

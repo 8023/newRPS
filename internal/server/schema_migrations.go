@@ -17,7 +17,7 @@ import (
 //
 // 是 var 不是 const，只是为了让测试能临时替换掉去验证迁移机制本身；正常代码路径里
 // 把它当常量对待，不要在业务逻辑里修改它。
-var currentSchemaVersion = 9
+var currentSchemaVersion = 11
 
 // schemaVersionSchema：只有一行的版本表，openDatabase 每次启动都会先确保它存在。
 const schemaVersionSchema = `
@@ -117,6 +117,28 @@ var migrations = []schemaMigration{
 	// 未落盘会话，属有意接受的边界。
 	{version: 9, migrate: func(db sqlExecer) error {
 		return addColumnIfMissing(db, "players", "total_online_ms", "INTEGER NOT NULL DEFAULT 0")
+	}},
+	// v10：认主/认宠玩法——players 三偏好开关；pet_bonds / pet_bond_requests /
+	// pet_bond_request_approvals 由 petBondSchema 的 CREATE IF NOT EXISTS 建表，
+	// 此处只补 players 列。
+	{version: 10, migrate: func(db sqlExecer) error {
+		if err := addColumnIfMissing(db, "players", "bond_master_enabled", "INTEGER"); err != nil {
+			return err
+		}
+		if err := addColumnIfMissing(db, "players", "bond_pet_enabled", "INTEGER"); err != nil {
+			return err
+		}
+		return addColumnIfMissing(db, "players", "bond_public_display", "INTEGER")
+	}},
+	// v11：斗兽棋分游戏胜负平。
+	{version: 11, migrate: func(db sqlExecer) error {
+		if err := addColumnIfMissing(db, "players", "jungle_wins", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+			return err
+		}
+		if err := addColumnIfMissing(db, "players", "jungle_losses", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+			return err
+		}
+		return addColumnIfMissing(db, "players", "jungle_draws", "INTEGER NOT NULL DEFAULT 0")
 	}},
 }
 

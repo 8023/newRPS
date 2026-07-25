@@ -61,6 +61,8 @@ function checkRoomLevel1Notifications(old: RoomSnapshot | null, next: RoomSnapsh
     if (old.tictactoe?.turn !== mySeat && next.tictactoe.turn === mySeat) notifyTurnIfHidden();
   } else if (next.settings.gameId === "gomoku" && next.gomoku) {
     if (old.gomoku?.turn !== mySeat && next.gomoku.turn === mySeat) notifyTurnIfHidden();
+  } else if (next.settings.gameId === "jungle" && next.jungle) {
+    if (old.jungle?.turn !== mySeat && next.jungle.turn === mySeat) notifyTurnIfHidden();
   }
 }
 
@@ -448,7 +450,16 @@ export function App() {
     if (!me || !lobby) return;
     const latest = lobby.players.find((player) => player.id === me.player.id);
     if (latest && playerSyncKey(latest) !== playerSyncKey(me.player)) {
-      setMe((old) => old ? { ...old, player: latest } : old);
+      // LobbyPlayer 是精简视图，禁止整对象覆盖 join 时的完整 PublicPlayer（会冲掉冷却等字段）。
+      setMe((old) => {
+        if (!old) return old;
+        const merged = { ...old.player, ...latest } as typeof old.player;
+        // 头像空串/缺省：batch 路径同样显式写回，避免残留旧 URL。
+        if (latest.avatarUrl === undefined || latest.avatarUrl === "") {
+          merged.avatarUrl = latest.avatarUrl || "";
+        }
+        return { ...old, player: merged };
+      });
     }
   }, [lobby, me]);
 

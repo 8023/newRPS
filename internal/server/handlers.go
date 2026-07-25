@@ -53,6 +53,20 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{20, 60_000, 10_000}, s.onLobbySuggestionsUnsubscribe
 	case "player:updateProfile":
 		return RateLimitOptions{10, 60_000, 30_000}, s.onPlayerUpdateProfile
+	case "petbond:getState":
+		return RateLimitOptions{20, 60_000, 10_000}, s.onPetBondGetState
+	case "petbond:seekMaster":
+		return RateLimitOptions{10, 60_000, 30_000}, s.onPetBondSeekMaster
+	case "petbond:seekPet":
+		return RateLimitOptions{10, 60_000, 30_000}, s.onPetBondSeekPet
+	case "petbond:approve":
+		return RateLimitOptions{20, 60_000, 15_000}, s.onPetBondApprove
+	case "petbond:cancel":
+		return RateLimitOptions{20, 60_000, 15_000}, s.onPetBondCancel
+	case "petbond:requestRelease":
+		return RateLimitOptions{10, 60_000, 30_000}, s.onPetBondRequestRelease
+	case "petbond:setTitle":
+		return RateLimitOptions{10, 60_000, 30_000}, s.onPetBondSetTitle
 	case "giveaway:boost":
 		return RateLimitOptions{20, 60_000, 30_000}, s.onGiveawayBoost
 	case "giveaway:submitBoard":
@@ -121,6 +135,16 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{8, 60_000, 5_000}, s.onGomokuResignRespond
 	case "gomoku:restart":
 		return RateLimitOptions{8, 60_000, 30_000}, s.onGomokuRestart
+	case "jungle:ready":
+		return RateLimitOptions{12, 60_000, 30_000}, s.onJungleReady
+	case "jungle:move":
+		return RateLimitOptions{30, 10_000, 15_000}, s.onJungleMove
+	case "jungle:resignRequest":
+		return RateLimitOptions{5, 60_000, 8_000}, s.onJungleResignRequest
+	case "jungle:resignRespond":
+		return RateLimitOptions{8, 60_000, 5_000}, s.onJungleResignRespond
+	case "jungle:restart":
+		return RateLimitOptions{8, 60_000, 30_000}, s.onJungleRestart
 	case "liarsdice:joinRoster":
 		return RateLimitOptions{12, 60_000, 15_000}, s.onLiarsDiceJoinRoster
 	case "liarsdice:leaveRoster":
@@ -231,7 +255,7 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 		// 旧版前端曾用双 UUID 拼接生成 secret，新版统一成单个 token；验证通过后顺手
 		// 静默换发一条新格式凭据，原地替换（先删后加，不占用/挤掉设备槽位）。
 		if isLegacySecretFormat(p.PlayerSecret) {
-			reissuedSecret = randomID()
+			reissuedSecret = randomPlayerSecret()
 			player.removePlayerSecret(p.PlayerSecret)
 			player.addPlayerSecret(reissuedSecret)
 		}
@@ -365,6 +389,8 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 	} else {
 		s.broadcastLobby()
 	}
+	// 宠物乐园候选列表依赖在线状态，上线后推送给全体。
+	s.notifyAllOnlinePetBondStates()
 	if player.RoomID != "" {
 		if room := s.rooms[player.RoomID]; room != nil {
 			if room.Phase == types.PhasePunishment && hadDisconnectHold {
@@ -396,8 +422,12 @@ func (s *Server) onAdminLogin(client *Client, env wsEnvelope) {
 		return
 	}
 	s.adminClientIDs[client.id] = struct{}{}
+	// IsAdmin 仅作本连接存活期间的展示标记；权限以 adminClientIDs 为准。
+	// 断线时会清掉，重连后必须重新 admin:login，避免 IsAdmin 粘滞到进程结束。
 	if player != nil {
 		player.IsAdmin = boolPtr(true)
+		s.refreshPlayerSnapshots(player)
+		s.broadcastPlayerUpdate(player)
 	}
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 	s.broadcastLobby()
@@ -438,6 +468,9 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 		NameWarAllowRename *bool  `json:"nameWarAllowRename"`
 		GiveawayEnabled    *bool  `json:"giveawayEnabled"`
 		ExtremeModeEnabled *bool  `json:"extremeModeEnabled"`
+		BondMasterEnabled  *bool  `json:"bondMasterEnabled"`
+		BondPetEnabled     *bool  `json:"bondPetEnabled"`
+		BondPublicDisplay  *bool  `json:"bondPublicDisplay"`
 	}
 	_ = decodeD(env, &p)
 	player, ok := s.requirePlayer(client, env)
@@ -572,12 +605,27 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 		}
 		s.logPlayerActivity(extremeAction, player.ID, player.Name, "", client.ipAddress, client.deviceKey, client.fingerprint, "")
 	}
+	// 认主/认宠开关：关闭不解除已有关系，只禁止新增；公开展示关闭则大厅关系图隐藏自己。
+	nextBondMaster := p.BondMasterEnabled != nil && *p.BondMasterEnabled
+	nextBondPet := p.BondPetEnabled != nil && *p.BondPetEnabled
+	nextBondPublic := p.BondPublicDisplay != nil && *p.BondPublicDisplay
+	bondChanged := nextBondMaster != ptrBool(player.BondMasterEnabled) ||
+		nextBondPet != ptrBool(player.BondPetEnabled) ||
+		nextBondPublic != ptrBool(player.BondPublicDisplay)
+	player.BondMasterEnabled = boolPtr(nextBondMaster)
+	player.BondPetEnabled = boolPtr(nextBondPet)
+	player.BondPublicDisplay = boolPtr(nextBondPublic)
 	if nameChanged {
 		player.ProfileUpdatedAt = int64Ptr(now)
 	}
 	player.DisplayName = formatDisplayName(player)
 	s.refreshPlayerSnapshots(player)
 	s.broadcastPlayerUpdate(player)
+	if bondChanged {
+		s.broadcastLobby()
+		// 其他人的认主/认宠候选列表依赖这些开关，需实时推送。
+		s.notifyAllOnlinePetBondStates()
+	}
 	if player.Persistent {
 		s.requestPersist("lazy")
 	}

@@ -792,6 +792,129 @@ main {
   gap: 10px;
 }
 
+.pet-bond-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.pet-bond-panel .mobile-collapsible-body {
+  display: grid;
+  gap: 12px;
+}
+
+.pet-bond-section {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+
+.pet-bond-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pet-bond-section h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.pet-bond-quota {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  margin-left: auto;
+  border-radius: 999px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-solid);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.pet-bond-chain-list,
+.pet-bond-member-list,
+.pet-bond-candidate-list {
+  display: grid;
+  gap: 6px;
+}
+
+.pet-bond-chain {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.pet-bond-chain-arrow {
+  color: var(--muted);
+}
+
+.pet-bond-member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+}
+
+.pet-bond-member-row.pet-bond-pin {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px rgba(102, 183, 238, 0.25);
+}
+
+.pet-bond-row-actions {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.pet-bond-row-actions .small {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.pet-bond-title-tag {
+  margin-left: 6px;
+  color: var(--muted);
+  font-style: normal;
+  font-size: 12px;
+}
+
+.pet-bond-player-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.pet-bond-chain-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pet-bond-chain {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .giveaway-hints {
   display: grid;
   gap: 2px;
@@ -1019,8 +1142,9 @@ main {
 .othello-theme-card {
   display: grid;
   gap: 6px;
+  justify-items: center;
   align-content: start;
-  text-align: left;
+  text-align: center;
   padding: 10px;
   border-color: var(--border);
   background: linear-gradient(180deg, var(--panel-solid), var(--panel-soft));
@@ -1037,6 +1161,7 @@ main {
   width: 54px;
   aspect-ratio: 1;
   overflow: hidden;
+  margin: 0 auto;
   border: 2px solid var(--theme-border, #2f7a5c);
   border-radius: 8px;
   background: var(--theme-board, #2f8a64);
@@ -1068,10 +1193,12 @@ main {
 }
 
 .othello-theme-card strong {
+  width: 100%;
   font-size: 13px;
 }
 
 .othello-theme-card small {
+  width: 100%;
   color: var(--muted);
   font-size: 11px;
   line-height: 1.35;
@@ -1086,8 +1213,9 @@ main {
 .tictactoe-theme-card {
   display: grid;
   gap: 6px;
+  justify-items: center;
   align-content: start;
-  text-align: left;
+  text-align: center;
   padding: 10px;
   border-color: var(--border);
   background: linear-gradient(180deg, var(--panel-solid), var(--panel-soft));
@@ -1104,6 +1232,7 @@ main {
   width: 54px;
   aspect-ratio: 1;
   overflow: hidden;
+  margin: 0 auto;
   border: 2px solid var(--ttt-border, #c68b32);
   border-radius: 8px;
   background: var(--ttt-board, #f0d18f);
@@ -1130,10 +1259,12 @@ main {
 }
 
 .tictactoe-theme-card strong {
+  width: 100%;
   font-size: 13px;
 }
 
 .tictactoe-theme-card small {
+  width: 100%;
   color: var(--muted);
   font-size: 11px;
   line-height: 1.35;
@@ -1172,11 +1303,27 @@ main {
 
 .lobby-lower-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.72fr);
+  /* 左列：宠物乐园；右列：上=通用改名处，下=白给自救板 */
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.9fr);
   gap: 12px;
   margin-top: 12px;
-  /* start：两侧面板各自按内容增高，避免矮的一方被 stretch 拉高后在提示语上下摊出大段空白 */
+  /* 列顶对齐，避免矮列被拉高后出现大段空白 */
   align-items: start;
+}
+
+.lobby-lower-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  /* 列内卡片按内容高度排列，互不拉伸填满 */
+  align-items: stretch;
+}
+
+.lobby-lower-col > .panel {
+  /* 防止 grid/flex 子项被默认 stretch 产生视觉空洞 */
+  height: auto;
+  align-self: stretch;
 }
 
 .room-card {
@@ -1879,7 +2026,7 @@ main {
 
 .battle-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 180px minmax(0, 1fr);
   grid-template-areas: "seat-a versus seat-b";
   gap: 10px;
   align-items: stretch;
@@ -2823,6 +2970,399 @@ main {
   padding: 5px 9px;
   font-size: 12px;
   font-weight: 800;
+}
+
+/* ── 斗兽棋 ─────────────────────────────────────────── */
+.jungle-panel {
+  --jungle-content-max: 460px;
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+}
+
+.jungle-head {
+  width: min(100%, var(--jungle-content-max));
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.jungle-head h3,
+.jungle-head p {
+  margin: 0;
+}
+
+.jungle-turn-card,
+.jungle-score-mini {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  padding: 8px 10px;
+  display: grid;
+  gap: 3px;
+  min-width: 112px;
+  text-align: center;
+}
+
+.jungle-score-mini {
+  grid-template-columns: repeat(2, auto);
+  justify-content: center;
+  align-items: start;
+  gap: 6px 12px;
+}
+
+.jungle-score-side {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.jungle-score-side em {
+  font-style: normal;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.jungle-score-side b {
+  font-weight: 900;
+  font-size: 14px;
+}
+
+.jungle-score-mini strong,
+.jungle-live-rank {
+  grid-column: 1 / -1;
+}
+
+.jungle-score-mini strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.jungle-live-rank,
+.jungle-turn-card small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.jungle-ready-card {
+  width: min(100%, var(--jungle-content-max));
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, #3d7a4a 34%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, #3d7a4a 9%, var(--panel-solid));
+  padding: 10px;
+}
+
+.jungle-ready-card strong,
+.jungle-ready-card p {
+  margin: 0;
+}
+
+.jungle-draw-animation {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.jungle-ready-card.drawing .jungle-draw-animation span {
+  animation: othello-draw-bounce 0.7s ease-in-out infinite alternate;
+}
+
+.jungle-ready-card.drawing .jungle-draw-animation span:nth-child(2) {
+  animation-delay: 0.14s;
+}
+
+.jungle-ready-card.drawing .jungle-draw-animation span:nth-child(3) {
+  animation-delay: 0.28s;
+}
+
+.jungle-restart-button {
+  width: min(100%, var(--jungle-content-max));
+}
+
+.jungle-request-card {
+  width: min(100%, var(--jungle-content-max));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, #c4a35a 40%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, #c4a35a 10%, var(--panel-solid));
+  padding: 10px;
+}
+
+.jungle-request-card.needs-action {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  background: color-mix(in srgb, var(--primary) 10%, var(--panel-solid));
+}
+
+.jungle-request-card strong,
+.jungle-request-card p {
+  margin: 0;
+}
+
+.jungle-request-actions,
+.jungle-risk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.jungle-risk-actions {
+  width: min(100%, var(--jungle-content-max));
+  justify-content: center;
+}
+
+.jungle-board {
+  width: min(100%, var(--jungle-content-max), 78dvh);
+  aspect-ratio: 7 / 9;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: repeat(9, minmax(0, 1fr));
+  gap: 3px;
+  border: 3px solid color-mix(in srgb, var(--jungle-border, #2f5c3a) 70%, var(--border));
+  border-radius: 8px;
+  padding: 5px;
+  background: var(--jungle-board, #3d7a4a);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 18px 36px color-mix(in srgb, var(--jungle-border, #2f5c3a) 28%, transparent);
+}
+
+/* 电脑端：面板内容区与棋盘统一加宽 25%，棋子上限同步放大 */
+@media (min-width: 921px) {
+  .jungle-panel {
+    --jungle-content-max: 575px;
+  }
+
+  .jungle-board {
+    gap: 3.75px;
+    border-width: 3.75px;
+    border-radius: 10px;
+    padding: 6.25px;
+  }
+
+  .jungle-piece {
+    --jungle-piece-size: clamp(35px, 92cqmin, 80px);
+    font-size: clamp(20px, 58cqmin, 45px);
+  }
+
+  @supports not (width: 1cqmin) {
+    .jungle-piece {
+      --jungle-piece-size: min(92%, 70px);
+      font-size: clamp(20px, 5.2vw, 37.5px);
+    }
+  }
+}
+
+.jungle-cell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  background: var(--jungle-land, #4e9a5e);
+  color: inherit;
+  /* 用容器查询按格子短边定棋子直径，保证正圆且尽量铺满 */
+  container-type: size;
+  /* 穴/陷的 em 基准（格子自身不能查自己的 cqmin，用 rem/vw 作安全基准） */
+  font-size: clamp(0.55rem, 2.6vw, 0.78rem);
+}
+
+.jungle-cell.water {
+  background: var(--jungle-water, #3a7eb8);
+}
+
+.jungle-cell.trap {
+  background: var(--jungle-trap, #c4a35a);
+}
+
+.jungle-cell.den {
+  background: var(--jungle-den, #6b3f2a);
+}
+
+.jungle-cell:not(:disabled):hover {
+  box-shadow: inset 0 0 0 999px var(--jungle-hover, rgba(255, 255, 255, 0.18));
+}
+
+.jungle-cell.selected {
+  outline: 2px solid #ffe082;
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.jungle-cell.legal {
+  box-shadow: inset 0 0 0 2px #fff59d, inset 0 0 0 999px rgba(255, 245, 157, 0.22);
+}
+
+.jungle-cell.last-from {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+}
+
+.jungle-cell.last-to {
+  outline: 2px solid rgba(255, 255, 255, 0.65);
+  outline-offset: -2px;
+}
+
+.jungle-cell:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+/* 穴/陷：相对格子 font-size 的 em（约 2.3× 基准 ≈ 1.3–1.8rem，手机端不易溢出） */
+.jungle-terrain-mark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 2.3em;
+  font-weight: 800;
+  opacity: 0.5;
+  pointer-events: none;
+  color: rgba(255, 255, 255, 0.88);
+  line-height: 1;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.jungle-terrain-mark.water-mark {
+  opacity: 0.35;
+  font-size: 1.1em;
+}
+
+.jungle-piece {
+  position: relative;
+  z-index: 1;
+  /* 短边 92%，并设上下限；width/height 同值强制正圆 */
+  --jungle-piece-size: clamp(28px, 92cqmin, 64px);
+  width: var(--jungle-piece-size);
+  height: var(--jungle-piece-size);
+  min-width: var(--jungle-piece-size);
+  min-height: var(--jungle-piece-size);
+  max-width: var(--jungle-piece-size);
+  max-height: var(--jungle-piece-size);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  line-height: 1;
+  font-size: clamp(16px, 58cqmin, 36px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  border: 2px solid rgba(0, 0, 0, 0.12);
+  /* 无容器查询回退时仍尽量正圆 */
+  aspect-ratio: 1 / 1;
+}
+
+@supports not (width: 1cqmin) {
+  .jungle-piece {
+    --jungle-piece-size: min(92%, 56px);
+    width: var(--jungle-piece-size);
+    height: auto;
+    min-width: 0;
+    min-height: 0;
+    max-width: none;
+    max-height: none;
+    aspect-ratio: 1 / 1;
+    font-size: clamp(16px, 5.2vw, 30px);
+  }
+}
+
+.jungle-piece.side-A {
+  background: var(--jungle-a-piece, #f0f4f8);
+  color: var(--jungle-a-text, #1a2a1f);
+}
+
+.jungle-piece.side-B {
+  background: var(--jungle-b-piece, #1a1f2a);
+  color: var(--jungle-b-text, #f0f4f8);
+}
+
+.jungle-legend {
+  width: min(100%, var(--jungle-content-max));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.jungle-legend span {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-soft);
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.jungle-rules-hint {
+  width: min(100%, var(--jungle-content-max));
+  margin: 0;
+  display: grid;
+  gap: 6px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.jungle-rules-hint p {
+  margin: 0;
+}
+
+.jungle-rank-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px 0;
+  font-weight: 800;
+}
+
+.jungle-rank-label {
+  margin-right: 6px;
+  color: var(--muted);
+}
+
+.jungle-rank-item {
+  display: inline-flex;
+  align-items: center;
+}
+
+.jungle-rank-gt {
+  margin: 0 2px;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.jungle-rank-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55em;
+  height: 1.55em;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--panel-soft) 80%, transparent);
+  font-size: 15px;
+  line-height: 1;
 }
 
 .move-panel h3,

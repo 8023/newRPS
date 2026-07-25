@@ -45,6 +45,10 @@ type LobbyPlayer struct {
 	ExtremeRenameProtectedUntil *int64 `json:"extremeRenameProtectedUntil,omitempty"`
 	ExtremeRenamedByName        string `json:"extremeRenamedByName,omitempty"`
 
+	BondMasterEnabled *bool `json:"bondMasterEnabled,omitempty"`
+	BondPetEnabled    *bool `json:"bondPetEnabled,omitempty"`
+	BondPublicDisplay *bool `json:"bondPublicDisplay,omitempty"`
+
 	RoomID    string     `json:"roomId,omitempty"`
 	Stats     LobbyStats `json:"stats"`
 	GameStats GameStats  `json:"gameStats"`
@@ -105,6 +109,9 @@ func ToLobbyPlayer(p PublicPlayer) LobbyPlayer {
 		ExtremeForceClosedAt:         p.ExtremeForceClosedAt,
 		ExtremeRenameProtectedUntil:  p.ExtremeRenameProtectedUntil,
 		ExtremeRenamedByName:         p.ExtremeRenamedByName,
+		BondMasterEnabled:            p.BondMasterEnabled,
+		BondPetEnabled:               p.BondPetEnabled,
+		BondPublicDisplay:            p.BondPublicDisplay,
 		RoomID:                       p.RoomID,
 		Stats: LobbyStats{
 			Wins: p.Stats.Wins, Losses: p.Stats.Losses, Draws: p.Stats.Draws,
@@ -136,7 +143,9 @@ func (p LobbyPlayer) AsPublicPlayer() PublicPlayer {
 		RankMultiplierUnlocked: p.RankMultiplierUnlocked, ExtremeModeEnabled: p.ExtremeModeEnabled,
 		ExtremeWinStreak: p.ExtremeWinStreak, ExtremeForceClosed: p.ExtremeForceClosed,
 		ExtremeForceClosedAt: p.ExtremeForceClosedAt, ExtremeRenameProtectedUntil: p.ExtremeRenameProtectedUntil,
-		ExtremeRenamedByName: p.ExtremeRenamedByName, RoomID: p.RoomID,
+		ExtremeRenamedByName: p.ExtremeRenamedByName,
+		BondMasterEnabled: p.BondMasterEnabled, BondPetEnabled: p.BondPetEnabled, BondPublicDisplay: p.BondPublicDisplay,
+		RoomID: p.RoomID,
 		Stats: PublicStats{
 			Wins: p.Stats.Wins, Losses: p.Stats.Losses, Draws: p.Stats.Draws,
 			Punishments: p.Stats.Punishments, RankedPoints: p.Stats.RankedPoints, Title: p.Stats.Title,

@@ -93,9 +93,11 @@ type PlayerState struct {
 	PlayerID  string // long-term identity (not public)
 	// PlayerSecrets：一台设备一条，明文存储（认领/迁移方案已确认不哈希）。
 	// 最多 maxPlayerSecrets 条，超出后挤掉最早的一条（见 addPlayerSecret）。
+	// 服务端新签发用 randomPlayerSecret（16 字节）；前端注册可用 UUID；旧短 secret 仍有效。
 	PlayerSecrets []string
-	// ClaimKey：认领密钥，明文、单值、一次性——用于把身份"分享"给另一台设备。
-	// 认领成功后立即轮换；也可以在个人资料页手动刷新作废旧值。
+	// ClaimKey：认领密钥，明文、单值、一次性（randomClaimKey，12 字节 base64url）——
+	// 用于把身份"分享"给另一台设备。认领成功后立即轮换；也可手动刷新作废旧值。
+	// 库内 playerId 仍为 UUID；前端展示认领码时把 id 压成 base64url。
 	ClaimKey string
 	// ActiveSecret：当前这条活跃 socket 是用 PlayerSecrets 里哪一条验证通过的——
 	// 挤人时要避开它，不能把正在用的这条自己挤掉自己。
@@ -192,6 +194,7 @@ type RoomState struct {
 	TicTacToe       *types.TicTacToeState
 	LiarsDice       *types.LiarsDiceState
 	Gomoku          *types.GomokuState
+	Jungle          *types.JungleState
 	// LiarsDiceHands：私有骰子，playerId -> 点数列表；绝不进 roomSnapshot/广播，
 	// 只通过 emitToClient 单播给玩家自己（保密性来自"只发给这一个 socket"，不需要加密）。
 	LiarsDiceHands              map[string][]int
@@ -283,6 +286,7 @@ type Server struct {
 	gomokuUndoTimers        map[string]*time.Timer
 	othelloClockTimers      map[string]*time.Timer
 	gomokuClockTimers       map[string]*time.Timer
+	jungleClockTimers       map[string]*time.Timer
 
 	// deviceCreateAttempts：按 deviceKey 记录 10 分钟内新建玩家时间戳
 	deviceCreateAttempts map[string][]int64
@@ -298,6 +302,10 @@ type Server struct {
 	// pushDB：Web Push 订阅存储；vapid：VAPID 密钥对（work/vapid.json 或环境变量）
 	pushDB   *pushStore
 	playerDB *playerStore
+	// petBondDB / petBonds / petBondRequests：认主关系与待办申请（内存权威 + SQLite 写穿）
+	petBondDB       *petBondStore
+	petBonds        map[string]*petBond        // bondKey(master,pet) -> bond
+	petBondRequests map[string]*petBondRequest // id -> pending request
 	// activityDB：玩家审计事件（改名/模式开关）+ 连接生命周期事件的 SQLite 持久化存储，
 	// system/error 两张活动日志表不在此列，仍走 work/logs/*.csv（见 activitylog.go）
 	activityDB     *activityStore

@@ -84,13 +84,6 @@ func gomokuWinningLine(board [][]*types.GomokuCell, row, col int) []types.Pos {
 	return nil
 }
 
-func (s *Server) gomokuTurnPlayer(room *RoomState) *PlayerState {
-	if room.Gomoku == nil {
-		return nil
-	}
-	return s.humanPlayerFromSeat(room, room.Gomoku.Turn)
-}
-
 func (s *Server) clearGomokuUndoTimer(roomID string) {
 	if t := s.gomokuUndoTimers[roomID]; t != nil {
 		t.Stop()
@@ -260,15 +253,6 @@ func (s *Server) scheduleGomokuReadyStart(room *RoomState) {
 		s.roomNotice(current, fmt.Sprintf("随机完成：%s 执黑先手。", occupantName(current.Seats[blackSeat])))
 		s.broadcastRoom(current.ID, true)
 	})
-}
-
-func gomokuRankedText(state *types.GomokuState) string {
-	if state == nil || state.RankedDelta == nil {
-		return ""
-	}
-	blackDelta := state.RankedDelta[state.BlackSeat]
-	whiteDelta := state.RankedDelta[oppositeSeat(state.BlackSeat)]
-	return fmt.Sprintf("黑 %s，白 %s", formatSigned(blackDelta), formatSigned(whiteDelta))
 }
 
 // finishGomokuGame 结束对局；note 非空时会作为「（认输）」这类后缀追加到结果文案与历史记录。

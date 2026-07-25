@@ -55,5 +55,5 @@ func openDatabase(dataDir string) (*sql.DB, error) {
 // 顺序无关紧要——彼此互不引用。始终反映"当前代码期望的最新结构"；已有数据库从旧结构
 // 升到这个结构靠 schema_migrations.go 里的 migrations，不靠改这里的 DDL 文本本身。
 var allSchemas = []string{
-	chatSchema, roomEventSchema, roomEventLogSchema, punishmentEventSchema, pushSubscriptionSchema, playerSchema, activityEventSchema,
+	chatSchema, roomEventSchema, roomEventLogSchema, punishmentEventSchema, pushSubscriptionSchema, playerSchema, activityEventSchema, petBondSchema,
 }

@@ -5,7 +5,7 @@
 //
 //	site.json, announcement-board.json, security-disclaimer.json, genders.json, gender-factions.json,
 //	titles.json, punishments.json, player-punishment-room-name-pool.json, room-tags.json,
-//	room-info-tags.json, access-control.json, name-war.json, giveaway.json,
+//	room-info-tags.json, access-control.json, name-war.json, giveaway.json, pet-bond.json,
 //	extreme-mode.json, ranked-score.json, games.json, messages.json
 package config
 
@@ -39,6 +39,7 @@ var splitConfigFiles = []string{
 	"access-control.json",
 	"name-war.json",
 	"giveaway.json",
+	"pet-bond.json",
 	"extreme-mode.json",
 	"ranked-score.json",
 	"games.json",
@@ -327,7 +328,10 @@ func normalizeConfig(input types.AppConfig) types.AppConfig {
 
 	games := make([]types.GameConfig, 0, len(input.Games))
 	for _, g := range input.Games {
-		if g.ID != "rps" && g.ID != "othello" && g.ID != "tictactoe" && g.ID != "liarsdice" && g.ID != "gomoku" {
+		// 与 types.GameID / 建房列表白名单保持一致；漏写会导致 config.games 静默丢掉该玩法。
+		switch g.ID {
+		case "rps", "othello", "tictactoe", "liarsdice", "gomoku", "jungle":
+		default:
 			continue
 		}
 		g.Name = sliceRunes(g.Name, 18)
@@ -395,6 +399,22 @@ func normalizeConfig(input types.AppConfig) types.AppConfig {
 	out.Giveaway.PanelDescription = sliceRunes(input.Giveaway.PanelDescription, 160)
 	out.Giveaway.SubmitPlaceholder = sliceRunes(input.Giveaway.SubmitPlaceholder, 60)
 	out.Giveaway.EmptyText = sliceRunes(input.Giveaway.EmptyText, 60)
+	out.PetBond.PanelTitle = sliceRunes(input.PetBond.PanelTitle, 24)
+	if out.PetBond.PanelTitle == "" {
+		out.PetBond.PanelTitle = "宠物乐园"
+	}
+	if out.PetBond.MaxPetsPerMaster < 1 {
+		out.PetBond.MaxPetsPerMaster = 3
+	}
+	if out.PetBond.MaxMastersPerPet < 1 {
+		out.PetBond.MaxMastersPerPet = 3
+	}
+	if out.PetBond.MaxTitleLength < 1 {
+		out.PetBond.MaxTitleLength = 12
+	}
+	if out.PetBond.MaxTitleLength > 24 {
+		out.PetBond.MaxTitleLength = 24
+	}
 	// AccessControl：0 表示非法，留给 Validate 报错，不做静默默认
 	return out
 }
@@ -623,6 +643,18 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 	}
 	if input.Giveaway.DislikeVoteValue <= 0 || input.Giveaway.DislikeVoteValue > 100 {
 		return input, fmt.Errorf("倒赞增加值必须在 0（不含）到 100 之间")
+	}
+	if strings.TrimSpace(input.PetBond.PanelTitle) == "" {
+		return input, fmt.Errorf("宠物乐园面板标题不能为空")
+	}
+	if input.PetBond.MaxPetsPerMaster < 1 || input.PetBond.MaxPetsPerMaster > 20 {
+		return input, fmt.Errorf("每名主人最多宠物数须在 1～20")
+	}
+	if input.PetBond.MaxMastersPerPet < 1 || input.PetBond.MaxMastersPerPet > 20 {
+		return input, fmt.Errorf("每名宠物最多主人数须在 1～20")
+	}
+	if input.PetBond.MaxTitleLength < 1 || input.PetBond.MaxTitleLength > 24 {
+		return input, fmt.Errorf("宠物称号长度上限须在 1～24")
 	}
 	if strings.TrimSpace(input.ExtremeMode.Label) == "" {
 		return input, fmt.Errorf("极限模式名称不能为空")
@@ -921,6 +953,7 @@ func readSplitConfig() (types.AppConfig, error) {
 		{"access-control.json", &cfg.AccessControl},
 		{"name-war.json", &cfg.NameWar},
 		{"giveaway.json", &cfg.Giveaway},
+		{"pet-bond.json", &cfg.PetBond},
 		{"extreme-mode.json", &cfg.ExtremeMode},
 		{"ranked-score.json", &cfg.RankedScore},
 		{"games.json", &cfg.Games},
@@ -957,6 +990,7 @@ func writeSplitConfig(cfg types.AppConfig) error {
 		{"access-control.json", cfg.AccessControl},
 		{"name-war.json", cfg.NameWar},
 		{"giveaway.json", cfg.Giveaway},
+		{"pet-bond.json", cfg.PetBond},
 		{"extreme-mode.json", cfg.ExtremeMode},
 		{"ranked-score.json", cfg.RankedScore},
 		{"games.json", cfg.Games},

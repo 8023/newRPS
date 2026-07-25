@@ -150,15 +150,6 @@ func (s *Server) scheduleTicTacToeReadyStart(room *RoomState) {
 	})
 }
 
-func tictactoeRankedText(state *types.TicTacToeState) string {
-	if state == nil || state.RankedDelta == nil {
-		return ""
-	}
-	xDelta := state.RankedDelta[state.XSeat]
-	oDelta := state.RankedDelta[oppositeSeat(state.XSeat)]
-	return fmt.Sprintf("X %s，O %s", formatSigned(xDelta), formatSigned(oDelta))
-}
-
 // finishTicTacToeGame 结束对局；note 非空时会作为「（认输）」这类后缀追加到结果文案与历史记录。
 func (s *Server) finishTicTacToeGame(room *RoomState, result types.RoundResult, winningLine []types.Pos, note string) {
 	if room.TicTacToe == nil {

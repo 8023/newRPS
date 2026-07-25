@@ -165,9 +165,8 @@ func (s *Server) buildAdminPlayerList(q adminPlayerListQuery) adminPlayerListRes
 }
 
 func (s *Server) onAdminListPlayers(client *Client, env wsEnvelope) {
-	admin := s.getPlayerByClient(client)
 	_, isAdminSocket := s.adminClientIDs[client.id]
-	if (admin == nil || !ptrBool(admin.IsAdmin)) && !isAdminSocket {
+	if !isAdminSocket {
 		client.reply(env.ID, nil, "需要管理员权限")
 		return
 	}

@@ -117,6 +117,7 @@ func New() (*Server, error) {
 		gomokuUndoTimers:        map[string]*time.Timer{},
 		othelloClockTimers:      map[string]*time.Timer{},
 		gomokuClockTimers:       map[string]*time.Timer{},
+		jungleClockTimers:       map[string]*time.Timer{},
 		deviceCreateAttempts:    map[string][]int64{},
 		ipCreateAttempts:        map[string][]int64{},
 		adminClientIDs:          map[string]struct{}{},
@@ -156,7 +157,10 @@ func New() (*Server, error) {
 		s.pushDB = newPushStore(db)
 		s.playerDB = newPlayerStore(db)
 		s.activityDB = newActivityStore(db)
+		s.petBondDB = newPetBondStore(db)
 	}
+	s.petBonds = map[string]*petBond{}
+	s.petBondRequests = map[string]*petBondRequest{}
 	// VAPID 密钥：失败不阻断启动，Web Push 功能会静默不可用（sendPush 会因 vapid.PublicKey=="" 直接跳过）。
 	if keys, err := loadOrGenerateVAPIDKeys(root); err != nil {
 		s.errorLog("vapid_keys_failed", err.Error())
@@ -170,6 +174,7 @@ func New() (*Server, error) {
 // Run starts HTTP server and blocks until shutdown.
 func (s *Server) Run() error {
 	s.loadPlayersFromDisk()
+	s.loadPetBondsFromDisk()
 	s.scheduleExtremeHourlyDecay()
 	s.scheduleRankedDailyDecay()
 	go s.runActivityLogConsumer()

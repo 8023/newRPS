@@ -233,6 +233,23 @@ func sanitizeLiarsDice(state *types.LiarsDiceState) *types.LiarsDiceState {
 	return &out
 }
 
+func sanitizeJungle(state *types.JungleState) *types.JungleState {
+	if state == nil {
+		return nil
+	}
+	out := *state
+	if out.RankedDelta == nil {
+		out.RankedDelta = map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}
+	}
+	if out.Board == nil {
+		out.Board = make([][]*types.JungleCell, jungleRows)
+		for i := range out.Board {
+			out.Board[i] = make([]*types.JungleCell, jungleCols)
+		}
+	}
+	return &out
+}
+
 func sanitizeRoomSnapshot(snap types.RoomSnapshot) types.RoomSnapshot {
 	snap.Settings = sanitizeRoomSettings(snap.Settings)
 	snap.Spectators = emptyPlayers(snap.Spectators)
@@ -263,6 +280,7 @@ func sanitizeRoomSnapshot(snap types.RoomSnapshot) types.RoomSnapshot {
 	snap.TicTacToe = sanitizeTicTacToe(snap.TicTacToe)
 	snap.LiarsDice = sanitizeLiarsDice(snap.LiarsDice)
 	snap.Gomoku = sanitizeGomoku(snap.Gomoku)
+	snap.Jungle = sanitizeJungle(snap.Jungle)
 	return snap
 }
 
@@ -292,6 +310,9 @@ func sanitizeLobbySnapshot(snap types.LobbySnapshot) types.LobbySnapshot {
 	snap.RankedLeaderboard = emptyLobbyPlayers(snap.RankedLeaderboard)
 	snap.Suggestions = emptySuggestions(snap.Suggestions)
 	snap.LobbyChat = emptyChat(snap.LobbyChat)
+	if snap.PetBonds == nil {
+		snap.PetBonds = []types.PetBondEdge{}
+	}
 	return snap
 }
 

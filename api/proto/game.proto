@@ -88,6 +88,7 @@ message GameStats {
   GameWLD tictactoe = 3;
   GameWLD gomoku = 4;
   GameWLD liarsdice = 5;
+  GameWLD jungle = 6;
 }
 
 // 完整玩家（房间 / me / player:get）
@@ -149,6 +150,11 @@ message PublicPlayer {
   bool is_admin = 82;
   PublicStats stats = 84;
   GameStats game_stats = 85;
+
+  // 认主/认宠玩法偏好
+  bool bond_master_enabled = 87;
+  bool bond_pet_enabled = 88;
+  bool bond_public_display = 89;
 }
 
 // 大厅精简玩家
@@ -196,6 +202,10 @@ message LobbyPlayer {
   LobbyStats stats = 49;
   GameStats game_stats = 50;
   string avatar_url = 51;
+
+  bool bond_master_enabled = 55;
+  bool bond_pet_enabled = 56;
+  bool bond_public_display = 57;
 }
 
 message SeatOccupant {
@@ -264,6 +274,9 @@ message RoomSettings {
   int32 othello_game_minutes = 29;
   int32 gomoku_move_seconds = 30;
   int32 gomoku_game_minutes = 31;
+  string jungle_board_theme = 32;
+  int32 jungle_move_seconds = 33;
+  int32 jungle_game_minutes = 34;
 }
 
 message GomokuUndoRequest {
@@ -295,6 +308,27 @@ message GomokuState {
   int64 move_deadline_at = 13;
   int64 clock_deadline_at = 14;
   repeated IntPair clock_remaining = 15;
+}
+
+message JungleResignRequest {
+  string from_seat = 1;
+  string to_seat = 2;
+  int64 created_at = 3;
+}
+
+message JungleState {
+  repeated BoardRow board = 1;
+  string turn = 2;
+  int32 move_count = 3;
+  Pos last_from = 4;
+  Pos last_to = 5;
+  repeated IntPair ranked_delta = 6;
+  JungleResignRequest resign_request = 7;
+  bool ended = 8;
+  string winner = 9;
+  int64 move_deadline_at = 10;
+  int64 clock_deadline_at = 11;
+  repeated IntPair clock_remaining = 12;
 }
 
 message PunishmentProof {
@@ -524,6 +558,7 @@ message RoomSnapshot {
   TicTacToeState tictactoe = 13;
   LiarsDiceState liars_dice = 23;
   GomokuState gomoku = 24;
+  JungleState jungle = 27;
   string result_text = 14;
   repeated string punished_player_ids = 15;
   repeated PunishmentProof proofs = 16;
@@ -592,6 +627,8 @@ message LobbyRoomInfo {
   int32 gomoku_move_seconds = 28;
   int32 gomoku_game_minutes = 29;
   int32 gomoku_undo_limit = 30;
+  int32 jungle_move_seconds = 31;
+  int32 jungle_game_minutes = 32;
 }
 
 message LobbyPlayerEntry {
@@ -604,6 +641,13 @@ message LobbyRoomEntry {
   LobbyRoomInfo room = 2;
 }
 
+// 大厅公开展示的一条主人→宠物边
+message PetBondEdge {
+  string master_id = 1;
+  string pet_id = 2;
+  string pet_title = 3;
+}
+
 message LobbySnapshot {
   AppConfig config = 1;
   int32 online_count = 2;
@@ -614,6 +658,7 @@ message LobbySnapshot {
   repeated Suggestion suggestions = 7;
   repeated ChatMessage lobby_chat = 8;
   ServerStats server_stats = 9;
+  repeated PetBondEdge pet_bonds = 10;
 }
 
 // ── 配置 ──────────────────────────────────────────────
@@ -759,6 +804,13 @@ message GiveawayConfig {
   double dislike_vote_value = 10;
 }
 
+message PetBondConfig {
+  string panel_title = 1;
+  int32 max_pets_per_master = 2;
+  int32 max_masters_per_pet = 3;
+  int32 max_title_length = 4;
+}
+
 message AppConfig {
   SiteConfig site = 1;
   AnnouncementBoard announcement_board = 2;
@@ -779,6 +831,7 @@ message AppConfig {
   repeated StringPair messages = 16;
   SecurityDisclaimerConfig security_disclaimer = 17;
   RankedScoreConfig ranked_score = 18;
+  PetBondConfig pet_bond = 19;
 }
 
 message RankedScoreConfig {

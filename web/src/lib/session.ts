@@ -145,16 +145,68 @@ export function clearPlayerIdentity() {
   localStorage.removeItem(playerSecretKey);
 }
 
-/** 认领密钥（展示/分享用）编码成一个字符串：playerId 和 claimKey 都是 URL-safe 字符集，用 "." 拼接不会冲突。 */
-export function encodeClaimCode(playerId: string, claimKey: string) {
-  return `${playerId}.${claimKey}`;
+/** 标准 UUID 字符串（库内 / localStorage / identity:claim 使用的 playerId 形态）。 */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function looksLikeUuid(value: string): boolean {
+  return UUID_RE.test(value);
 }
 
+/**
+ * 把 UUID 压成 16 字节的 base64url（22 字符，无 padding），仅用于认领码展示。
+ * 库内与 API 仍使用 UUID；转换可逆。
+ */
+export function uuidToClaimIdPart(uuid: string): string {
+  const hex = uuid.replace(/-/g, "");
+  if (hex.length !== 32 || !/^[0-9a-f]+$/i.test(hex)) return uuid;
+  const bytes = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+/** 认领码左侧 base64url → UUID；失败返回 null。 */
+export function claimIdPartToUuid(part: string): string | null {
+  if (looksLikeUuid(part)) return part.toLowerCase();
+  try {
+    const padded = part.replace(/-/g, "+").replace(/_/g, "/");
+    const padLen = (4 - (padded.length % 4)) % 4;
+    const bin = atob(padded + "=".repeat(padLen));
+    if (bin.length !== 16) return null;
+    const hex = Array.from(bin, (c) => c.charCodeAt(0).toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 认领码（展示/分享用）：`base64url(playerId 的 16 字节).claimKey`。
+ * 服务端下发的仍是 UUID + 明文 claimKey；编码只发生在前端展示层。
+ * 旧码 `uuid.claimKey` 仍可由 decodeClaimCode 解析。
+ */
+export function encodeClaimCode(playerId: string, claimKey: string) {
+  const idPart = looksLikeUuid(playerId) ? uuidToClaimIdPart(playerId) : playerId;
+  return `${idPart}.${claimKey}`;
+}
+
+/**
+ * 解析认领码 → 服务端 identity:claim 所需的 UUID playerId + claimKey。
+ * 支持新格式（base64url.id）与旧格式（完整 UUID）。
+ */
 export function decodeClaimCode(code: string): { playerId: string; claimKey: string } | null {
   const trimmed = code.trim();
   const idx = trimmed.lastIndexOf(".");
   if (idx <= 0 || idx === trimmed.length - 1) return null;
-  return { playerId: trimmed.slice(0, idx), claimKey: trimmed.slice(idx + 1) };
+  const rawId = trimmed.slice(0, idx);
+  const claimKey = trimmed.slice(idx + 1);
+  if (!claimKey) return null;
+  const playerId = claimIdPartToUuid(rawId);
+  if (!playerId) return null;
+  return { playerId, claimKey };
 }
 
 export async function fetchClaimKey(): Promise<{ playerId: string; claimKey: string }> {

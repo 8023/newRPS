@@ -13,6 +13,7 @@ const (
 	defaultOthelloRoomName   = "新的黑白棋房间"
 	defaultTicTacToeRoomName = "新的井字棋房间"
 	defaultGomokuRoomName    = "新的五子棋房间"
+	defaultJungleRoomName    = "新的斗兽棋房间"
 )
 
 // activeRoomsOwnedBy 统计某玩家当前存活（未关闭，s.rooms 里还在）的房间数，
@@ -179,6 +180,7 @@ func (s *Server) roomSnapshot(room *RoomState, includeChat, includeHistory bool)
 		TicTacToe:         room.TicTacToe,
 		LiarsDice:         room.LiarsDice,
 		Gomoku:            room.Gomoku,
+		Jungle:            room.Jungle,
 		ResultText:        room.ResultText,
 		PunishedPlayerIDs: room.PunishedPlayerIDs,
 		Proofs:            room.Proofs,
@@ -380,6 +382,9 @@ func (s *Server) generatedRoomName(settings types.RoomSettings) string {
 	if settings.GameID == types.GameGomoku && !settings.EnablePunishment {
 		return s.uniqueRoomName(defaultGomokuRoomName)
 	}
+	if settings.GameID == types.GameJungle && !settings.EnablePunishment {
+		return s.uniqueRoomName(defaultJungleRoomName)
+	}
 	pool := s.roomNamePoolForSettings(settings)
 	if pool == nil {
 		if strings.TrimSpace(settings.Name) != "" {
@@ -407,7 +412,7 @@ func (s *Server) normalizeRoomName(settings types.RoomSettings) string {
 	if len(runes) > 24 {
 		cleanName = string(runes[:24])
 	}
-	if cleanName == "" || cleanName == defaultRoomName || cleanName == defaultOthelloRoomName || cleanName == defaultTicTacToeRoomName || cleanName == defaultGomokuRoomName {
+	if cleanName == "" || cleanName == defaultRoomName || cleanName == defaultOthelloRoomName || cleanName == defaultTicTacToeRoomName || cleanName == defaultGomokuRoomName || cleanName == defaultJungleRoomName {
 		return s.generatedRoomName(settings)
 	}
 	return cleanName
@@ -461,9 +466,20 @@ func (s *Server) canLeaveRoom(player *PlayerState, reason LeaveReason) LeaveResu
 			return LeaveResult{OK: false, Error: "五子棋对局进行中不能离开战斗席，请等待对局结束"}
 		}
 	}
+	if room.Settings.GameID == types.GameJungle && room.Phase == types.PhaseChoosing {
+		if _, ok := s.seatOf(room, player.ID); ok && isProtected {
+			return LeaveResult{OK: false, Error: "斗兽棋对局进行中不能离开战斗席，请等待对局结束"}
+		}
+	}
 	if room.Settings.GameID == types.GameLiarsDice && room.Phase == types.PhaseChoosing {
 		if room.LiarsDice != nil && containsString(room.LiarsDice.ParticipantIDs, player.ID) && isProtected {
 			return LeaveResult{OK: false, Error: "大话骰对局进行中不能离开参战席，请等待对局结束"}
+		}
+	}
+	// RPS 出拳阶段禁止手动离席/换房/观战：否则会留下对手已出拳，新人入座被秒结算或卡死。
+	if (room.Settings.GameID == types.GameRPS || room.Settings.GameID == "") && room.Phase == types.PhaseChoosing {
+		if _, ok := s.seatOf(room, player.ID); ok && isProtected {
+			return LeaveResult{OK: false, Error: "出拳进行中不能离开战斗席，请等待本局结算或断线超时"}
 		}
 	}
 	if room.Phase != types.PhasePunishment {
@@ -493,6 +509,15 @@ func (s *Server) clearSeatForPlayer(room *RoomState, seat types.SeatKey) {
 			room.ForgiveAdvantage = nil
 		}
 	}
+	// RPS 出拳中有人离席（断线超时/踢人等）：整桌收回出拳与 forfeit，回到 waiting，避免陈年 Choices。
+	if (room.Settings.GameID == types.GameRPS || room.Settings.GameID == "") && room.Phase == types.PhaseChoosing {
+		room.Phase = types.PhaseReady
+		room.Status = "waiting"
+		room.Choices = map[types.SeatKey]types.Move{}
+		room.RevealedChoices = nil
+		room.DisconnectForfeits = map[string]DisconnectForfeit{}
+		room.ResultText = ""
+	}
 	if room.Settings.GameID == types.GameOthello && room.Phase != types.PhaseResult && room.Phase != types.PhaseChoosing {
 		s.resetOthelloRoom(room)
 	}
@@ -501,6 +526,9 @@ func (s *Server) clearSeatForPlayer(room *RoomState, seat types.SeatKey) {
 	}
 	if room.Settings.GameID == types.GameGomoku && room.Phase != types.PhaseResult && room.Phase != types.PhaseChoosing {
 		s.resetGomokuRoom(room)
+	}
+	if room.Settings.GameID == types.GameJungle && room.Phase != types.PhaseResult && room.Phase != types.PhaseChoosing {
+		s.resetJungleRoom(room)
 	}
 }
 
@@ -527,11 +555,13 @@ func (s *Server) leaveRoom(player *PlayerState, reason LeaveReason) LeaveResult 
 	if reason == LeaveAdminKick {
 		s.roomNotice(room, playerShortName(player)+" 被管理员移出房间。")
 	}
-	if reason == LeaveAdminKick && (room.Settings.GameID == types.GameOthello || room.Settings.GameID == types.GameTicTacToe || room.Settings.GameID == types.GameGomoku) &&
-		room.Phase == types.PhaseChoosing {
-		if _, ok := s.seatOf(room, player.ID); ok {
-			s.createDisconnectForfeit(room, player)
-			s.applyDisconnectForfeit(room, player)
+	if reason == LeaveAdminKick && room.Phase == types.PhaseChoosing {
+		if room.Settings.GameID == types.GameOthello || room.Settings.GameID == types.GameTicTacToe || room.Settings.GameID == types.GameGomoku ||
+			room.Settings.GameID == types.GameJungle || room.Settings.GameID == types.GameRPS || room.Settings.GameID == "" {
+			if _, ok := s.seatOf(room, player.ID); ok {
+				s.createDisconnectForfeit(room, player)
+				s.applyDisconnectForfeit(room, player)
+			}
 		}
 	}
 	if reason == LeaveAdminKick && room.Settings.GameID == types.GameLiarsDice && room.Phase == types.PhaseChoosing {
@@ -597,6 +627,9 @@ func (s *Server) createDisconnectForfeit(room *RoomState, player *PlayerState) {
 		return
 	}
 	if room.Settings.GameID == types.GameGomoku && room.Gomoku == nil {
+		return
+	}
+	if room.Settings.GameID == types.GameJungle && room.Jungle == nil {
 		return
 	}
 	loserSeat, ok := s.seatOf(room, player.ID)

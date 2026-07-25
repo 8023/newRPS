@@ -7,6 +7,7 @@ export const defaultOthelloRoomName = "新的黑白棋房间";
 export const defaultTicTacToeRoomName = "新的井字棋房间";
 export const defaultLiarsDiceRoomName = "新的大话骰房间";
 export const defaultGomokuRoomName = "新的五子棋房间";
+export const defaultJungleRoomName = "新的斗兽棋房间";
 export const maxOriginalImageBytes = 10 * 1024 * 1024;
 export const maxProofUploadBytes = 2 * 1024 * 1024;
 export const maxProofPixels = 4_000_000;
@@ -35,9 +36,18 @@ export type TicTacToeBoardThemeId = typeof tictactoeBoardThemes[number]["id"];
 /** 五子棋与黑白棋共用同一套棋盘/棋子配色主题 */
 export const gomokuBoardThemes = othelloBoardThemes;
 export type GomokuBoardThemeId = typeof gomokuBoardThemes[number]["id"];
-/** 黑白棋/五子棋建房「每子时长」下拉选项（秒），0 = 不限时 */
+/** 斗兽棋棋盘主题：草地/水域/陷阱/兽穴/棋子色 */
+export const jungleBoardThemes = [
+  { id: "forest", name: "密林绿", description: "经典草地，清晰好认。", board: "#3d7a4a", land: "#4e9a5e", water: "#3a7eb8", trap: "#c4a35a", den: "#6b3f2a", border: "#2f5c3a", aPiece: "#f0f4f8", bPiece: "#1a1f2a", aText: "#1a2a1f", bText: "#f0f4f8", hover: "rgba(255,255,255,0.18)" },
+  { id: "bamboo", name: "竹影青", description: "清爽竹林感。", board: "#5a9a6e", land: "#7bb88a", water: "#4a90b8", trap: "#d4b86a", den: "#7a5030", border: "#3d6b4a", aPiece: "#fffaf0", bPiece: "#243028", aText: "#243028", bText: "#fffaf0", hover: "rgba(255,255,255,0.2)" },
+  { id: "river", name: "溪畔蓝", description: "偏冷色，夜晚也舒服。", board: "#2d5a6e", land: "#3d7a8e", water: "#1e6a9a", trap: "#b89a5a", den: "#5a3828", border: "#4a90a8", aPiece: "#eef6ff", bPiece: "#121820", aText: "#1a3040", bText: "#eef6ff", hover: "rgba(180,220,255,0.18)" },
+  { id: "dusk", name: "暮色橙", description: "温暖桌游感。", board: "#8a5a3a", land: "#a87848", water: "#3a7090", trap: "#d4a050", den: "#5a3020", border: "#6a4028", aPiece: "#fff6e8", bPiece: "#1c1410", aText: "#3a2818", bText: "#fff6e8", hover: "rgba(255,220,160,0.16)" },
+  { id: "night", name: "夜林紫", description: "暗色棋盘，不刺眼。", board: "#1e2438", land: "#2a3450", water: "#1a4068", trap: "#6a5838", den: "#3a2820", border: "#6b8dd6", aPiece: "#e8f0ff", bPiece: "#0a0e16", aText: "#1a2438", bText: "#e8f0ff", hover: "rgba(140,170,255,0.16)" }
+] as const;
+export type JungleBoardThemeId = typeof jungleBoardThemes[number]["id"];
+/** 黑白棋/五子棋/斗兽棋建房「每子时长」下拉选项（秒），0 = 不限时 */
 export const moveSecondsOptions = [0, 30, 45, 60, 90, 120, 180] as const;
-/** 黑白棋/五子棋建房「每局时长」下拉选项（分钟），0 = 不限时 */
+/** 黑白棋/五子棋/斗兽棋建房「每局时长」下拉选项（分钟），0 = 不限时 */
 export const gameMinutesOptions = [0, 5, 10, 15, 20, 30, 45, 60] as const;
 
 export const doumiaoLinks = [

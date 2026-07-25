@@ -37,6 +37,9 @@ export function playerSyncKey(player: PublicPlayer) {
     player.gameStats?.liarsdice?.wins || 0,
     player.gameStats?.liarsdice?.losses || 0,
     player.gameStats?.liarsdice?.draws || 0,
+    player.gameStats?.jungle?.wins || 0,
+    player.gameStats?.jungle?.losses || 0,
+    player.gameStats?.jungle?.draws || 0,
     player.nameWarEnabled ? "1" : "0",
     player.nameWarPunished ? "1" : "0",
     player.nameWarPenaltyName || "",
@@ -67,7 +70,10 @@ export function playerSyncKey(player: PublicPlayer) {
     player.extremeForceClosedAt || 0,
     player.extremeRenameProtectedUntil || 0,
     player.extremeRenamedBy || "",
-    player.extremeRenamedByName || ""
+    player.extremeRenamedByName || "",
+    player.bondMasterEnabled ? "1" : "0",
+    player.bondPetEnabled ? "1" : "0",
+    player.bondPublicDisplay ? "1" : "0"
   ].join("|");
 }
 
@@ -123,13 +129,14 @@ export function normalizeGameStats(stats: PublicPlayer["gameStats"] | null | und
     othello: normalizeGameWLD(s.othello),
     tictactoe: normalizeGameWLD(s.tictactoe),
     gomoku: normalizeGameWLD(s.gomoku),
-    liarsdice: normalizeGameWLD(s.liarsdice)
+    liarsdice: normalizeGameWLD(s.liarsdice),
+    jungle: normalizeGameWLD(s.jungle)
   };
 }
 
 export function totalFromGameStats(gs: PublicPlayer["gameStats"] | null | undefined) {
   const g = normalizeGameStats(gs);
-  const parts = [g.rps, g.othello, g.tictactoe, g.gomoku, g.liarsdice];
+  const parts = [g.rps, g.othello, g.tictactoe, g.gomoku, g.liarsdice, g.jungle];
   return {
     wins: parts.reduce((n, p) => n + p.wins, 0),
     losses: parts.reduce((n, p) => n + p.losses, 0),
@@ -304,11 +311,15 @@ function fixPosList(list: Array<{ row?: number; col?: number }> | undefined | nu
 }
 
 function padBoard<T>(board: (T | null)[][] | undefined | null, n: number): (T | null)[][] {
+  return padBoardRect(board, n, n);
+}
+
+function padBoardRect<T>(board: (T | null)[][] | undefined | null, rows: number, cols: number): (T | null)[][] {
   const out: (T | null)[][] = [];
-  for (let r = 0; r < n; r++) {
+  for (let r = 0; r < rows; r++) {
     const src = board?.[r] || [];
     const row: (T | null)[] = [];
-    for (let c = 0; c < n; c++) row.push(c < src.length ? (src[c] ?? null) : null);
+    for (let c = 0; c < cols; c++) row.push(c < src.length ? (src[c] ?? null) : null);
     out.push(row);
   }
   return out;
@@ -359,6 +370,19 @@ export function normalizeGomoku(state: RoomSnapshot["gomoku"]): RoomSnapshot["go
   };
 }
 
+export function normalizeJungle(state: RoomSnapshot["jungle"]): RoomSnapshot["jungle"] {
+  if (!state) return state;
+  return {
+    ...state,
+    rankedDelta: state.rankedDelta || { A: 0, B: 0 },
+    moveCount: Number(state.moveCount) || 0,
+    board: padBoardRect(state.board, 9, 7),
+    moveDeadlineAt: Number(state.moveDeadlineAt) || 0,
+    clockDeadlineAt: Number(state.clockDeadlineAt) || 0,
+    clockRemaining: state.clockRemaining || { A: 0, B: 0 }
+  };
+}
+
 export function normalizeLiarsDice(state: RoomSnapshot["liarsDice"]): RoomSnapshot["liarsDice"] {
   if (!state) return state;
   return {
@@ -399,7 +423,8 @@ export function normalizeRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
     othello: normalizeOthello(room.othello),
     tictactoe: normalizeTicTacToe(room.tictactoe),
     liarsDice: normalizeLiarsDice(room.liarsDice),
-    gomoku: normalizeGomoku(room.gomoku)
+    gomoku: normalizeGomoku(room.gomoku),
+    jungle: normalizeJungle(room.jungle)
   };
 }
 
@@ -468,6 +493,22 @@ export function withGiveawayDefaults(g?: Partial<AppConfig["giveaway"]> | null):
   return base;
 }
 
+export const DEFAULT_PET_BOND: AppConfig["petBond"] = {
+  panelTitle: "宠物乐园",
+  maxPetsPerMaster: 3,
+  maxMastersPerPet: 3,
+  maxTitleLength: 12
+};
+
+export function withPetBondDefaults(p?: Partial<AppConfig["petBond"]> | null): AppConfig["petBond"] {
+  const base = { ...DEFAULT_PET_BOND, ...(p || {}) };
+  if (!(base.maxPetsPerMaster >= 1)) base.maxPetsPerMaster = DEFAULT_PET_BOND.maxPetsPerMaster;
+  if (!(base.maxMastersPerPet >= 1)) base.maxMastersPerPet = DEFAULT_PET_BOND.maxMastersPerPet;
+  if (!(base.maxTitleLength >= 1)) base.maxTitleLength = DEFAULT_PET_BOND.maxTitleLength;
+  if (!base.panelTitle?.trim()) base.panelTitle = DEFAULT_PET_BOND.panelTitle;
+  return base;
+}
+
 export function normalizeConfig(config: AppConfig): AppConfig {
   return {
     ...config,
@@ -502,6 +543,7 @@ export function normalizeConfig(config: AppConfig): AppConfig {
       penaltyThreshold: config.nameWar?.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD
     },
     giveaway: withGiveawayDefaults(config.giveaway),
+    petBond: withPetBondDefaults(config.petBond),
     games: config.games || [],
     messages: config.messages || {},
     // 与 extremeMode 同模式：整段对象 + 内部 map 缺省，保证业务代码可直接点字段。

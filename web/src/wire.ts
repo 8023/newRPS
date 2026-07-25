@@ -247,6 +247,14 @@ export function normalizeStateTree(doc: any): any {
     out.gomoku.moveDeadlineAt = numOr(out.gomoku.moveDeadlineAt, 0);
     out.gomoku.clockDeadlineAt = numOr(out.gomoku.clockDeadlineAt, 0);
   }
+  if (out.jungle && typeof out.jungle === "object") {
+    out.jungle.board = padBoardRect(boardRows(out.jungle.board), 9, 7);
+    out.jungle.moveCount = numOr(out.jungle.moveCount, 0);
+    out.jungle.moveDeadlineAt = numOr(out.jungle.moveDeadlineAt, 0);
+    out.jungle.clockDeadlineAt = numOr(out.jungle.clockDeadlineAt, 0);
+    if (out.jungle.lastFrom) out.jungle.lastFrom = { row: numOr(out.jungle.lastFrom.row, 0), col: numOr(out.jungle.lastFrom.col, 0) };
+    if (out.jungle.lastTo) out.jungle.lastTo = { row: numOr(out.jungle.lastTo.row, 0), col: numOr(out.jungle.lastTo.col, 0) };
+  }
   // protobufjs defaults:false 会丢掉数值零值；这些字段会在广播窗口清空时回落到 0，
   // 若不补齐，管理面板会在 DELTA 把 key 整个删掉后显示 undefined/NaN。
   if (out.serverStats && typeof out.serverStats === "object") {
@@ -288,7 +296,8 @@ export function normalizeStateTree(doc: any): any {
 const PLAYER_BOOL_FIELDS = [
   "nameWarEnabled", "nameWarPunished", "nameWarAllowRename",
   "giveawayEnabled", "rankMultiplierUnlocked", "extremeModeEnabled",
-  "extremeForceClosed", "isAdmin"
+  "extremeForceClosed", "isAdmin",
+  "bondMasterEnabled", "bondPetEnabled", "bondPublicDisplay"
 ];
 const PLAYER_NUM_FIELDS = [
   "disconnectedAt", "disconnectExpiresAt", "profileUpdatedAt",
@@ -315,7 +324,9 @@ function fillRoomSettingsDefaults(settings: any): any {
     othelloMoveSeconds: numOr(settings.othelloMoveSeconds, 0),
     othelloGameMinutes: numOr(settings.othelloGameMinutes, 0),
     gomokuMoveSeconds: numOr(settings.gomokuMoveSeconds, 0),
-    gomokuGameMinutes: numOr(settings.gomokuGameMinutes, 0)
+    gomokuGameMinutes: numOr(settings.gomokuGameMinutes, 0),
+    jungleMoveSeconds: numOr(settings.jungleMoveSeconds, 0),
+    jungleGameMinutes: numOr(settings.jungleGameMinutes, 0)
   };
 }
 
@@ -387,7 +398,8 @@ function materializeGameStats(stats: any): any {
     othello: materializeGameWLD(s.othello),
     tictactoe: materializeGameWLD(s.tictactoe),
     gomoku: materializeGameWLD(s.gomoku),
-    liarsdice: materializeGameWLD(s.liarsdice)
+    liarsdice: materializeGameWLD(s.liarsdice),
+    jungle: materializeGameWLD(s.jungle)
   };
 }
 
@@ -425,6 +437,7 @@ function materializeLobby(lobby: any): any {
   const players = (L.players || []).map((e: any) => materializePlayer(e.player || e)).filter(Boolean);
   const rooms = (L.rooms || []).map((e: any) => materializeLobbyRoom(e.room || e)).filter(Boolean);
   if (L.config) L.config = materializeConfig(L.config);
+  if (!Array.isArray(L.petBonds)) L.petBonds = [];
   return {
     ...L,
     players,
@@ -503,6 +516,16 @@ function materializeRoom(room: any): any {
     r.gomoku.moveCount = numOr(r.gomoku.moveCount, 0);
     r.gomoku.moveDeadlineAt = numOr(r.gomoku.moveDeadlineAt, 0);
     r.gomoku.clockDeadlineAt = numOr(r.gomoku.clockDeadlineAt, 0);
+  }
+  if (r.jungle) {
+    r.jungle.board = padBoardRect(boardRows(r.jungle.board), 9, 7);
+    r.jungle.rankedDelta = pairsToMap(r.jungle.rankedDelta, 0);
+    r.jungle.clockRemaining = pairsToMap(r.jungle.clockRemaining, 0);
+    r.jungle.moveCount = numOr(r.jungle.moveCount, 0);
+    r.jungle.moveDeadlineAt = numOr(r.jungle.moveDeadlineAt, 0);
+    r.jungle.clockDeadlineAt = numOr(r.jungle.clockDeadlineAt, 0);
+    if (r.jungle.lastFrom) r.jungle.lastFrom = { row: numOr(r.jungle.lastFrom.row, 0), col: numOr(r.jungle.lastFrom.col, 0) };
+    if (r.jungle.lastTo) r.jungle.lastTo = { row: numOr(r.jungle.lastTo.row, 0), col: numOr(r.jungle.lastTo.col, 0) };
   }
   // 历史里的井字连线/大话骰开牌数据同样可能丢 0 / 需要 pair 展开
   if (Array.isArray(r.roundHistory)) {
@@ -630,6 +653,15 @@ function materializeConfig(cfg: any): any {
   }
   if (!c.nameWar || typeof c.nameWar !== "object") c.nameWar = {};
   c.nameWar.penaltyThreshold = numOr(c.nameWar.penaltyThreshold, DEFAULT_NAME_WAR_PENALTY_THRESHOLD);
+  {
+    const pb = c.petBond && typeof c.petBond === "object" ? c.petBond : {};
+    c.petBond = {
+      panelTitle: typeof pb.panelTitle === "string" && pb.panelTitle.trim() ? pb.panelTitle : "宠物乐园",
+      maxPetsPerMaster: numOr(pb.maxPetsPerMaster, 3) || 3,
+      maxMastersPerPet: numOr(pb.maxMastersPerPet, 3) || 3,
+      maxTitleLength: numOr(pb.maxTitleLength, 12) || 12
+    };
+  }
   if (!c.accessControl || typeof c.accessControl !== "object") c.accessControl = {};
   if (Array.isArray(c.punishments)) {
     for (const p of c.punishments) {
@@ -743,11 +775,16 @@ function boardRows(rows: any): any[] {
 
 /** 保证 n×n 棋盘；缺行/列补 null（避免 proto 省略空串后尺寸变短） */
 function padBoardMatrix(matrix: any[], n: number): any[] {
+  return padBoardRect(matrix, n, n);
+}
+
+/** 保证 rows×cols 棋盘（斗兽棋 9×7） */
+function padBoardRect(matrix: any[], rows: number, cols: number): any[] {
   const out: any[] = [];
-  for (let r = 0; r < n; r++) {
+  for (let r = 0; r < rows; r++) {
     const src = Array.isArray(matrix[r]) ? matrix[r] : [];
     const row: any[] = [];
-    for (let c = 0; c < n; c++) {
+    for (let c = 0; c < cols; c++) {
       row.push(c < src.length ? src[c] ?? null : null);
     }
     out.push(row);

@@ -7,10 +7,6 @@ import (
 	"github.com/doumiao/newRPS/internal/types"
 )
 
-func isRpsMove(move types.Move) bool {
-	return move == types.MoveRock || move == types.MoveScissors || move == types.MovePaper
-}
-
 func judge(a, b types.Move) types.RoundResult {
 	if a == b {
 		return types.ResultDraw
@@ -157,6 +153,15 @@ func (s *Server) maybeStartChoosing(room *RoomState) {
 		}
 		return
 	}
+	if room.Settings.GameID == types.GameJungle {
+		if room.Phase == types.PhaseReady || room.Phase == types.PhaseChoosing {
+			return
+		}
+		if room.Seats[types.SeatA] != nil && room.Seats[types.SeatB] != nil {
+			s.resetJungleRoom(room)
+		}
+		return
+	}
 	if room.Phase == types.PhaseChoosing && (room.Choices[types.SeatA] != "" || room.Choices[types.SeatB] != "") {
 		return
 	}
@@ -167,6 +172,7 @@ func (s *Server) maybeStartChoosing(room *RoomState) {
 	room.Status = "playing"
 	room.Choices = map[types.SeatKey]types.Move{}
 	room.RevealedChoices = nil
+	room.DisconnectForfeits = map[string]DisconnectForfeit{}
 	room.ResultText = ""
 	room.Proofs = []types.PunishmentProof{}
 	room.PunishedPlayerIDs = []string{}
@@ -189,15 +195,23 @@ func (s *Server) prepareNextChoice(room *RoomState) {
 		s.resetGomokuRoom(room)
 		return
 	}
+	if room.Settings.GameID == types.GameJungle {
+		s.resetJungleRoom(room)
+		return
+	}
 	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
 		room.Phase = types.PhaseReady
 		room.Status = "waiting"
+		room.Choices = map[types.SeatKey]types.Move{}
+		room.RevealedChoices = nil
+		room.DisconnectForfeits = map[string]DisconnectForfeit{}
 		return
 	}
 	room.Phase = types.PhaseChoosing
 	room.Status = "playing"
 	room.Choices = map[types.SeatKey]types.Move{}
 	room.RevealedChoices = nil
+	room.DisconnectForfeits = map[string]DisconnectForfeit{}
 	room.ResultText = ""
 	room.Proofs = []types.PunishmentProof{}
 	room.PunishedPlayerIDs = []string{}
@@ -213,6 +227,8 @@ func (s *Server) forceEndRpsRound(room *RoomState, result types.RoundResult) (bo
 	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
 		return false, "双方座位未坐满"
 	}
+	// 与自然结算一致：强制判定后作废未消费的断线判负条目，避免超时回调二次结算。
+	room.DisconnectForfeits = map[string]DisconnectForfeit{}
 	rankedStake := effectiveRankedStake(room.Settings)
 	rankedText := ""
 	streakText := ""
@@ -260,6 +276,8 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 	if room.Choices[types.SeatA] == "" || room.Choices[types.SeatB] == "" {
 		return
 	}
+	// 本局已自然结算：丢弃断线判负条目，防止 discTimer 再走 applyDisconnectForfeit 双重计分。
+	room.DisconnectForfeits = map[string]DisconnectForfeit{}
 	choiceA := room.Choices[types.SeatA]
 	choiceB := room.Choices[types.SeatB]
 	giveawaySeats := s.giveawayForcedSeats(room)
@@ -423,6 +441,13 @@ func (s *Server) applyDisconnectForfeit(room *RoomState, player *PlayerState) bo
 	if room.Settings.GameID == types.GameGomoku {
 		return s.applyGomokuDisconnectForfeit(room, forfeit)
 	}
+	if room.Settings.GameID == types.GameJungle {
+		return s.applyJungleDisconnectForfeit(room, forfeit)
+	}
+	// RPS：仅出拳阶段可判负；已进入 result/punishment/ready 说明本局已结算或未在对局中。
+	if room.Phase != types.PhaseChoosing {
+		return true
+	}
 	winner := s.players[forfeit.WinnerID]
 	loser := s.players[forfeit.LoserID]
 	wD, lD := s.applyRankedStake(winner, loser, forfeit.Stake)
@@ -477,6 +502,8 @@ func (s *Server) applyDisconnectForfeit(room *RoomState, player *PlayerState) bo
 		ExtremeRanked:   room.Settings.EnableExtremeRanked,
 		PunishmentTasks: []types.PunishmentTask{}, PunishedNames: []string{}, Proofs: []types.HistoryProof{},
 	})
+	// 消费掉本局 forfeit 后清空 map，避免另一侧同时断线再结算一次。
+	room.DisconnectForfeits = map[string]DisconnectForfeit{}
 	s.roomNotice(room, room.ResultText)
 	return true
 }

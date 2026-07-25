@@ -267,13 +267,6 @@ func playerShortName(player *PlayerState) string {
 	return player.Name
 }
 
-func playerShortNamePublic(p types.PublicPlayer) string {
-	if ptrBool(p.NameWarPunished) && p.NameWarPenaltyName != "" {
-		return p.NameWarPenaltyName
-	}
-	return p.Name
-}
-
 func (s *Server) refreshGiveawayBoard(player *PlayerState, now int64) {
 	if player.GiveawayBoardExpiresAt == nil || *player.GiveawayBoardExpiresAt > now {
 		return
@@ -377,6 +370,8 @@ func (s *Server) publicPlayer(player *PlayerState) types.PublicPlayer {
 	p.Stats.LowestScore = s.displayClampScore(player, player.Stats.LowestScore)
 	// 累计在线：存储值 + 当前会话（不写回存储，避免与断线累加重叠）。
 	p.Stats.TotalOnlineMs = s.effectiveOnlineMs(player)
+	// 主人设定的宠物称号覆盖积分档称号（管理员自定义 / 名争惩罚优先）。
+	s.applyDisplayTitle(player, &p)
 	return p
 }
 
@@ -576,7 +571,7 @@ func (s *Server) createPlayer(name, genderID, customGenderLabel, factionID, toke
 	}
 	if persistent {
 		player.PlayerSecrets = []string{identitySecret}
-		player.ClaimKey = randomID()
+		player.ClaimKey = randomClaimKey()
 	}
 	if session != nil {
 		player.CurrentSID = session.SID

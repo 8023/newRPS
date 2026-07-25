@@ -68,6 +68,7 @@ const (
 	GameTicTacToe GameID = "tictactoe"
 	GameLiarsDice GameID = "liarsdice"
 	GameGomoku    GameID = "gomoku"
+	GameJungle    GameID = "jungle"
 )
 
 type RankStake int
@@ -93,7 +94,7 @@ type PunishmentTaskConfig struct {
 }
 
 type PublicStats struct {
-	// Wins/Losses/Draws 为五游戏合计（由 GameStats 汇总），排行总榜直接读这里。
+	// Wins/Losses/Draws 为各游戏合计（由 GameStats 汇总），排行总榜直接读这里。
 	Wins        int `json:"wins"`
 	Losses      int `json:"losses"`
 	Draws       int `json:"draws"`
@@ -125,18 +126,19 @@ type GameWLD struct {
 	Draws  int `json:"draws"`
 }
 
-// GameStats 五个游戏各自的胜负平（不再单独维护黑白棋吃子等字段）。
+// GameStats 各游戏各自的胜负平（不再单独维护黑白棋吃子等字段）。
 type GameStats struct {
 	RPS       GameWLD `json:"rps"`
 	Othello   GameWLD `json:"othello"`
 	TicTacToe GameWLD `json:"tictactoe"`
 	Gomoku    GameWLD `json:"gomoku"`
 	LiarsDice GameWLD `json:"liarsdice"`
+	Jungle    GameWLD `json:"jungle"`
 }
 
-// Total 汇总五游戏胜负平。
+// Total 汇总各游戏胜负平。
 func (g GameStats) Total() (wins, losses, draws int) {
-	for _, w := range []GameWLD{g.RPS, g.Othello, g.TicTacToe, g.Gomoku, g.LiarsDice} {
+	for _, w := range []GameWLD{g.RPS, g.Othello, g.TicTacToe, g.Gomoku, g.LiarsDice, g.Jungle} {
 		wins += w.Wins
 		losses += w.Losses
 		draws += w.Draws
@@ -158,6 +160,8 @@ func (g *GameStats) WLDFor(gameID GameID) *GameWLD {
 		return &g.Gomoku
 	case GameLiarsDice:
 		return &g.LiarsDice
+	case GameJungle:
+		return &g.Jungle
 	default:
 		return &g.RPS
 	}
@@ -220,6 +224,10 @@ type PublicPlayer struct {
 	ExtremeRenameProtectedUntil      *int64       `json:"extremeRenameProtectedUntil,omitempty"`
 	ExtremeRenamedBy                 string       `json:"extremeRenamedBy,omitempty"`
 	ExtremeRenamedByName             string       `json:"extremeRenamedByName,omitempty"`
+	// 认主/认宠玩法偏好（关闭开关不解除已有关系，只禁止新增）。
+	BondMasterEnabled  *bool `json:"bondMasterEnabled,omitempty"`
+	BondPetEnabled     *bool `json:"bondPetEnabled,omitempty"`
+	BondPublicDisplay  *bool `json:"bondPublicDisplay,omitempty"`
 	RoomID                           string       `json:"roomId,omitempty"`
 	IsAdmin                          *bool        `json:"isAdmin,omitempty"`
 	Stats                            PublicStats  `json:"stats"`
@@ -277,6 +285,7 @@ type RoomSettings struct {
 	OthelloBoardTheme      string         `json:"othelloBoardTheme,omitempty"`
 	TicTacToeBoardTheme    string         `json:"tictactoeBoardTheme,omitempty"`
 	GomokuBoardTheme       string         `json:"gomokuBoardTheme,omitempty"`
+	JungleBoardTheme       string         `json:"jungleBoardTheme,omitempty"`
 	LiarsDiceMinPlayers    int            `json:"liarsDiceMinPlayers,omitempty"`
 	LiarsDiceMaxPlayers    int            `json:"liarsDiceMaxPlayers,omitempty"`
 	// 合法取值含 0（禁止悔棋），不能用 omitempty，否则 0 会被当成"未设置"丢失
@@ -286,6 +295,8 @@ type RoomSettings struct {
 	OthelloGameMinutes int `json:"othelloGameMinutes,omitempty"`
 	GomokuMoveSeconds  int `json:"gomokuMoveSeconds,omitempty"`
 	GomokuGameMinutes  int `json:"gomokuGameMinutes,omitempty"`
+	JungleMoveSeconds  int `json:"jungleMoveSeconds,omitempty"`
+	JungleGameMinutes  int `json:"jungleGameMinutes,omitempty"`
 }
 
 type PunishmentProof struct {
@@ -500,6 +511,45 @@ type GomokuState struct {
 	ClockRemaining  map[SeatKey]int64 `json:"clockRemaining,omitempty"`
 }
 
+// JungleAnimal 斗兽棋棋子种类（等级见 jungleRank）。
+type JungleAnimal string
+
+const (
+	JungleRat      JungleAnimal = "rat"
+	JungleCat      JungleAnimal = "cat"
+	JungleDog      JungleAnimal = "dog"
+	JungleWolf     JungleAnimal = "wolf"
+	JungleLeopard  JungleAnimal = "leopard"
+	JungleTiger    JungleAnimal = "tiger"
+	JungleLion     JungleAnimal = "lion"
+	JungleElephant JungleAnimal = "elephant"
+)
+
+// JungleCell 棋盘格子上的棋子，编码为 "A:rat" / "B:elephant"。
+type JungleCell string
+
+type JungleResignRequest struct {
+	FromSeat  SeatKey `json:"fromSeat"`
+	ToSeat    SeatKey `json:"toSeat"`
+	CreatedAt int64   `json:"createdAt"`
+}
+
+// JungleState 斗兽棋对局状态。座位 A 执下方棋子（第 6–8 行），座位 B 执上方（第 0–2 行）。
+type JungleState struct {
+	Board         [][]*JungleCell      `json:"board"`
+	Turn          SeatKey              `json:"turn"`
+	MoveCount     int                  `json:"moveCount"`
+	LastFrom      *Pos                 `json:"lastFrom,omitempty"`
+	LastTo        *Pos                 `json:"lastTo,omitempty"`
+	RankedDelta   map[SeatKey]int      `json:"rankedDelta"`
+	ResignRequest *JungleResignRequest `json:"resignRequest,omitempty"`
+	Ended         bool                 `json:"ended,omitempty"`
+	Winner        RoundResult          `json:"winner,omitempty"`
+	MoveDeadlineAt  int64             `json:"moveDeadlineAt,omitempty"`
+	ClockDeadlineAt int64             `json:"clockDeadlineAt,omitempty"`
+	ClockRemaining  map[SeatKey]int64 `json:"clockRemaining,omitempty"`
+}
+
 type LiarsDiceBid struct {
 	PlayerID string `json:"playerId"`
 	Count    int    `json:"count"`
@@ -540,6 +590,7 @@ type RoomSnapshot struct {
 	TicTacToe         *TicTacToeState       `json:"tictactoe,omitempty"`
 	LiarsDice         *LiarsDiceState       `json:"liarsDice,omitempty"`
 	Gomoku            *GomokuState          `json:"gomoku,omitempty"`
+	Jungle            *JungleState          `json:"jungle,omitempty"`
 	ResultText        string                `json:"resultText,omitempty"`
 	PunishedPlayerIDs []string              `json:"punishedPlayerIds"`
 	Proofs            []PunishmentProof     `json:"proofs"`
@@ -597,6 +648,23 @@ type LobbyRoomInfo struct {
 	GomokuMoveSeconds   int `json:"gomokuMoveSeconds,omitempty"`
 	GomokuGameMinutes   int `json:"gomokuGameMinutes,omitempty"`
 	GomokuUndoLimit     int `json:"gomokuUndoLimit,omitempty"`
+	JungleMoveSeconds   int `json:"jungleMoveSeconds,omitempty"`
+	JungleGameMinutes   int `json:"jungleGameMinutes,omitempty"`
+}
+
+// PetBondEdge 大厅公开展示的一条主人→宠物边（双方均在线且开启公开展示）。
+type PetBondEdge struct {
+	MasterID string `json:"masterId"`
+	PetID    string `json:"petId"`
+	PetTitle string `json:"petTitle,omitempty"`
+}
+
+// PetBondConfig 认主/认宠玩法的管理员配置。
+type PetBondConfig struct {
+	PanelTitle       string `json:"panelTitle"`
+	MaxPetsPerMaster int    `json:"maxPetsPerMaster"`
+	MaxMastersPerPet int    `json:"maxMastersPerPet"`
+	MaxTitleLength   int    `json:"maxTitleLength"`
 }
 
 type LobbySnapshot struct {
@@ -611,6 +679,8 @@ type LobbySnapshot struct {
 	Suggestions       []Suggestion             `json:"suggestions"`
 	LobbyChat         []ChatMessage            `json:"lobbyChat"`
 	ServerStats       ServerStats              `json:"serverStats"`
+	// PetBonds：双方均在线且开启公开展示的认主边，供大厅「宠物乐园」关系图使用。
+	PetBonds []PetBondEdge `json:"petBonds"`
 }
 
 // TitleSegment 称号分段：按排位分相对展示上下限的百分比划分（-100%～100%）。
@@ -739,6 +809,7 @@ type AppConfig struct {
 		DislikeVoteLimitPerHour int     `json:"dislikeVoteLimitPerHour"`
 		DislikeVoteValue        float64 `json:"dislikeVoteValue"`
 	} `json:"giveaway"`
+	PetBond     PetBondConfig     `json:"petBond"`
 	ExtremeMode ExtremeModeConfig `json:"extremeMode"`
 	RankedScore RankedScoreConfig `json:"rankedScore"`
 	Games       []GameConfig      `json:"games"`

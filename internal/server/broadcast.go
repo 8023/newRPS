@@ -95,7 +95,8 @@ func (s *Server) lobbySnapshot(includeConfig, includeSuggestions bool) types.Lob
 			LiarsDiceMinPlayers: room.Settings.LiarsDiceMinPlayers, LiarsDiceMaxPlayers: room.Settings.LiarsDiceMaxPlayers,
 			OthelloMoveSeconds: room.Settings.OthelloMoveSeconds, OthelloGameMinutes: room.Settings.OthelloGameMinutes,
 			GomokuMoveSeconds: room.Settings.GomokuMoveSeconds, GomokuGameMinutes: room.Settings.GomokuGameMinutes,
-				GomokuUndoLimit: room.Settings.GomokuUndoLimit,
+			GomokuUndoLimit: room.Settings.GomokuUndoLimit,
+			JungleMoveSeconds: room.Settings.JungleMoveSeconds, JungleGameMinutes: room.Settings.JungleGameMinutes,
 		}
 		if room.Settings.EnableTags {
 			info.Tags = room.Settings.Tags
@@ -111,6 +112,7 @@ func (s *Server) lobbySnapshot(includeConfig, includeSuggestions bool) types.Lob
 		OnlineCount: online, Players: humanPlayers, Rooms: rooms,
 		NormalLeaderboard: []types.LobbyPlayer{}, RankedLeaderboard: []types.LobbyPlayer{},
 		Suggestions: []types.Suggestion{}, LobbyChat: []types.ChatMessage{}, ServerStats: s.serverStats,
+		PetBonds: s.publicPetBondEdges(),
 	}
 	if includeConfig {
 		cfg := sanitizePublicConfig(s.publicConfig())
@@ -391,23 +393,16 @@ func (s *Server) sendFullChannel(c *Client, channel string) {
 		if room == nil {
 			return
 		}
+		// 必须已在房内（进房过密码/加入过），禁止用 sync:full 旁观任意房间。
+		if c == nil || !c.inRoom(roomID) {
+			return
+		}
 		snap := s.roomSnapshot(room, true, true)
 		env, _, err := s.buildFullEnvelope("room:update", channel, snap)
 		if err == nil {
 			s.emitWireClient(c, env)
 		}
 	}
-}
-
-func (s *Server) systemChat(text string, roomID string) {
-	if roomID != "" && s.rooms[roomID] == nil {
-		return
-	}
-	// 系统消息瞬时、不入库；仅实时推送到对应频道。
-	s.deliverChat(types.ChatMessage{
-		ID: randomID(), RoomID: roomID, PlayerID: "system", Author: "系统",
-		Text: text, At: nowMs(), System: true,
-	}, false)
 }
 
 func (s *Server) roomNotice(room *RoomState, text string) {

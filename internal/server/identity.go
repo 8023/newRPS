@@ -5,9 +5,10 @@ import "strings"
 // 多端身份认领：认领密钥（ClaimKey）与长期设备凭据（PlayerSecrets）是两个不同的东西。
 //   - PlayerSecrets：每台已登录设备一条，明文，永久有效（除非登出时撤销），
 //     player:join 每次重连都要带上其中一条才能证明身份。
-//   - ClaimKey：单值、明文、一次性——只用于把身份「搬」到一台新设备。展示给用户、
-//     粘贴到另一台设备提交后，服务端验证通过就会：① 生成一条全新的 PlayerSecrets
-//     供新设备使用；② 立即轮换掉这个 ClaimKey（用过即作废），不影响任何一台已登录设备。
+//   - ClaimKey：单值、明文、一次性（randomClaimKey，12 字节）——只用于把身份「搬」到一台新设备。
+//     服务端/库内 playerId 始终是 UUID；前端展示认领码时把 playerId 压成 base64url，
+//     粘贴恢复时再解回 UUID 再调 identity:claim。验证通过后：① 生成一条全新的
+//     PlayerSecrets 供新设备使用；② 立即轮换 ClaimKey（用过即作废）。
 
 // isSameDevice 判断新连接的 deviceKey 是否和这个玩家上次记录的 deviceKey 一致——
 // 一致视为「同设备刷新/重连」，不一致视为「换了一台设备」。
@@ -16,8 +17,8 @@ func isSameDevice(recordedDeviceKey, newDeviceKey string) bool {
 }
 
 // isLegacySecretFormat 识别前端早期版本生成的双 UUID 拼接格式（36+1+36=73 字符、
-// 9 个 "-"）；新格式统一为单个 randomID()/UUID，不再拼接两段。命中旧格式时
-// onPlayerJoin 会顺手静默换发一个新格式 secret，不强制、不影响旧格式继续使用。
+// 9 个 "-"）。命中时 onPlayerJoin 会静默换发 randomPlayerSecret（不强制用户重登）；
+// 未命中的旧短 secret / 单 UUID 仍照常校验，不做迁移打断。
 func isLegacySecretFormat(secret string) bool {
 	return len(secret) == 73 && strings.Count(secret, "-") == 9
 }
@@ -48,7 +49,7 @@ func (s *Server) onIdentityShowClaimKey(client *Client, env wsEnvelope) {
 		return
 	}
 	if player.ClaimKey == "" {
-		player.ClaimKey = randomID()
+		player.ClaimKey = randomClaimKey()
 		s.requestPersist("lazy")
 	}
 	client.reply(env.ID, map[string]any{"claimKey": player.ClaimKey, "playerId": player.PlayerID}, "")
@@ -65,7 +66,7 @@ func (s *Server) onIdentityRefreshClaimKey(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "当前身份不支持认领")
 		return
 	}
-	player.ClaimKey = randomID()
+	player.ClaimKey = randomClaimKey()
 	s.requestPersist("lazy")
 	client.reply(env.ID, map[string]any{"claimKey": player.ClaimKey, "playerId": player.PlayerID}, "")
 }
@@ -92,10 +93,10 @@ func (s *Server) onIdentityClaim(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "认领密钥无效或已过期")
 		return
 	}
-	newSecret := randomID()
+	newSecret := randomPlayerSecret()
 	evicted := player.addPlayerSecret(newSecret)
 	// 用过即作废：认领成功后立即轮换，旧密钥不能再用第二次。
-	player.ClaimKey = randomID()
+	player.ClaimKey = randomClaimKey()
 	s.requestPersist("lazy")
 	if evicted != "" {
 		s.notifyDeviceEvicted(player, evicted)

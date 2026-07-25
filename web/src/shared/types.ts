@@ -15,7 +15,7 @@ export type Move = "rock" | "scissors" | "paper" | "giveaway" | "forfeit" | "noM
 export type RoundResult = "A" | "B" | "draw" | "doubleLoss";
 export type GamePhase = "waiting" | "ready" | "choosing" | "result" | "punishment";
 export type SeatKey = "A" | "B";
-export type GameId = "rps" | "othello" | "tictactoe" | "liarsdice" | "gomoku";
+export type GameId = "rps" | "othello" | "tictactoe" | "liarsdice" | "gomoku" | "jungle";
 export type RankStake = 1 | 2 | 5 | 10 | 20;
 export type OthelloCell = "black" | "white" | null;
 export type TicTacToeCell = "X" | "O" | null;
@@ -97,6 +97,27 @@ export type GomokuState = {
   clockDeadlineAt?: number;
   clockRemaining?: Record<SeatKey, number>;
 };
+/** 斗兽棋棋子编码："A:rat" / "B:elephant" */
+export type JungleCell = string | null;
+export type JungleAnimal = "rat" | "cat" | "dog" | "wolf" | "leopard" | "tiger" | "lion" | "elephant";
+export type JungleState = {
+  board: JungleCell[][];
+  turn: SeatKey;
+  moveCount: number;
+  lastFrom?: { row: number; col: number } | null;
+  lastTo?: { row: number; col: number } | null;
+  rankedDelta?: Record<SeatKey, number>;
+  resignRequest?: {
+    fromSeat: SeatKey;
+    toSeat: SeatKey;
+    createdAt: number;
+  };
+  ended?: boolean;
+  winner?: RoundResult;
+  moveDeadlineAt?: number;
+  clockDeadlineAt?: number;
+  clockRemaining?: Record<SeatKey, number>;
+};
 export type RankMultiplier = 1 | 2 | 5 | 10;
 
 export type RoomNamePool = {
@@ -148,6 +169,7 @@ export type GameStats = {
   tictactoe: GameWLD;
   gomoku: GameWLD;
   liarsdice: GameWLD;
+  jungle: GameWLD;
 };
 
 export type PublicPlayer = {
@@ -200,10 +222,90 @@ export type PublicPlayer = {
   extremeRenameProtectedUntil?: number;
   extremeRenamedBy?: string;
   extremeRenamedByName?: string;
+  /** 开启认主：可申请认他人为主人 */
+  bondMasterEnabled?: boolean;
+  /** 开启认宠：可被申请 / 主动收宠 */
+  bondPetEnabled?: boolean;
+  /** 公开展示：出现在大厅关系图谱 */
+  bondPublicDisplay?: boolean;
   roomId?: string;
   isAdmin?: boolean;
   stats: PublicStats;
   gameStats: GameStats;
+};
+
+export type PetBondConfig = {
+  panelTitle: string;
+  maxPetsPerMaster: number;
+  maxMastersPerPet: number;
+  maxTitleLength: number;
+};
+
+export type PetBondEdge = {
+  masterId: string;
+  petId: string;
+  petTitle?: string;
+};
+
+export type PetBondMember = {
+  playerId: string;
+  name: string;
+  displayName: string;
+  avatarUrl?: string;
+  connected: boolean;
+  petTitle?: string;
+  releasePending?: boolean;
+  releaseIncoming?: boolean;
+  releaseRequestId?: string;
+  /** 现有主人视角：该宠物正在申请认新主 */
+  newMasterPendingId?: string;
+  newMasterPendingName?: string;
+};
+
+export type PetBondCandidate = {
+  playerId: string;
+  name: string;
+  displayName: string;
+  avatarUrl?: string;
+  connected: boolean;
+  status: "none" | "pending" | "already" | string;
+  requestId?: string;
+  incoming?: boolean;
+  incomingId?: string;
+  incomingLabel?: string;
+};
+
+export type PetBondRequest = {
+  id: string;
+  kind: string;
+  fromId: string;
+  toId: string;
+  masterId?: string;
+  petId?: string;
+  fromName: string;
+  toName: string;
+  createdAt: number;
+  requiredIds: string[];
+  approvedIds: string[];
+  canApprove: boolean;
+  label: string;
+  pinTop?: boolean;
+};
+
+export type PetBondChain = {
+  playerIds: string[];
+  playerNames: string[];
+};
+
+export type PetBondState = {
+  masters: PetBondMember[];
+  pets: PetBondMember[];
+  masterCandidates: PetBondCandidate[];
+  petCandidates: PetBondCandidate[];
+  incoming: PetBondRequest[];
+  outgoing: PetBondRequest[];
+  chains: PetBondChain[];
+  config: PetBondConfig;
 };
 
 export type SeatOccupant = PublicPlayer | null;
@@ -256,6 +358,7 @@ export type RoomSettings = {
   othelloBoardTheme?: "classic" | "pastel" | "midnight" | "wood" | "neon";
   tictactoeBoardTheme?: "paper" | "mint" | "midnight" | "candy" | "arcade";
   gomokuBoardTheme?: "classic" | "pastel" | "midnight" | "wood" | "neon";
+  jungleBoardTheme?: "forest" | "bamboo" | "river" | "dusk" | "night";
   gomokuUndoLimit?: 0 | 1 | 3 | 10;
   liarsDiceMinPlayers?: number;
   liarsDiceMaxPlayers?: number;
@@ -264,6 +367,8 @@ export type RoomSettings = {
   othelloGameMinutes?: number;
   gomokuMoveSeconds?: number;
   gomokuGameMinutes?: number;
+  jungleMoveSeconds?: number;
+  jungleGameMinutes?: number;
 };
 
 export type LiarsDiceBid = {
@@ -387,6 +492,7 @@ export type RoomSnapshot = {
   tictactoe?: TicTacToeState;
   liarsDice?: LiarsDiceState;
   gomoku?: GomokuState;
+  jungle?: JungleState;
   resultText?: string;
   punishedPlayerIds: string[];
   proofs: PunishmentProof[];
@@ -449,12 +555,15 @@ export type LobbySnapshot = {
     gomokuMoveSeconds?: number;
     gomokuGameMinutes?: number;
     gomokuUndoLimit?: number;
+    jungleMoveSeconds?: number;
+    jungleGameMinutes?: number;
   }>;
   normalLeaderboard: PublicPlayer[];
   rankedLeaderboard: PublicPlayer[];
   suggestions: Suggestion[];
   lobbyChat: ChatMessage[];
   serverStats: ServerStats;
+  petBonds?: PetBondEdge[];
 };
 
 export type AppConfig = {
@@ -532,6 +641,7 @@ export type AppConfig = {
     dislikeVoteLimitPerHour: number;
     dislikeVoteValue: number;
   };
+  petBond: PetBondConfig;
   extremeMode: {
     label: string;
     emoji: string;
