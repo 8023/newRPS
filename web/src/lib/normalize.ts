@@ -101,6 +101,7 @@ export function normalizePublicStats(stats: PublicPlayer["stats"] | null | undef
     sortHighestScore: statNum(s.sortHighestScore, statNum(s.highestScore)),
     sortLowestScore: statNum(s.sortLowestScore, statNum(s.lowestScore)),
     title: title || "暂无称号",
+    totalOnlineMs: statNum(s.totalOnlineMs),
     ...(s.titleSegmentId ? { titleSegmentId: s.titleSegmentId } : {}),
     ...(s.titleCustom ? { titleCustom: true } : {})
   };
@@ -175,7 +176,7 @@ export function replacePlayerInRoom(room: RoomSnapshot, player: PublicPlayer) {
   const seats = { ...(room.seats || { A: null, B: null }) };
   for (const seat of ["A", "B"] as SeatKey[]) {
     const occupant = seats[seat];
-    if (occupant?.id === player.id && !("isBot" in occupant)) {
+    if (occupant?.id === player.id) {
       seats[seat] = player;
       changed = true;
     }
@@ -190,8 +191,8 @@ export function replacePlayerInRoom(room: RoomSnapshot, player: PublicPlayer) {
 
 export function replaceLobbyVersusPlayer(versus: LobbySnapshot["rooms"][number]["versus"], player: PublicPlayer) {
   return {
-    A: versus.A && !("isBot" in versus.A) && versus.A.player.id === player.id ? { player } : versus.A,
-    B: versus.B && !("isBot" in versus.B) && versus.B.player.id === player.id ? { player } : versus.B
+    A: versus.A && versus.A.player.id === player.id ? { player } : versus.A,
+    B: versus.B && versus.B.player.id === player.id ? { player } : versus.B
   };
 }
 
@@ -241,12 +242,12 @@ export function normalizeLobbySnapshot(snapshot: LobbySnapshot, old?: LobbySnaps
   const rooms = coerceLobbyRooms(snapshot.rooms as any).map((room) => ({
     ...room,
     versus: {
-      A: room.versus?.A && !("isBot" in room.versus.A) && room.versus.A.player
+      A: room.versus?.A?.player
         ? { player: normalizePublicPlayer(room.versus.A.player) }
-        : room.versus?.A ?? null,
-      B: room.versus?.B && !("isBot" in room.versus.B) && room.versus.B.player
+        : null,
+      B: room.versus?.B?.player
         ? { player: normalizePublicPlayer(room.versus.B.player) }
-        : room.versus?.B ?? null
+        : null
     }
   }));
   const lobbyChat = (!snapshot.lobbyChat || snapshot.lobbyChat.length === 0) && old ? old.lobbyChat : (snapshot.lobbyChat || []);
@@ -456,7 +457,15 @@ export const DEFAULT_GIVEAWAY: AppConfig["giveaway"] = {
 };
 
 export function withGiveawayDefaults(g?: Partial<AppConfig["giveaway"]> | null): AppConfig["giveaway"] {
-  return { ...DEFAULT_GIVEAWAY, ...g };
+  const base = { ...DEFAULT_GIVEAWAY, ...(g || {}) };
+  // 0/NaN 不是合法配置（服务端 Validate 拒绝），多为 proto 漏字段或 defaults:false 后的零值，回退默认。
+  if (!(base.activeBoostValue > 0)) base.activeBoostValue = DEFAULT_GIVEAWAY.activeBoostValue;
+  if (!(base.winPenaltyValue > 0)) base.winPenaltyValue = DEFAULT_GIVEAWAY.winPenaltyValue;
+  if (!(base.likeVoteLimitPerHour >= 1)) base.likeVoteLimitPerHour = DEFAULT_GIVEAWAY.likeVoteLimitPerHour;
+  if (!(base.likeVoteValue > 0)) base.likeVoteValue = DEFAULT_GIVEAWAY.likeVoteValue;
+  if (!(base.dislikeVoteLimitPerHour >= 1)) base.dislikeVoteLimitPerHour = DEFAULT_GIVEAWAY.dislikeVoteLimitPerHour;
+  if (!(base.dislikeVoteValue > 0)) base.dislikeVoteValue = DEFAULT_GIVEAWAY.dislikeVoteValue;
+  return base;
 }
 
 export function normalizeConfig(config: AppConfig): AppConfig {
@@ -493,10 +502,6 @@ export function normalizeConfig(config: AppConfig): AppConfig {
       penaltyThreshold: config.nameWar?.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD
     },
     giveaway: withGiveawayDefaults(config.giveaway),
-    bots: {
-      names: config.bots?.names || [],
-      difficulties: config.bots?.difficulties || []
-    },
     games: config.games || [],
     messages: config.messages || {},
     // 与 extremeMode 同模式：整段对象 + 内部 map 缺省，保证业务代码可直接点字段。

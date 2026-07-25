@@ -111,7 +111,6 @@ func New() (*Server, error) {
 		rooms:                   map[string]*RoomState{},
 		clients:                 map[string]*Client{},
 		socketToClient:          map[string]*Client{},
-		botTimers:               map[string]*time.Timer{},
 		othelloSettlementTimers: map[string]*time.Timer{},
 		ticTacToeGiveawayTimers: map[string]*time.Timer{},
 		liarsDiceStartTimers:    map[string]*time.Timer{},
@@ -216,6 +215,8 @@ func (s *Server) Run() error {
 		// closeLiveStateOnShutdown）。真正的进程被杀（kill -9/OOM）仍然覆盖不到，属于已知的、
 		// 影响有限的边界情况。
 		s.closeLiveStateOnShutdown()
+		// closeLiveState 会把仍在线会话的时长累进 TotalOnlineMs，再刷一次盘。
+		s.flushPersist()
 		if s.db != nil {
 			_ = s.db.Close()
 		}
@@ -268,7 +269,7 @@ func (s *Server) closeLiveStateOnShutdown() {
 	s.mu.Lock()
 	conns := make([]openConn, 0, len(s.clients))
 	for _, c := range s.clients {
-		// 先打标，防止随后 WS 拆线触发 onClientDisconnect 再写一条 disconnect。
+		// 先打标，防止随后 WS 拆线触发 onClientDisconnect 再写一条 disconnect / 再累加时长。
 		if c.connectionLogged {
 			continue
 		}
@@ -276,6 +277,12 @@ func (s *Server) closeLiveStateOnShutdown() {
 		playerID := ""
 		if p := s.getPlayerByClient(c); p != nil {
 			playerID = p.ID
+			// 优雅关停时本会话时长也计入累计在线（随后 flushPersist 落盘）。
+			if c.connectedAt > 0 {
+				if d := now - c.connectedAt; d > 0 {
+					p.Stats.TotalOnlineMs += d
+				}
+			}
 		}
 		conns = append(conns, openConn{
 			id: c.id, connectedAt: c.connectedAt, sid: c.sid, ipAddress: c.ipAddress,

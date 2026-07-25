@@ -72,8 +72,6 @@ const (
 
 type RankStake int
 type RankMultiplier int
-type BotDifficulty string
-type BotStrategy string
 
 type RoomNamePool struct {
 	Adjectives []string `json:"adjectives"`
@@ -115,6 +113,9 @@ type PublicStats struct {
 	// TitleCustom：true 表示 Title 是管理员在后台手动设置的，syncTitleForRankSegment
 	// 不会因排位分变动/跨档而自动改写；管理员把称号清空即可清除该标记、恢复自动计算。
 	TitleCustom bool `json:"titleCustom,omitempty"`
+	// TotalOnlineMs：累计在线时长（毫秒）。存储值为已结束会话之和；
+	// publicPlayer 下发时若当前在线会加上本会话已持续时长（不写回存储）。
+	TotalOnlineMs int64 `json:"totalOnlineMs,omitempty"`
 }
 
 // GameWLD 单游戏胜/负/平。
@@ -225,15 +226,7 @@ type PublicPlayer struct {
 	GameStats                        GameStats    `json:"gameStats"`
 }
 
-type BotPlayer struct {
-	ID         string        `json:"id"`
-	Name       string        `json:"name"`
-	Difficulty BotDifficulty `json:"difficulty"`
-	IsBot      bool          `json:"isBot"`
-}
-
-// SeatOccupant is either *PublicPlayer, *BotPlayer or null (JSON).
-// Encoded as json.RawMessage / any in snapshots.
+// SeatOccupant is *PublicPlayer or null (JSON). Encoded as any in snapshots.
 
 type ChatMessage struct {
 	ID         string `json:"id"`
@@ -262,12 +255,10 @@ type Suggestion struct {
 }
 
 type RoomSettings struct {
-	Name             string        `json:"name"`
-	Password         string        `json:"password,omitempty"`
-	GameID           GameID        `json:"gameId"`
-	EnableBot        bool          `json:"enableBot"`
-	BotDifficulty    BotDifficulty `json:"botDifficulty"`
-	EnablePunishment bool          `json:"enablePunishment"`
+	Name             string `json:"name"`
+	Password         string `json:"password,omitempty"`
+	GameID           GameID `json:"gameId"`
+	EnablePunishment bool   `json:"enablePunishment"`
 	PunishmentSource string        `json:"punishmentSource,omitempty"`
 	PunishmentID     string        `json:"punishmentId,omitempty"`
 	// 数组字段不用 omitempty：空切片会变成 null 或字段缺失，前端 .map/.includes 会挂
@@ -585,11 +576,9 @@ type LobbyRoomInfo struct {
 	Players                int             `json:"players"`
 	Spectators             int             `json:"spectators"`
 	Versus                 map[SeatKey]any `json:"versus"`
-	Status                 string          `json:"status"`
-	RoomBackgroundImage    string          `json:"roomBackgroundImage,omitempty"`
-	EnableBot              bool            `json:"enableBot"`
-	BotDifficulty          BotDifficulty   `json:"botDifficulty"`
-	EnablePunishment       bool            `json:"enablePunishment"`
+	Status                 string `json:"status"`
+	RoomBackgroundImage    string `json:"roomBackgroundImage,omitempty"`
+	EnablePunishment       bool   `json:"enablePunishment"`
 	PunishmentIDs          []string        `json:"punishmentIds"`
 	PunishmentID           string          `json:"punishmentId,omitempty"`
 	TieDoublePunish        bool            `json:"tieDoublePunish"`
@@ -647,16 +636,6 @@ type PunishmentConfig struct {
 	CardImageOpacity     float64                `json:"cardImageOpacity,omitempty"`
 	RoomBackgroundImages []string               `json:"roomBackgroundImages,omitempty"`
 	RoomNamePool         *RoomNamePool          `json:"roomNamePool,omitempty"`
-}
-
-type BotDifficultyConfig struct {
-	ID          BotDifficulty `json:"id"`
-	Name        string        `json:"name"`
-	Description string        `json:"description"`
-	Emoji       string        `json:"emoji,omitempty"`
-	Level       int           `json:"level,omitempty"`
-	Strategy    BotStrategy   `json:"strategy,omitempty"`
-	CardColor   string        `json:"cardColor,omitempty"`
 }
 
 type GameConfig struct {
@@ -762,10 +741,6 @@ type AppConfig struct {
 	} `json:"giveaway"`
 	ExtremeMode ExtremeModeConfig `json:"extremeMode"`
 	RankedScore RankedScoreConfig `json:"rankedScore"`
-	Bots        struct {
-		Names        []string              `json:"names"`
-		Difficulties []BotDifficultyConfig `json:"difficulties"`
-	} `json:"bots"`
-	Games    []GameConfig      `json:"games"`
-	Messages map[string]string `json:"messages"`
+	Games       []GameConfig      `json:"games"`
+	Messages    map[string]string `json:"messages"`
 }

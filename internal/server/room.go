@@ -48,32 +48,21 @@ func occupantName(occupant SeatOccupant) string {
 	if occupant == nil {
 		return "空位"
 	}
-	if occupant.IsBot() {
-		return occupant.(*BotSeat).Bot.Name
-	}
 	return occupant.(*HumanSeat).Player.DisplayName
-}
-
-func isHumanOccupant(occupant SeatOccupant) bool {
-	return occupant != nil && !occupant.IsBot()
 }
 
 func (s *Server) shouldCloseRoom(room *RoomState) bool {
 	if room.Settings.GameID == types.GameLiarsDice {
 		return len(room.SpectatorIDs) == 0 && (room.LiarsDice == nil || len(room.LiarsDice.ParticipantIDs) == 0)
 	}
-	return !isHumanOccupant(room.Seats[types.SeatA]) &&
-		!isHumanOccupant(room.Seats[types.SeatB]) &&
+	return room.Seats[types.SeatA] == nil &&
+		room.Seats[types.SeatB] == nil &&
 		len(room.SpectatorIDs) == 0
 }
 
 func (s *Server) cleanupRoomIfEmpty(room *RoomState) bool {
 	if !s.shouldCloseRoom(room) {
 		return false
-	}
-	if t := s.botTimers[room.ID]; t != nil {
-		t.Stop()
-		delete(s.botTimers, room.ID)
 	}
 	s.clearOthelloSettlementTimer(room.ID)
 	s.clearTicTacToeGiveawayTimer(room.ID)
@@ -129,7 +118,7 @@ func (s *Server) roomSnapshot(room *RoomState, includeChat, includeHistory bool)
 		}
 	}
 	for _, seat := range []types.SeatKey{types.SeatA, types.SeatB} {
-		if occ := room.Seats[seat]; occ != nil && !occ.IsBot() {
+		if occ := room.Seats[seat]; occ != nil {
 			if player := s.players[occ.GetID()]; player != nil {
 				if s.refreshNameWarState(player, nowMs()) {
 					s.refreshPlayerSnapshots(player)
@@ -151,8 +140,6 @@ func (s *Server) roomSnapshot(room *RoomState, includeChat, includeHistory bool)
 		occ := room.Seats[seat]
 		if occ == nil {
 			seats[seat] = nil
-		} else if occ.IsBot() {
-			seats[seat] = occ.(*BotSeat).Bot
 		} else {
 			seats[seat] = occ.(*HumanSeat).Player
 		}
@@ -256,22 +243,6 @@ func (s *Server) canAutoSeatOnJoin(room *RoomState, player *PlayerState) bool {
 		return false
 	}
 	return true
-}
-
-func (s *Server) makeBot(difficulty types.BotDifficulty) *BotSeat {
-	difficultyName := string(difficulty)
-	for _, d := range s.cfg.Bots.Difficulties {
-		if d.ID == difficulty {
-			difficultyName = d.Name
-			break
-		}
-	}
-	return &BotSeat{Bot: types.BotPlayer{
-		ID:         "bot-" + randomID(),
-		Name:       "机器人（" + difficultyName + "）",
-		Difficulty: difficulty,
-		IsBot:      true,
-	}}
 }
 
 func (s *Server) normalizeRoomTags(settings types.RoomSettings) []string {
@@ -455,14 +426,15 @@ func (s *Server) randomRoomBackground(settings types.RoomSettings) string {
 
 func (s *Server) humanPlayerFromSeat(room *RoomState, seat types.SeatKey) *PlayerState {
 	occ := room.Seats[seat]
-	if occ == nil || occ.IsBot() {
+	if occ == nil {
 		return nil
 	}
 	return s.players[occ.GetID()]
 }
 
-func (s *Server) isHumanVsHumanRoom(room *RoomState) bool {
-	return isHumanOccupant(room.Seats[types.SeatA]) && isHumanOccupant(room.Seats[types.SeatB])
+// isFullHumanRoom 双方战斗席都有真人（平台仅支持真人在线对局）。
+func (s *Server) isFullHumanRoom(room *RoomState) bool {
+	return room.Seats[types.SeatA] != nil && room.Seats[types.SeatB] != nil
 }
 
 func (s *Server) canLeaveRoom(player *PlayerState, reason LeaveReason) LeaveResult {
@@ -633,7 +605,7 @@ func (s *Server) createDisconnectForfeit(room *RoomState, player *PlayerState) {
 	}
 	winnerSeat := oppositeSeat(loserSeat)
 	winner := room.Seats[winnerSeat]
-	if winner == nil || winner.IsBot() {
+	if winner == nil {
 		return
 	}
 	stake := effectiveRankedStake(room.Settings)

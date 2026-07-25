@@ -17,7 +17,7 @@ import (
 //
 // 是 var 不是 const，只是为了让测试能临时替换掉去验证迁移机制本身；正常代码路径里
 // 把它当常量对待，不要在业务逻辑里修改它。
-var currentSchemaVersion = 8
+var currentSchemaVersion = 9
 
 // schemaVersionSchema：只有一行的版本表，openDatabase 每次启动都会先确保它存在。
 const schemaVersionSchema = `
@@ -112,6 +112,11 @@ var migrations = []schemaMigration{
 			return err
 		}
 		return addColumnIfMissing(db, "players", "custom_gender_label", "TEXT NOT NULL DEFAULT ''")
+	}},
+	// v9：累计在线时长（毫秒）。断线 / 优雅关停时累加本会话时长；非优雅退出可丢
+	// 未落盘会话，属有意接受的边界。
+	{version: 9, migrate: func(db sqlExecer) error {
+		return addColumnIfMissing(db, "players", "total_online_ms", "INTEGER NOT NULL DEFAULT 0")
 	}},
 }
 

@@ -55,6 +55,8 @@ message PublicStats {
   int32 sort_lowest_score = 12;
   // 管理员在后台手动设置过称号（不随排位分档位变化自动改写），见 title_custom 相关后端逻辑。
   bool title_custom = 13;
+  // 累计在线时长（毫秒）。下发时若当前在线，会加上本会话已持续时长。
+  int64 total_online_ms = 14;
 }
 
 message LobbyStats {
@@ -70,6 +72,8 @@ message LobbyStats {
   int32 sort_highest_score = 10;
   int32 sort_lowest_score = 11;
   bool title_custom = 12;
+  // 累计在线时长（毫秒）。下发时若当前在线，会加上本会话已持续时长。
+  int64 total_online_ms = 13;
 }
 
 message GameWLD {
@@ -174,6 +178,11 @@ message LobbyPlayer {
   int64 giveaway_board_expires_at = 29;
   int32 giveaway_board_likes = 31;
   int32 giveaway_board_dislikes = 33;
+  // 投票额度：大厅广播会合并到 me.player（见 types.LobbyPlayer 注释）。
+  // 缺字段会导致额度被抹成 0/undefined，前端一直显示满额度。
+  int64 giveaway_vote_window_started_at = 52;
+  int32 giveaway_vote_likes_this_hour = 53;
+  int32 giveaway_vote_dislikes_this_hour = 54;
 
   bool rank_multiplier_unlocked = 35;
   bool extreme_mode_enabled = 37;
@@ -189,18 +198,11 @@ message LobbyPlayer {
   string avatar_url = 51;
 }
 
-message BotPlayer {
-  string id = 1;
-  string name = 2;
-  string difficulty = 3;
-  bool is_bot = 4;
-}
-
 message SeatOccupant {
   oneof kind {
     PublicPlayer player = 1;
-    BotPlayer bot = 2;
   }
+  reserved 2; // was bot (BotPlayer)
 }
 
 message ChatMessage {
@@ -215,6 +217,11 @@ message ChatMessage {
   bool system = 9;
   bool transient = 10;
   int64 expires_at = 11;
+  // 被 @ 的玩家 id；前端 me.id 命中时高亮气泡。chat:new 走动态 RAW 已带此字段，
+  // typed ChatMessage（lobbyChat/room.chat/chat:append）也必须保留，避免历史路径静默丢 @。
+  repeated string mentions = 12;
+  // SQLite 游标（chat:loadOlder 用）；瞬时系统消息可为 0。
+  int64 seq = 13;
 }
 
 message Suggestion {
@@ -230,8 +237,8 @@ message RoomSettings {
   string name = 1;
   string password = 2;
   string game_id = 3;
-  bool enable_bot = 4;
-  string bot_difficulty = 5;
+  reserved 4, 5; // was enable_bot, bot_difficulty
+  reserved "enable_bot", "bot_difficulty";
   bool enable_punishment = 6;
   string punishment_source = 7;
   string punishment_id = 8;
@@ -545,9 +552,8 @@ message ServerStats {
 }
 
 message VersusSeat {
-  // human seat uses nested player; bot uses bot
   PublicPlayer player = 1;
-  BotPlayer bot = 2;
+  reserved 2; // was bot (BotPlayer)
 }
 
 message VersusPair {
@@ -566,8 +572,8 @@ message LobbyRoomInfo {
   repeated VersusPair versus = 8;
   string status = 9;
   string room_background_image = 10;
-  bool enable_bot = 11;
-  string bot_difficulty = 12;
+  reserved 11, 12; // was enable_bot, bot_difficulty
+  reserved "enable_bot", "bot_difficulty";
   bool enable_punishment = 13;
   repeated string punishment_ids = 14;
   string punishment_id = 15;
@@ -664,16 +670,6 @@ message PunishmentConfig {
   RoomNamePool room_name_pool = 9;
 }
 
-message BotDifficultyConfig {
-  string id = 1;
-  string name = 2;
-  string description = 3;
-  string emoji = 4;
-  int32 level = 5;
-  string strategy = 6;
-  string card_color = 7;
-}
-
 message GameConfig {
   string id = 1;
   string name = 2;
@@ -751,11 +747,16 @@ message GiveawayConfig {
   string panel_description = 2;
   string submit_placeholder = 3;
   string empty_text = 4;
-}
-
-message BotsConfig {
-  repeated string names = 1;
-  repeated BotDifficultyConfig difficulties = 2;
+  // 主动白给（手动选白给 / 点击白给按钮 / RPS 概率强制白给）每次增加的百分比。
+  double active_boost_value = 5;
+  // 白给已开启的玩家每赢一局（含断线判负）减少的百分比。
+  double win_penalty_value = 6;
+  // 自救板点赞：每小时可投次数上限、每次降低的百分比。
+  int32 like_vote_limit_per_hour = 7;
+  double like_vote_value = 8;
+  // 自救板倒赞：每小时可投次数上限、每次增加的百分比。
+  int32 dislike_vote_limit_per_hour = 9;
+  double dislike_vote_value = 10;
 }
 
 message AppConfig {
@@ -772,7 +773,8 @@ message AppConfig {
   NameWarConfig name_war = 11;
   GiveawayConfig giveaway = 12;
   ExtremeModeConfig extreme_mode = 13;
-  BotsConfig bots = 14;
+  reserved 14; // was bots (BotsConfig)
+  reserved "bots";
   repeated GameConfig games = 15;
   repeated StringPair messages = 16;
   SecurityDisclaimerConfig security_disclaimer = 17;

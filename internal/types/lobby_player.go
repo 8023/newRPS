@@ -64,6 +64,8 @@ type LobbyStats struct {
 	SortLowestScore  int    `json:"sortLowestScore"`
 	Title            string `json:"title"`
 	TitleCustom      bool   `json:"titleCustom,omitempty"`
+	// TotalOnlineMs：累计在线时长（毫秒）；与 PublicStats 同语义。
+	TotalOnlineMs int64 `json:"totalOnlineMs,omitempty"`
 }
 
 // ToLobbyPlayer 从完整公开资料裁剪。
@@ -110,6 +112,7 @@ func ToLobbyPlayer(p PublicPlayer) LobbyPlayer {
 			HighestScore: p.Stats.HighestScore, LowestScore: p.Stats.LowestScore,
 			SortRankedPoints: p.Stats.SortRankedPoints, SortHighestScore: p.Stats.SortHighestScore,
 			SortLowestScore: p.Stats.SortLowestScore, TitleCustom: p.Stats.TitleCustom,
+			TotalOnlineMs: p.Stats.TotalOnlineMs,
 		},
 		GameStats: p.GameStats,
 	}
@@ -140,6 +143,7 @@ func (p LobbyPlayer) AsPublicPlayer() PublicPlayer {
 			HighestScore: p.Stats.HighestScore, LowestScore: p.Stats.LowestScore,
 			SortRankedPoints: p.Stats.SortRankedPoints, SortHighestScore: p.Stats.SortHighestScore,
 			SortLowestScore: p.Stats.SortLowestScore, TitleCustom: p.Stats.TitleCustom,
+			TotalOnlineMs: p.Stats.TotalOnlineMs,
 		},
 		GameStats: p.GameStats,
 	}

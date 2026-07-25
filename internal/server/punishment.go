@@ -26,7 +26,7 @@ func (s *Server) punishmentPlayersForResult(room *RoomState, result types.RoundR
 	var out []*PlayerState
 	for _, seat := range punishSeats {
 		occ := room.Seats[seat]
-		if occ == nil || occ.IsBot() {
+		if occ == nil {
 			continue
 		}
 		if p := s.players[occ.GetID()]; p != nil {
@@ -229,12 +229,6 @@ func (s *Server) seatShortName(room *RoomState, seat types.SeatKey) string {
 	if occ == nil {
 		return ""
 	}
-	if occ.IsBot() {
-		if bot, ok := occ.(*BotSeat); ok {
-			return bot.Bot.Name
-		}
-		return occupantName(occ)
-	}
 	if p := s.players[occ.GetID()]; p != nil {
 		return playerShortName(p)
 	}
@@ -405,15 +399,6 @@ func (s *Server) punishmentComplete(room *RoomState) bool {
 		}
 	}
 	return true
-}
-
-func (s *Server) opponentIsBot(room *RoomState, playerID string) bool {
-	seat, ok := s.seatOf(room, playerID)
-	if !ok {
-		return false
-	}
-	opp := room.Seats[oppositeSeat(seat)]
-	return opp != nil && opp.IsBot()
 }
 
 func (s *Server) humanOpponent(room *RoomState, playerID string) *PlayerState {

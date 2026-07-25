@@ -434,7 +434,12 @@ func (s *Server) onClientDisconnect(client *Client) {
 	client.shutdown()
 	// 被同 SID 顶替：索引已在 handleWS 里清过。此处若再 delete 空 map，
 	// 会把新连接 Accept 前预创建的 device 集合删掉，随后写入触发 nil map panic。
+	// 仍需累加本连接已在线时长（否则刷新/重连会丢这一段）。
 	if client.replaced {
+		if !client.connectionLogged {
+			client.connectionLogged = true
+			s.accumulateClientOnlineMs(client, nowMs())
+		}
 		return
 	}
 
@@ -464,15 +469,18 @@ func (s *Server) onClientDisconnect(client *Client) {
 	}
 	// 一次性写完整一条 connection_events 行（见 activitylog.go），不再重复打到 stdout；
 	// 即使这条连接从没关联到玩家（playerID 为空，比如连上就断的游客）也照样记一行。
-	// 优雅关停时 closeLiveStateOnShutdown 可能已经写过并置 connectionLogged，这里跳过避免重复。
+	// 优雅关停时 closeLiveStateOnShutdown 可能已经写过并置 connectionLogged，这里跳过避免重复
+	// （在线时长累加同样只做一次，避免双计）。
 	if !client.connectionLogged {
 		client.connectionLogged = true
+		now := nowMs()
 		s.logConnectionEvent(connectionEventPayload{
-			socketID: client.id, connectedAt: client.connectedAt, disconnectedAt: nowMs(),
+			socketID: client.id, connectedAt: client.connectedAt, disconnectedAt: now,
 			sessionSID: client.sid, ip: client.ipAddress, device: client.deviceKey,
 			fingerprint: client.fingerprint, userAgent: client.userAgent, compression: client.compression,
 			playerID: playerID, closeReason: "disconnect",
 		})
+		s.accumulateClientOnlineMs(client, now)
 	}
 	if player == nil {
 		return

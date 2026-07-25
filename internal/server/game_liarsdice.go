@@ -418,6 +418,15 @@ func (s *Server) resolveLiarsDiceChallenge(room *RoomState, challengerID string)
 	streakText := ""
 	recordGameOutcome(winner, types.GameLiarsDice, "win")
 	recordGameOutcome(loser, types.GameLiarsDice, "loss")
+	// 其余参战玩家本局记平（不计排位分、不受罚）。
+	for _, id := range room.LiarsDice.ParticipantIDs {
+		if id == winnerID || id == loserID {
+			continue
+		}
+		if p := s.players[id]; p != nil {
+			recordGameOutcome(p, types.GameLiarsDice, "draw")
+		}
+	}
 	s.applyGiveawayWinPenalty(winner)
 	if room.Settings.EnableRanked {
 		wD, lD := s.applyRankedStake(winner, loser, effectiveRankedStake(room.Settings))
@@ -431,11 +440,10 @@ func (s *Server) resolveLiarsDiceChallenge(room *RoomState, challengerID string)
 	}
 	room.ResultText = fmt.Sprintf("%s 开牌：叫点 %d 个 %d，实际 %d 个，%s，%s 胜利%s%s",
 		names[challengerID], bid.Count, bid.Face, actual, verdict, names[winnerID], rankedText, streakText)
-	if winner != nil {
-		s.refreshPlayerSnapshots(winner)
-	}
-	if loser != nil {
-		s.refreshPlayerSnapshots(loser)
+	for _, id := range room.LiarsDice.ParticipantIDs {
+		if p := s.players[id]; p != nil {
+			s.refreshPlayerSnapshots(p)
+		}
 	}
 
 	punishment := s.currentPunishment(room)
@@ -649,6 +657,17 @@ func (s *Server) applyLiarsDiceDisconnectForfeit(room *RoomState, player *Player
 	streakText := ""
 	recordGameOutcome(winner, types.GameLiarsDice, "win")
 	recordGameOutcome(loser, types.GameLiarsDice, "loss")
+	// 其余参战玩家本局记平（与正常开牌结算一致）。
+	if room.LiarsDice != nil {
+		for _, id := range room.LiarsDice.ParticipantIDs {
+			if id == forfeit.WinnerID || id == forfeit.LoserID {
+				continue
+			}
+			if p := s.players[id]; p != nil {
+				recordGameOutcome(p, types.GameLiarsDice, "draw")
+			}
+		}
+	}
 	s.applyGiveawayWinPenalty(winner)
 	if room.Settings.EnableRanked {
 		wD, lD := s.applyRankedStake(winner, loser, forfeit.Stake)
@@ -664,11 +683,19 @@ func (s *Server) applyLiarsDiceDisconnectForfeit(room *RoomState, player *Player
 		room.LiarsDice.LoserID = forfeit.LoserID
 	}
 	room.ResultText = fmt.Sprintf("%s 断线超时判负，上家 %s 大话骰胜利%s%s", forfeit.LoserName, forfeit.WinnerName, rankedText, streakText)
-	if winner != nil {
-		s.refreshPlayerSnapshots(winner)
-	}
-	if loser != nil {
-		s.refreshPlayerSnapshots(loser)
+	if room.LiarsDice != nil {
+		for _, id := range room.LiarsDice.ParticipantIDs {
+			if p := s.players[id]; p != nil {
+				s.refreshPlayerSnapshots(p)
+			}
+		}
+	} else {
+		if winner != nil {
+			s.refreshPlayerSnapshots(winner)
+		}
+		if loser != nil {
+			s.refreshPlayerSnapshots(loser)
+		}
 	}
 	var punishedPlayers []*PlayerState
 	var punishedNames []string

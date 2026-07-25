@@ -43,6 +43,32 @@ export function hasCachedLogin(): boolean {
   return Boolean(localStorage.getItem("rps-online-name"));
 }
 
+/**
+ * 读取自动 player:join 所需的性别/阵营本地缓存。
+ *
+ * 自定义性别时 genderId 的合法值就是空串（展示文案在 rps-online-custom-gender）。
+ * 绝不能写成 `getItem("rps-online-gender") || "male"`——空串在 JS 里是 falsy，
+ * 会被错误兜底成 "male"，导致每次刷新/重连都把自定义性别覆盖成默认预设。
+ */
+export function readCachedJoinGender(): { genderId: string; customGenderLabel: string; factionId: string } {
+  const customGenderLabel = localStorage.getItem("rps-online-custom-gender") || "";
+  const rawGender = localStorage.getItem("rps-online-gender");
+  // null = 从未写入；"" = 明确选了自定义。仅在从未写入且也没有自定义文案时兜底 male。
+  const genderId = rawGender !== null ? rawGender : (customGenderLabel ? "" : "male");
+  const factionId = localStorage.getItem("rps-online-faction") || "";
+  return { genderId, customGenderLabel, factionId };
+}
+
+/** 把服务端确认过的名字/性别/阵营写回本地，供下次自动 join 使用。 */
+export function cacheJoinProfile(player: { name: string; genderId?: string | null; genderLabel?: string | null; factionId?: string | null }) {
+  // genderId 可能因 proto 省略空串而变成 undefined，必须写成 "" 而不是 String(undefined)==="undefined"。
+  const genderId = typeof player.genderId === "string" ? player.genderId : "";
+  localStorage.setItem("rps-online-name", player.name || "");
+  localStorage.setItem("rps-online-gender", genderId);
+  localStorage.setItem("rps-online-custom-gender", genderId ? "" : (player.genderLabel || ""));
+  localStorage.setItem("rps-online-faction", player.factionId || "");
+}
+
 export async function ensureSessionToken(forceNew = false) {
   const existing = localStorage.getItem(tokenKey);
   // 注意：本地只能看格式/过期时间，无法验 HMAC。密钥轮换后的「假有效」token 必须 forceNew 才能换掉。

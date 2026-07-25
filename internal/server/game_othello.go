@@ -630,7 +630,7 @@ func (s *Server) applyOthelloMove(room *RoomState, seat types.SeatKey, row, col 
 	player := s.humanPlayerFromSeat(room, seat)
 	opponent := s.humanPlayerFromSeat(room, opponentSeat)
 	liveStake := len(flips) * int(room.Settings.Stake) * int(rankMultiplierFor(room.Settings))
-	useGiveawaySettlement := room.Settings.EnableRanked && player != nil && ptrBool(player.GiveawayEnabled) && s.isHumanVsHumanRoom(room)
+	useGiveawaySettlement := room.Settings.EnableRanked && player != nil && ptrBool(player.GiveawayEnabled) && s.isFullHumanRoom(room)
 	nextTurn := othelloSeatForColor(room.Othello, oppositeOthelloColor(color))
 	if useGiveawaySettlement {
 		forcedGiveaway := s.shouldTriggerGiveaway(player)

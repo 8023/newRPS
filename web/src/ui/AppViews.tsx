@@ -1,13 +1,13 @@
 import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type ReactNode, type UIEvent as ReactUIEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Coffee, Crown, DoorOpen, ExternalLink, Eye, HeartHandshake, Info, Moon, Pencil, Save, Send, Shield, Sun, Swords, Upload, UserRound, Users } from "lucide-react";
-import type { AppConfig, BotDifficulty, ChatMessage, GenderFaction, LobbySnapshot, Move, PublicPlayer, PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant } from "../shared/types";
+import type { AppConfig, ChatMessage, GenderFaction, LobbySnapshot, Move, PublicPlayer, PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant } from "../shared/types";
 import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, withRankedScoreDefaults } from "../lib/normalize";
 import {
   defaultGomokuRoomName, defaultLiarsDiceRoomName, defaultOthelloRoomName, defaultRoomName, defaultTicTacToeRoomName,
   gameMinutesOptions, gomokuBoardThemes, moveSecondsOptions, othelloBoardThemes, playerSecretKey, doumiaoLinks, luv4uLinks, tictactoeBoardThemes, tokenKey
 } from "../lib/constants";
 import { ask } from "../lib/rpc";
-import { claimIdentity, clearPlayerIdentity, encodeClaimCode, fetchClaimKey, joinIdentityPayload, logout, refreshClaimKey } from "../lib/session";
+import { cacheJoinProfile, claimIdentity, clearPlayerIdentity, encodeClaimCode, fetchClaimKey, joinIdentityPayload, logout, refreshClaimKey } from "../lib/session";
 import { appendHistoryPage, normalizeRoomSnapshot, normalizeRoundHistoryItem } from "../lib/normalize";
 import { prepareProofImageForUpload } from "../lib/proofImage";
 import { prepareAvatarImageForUpload } from "../lib/avatarImage";
@@ -21,7 +21,7 @@ import type { MeState } from "../lib/types";
 import { LiarsDicePanel } from "./LiarsDicePanel";
 import { GomokuPanel, GomokuScore } from "./GomokuPanel";
 
-import { formatDuration } from "../lib/format";
+import { formatDuration, formatOnlineDuration } from "../lib/format";
 
 // 仅手机端生效的模块折叠开关（三角图标）；桌面端由 CSS 隐藏按钮并强制展开，不受折叠状态影响。
 // collapsed/onToggle 由调用方通过 useMobileCollapse(sectionKey) 持有，与被折叠的内容共享同一份状态。
@@ -57,10 +57,8 @@ export function Login({ config, onDone, onError }: { config: AppConfig; onDone: 
       return;
     }
     localStorage.setItem(tokenKey, result.token);
-    if (typeof payload.name === "string") localStorage.setItem("rps-online-name", payload.name);
-    if (typeof payload.genderId === "string") localStorage.setItem("rps-online-gender", payload.genderId);
-    if (typeof payload.customGenderLabel === "string") localStorage.setItem("rps-online-custom-gender", payload.customGenderLabel);
-    if (typeof payload.factionId === "string") localStorage.setItem("rps-online-faction", payload.factionId);
+    // 以服务端确认后的资料为准缓存；自定义性别 genderId 为空串，必须原样写入（见 cacheJoinProfile）。
+    if (result.player) cacheJoinProfile(result.player);
     if (result.reissuedSecret) localStorage.setItem(playerSecretKey, result.reissuedSecret);
     onDone(result);
   }
@@ -525,8 +523,14 @@ export function safePlayerStats(player: PublicPlayer | null | undefined) {
     sortHighestScore: Number.isFinite(Number(s.sortHighestScore)) ? Number(s.sortHighestScore) : highestScore,
     sortLowestScore: Number.isFinite(Number(s.sortLowestScore)) ? Number(s.sortLowestScore) : lowestScore,
     title: title || "暂无称号",
-    titleCustom: !!s.titleCustom
+    titleCustom: !!s.titleCustom,
+    totalOnlineMs: Number.isFinite(Number(s.totalOnlineMs)) ? Number(s.totalOnlineMs) : 0
   };
+}
+
+/** 排行榜展示用累计在线时长（毫秒）。 */
+export function totalOnlineMsOf(player: PublicPlayer) {
+  return safePlayerStats(player).totalOnlineMs || 0;
 }
 
 export function Lobby({ config, lobby, me, onError, onGoRoom }: { config: AppConfig; lobby: LobbySnapshot; me: PublicPlayer; onError: (message: string) => void; onGoRoom: (room?: RoomSnapshot) => void }) {
@@ -627,8 +631,6 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
   const [settings, setSettings] = useState<RoomSettings>({
     name: defaultRoomName,
     gameId: "rps",
-    enableBot: false,
-    botDifficulty: "easy",
     enablePunishment: false,
     punishmentSource: "system",
     punishmentId: config.punishments[0]?.id,
@@ -667,10 +669,6 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
         next.punishmentId = validPunishmentIds[validPunishmentIds.length - 1];
         changed = true;
       }
-      if (!config.bots.difficulties.some((difficulty) => difficulty.id === next.botDifficulty)) {
-        next.botDifficulty = config.bots.difficulties[0]?.id || "easy";
-        changed = true;
-      }
       if (next.tags?.some((tag) => !config.roomTags.includes(tag))) {
         next.tags = next.tags.filter((tag) => config.roomTags.includes(tag));
         next.enableTags = Boolean(next.tags.length);
@@ -678,7 +676,7 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
       }
       return changed ? next : old;
     });
-  }, [config.punishments, config.bots.difficulties, config.roomTags]);
+  }, [config.punishments, config.roomTags]);
 
   function patch(next: Partial<RoomSettings>) {
     setSettings((old) => {
@@ -692,16 +690,13 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
       }
       if (next.gameId === "othello" || merged.gameId === "othello") {
         merged.othelloBoardTheme = merged.othelloBoardTheme || "classic";
-        merged.enableBot = false;
       }
       if (next.gameId === "tictactoe" || merged.gameId === "tictactoe") {
         merged.tictactoeBoardTheme = merged.tictactoeBoardTheme || "paper";
-        merged.enableBot = false;
       }
       if (next.gameId === "gomoku" || merged.gameId === "gomoku") {
         merged.gomokuBoardTheme = merged.gomokuBoardTheme || "wood";
         merged.gomokuUndoLimit = merged.gomokuUndoLimit ?? 0;
-        merged.enableBot = false;
       }
       if ("othelloMoveSeconds" in next && !moveSecondsOptions.includes(next.othelloMoveSeconds as typeof moveSecondsOptions[number])) {
         merged.othelloMoveSeconds = 0;
@@ -718,7 +713,6 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
       if (next.gameId === "liarsdice" || merged.gameId === "liarsdice") {
         merged.liarsDiceMinPlayers = merged.liarsDiceMinPlayers || 3;
         merged.liarsDiceMaxPlayers = merged.liarsDiceMaxPlayers || 3;
-        merged.enableBot = false;
       }
       if ("liarsDiceMaxPlayers" in next) {
         const maxP = Math.min(8, Math.max(2, next.liarsDiceMaxPlayers || 3));
@@ -731,16 +725,6 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
       }
       if (next.punishmentSource === "player") {
         merged.enablePunishment = true;
-        merged.enableBot = false;
-      }
-      if (next.enableBot) {
-        merged.enableRanked = false;
-        merged.enableRankMultiplier = false;
-        merged.rankMultiplier = 1;
-        merged.enableExtremeRanked = false;
-      }
-      if (next.enableRanked) {
-        merged.enableBot = false;
       }
       if (next.enableRanked === false) {
         merged.enableRankMultiplier = false;
@@ -749,13 +733,11 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
       }
       if (next.enableRankMultiplier) {
         merged.enableRanked = true;
-        merged.enableBot = false;
         merged.enableExtremeRanked = false;
         if (!([2, 5, 10] as const).includes(merged.rankMultiplier as 2 | 5 | 10)) merged.rankMultiplier = 2;
       }
       if (next.enableExtremeRanked) {
         merged.enableRanked = true;
-        merged.enableBot = false;
         merged.enableRankMultiplier = false;
         merged.rankMultiplier = 1;
       }
@@ -767,25 +749,18 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
       }
       if (merged.gameId === "othello") {
         if (!([1, 2, 5, 10] as const).includes(merged.stake as 1 | 2 | 5 | 10)) merged.stake = 5;
-        merged.enableBot = false;
         if (merged.enableExtremeRanked) {
           merged.enableRankMultiplier = false;
           merged.rankMultiplier = 1;
         }
       } else if (merged.gameId === "tictactoe") {
         if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) merged.stake = 5;
-        merged.enableBot = false;
       } else if (merged.gameId === "liarsdice") {
         if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) merged.stake = 5;
-        merged.enableBot = false;
       } else if (merged.gameId === "gomoku") {
         if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) merged.stake = 5;
-        merged.enableBot = false;
       } else if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) {
         merged.stake = 5;
-      }
-      if (next.enableBot && merged.punishmentSource === "player") {
-        merged.punishmentSource = "system";
       }
       if (merged.punishmentSource === "system") {
         merged.punishmentIds = selectedPunishmentIdsForConfig(config, merged);
@@ -854,7 +829,11 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
                     type="button"
                     className={`game-choice-card ${settings.gameId === game.id ? "active" : ""}`}
                     key={game.id}
-                    onClick={() => patch({ gameId: game.id })}
+                    onClick={() => patch({
+                      gameId: game.id,
+                      // 大话骰没有整局平局，隐藏并清掉平局双罚，避免歧义。
+                      ...(game.id === "liarsdice" ? { tieDoublePunish: false } : {})
+                    })}
                   >
                     <span className="game-choice-icon" aria-hidden="true">{gameIcon(game.id)}</span>
                     <span className="game-choice-copy">
@@ -864,10 +843,10 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
                   </button>
                 ))}
               </div>
-              {settings.gameId === "othello" && <p className="hint">黑白棋支持真人 1v1、观战、聊天、排位和惩罚；Bot 不开放，排位房会支持白给/上贡结算。</p>}
-              {settings.gameId === "tictactoe" && <p className="hint">井字棋支持真人 1v1、观战、聊天、排位和惩罚；双方准备后随机 X/O 先手，Bot 暂不开放。</p>}
-              {settings.gameId === "liarsdice" && <p className="hint">大话骰支持 2-8 人参战，进房默认观战，可自由加入/离开参战席；全员准备且名单 5 秒无变动后自动开局，Bot 暂不开放。</p>}
-              {settings.gameId === "gomoku" && <p className="hint">五子棋支持真人 1v1、观战、聊天、排位和惩罚；15x15 棋盘先连成五子者胜，可向对方请求悔棋或认输，Bot 暂不开放。</p>}
+              {settings.gameId === "othello" && <p className="hint">黑白棋支持真人 1v1、观战、聊天、排位和惩罚；排位房会支持白给/上贡结算。</p>}
+              {settings.gameId === "tictactoe" && <p className="hint">井字棋支持真人 1v1、观战、聊天、排位和惩罚；双方准备后随机 X/O 先手。</p>}
+              {settings.gameId === "liarsdice" && <p className="hint">大话骰支持 2-8 人参战，进房默认观战，可自由加入/离开参战席；全员准备且名单 5 秒无变动后自动开局。</p>}
+              {settings.gameId === "gomoku" && <p className="hint">五子棋支持真人 1v1、观战、聊天、排位和惩罚；15x15 棋盘先连成五子者胜，可向对方请求悔棋或认输。</p>}
               {settings.gameId === "gomoku" && (
                 <div className="game-timer-settings">
                   <label>
@@ -1068,51 +1047,30 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
               )}
             </div>
             <div className="create-section">
-              <h3>对手</h3>
-              <Toggle label="开启 Bot" value={settings.enableBot} disabled={settings.gameId === "othello" || settings.gameId === "tictactoe" || settings.gameId === "liarsdice" || settings.gameId === "gomoku" || (settings.enablePunishment && settings.punishmentSource === "player") || settings.enableRanked} onChange={(value) => patch({ enableBot: value })} />
-              {settings.gameId === "othello" && <p className="hint">黑白棋暂不支持 Bot。</p>}
-              {settings.gameId === "tictactoe" && <p className="hint">井字棋暂不支持 Bot。</p>}
-              {settings.gameId === "gomoku" && <p className="hint">五子棋暂不支持 Bot。</p>}
-              {settings.enablePunishment && settings.punishmentSource === "player" && <p className="hint">玩家发布任务模式需要真人对战，不能开启 Bot。</p>}
-              {settings.enableRanked && <p className="hint">排位战需要真人对战，不能开启 Bot。</p>}
-              {settings.enableBot && (
-                <div className="bot-difficulty-grid">
-                  {config.bots.difficulties.map((difficulty) => (
-                    <button
-                      type="button"
-                      className={`bot-difficulty-card ${settings.botDifficulty === difficulty.id ? "active" : ""}`}
-                      key={difficulty.id}
-                      onClick={() => patch({ botDifficulty: difficulty.id })}
-                      style={{ "--bot-card-color": difficulty.cardColor || "#9ed7ff" } as CSSProperties}
-                    >
-                      <span className="bot-card-emoji">{difficulty.emoji || "🤖"}</span>
-                      <strong>{difficulty.name}</strong>
-                      <em>{botStars(difficulty.level || 1)}</em>
-                      <small>{difficulty.description}</small>
-                      <b>{botStrategyText(difficulty.strategy)}</b>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="create-section">
               <h3>玩法</h3>
               <div className="ranked-choice-grid">
                 <button type="button" className={`ranked-choice-card ${!settings.enableRanked ? "active" : ""}`} onClick={() => patch({ enableRanked: false, enableExtremeRanked: false })}>
                   <span>🎮 普通局</span>
-                  <small>不增加/减少排位积分，可以和 Bot 对战。</small>
+                  <small>不增加/减少排位积分，适合随意对战。</small>
                 </button>
                 {(settings.gameId === "othello" ? ([1, 2, 5, 10] as const) : ([5, 10, 20] as const)).map((stake) => (
                   <button type="button" className={`ranked-choice-card ${settings.enableRanked && settings.stake === stake ? "active" : ""}`} key={stake} onClick={() => patch({ enableRanked: true, stake, enableExtremeRanked: Boolean(me.extremeModeEnabled) })}>
                     <span>{settings.gameId === "othello" ? "🏆 黑白棋排位" : settings.gameId === "tictactoe" ? "🏆 井字棋排位" : settings.gameId === "gomoku" ? "🏆 五子棋排位" : me.extremeModeEnabled ? "⚡ 极限排位" : "🏆 排位"} {stake}{settings.gameId === "othello" ? " 分/子" : " 分"}</span>
-                    <small>{settings.gameId === "othello" ? `每翻掉对方 1 子立即结算 ${stake} 分，终局不重复结算。` : me.extremeModeEnabled ? "只能创建极限排位房；非极限玩家无法进入。" : `胜利 +${stake}，失败 -${stake}；普通平局不扣分，平局双罚时双方 -${stake}。`}</small>
+                    <small>{
+                      settings.gameId === "othello"
+                        ? `每翻掉对方 1 子立即结算 ${stake} 分，终局不重复结算。`
+                        : settings.gameId === "liarsdice"
+                          ? `胜利 +${stake}，失败 -${stake}；其余参战玩家本局平，不计分。`
+                          : me.extremeModeEnabled
+                            ? "只能创建极限排位房；非极限玩家无法进入。"
+                            : `胜利 +${stake}，失败 -${stake}；普通平局不扣分，平局双罚时双方 -${stake}。`
+                    }</small>
                   </button>
                 ))}
               </div>
               {settings.gameId === "othello" && <p className="hint">黑白棋排位按实时翻子结算，可选 1/2/5/10 分/子；支持倍率和极限模式，但两者不能同时开启。</p>}
               {settings.gameId === "tictactoe" && <p className="hint">井字棋排位按胜负固定分结算，可选 5/10/20 分；支持倍率和极限模式。</p>}
               {settings.gameId === "gomoku" && <p className="hint">五子棋排位按胜负固定分结算，可选 5/10/20 分；支持倍率和极限模式。</p>}
-              {settings.enableBot && <p className="hint">开启 Bot 时不能选择排位战。</p>}
               {settings.enableRanked && me.extremeModeEnabled && (
                 <div className="multiplier-box extreme-mode-box">
                   <div className="multiplier-head">
@@ -1166,6 +1124,7 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
               {settings.gameId === "othello" && <p className="hint">黑白棋惩罚会在终局、认输、逃跑或断线判负后触发；平局双罚开启时黑白棋平局双方都要惩罚。</p>}
               {settings.gameId === "tictactoe" && <p className="hint">井字棋惩罚会在终局或断线判负后触发；平局双罚开启时井字棋平局双方都要惩罚。</p>}
               {settings.gameId === "gomoku" && <p className="hint">五子棋惩罚会在终局、认输或断线判负后触发；平局双罚开启时五子棋平局双方都要惩罚。</p>}
+              {settings.gameId === "liarsdice" && <p className="hint">大话骰惩罚仅对败者触发（叫点/开牌对决中的负方，或断线判负方）；其余参战玩家记平但不计分、不受罚。</p>}
               {settings.enablePunishment && (
                 <>
                   <Select value={settings.punishmentSource || "system"} onChange={(value) => patch({ punishmentSource: value as RoomSettings["punishmentSource"] })} options={[
@@ -1203,9 +1162,13 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
                   ) : (
                     <p className="hint">本局结算后，由对手临时写惩罚任务；任务不会保存到后台配置。</p>
                   )}
-                  <Toggle label="平局双罚" value={settings.tieDoublePunish} onChange={(value) => patch({ tieDoublePunish: value })} />
-                  {settings.enableRanked && settings.tieDoublePunish && (
-                    <p className="hint">排位平局双罚开启时，平局双方都会扣 {settings.stake} 分。</p>
+                  {settings.gameId !== "liarsdice" && (
+                    <>
+                      <Toggle label="平局双罚" value={settings.tieDoublePunish} onChange={(value) => patch({ tieDoublePunish: value })} />
+                      {settings.enableRanked && settings.tieDoublePunish && (
+                        <p className="hint">排位平局双罚开启时，平局双方都会扣 {settings.stake} 分。</p>
+                      )}
+                    </>
                   )}
                   <Toggle label="惩罚需对手确认" value={settings.requireOpponentConfirm} onChange={(value) => patch({ requireOpponentConfirm: value })} />
                   <Toggle label="允许图片证明" value={settings.allowProofImage ?? true} onChange={(value) => patch({ allowProofImage: value })} />
@@ -1306,8 +1269,8 @@ export function RoomVersusLine({ room }: { room: LobbySnapshot["rooms"][number] 
   }
   const left = room.versus.A;
   const right = room.versus.B;
-  const leftName = left ? "player" in left ? left.player.displayName : left.name : "等待玩家";
-  const rightName = right ? "player" in right ? right.player.displayName : right.name : "等待玩家";
+  const leftName = left?.player?.displayName || "等待玩家";
+  const rightName = right?.player?.displayName || "等待玩家";
   return (
     <div className="room-versus-line" title={`${leftName} VS ${rightName}`}>
       <RoomVersusSeat occupant={left} />
@@ -1319,8 +1282,7 @@ export function RoomVersusLine({ room }: { room: LobbySnapshot["rooms"][number] 
 
 export function RoomVersusSeat({ occupant }: { occupant: LobbySnapshot["rooms"][number]["versus"]["A"] }) {
   if (!occupant) return <span className="empty">等待玩家</span>;
-  if ("player" in occupant) return <PlayerBadge player={occupant.player} compact />;
-  return <span className="bot">{occupant.name}</span>;
+  return <PlayerBadge player={occupant.player} compact />;
 }
 
 export function TagPicker({ options, value, onChange }: { options: string[]; value: string[]; onChange: (tags: string[]) => void }) {
@@ -1338,19 +1300,6 @@ export function TagPicker({ options, value, onChange }: { options: string[]; val
       {options.length === 0 && <p className="empty">后台还没有配置房间 Tag</p>}
     </div>
   );
-}
-
-export function botStars(level: number) {
-  const safeLevel = Math.max(1, Math.min(5, Math.round(level)));
-  return "★".repeat(safeLevel) + "☆".repeat(5 - safeLevel);
-}
-
-export function botStrategyText(strategy?: AppConfig["bots"]["difficulties"][number]["strategy"]) {
-  if (strategy === "throw") return "白给";
-  if (strategy === "win") return "必胜";
-  if (strategy === "counter") return "反制";
-  if (strategy === "chaos") return "混乱连招";
-  return "随机";
 }
 
 export function Room({ config, room, me, lobby, onBack, onError }: { config: AppConfig; room: RoomSnapshot; me: PublicPlayer; lobby: LobbySnapshot | null; onBack: () => void; onError: (message: string) => void }) {
@@ -1377,8 +1326,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
   const myChoice = mySeat ? room.phase === "result" ? undefined : localChoice || choices[mySeat] : undefined;
   const resultChoice = mySeat ? room.revealedChoices?.[mySeat] : undefined;
   const canChoose = Boolean(mySeat && room.phase !== "punishment" && (room.phase === "choosing" || room.phase === "result") && seats.A && seats.B);
-  const roomHasBot = Boolean((seats.A && "isBot" in seats.A) || (seats.B && "isBot" in seats.B));
-  const canShowGiveawayButton = Boolean(mySeat && me.giveawayEnabled && !roomHasBot && seats.A && seats.B);
+  const canShowGiveawayButton = Boolean(mySeat && me.giveawayEnabled && seats.A && seats.B);
   const canGoSpectate = Boolean(mySeat && room.phase !== "punishment" && !choices[mySeat] && !((room.settings.gameId === "tictactoe" || room.settings.gameId === "gomoku") && room.phase === "choosing"));
   const roomPlayers = roomPlayerList(room);
   // 聊天发言人查找源：房间名单优先（在房间内持续更新），叠加大厅名单兜底
@@ -2327,7 +2275,7 @@ export function OthelloSettlementCard({ room, me, pending, now, onSettle }: { ro
 
 export function occupantDisplay(occupant: SeatOccupant) {
   if (!occupant) return "空位";
-  return "isBot" in occupant ? occupant.name : displayPlayerName(occupant);
+  return displayPlayerName(occupant);
 }
 
 export function RoundHistoryCard({ item, onOpenImage }: { item: RoomSnapshot["roundHistory"][number]; onOpenImage: (imageUrl: string) => void }) {
@@ -2474,7 +2422,7 @@ export function canAssignPunishmentTask(room: RoomSnapshot, currentPlayerId: str
   const punishedSeat = room.seats.A?.id === punishedPlayerId ? "A" : room.seats.B?.id === punishedPlayerId ? "B" : null;
   if (!punishedSeat) return false;
   const opponent = punishedSeat === "A" ? room.seats.B : room.seats.A;
-  return Boolean(opponent && !("isBot" in opponent) && opponent.id === currentPlayerId);
+  return Boolean(opponent && opponent.id === currentPlayerId);
 }
 
 export function RoomPlayerRow({ player, role, now }: { player: PublicPlayer; role: string; now: number }) {
@@ -2847,7 +2795,7 @@ export function roomPlayerList(room: RoomSnapshot) {
   const result: Array<{ player: PublicPlayer; role: string }> = [];
   for (const seat of ["A", "B"] as SeatKey[]) {
     const occupant = room.seats[seat];
-    if (occupant && !("isBot" in occupant)) result.push({ player: occupant, role: "战斗席" });
+    if (occupant) result.push({ player: occupant, role: "战斗席" });
   }
   for (const player of room.spectators) result.push({ player, role: "观战" });
   return result;
@@ -2876,16 +2824,12 @@ export function SeatView({ seat, room, me, now, onSit }: { seat: SeatKey; room: 
         <span className="seat-label">玩家 {seat}</span>
         {occupant ? (
           <strong className="seat-occupant-row">
-            {"isBot" in occupant ? `🤖 ${occupant.name}` : (
-              <>
-                <PlayerAvatar player={occupant} size={24} />
-                <PlayerBadge player={occupant} compact />
-              </>
-            )}
+            <PlayerAvatar player={occupant} size={24} />
+            <PlayerBadge player={occupant} compact />
           </strong>
         ) : <button disabled={battleSeatBlocked} title={battleSeatBlocked ? "当前排位类型不匹配，只能观战" : "坐到战斗席"} onClick={onSit}>{battleSeatBlocked ? "👀 只能观战" : "🪑 坐下"}</button>}
       </div>
-      {occupant && !("isBot" in occupant) && <OfflineBadge player={occupant} now={now} />}
+      {occupant && <OfflineBadge player={occupant} now={now} />}
       <p className="choice-badge">
         {room.settings.gameId === "othello"
           ? othelloTurn ? `${othelloColorLabel}落子中` : othelloColorLabel
@@ -2895,7 +2839,7 @@ export function SeatView({ seat, room, me, now, onSit }: { seat: SeatKey; room: 
               ? gomokuTurn ? `${gomokuMarkLabel}落子中` : gomokuMarkLabel
               : choice ? choiceText(choice) : room.seats.A && room.seats.B ? "🤔 等待出拳" : "⏳ 等人"}
       </p>
-      {occupant && !("isBot" in occupant) && <SeatStatsView stats={stats} />}
+      {occupant && <SeatStatsView stats={stats} />}
     </div>
   );
 }
@@ -2992,7 +2936,7 @@ export function roomInfoTags(config: AppConfig, room: RoomSnapshot) {
   ];
   if (room.settings.enableExtremeRanked) tags.push(roomInfoTag(config, "extremeRanked"));
   if (room.settings.enablePunishment) {
-    if (room.settings.tieDoublePunish) tags.push(roomInfoTag(config, "tieDoublePunish"));
+    if (room.settings.tieDoublePunish && room.settings.gameId !== "liarsdice") tags.push(roomInfoTag(config, "tieDoublePunish"));
     if (room.settings.requireOpponentConfirm) tags.push(roomInfoTag(config, "requireOpponentConfirm"));
     tags.push(roomInfoTag(config, room.settings.allowProofImage === false ? "textProofOnly" : "allowProofImage"));
   }
@@ -3019,7 +2963,7 @@ export function lobbyRoomInfoTags(config: AppConfig, room: LobbySnapshot["rooms"
   ];
   if (room.enableExtremeRanked) tags.push(roomInfoTag(config, "extremeRanked"));
   if (room.enablePunishment) {
-    if (room.tieDoublePunish) tags.push(roomInfoTag(config, "tieDoublePunish"));
+    if (room.tieDoublePunish && room.gameId !== "liarsdice") tags.push(roomInfoTag(config, "tieDoublePunish"));
     if (room.requireOpponentConfirm) tags.push(roomInfoTag(config, "requireOpponentConfirm"));
   }
   if (room.gameId === "liarsdice") {
@@ -3035,7 +2979,7 @@ export function lobbyRoomInfoTags(config: AppConfig, room: LobbySnapshot["rooms"
   }
   tags.push({
     key: `opponent-${room.id}`,
-    text: room.enableBot ? `Bot ${room.botDifficulty}` : "真人房",
+    text: "在线对战",
     style: plainInfoTagStyle
   });
   return tags;
@@ -3127,6 +3071,7 @@ export function Leaderboard({ title, players }: { title: string; players: Public
 
 export type GlobalLeaderboardTab =
   | "positive" | "negative" | "historyPositive" | "historyNegative" | "extremePositive" | "extremeNegative" | "nameWar" | "giveaway"
+  | "totalWins" | "onlineTime"
   | "rps" | "othello" | "tictactoe" | "gomoku" | "liarsdice";
 
 const GAME_LEADERBOARD_TABS: Array<{ id: GlobalLeaderboardTab; label: string; title: string }> = [
@@ -3301,7 +3246,11 @@ export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPl
                 ? "名字争夺战榜"
                 : tab === "giveaway"
                   ? "白给榜"
-                  : gameTabMeta?.title || "排行榜";
+                  : tab === "totalWins"
+                    ? "总局数榜"
+                    : tab === "onlineTime"
+                      ? "在线时长榜"
+                      : gameTabMeta?.title || "排行榜";
   return (
     <div className="modal-backdrop leaderboard-backdrop" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="leaderboard-modal">
@@ -3321,6 +3270,8 @@ export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPl
           <button className={tab === "extremeNegative" ? "active" : ""} onClick={() => setTab("extremeNegative")}>极限负</button>
           <button className={tab === "nameWar" ? "active" : ""} onClick={() => setTab("nameWar")}>名争</button>
           <button className={tab === "giveaway" ? "active" : ""} onClick={() => setTab("giveaway")}>白给</button>
+          <button className={tab === "totalWins" ? "active" : ""} onClick={() => setTab("totalWins")}>总局数</button>
+          <button className={tab === "onlineTime" ? "active" : ""} onClick={() => setTab("onlineTime")}>在线时长</button>
           {GAME_LEADERBOARD_TABS.map((item) => (
             <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>{item.label}</button>
           ))}
@@ -3330,8 +3281,12 @@ export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPl
           {ranked.map((player, index) => {
             const stats = safePlayerStats(player);
             const game = isGameLeaderboardTab(tab) ? gameWLDOf(player, tab) : null;
-            const decisive = game ? game.wins + game.losses : stats.wins + stats.losses;
-            const rate = decisive === 0 ? 0 : Math.round(((game ? game.wins : stats.wins) / decisive) * 100);
+            const showGameStats = Boolean(game) || tab === "totalWins";
+            const wins = game ? game.wins : stats.wins;
+            const losses = game ? game.losses : stats.losses;
+            const draws = game ? game.draws : stats.draws;
+            const decisive = wins + losses;
+            const rate = decisive === 0 ? 0 : Math.round((wins / decisive) * 100);
             return (
               <article className="global-rank-card" key={`${tab}-${player.id}`}>
                 <div className="global-rank-main">
@@ -3341,10 +3296,15 @@ export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPl
                   <span className={`online-dot ${player.connected ? "online" : "offline"}`}>{player.connected ? "在线" : "离线"}</span>
                 </div>
                 <div className="global-rank-stats">
-                  {game ? (
+                  {tab === "onlineTime" ? (
                     <>
-                      <span>{game.wins}胜 {game.losses}负 {game.draws}平</span>
-                      <span>总局 {game.wins + game.losses + game.draws}</span>
+                      <span>累计在线 {formatOnlineDuration(totalOnlineMsOf(player))}</span>
+                      <span>{stats.wins}胜 {stats.losses}负 {stats.draws}平</span>
+                    </>
+                  ) : showGameStats ? (
+                    <>
+                      <span>{wins}胜 {losses}负 {draws}平</span>
+                      <span>总局 {wins + losses + draws}</span>
                       <span>胜率 {rate}%</span>
                     </>
                   ) : (
@@ -3383,6 +3343,25 @@ export function leaderboardPlayers(players: PublicPlayer[], tab: GlobalLeaderboa
       .filter((player) => player.nameWarEnabled || player.nameWarPunished)
       .sort((a, b) => Number(Boolean(b.nameWarPunished)) - Number(Boolean(a.nameWarPunished)) || sortRankedPointsOf(a) - sortRankedPointsOf(b));
   }
+  // 总局数：按全部游戏合计胜场排序（与 stats.wins 一致）。
+  if (tab === "totalWins") {
+    return copy
+      .filter((player) => {
+        const s = safePlayerStats(player);
+        return s.wins + s.losses + s.draws > 0;
+      })
+      .sort((a, b) => {
+        const sa = safePlayerStats(a);
+        const sb = safePlayerStats(b);
+        return sb.wins - sa.wins || sa.losses - sb.losses || sb.draws - sa.draws;
+      });
+  }
+  // 在线时长：累计在线毫秒从长到短。
+  if (tab === "onlineTime") {
+    return copy
+      .filter((player) => totalOnlineMsOf(player) > 0)
+      .sort((a, b) => totalOnlineMsOf(b) - totalOnlineMsOf(a) || sortRankedPointsOf(b) - sortRankedPointsOf(a));
+  }
   if (isGameLeaderboardTab(tab)) {
     return copy
       .filter((player) => {
@@ -3405,6 +3384,21 @@ export function isGameLeaderboardTab(tab: GlobalLeaderboardTab) {
 }
 
 export function LeaderboardExtra({ player, tab, now }: { player: PublicPlayer; tab: GlobalLeaderboardTab; now: number }) {
+  if (tab === "totalWins") {
+    const s = safePlayerStats(player);
+    return (
+      <p className="global-rank-extra">
+        全部游戏胜场优先 · 总局 {s.wins + s.losses + s.draws}
+      </p>
+    );
+  }
+  if (tab === "onlineTime") {
+    return (
+      <p className="global-rank-extra">
+        累计在线时长优先 · {formatOnlineDuration(totalOnlineMsOf(player))}
+      </p>
+    );
+  }
   if (isGameLeaderboardTab(tab)) {
     const g = gameWLDOf(player, tab);
     const label = GAME_LEADERBOARD_TABS.find((item) => item.id === tab)?.label || "该游戏";

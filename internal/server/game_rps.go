@@ -3,7 +3,6 @@ package server
 import (
 	"fmt"
 	"math/rand"
-	"time"
 
 	"github.com/doumiao/newRPS/internal/types"
 )
@@ -12,22 +11,13 @@ func isRpsMove(move types.Move) bool {
 	return move == types.MoveRock || move == types.MoveScissors || move == types.MovePaper
 }
 
-// maxRecentMoves 限制每个玩家保留的历史出拳数（Bot 反制策略只看最近一手）。
-const maxRecentMoves = 20
-
-func appendRecentMove(moves []RpsMove, move RpsMove) []RpsMove {
-	moves = append(moves, move)
-	if len(moves) > maxRecentMoves {
-		moves = moves[len(moves)-maxRecentMoves:]
-	}
-	return moves
-}
-
-func judge(a, b RpsMove) types.RoundResult {
+func judge(a, b types.Move) types.RoundResult {
 	if a == b {
 		return types.ResultDraw
 	}
-	if (a == "rock" && b == "scissors") || (a == "scissors" && b == "paper") || (a == "paper" && b == "rock") {
+	if (a == types.MoveRock && b == types.MoveScissors) ||
+		(a == types.MoveScissors && b == types.MovePaper) ||
+		(a == types.MovePaper && b == types.MoveRock) {
 		return types.ResultA
 	}
 	return types.ResultB
@@ -57,7 +47,7 @@ func (s *Server) applyForgiveAdvantage(room *RoomState, result types.RoundResult
 }
 
 func (s *Server) giveawayForcedSeats(room *RoomState) []types.SeatKey {
-	if !s.isHumanVsHumanRoom(room) {
+	if !s.isFullHumanRoom(room) {
 		return nil
 	}
 	var seats []types.SeatKey
@@ -66,7 +56,7 @@ func (s *Server) giveawayForcedSeats(room *RoomState) []types.SeatKey {
 			continue
 		}
 		occ := room.Seats[seat]
-		if occ == nil || occ.IsBot() {
+		if occ == nil {
 			continue
 		}
 		player := s.players[occ.GetID()]
@@ -121,81 +111,6 @@ func moveText(move types.Move) string {
 	default:
 		return string(move)
 	}
-}
-
-func winningMoveAgainst(move RpsMove) RpsMove {
-	switch move {
-	case "rock":
-		return "paper"
-	case "paper":
-		return "scissors"
-	default:
-		return "rock"
-	}
-}
-
-func losingMoveAgainst(move RpsMove) RpsMove {
-	switch move {
-	case "rock":
-		return "scissors"
-	case "paper":
-		return "rock"
-	default:
-		return "paper"
-	}
-}
-
-func (s *Server) botMove(room *RoomState, bot types.BotPlayer) types.Move {
-	moves := []RpsMove{"rock", "scissors", "paper"}
-	var opponent *PlayerState
-	if room.Seats[types.SeatA] != nil && !room.Seats[types.SeatA].IsBot() {
-		opponent = s.players[room.Seats[types.SeatA].GetID()]
-	}
-	strategy := types.BotStrategy("random")
-	for _, d := range s.cfg.Bots.Difficulties {
-		if d.ID == bot.Difficulty {
-			if d.Strategy != "" {
-				strategy = d.Strategy
-			}
-			break
-		}
-	}
-	if strategy == "" {
-		switch bot.Difficulty {
-		case "normal":
-			strategy = "counter"
-		case "chaos":
-			strategy = "chaos"
-		default:
-			strategy = "random"
-		}
-	}
-	var currentOpponentMove RpsMove
-	hasCurrent := false
-	if opponent != nil {
-		if seat, ok := s.seatOf(room, opponent.ID); ok {
-			if m, ok2 := room.Choices[seat]; ok2 && isRpsMove(m) {
-				currentOpponentMove = RpsMove(m)
-				hasCurrent = true
-			}
-		}
-	}
-	if strategy == "win" && hasCurrent {
-		return types.Move(winningMoveAgainst(currentOpponentMove))
-	}
-	if strategy == "throw" && hasCurrent {
-		return types.Move(losingMoveAgainst(currentOpponentMove))
-	}
-	if strategy == "chaos" && rand.Float64() < 0.35 && room.RevealedChoices != nil {
-		if m, ok := room.RevealedChoices[types.SeatB]; ok && isRpsMove(m) {
-			return m
-		}
-	}
-	if strategy == "counter" && opponent != nil && len(opponent.RecentMoves) > 0 {
-		last := opponent.RecentMoves[len(opponent.RecentMoves)-1]
-		return types.Move(winningMoveAgainst(last))
-	}
-	return types.Move(moves[rand.Intn(len(moves))])
 }
 
 func (s *Server) roundResultLabel(room *RoomState, result types.RoundResult) string {
@@ -288,50 +203,6 @@ func (s *Server) prepareNextChoice(room *RoomState) {
 	room.PunishedPlayerIDs = []string{}
 }
 
-func (s *Server) maybeBotAct(room *RoomState) {
-	var botSeat types.SeatKey
-	found := false
-	for _, seat := range []types.SeatKey{types.SeatA, types.SeatB} {
-		if room.Seats[seat] != nil && room.Seats[seat].IsBot() {
-			botSeat = seat
-			found = true
-			break
-		}
-	}
-	if !found || room.Phase != types.PhaseChoosing {
-		return
-	}
-	if room.Choices[botSeat] != "" {
-		return
-	}
-	if s.botTimers[room.ID] != nil {
-		return
-	}
-	delay := time.Duration(600+rand.Intn(700)) * time.Millisecond
-	roomID := room.ID
-	timer := timeAfterFunc(delay, func() {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		delete(s.botTimers, roomID)
-		current := s.rooms[roomID]
-		if current == nil || current.Phase != types.PhaseChoosing {
-			return
-		}
-		if current.Choices[botSeat] != "" {
-			return
-		}
-		botOcc := current.Seats[botSeat]
-		if botOcc == nil || !botOcc.IsBot() {
-			return
-		}
-		current.Choices[botSeat] = s.botMove(current, botOcc.(*BotSeat).Bot)
-		oldStatus := current.Status
-		s.finishRoundIfReady(current)
-		s.broadcastRoom(current.ID, oldStatus != current.Status)
-	})
-	s.botTimers[room.ID] = timer
-}
-
 // forceEndRpsRound 管理员强制判定当前 RPS 出拳阶段的胜负；仅在 PhaseChoosing 时允许，
 // 避免和 finishRoundIfReady 的自然结算竞争，也避免对已出结果的对局重复结算
 // （RPS 没有像其它三个游戏那样常驻的 Ended 状态对象可供二次校验，改用 Phase 把关）。
@@ -403,7 +274,7 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 	if finalChoices[types.SeatA] == types.MoveGiveaway || finalChoices[types.SeatB] == types.MoveGiveaway {
 		baseResult = types.ResultDraw
 	} else {
-		baseResult = judge(RpsMove(finalChoices[types.SeatA]), RpsMove(finalChoices[types.SeatB]))
+		baseResult = judge(finalChoices[types.SeatA], finalChoices[types.SeatB])
 	}
 	result, forgiveOutcome := s.resultWithGiveaway(room, baseResult, finalChoices)
 	punishedPlayers := s.punishmentPlayersForResult(room, result)
@@ -420,12 +291,6 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 	playerB := s.humanPlayerFromSeat(room, types.SeatB)
 	rankedMultiplier := rankMultiplierFor(room.Settings)
 	rankedStake := effectiveRankedStake(room.Settings)
-	if playerA != nil && isRpsMove(choiceA) {
-		playerA.RecentMoves = appendRecentMove(playerA.RecentMoves, RpsMove(choiceA))
-	}
-	if playerB != nil && isRpsMove(choiceB) {
-		playerB.RecentMoves = appendRecentMove(playerB.RecentMoves, RpsMove(choiceB))
-	}
 	for _, seat := range giveawaySeats {
 		var player *PlayerState
 		if seat == types.SeatA {

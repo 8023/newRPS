@@ -347,10 +347,6 @@ func sanitizePublicConfig(cfg types.AppConfig) types.AppConfig {
 	if cfg.RoomInfoTags == nil {
 		cfg.RoomInfoTags = map[string]types.RoomInfoTagStyle{}
 	}
-	cfg.Bots.Names = emptyStrings(cfg.Bots.Names)
-	if cfg.Bots.Difficulties == nil {
-		cfg.Bots.Difficulties = []types.BotDifficultyConfig{}
-	}
 	if cfg.Games == nil {
 		cfg.Games = []types.GameConfig{}
 	}

@@ -20,8 +20,6 @@ const (
 	broadcastMetricWindow  = 60 * time.Second
 )
 
-type RpsMove string
-
 type DisconnectForfeit struct {
 	LoserID        string
 	LoserSeat      types.SeatKey
@@ -91,9 +89,8 @@ type PlayerState struct {
 	Token       string
 	IPAddress   string
 	Fingerprint string // 浏览器指纹 visitorId
-	DeviceKey   string // sha256(ip||fingerprint)，防多开维度
-	RecentMoves []RpsMove
-	PlayerID    string // long-term identity (not public)
+	DeviceKey string // sha256(ip||fingerprint)，防多开维度
+	PlayerID  string // long-term identity (not public)
 	// PlayerSecrets：一台设备一条，明文存储（认领/迁移方案已确认不哈希）。
 	// 最多 maxPlayerSecrets 条，超出后挤掉最早的一条（见 addPlayerSecret）。
 	PlayerSecrets []string
@@ -167,9 +164,9 @@ func (p *PlayerState) removePlayerSecret(secret string) {
 	p.PlayerSecrets = out
 }
 
+// SeatOccupant is a human player snapshot in a battle seat (nil = empty).
 type SeatOccupant interface {
 	GetID() string
-	IsBot() bool
 }
 
 // HumanSeat wraps a public player snapshot in a seat.
@@ -178,15 +175,6 @@ type HumanSeat struct {
 }
 
 func (h *HumanSeat) GetID() string { return h.Player.ID }
-func (h *HumanSeat) IsBot() bool   { return false }
-
-// BotSeat wraps a bot.
-type BotSeat struct {
-	Bot types.BotPlayer
-}
-
-func (b *BotSeat) GetID() string { return b.Bot.ID }
-func (b *BotSeat) IsBot() bool   { return true }
 
 type RoomState struct {
 	ID string
@@ -289,7 +277,6 @@ type Server struct {
 	clients        map[string]*Client // client.id -> client
 	socketToClient map[string]*Client // same as clients by id
 
-	botTimers               map[string]*time.Timer
 	othelloSettlementTimers map[string]*time.Timer
 	ticTacToeGiveawayTimers map[string]*time.Timer
 	liarsDiceStartTimers    map[string]*time.Timer

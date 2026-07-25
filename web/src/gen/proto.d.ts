@@ -1,460 +1,6 @@
 import * as $protobuf from "protobufjs";
 import Long = require("long");
 
-/** Namespace wire. */
-export namespace wire {
-
-    /**
-     * Properties of an Envelope.
-     * @deprecated Use wire.Envelope.$Properties instead.
-     */
-    interface IEnvelope extends wire.Envelope.$Properties {
-    }
-
-    /** Represents an Envelope. */
-    class Envelope {
-
-        /**
-         * Constructs a new Envelope.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: wire.Envelope.$Properties);
-
-        /** Unknown fields preserved while decoding when enabled */
-        $unknowns?: Uint8Array[];
-
-        /** Envelope event. */
-        event: string;
-
-        /** Envelope id. */
-        id: (number|Long);
-
-        /** Envelope err. */
-        err: string;
-
-        /** Envelope kind. */
-        kind: wire.PayloadKind;
-
-        /** Envelope channel. */
-        channel: string;
-
-        /** Envelope seq. */
-        seq: (number|Long);
-
-        /** Envelope hash. */
-        hash: string;
-
-        /** Envelope fullState. */
-        fullState?: (game.StateDocument.$Properties|null);
-
-        /** Envelope delta. */
-        delta?: (wire.StateDelta.$Properties|null);
-
-        /** Envelope rawBody. */
-        rawBody?: (game.RawBody.$Properties|null);
-
-        /**
-         * Creates a new Envelope instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns Envelope instance
-         */
-        static create(properties: wire.Envelope.$Shape): wire.Envelope & wire.Envelope.$Shape;
-        static create(properties?: wire.Envelope.$Properties): wire.Envelope;
-
-        /**
-         * Encodes the specified Envelope message. Does not implicitly {@link wire.Envelope.verify|verify} messages.
-         * @param message Envelope message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        static encode(message: wire.Envelope.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified Envelope message, length delimited. Does not implicitly {@link wire.Envelope.verify|verify} messages.
-         * @param message Envelope message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        static encodeDelimited(message: wire.Envelope.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes an Envelope message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns {wire.Envelope & wire.Envelope.$Shape} Envelope
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): wire.Envelope & wire.Envelope.$Shape;
-
-        /**
-         * Decodes an Envelope message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns {wire.Envelope & wire.Envelope.$Shape} Envelope
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): wire.Envelope & wire.Envelope.$Shape;
-
-        /**
-         * Verifies an Envelope message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates an Envelope message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns Envelope
-         */
-        static fromObject(object: { [k: string]: any }): wire.Envelope;
-
-        /**
-         * Creates a plain object from an Envelope message. Also converts values to other types if specified.
-         * @param message Envelope
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        static toObject(message: wire.Envelope, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this Envelope to JSON.
-         * @returns JSON object
-         */
-        toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the type url for Envelope
-         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
-         * @returns The type url
-         */
-        static getTypeUrl(prefix?: string): string;
-    }
-
-    namespace Envelope {
-
-        /** Properties of an Envelope. */
-        interface $Properties {
-
-            /** Envelope event */
-            event?: (string|null);
-
-            /** Envelope id */
-            id?: (number|Long|null);
-
-            /** Envelope err */
-            err?: (string|null);
-
-            /** Envelope kind */
-            kind?: (wire.PayloadKind|null);
-
-            /** Envelope channel */
-            channel?: (string|null);
-
-            /** Envelope seq */
-            seq?: (number|Long|null);
-
-            /** Envelope hash */
-            hash?: (string|null);
-
-            /** Envelope fullState */
-            fullState?: (game.StateDocument.$Properties|null);
-
-            /** Envelope delta */
-            delta?: (wire.StateDelta.$Properties|null);
-
-            /** Envelope rawBody */
-            rawBody?: (game.RawBody.$Properties|null);
-
-            /** Unknown fields preserved while decoding when enabled */
-            $unknowns?: Uint8Array[];
-        }
-
-        /** Shape of an Envelope. */
-        type $Shape = {
-          event?: string|null;
-          id?: number|Long|null;
-          err?: string|null;
-          kind?: wire.PayloadKind|null;
-          channel?: string|null;
-          seq?: number|Long|null;
-          hash?: string|null;
-          fullState?: game.StateDocument.$Shape|null;
-          delta?: wire.StateDelta.$Shape|null;
-          rawBody?: game.RawBody.$Shape|null;
-          $unknowns?: Uint8Array[];
-        };
-    }
-
-    /** PayloadKind enum. */
-    enum PayloadKind {
-
-        /** KIND_RAW value */
-        KIND_RAW = 0,
-
-        /** KIND_FULL value */
-        KIND_FULL = 1,
-
-        /** KIND_DELTA value */
-        KIND_DELTA = 2
-    }
-
-    /**
-     * Properties of a StateDelta.
-     * @deprecated Use wire.StateDelta.$Properties instead.
-     */
-    interface IStateDelta extends wire.StateDelta.$Properties {
-    }
-
-    /** Represents a StateDelta. */
-    class StateDelta {
-
-        /**
-         * Constructs a new StateDelta.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: wire.StateDelta.$Properties);
-
-        /** Unknown fields preserved while decoding when enabled */
-        $unknowns?: Uint8Array[];
-
-        /** StateDelta ops. */
-        ops: wire.PatchOp.$Properties[];
-
-        /**
-         * Creates a new StateDelta instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns StateDelta instance
-         */
-        static create(properties: wire.StateDelta.$Shape): wire.StateDelta & wire.StateDelta.$Shape;
-        static create(properties?: wire.StateDelta.$Properties): wire.StateDelta;
-
-        /**
-         * Encodes the specified StateDelta message. Does not implicitly {@link wire.StateDelta.verify|verify} messages.
-         * @param message StateDelta message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        static encode(message: wire.StateDelta.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified StateDelta message, length delimited. Does not implicitly {@link wire.StateDelta.verify|verify} messages.
-         * @param message StateDelta message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        static encodeDelimited(message: wire.StateDelta.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a StateDelta message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns {wire.StateDelta & wire.StateDelta.$Shape} StateDelta
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): wire.StateDelta & wire.StateDelta.$Shape;
-
-        /**
-         * Decodes a StateDelta message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns {wire.StateDelta & wire.StateDelta.$Shape} StateDelta
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): wire.StateDelta & wire.StateDelta.$Shape;
-
-        /**
-         * Verifies a StateDelta message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a StateDelta message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns StateDelta
-         */
-        static fromObject(object: { [k: string]: any }): wire.StateDelta;
-
-        /**
-         * Creates a plain object from a StateDelta message. Also converts values to other types if specified.
-         * @param message StateDelta
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        static toObject(message: wire.StateDelta, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this StateDelta to JSON.
-         * @returns JSON object
-         */
-        toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the type url for StateDelta
-         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
-         * @returns The type url
-         */
-        static getTypeUrl(prefix?: string): string;
-    }
-
-    namespace StateDelta {
-
-        /** Properties of a StateDelta. */
-        interface $Properties {
-
-            /** StateDelta ops */
-            ops?: (wire.PatchOp.$Properties[]|null);
-
-            /** Unknown fields preserved while decoding when enabled */
-            $unknowns?: Uint8Array[];
-        }
-
-        /** Shape of a StateDelta. */
-        type $Shape = {
-          ops?: wire.PatchOp.$Shape[]|null;
-          $unknowns?: Uint8Array[];
-        };
-    }
-
-    /**
-     * Properties of a PatchOp.
-     * @deprecated Use wire.PatchOp.$Properties instead.
-     */
-    interface IPatchOp extends wire.PatchOp.$Properties {
-    }
-
-    /** Represents a PatchOp. */
-    class PatchOp {
-
-        /**
-         * Constructs a new PatchOp.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: wire.PatchOp.$Properties);
-
-        /** Unknown fields preserved while decoding when enabled */
-        $unknowns?: Uint8Array[];
-
-        /** PatchOp path. */
-        path: string;
-
-        /** PatchOp value. */
-        value?: (google.protobuf.Value.$Properties|null);
-
-        /** PatchOp remove. */
-        remove: boolean;
-
-        /**
-         * Creates a new PatchOp instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns PatchOp instance
-         */
-        static create(properties: wire.PatchOp.$Shape): wire.PatchOp & wire.PatchOp.$Shape;
-        static create(properties?: wire.PatchOp.$Properties): wire.PatchOp;
-
-        /**
-         * Encodes the specified PatchOp message. Does not implicitly {@link wire.PatchOp.verify|verify} messages.
-         * @param message PatchOp message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        static encode(message: wire.PatchOp.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified PatchOp message, length delimited. Does not implicitly {@link wire.PatchOp.verify|verify} messages.
-         * @param message PatchOp message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        static encodeDelimited(message: wire.PatchOp.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a PatchOp message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns {wire.PatchOp & wire.PatchOp.$Shape} PatchOp
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): wire.PatchOp & wire.PatchOp.$Shape;
-
-        /**
-         * Decodes a PatchOp message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns {wire.PatchOp & wire.PatchOp.$Shape} PatchOp
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): wire.PatchOp & wire.PatchOp.$Shape;
-
-        /**
-         * Verifies a PatchOp message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a PatchOp message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns PatchOp
-         */
-        static fromObject(object: { [k: string]: any }): wire.PatchOp;
-
-        /**
-         * Creates a plain object from a PatchOp message. Also converts values to other types if specified.
-         * @param message PatchOp
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        static toObject(message: wire.PatchOp, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this PatchOp to JSON.
-         * @returns JSON object
-         */
-        toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the type url for PatchOp
-         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
-         * @returns The type url
-         */
-        static getTypeUrl(prefix?: string): string;
-    }
-
-    namespace PatchOp {
-
-        /** Properties of a PatchOp. */
-        interface $Properties {
-
-            /** PatchOp path */
-            path?: (string|null);
-
-            /** PatchOp value */
-            value?: (google.protobuf.Value.$Properties|null);
-
-            /** PatchOp remove */
-            remove?: (boolean|null);
-
-            /** Unknown fields preserved while decoding when enabled */
-            $unknowns?: Uint8Array[];
-        }
-
-        /** Shape of a PatchOp. */
-        type $Shape = {
-          path?: string|null;
-          value?: google.protobuf.Value.$Shape|null;
-          remove?: boolean|null;
-          $unknowns?: Uint8Array[];
-        };
-    }
-}
-
 /** Namespace game. */
 export namespace game {
 
@@ -1044,6 +590,9 @@ export namespace game {
         /** PublicStats titleCustom. */
         titleCustom: boolean;
 
+        /** PublicStats totalOnlineMs. */
+        totalOnlineMs: (number|Long);
+
         /**
          * Creates a new PublicStats instance using the specified properties.
          * @param [properties] Properties to set
@@ -1167,6 +716,9 @@ export namespace game {
             /** PublicStats titleCustom */
             titleCustom?: (boolean|null);
 
+            /** PublicStats totalOnlineMs */
+            totalOnlineMs?: (number|Long|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
@@ -1229,6 +781,9 @@ export namespace game {
 
         /** LobbyStats titleCustom. */
         titleCustom: boolean;
+
+        /** LobbyStats totalOnlineMs. */
+        totalOnlineMs: (number|Long);
 
         /**
          * Creates a new LobbyStats instance using the specified properties.
@@ -1349,6 +904,9 @@ export namespace game {
 
             /** LobbyStats titleCustom */
             titleCustom?: (boolean|null);
+
+            /** LobbyStats totalOnlineMs */
+            totalOnlineMs?: (number|Long|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -2145,6 +1703,15 @@ export namespace game {
         /** LobbyPlayer giveawayBoardDislikes. */
         giveawayBoardDislikes: number;
 
+        /** LobbyPlayer giveawayVoteWindowStartedAt. */
+        giveawayVoteWindowStartedAt: (number|Long);
+
+        /** LobbyPlayer giveawayVoteLikesThisHour. */
+        giveawayVoteLikesThisHour: number;
+
+        /** LobbyPlayer giveawayVoteDislikesThisHour. */
+        giveawayVoteDislikesThisHour: number;
+
         /** LobbyPlayer rankMultiplierUnlocked. */
         rankMultiplierUnlocked: boolean;
 
@@ -2331,6 +1898,15 @@ export namespace game {
             /** LobbyPlayer giveawayBoardDislikes */
             giveawayBoardDislikes?: (number|null);
 
+            /** LobbyPlayer giveawayVoteWindowStartedAt */
+            giveawayVoteWindowStartedAt?: (number|Long|null);
+
+            /** LobbyPlayer giveawayVoteLikesThisHour */
+            giveawayVoteLikesThisHour?: (number|null);
+
+            /** LobbyPlayer giveawayVoteDislikesThisHour */
+            giveawayVoteDislikesThisHour?: (number|null);
+
             /** LobbyPlayer rankMultiplierUnlocked */
             rankMultiplierUnlocked?: (boolean|null);
 
@@ -2373,141 +1949,6 @@ export namespace game {
     }
 
     /**
-     * Properties of a BotPlayer.
-     * @deprecated Use game.BotPlayer.$Properties instead.
-     */
-    interface IBotPlayer extends game.BotPlayer.$Properties {
-    }
-
-    /** Represents a BotPlayer. */
-    class BotPlayer {
-
-        /**
-         * Constructs a new BotPlayer.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: game.BotPlayer.$Properties);
-
-        /** Unknown fields preserved while decoding when enabled */
-        $unknowns?: Uint8Array[];
-
-        /** BotPlayer id. */
-        id: string;
-
-        /** BotPlayer name. */
-        name: string;
-
-        /** BotPlayer difficulty. */
-        difficulty: string;
-
-        /** BotPlayer isBot. */
-        isBot: boolean;
-
-        /**
-         * Creates a new BotPlayer instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns BotPlayer instance
-         */
-        static create(properties: game.BotPlayer.$Shape): game.BotPlayer & game.BotPlayer.$Shape;
-        static create(properties?: game.BotPlayer.$Properties): game.BotPlayer;
-
-        /**
-         * Encodes the specified BotPlayer message. Does not implicitly {@link game.BotPlayer.verify|verify} messages.
-         * @param message BotPlayer message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        static encode(message: game.BotPlayer.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified BotPlayer message, length delimited. Does not implicitly {@link game.BotPlayer.verify|verify} messages.
-         * @param message BotPlayer message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        static encodeDelimited(message: game.BotPlayer.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a BotPlayer message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns {game.BotPlayer & game.BotPlayer.$Shape} BotPlayer
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.BotPlayer & game.BotPlayer.$Shape;
-
-        /**
-         * Decodes a BotPlayer message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns {game.BotPlayer & game.BotPlayer.$Shape} BotPlayer
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.BotPlayer & game.BotPlayer.$Shape;
-
-        /**
-         * Verifies a BotPlayer message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a BotPlayer message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns BotPlayer
-         */
-        static fromObject(object: { [k: string]: any }): game.BotPlayer;
-
-        /**
-         * Creates a plain object from a BotPlayer message. Also converts values to other types if specified.
-         * @param message BotPlayer
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        static toObject(message: game.BotPlayer, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this BotPlayer to JSON.
-         * @returns JSON object
-         */
-        toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the type url for BotPlayer
-         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
-         * @returns The type url
-         */
-        static getTypeUrl(prefix?: string): string;
-    }
-
-    namespace BotPlayer {
-
-        /** Properties of a BotPlayer. */
-        interface $Properties {
-
-            /** BotPlayer id */
-            id?: (string|null);
-
-            /** BotPlayer name */
-            name?: (string|null);
-
-            /** BotPlayer difficulty */
-            difficulty?: (string|null);
-
-            /** BotPlayer isBot */
-            isBot?: (boolean|null);
-
-            /** Unknown fields preserved while decoding when enabled */
-            $unknowns?: Uint8Array[];
-        }
-
-        /** Shape of a BotPlayer. */
-        type $Shape = game.BotPlayer.$Properties;
-    }
-
-    /**
      * Properties of a SeatOccupant.
      * @deprecated Use game.SeatOccupant.$Properties instead.
      */
@@ -2529,11 +1970,8 @@ export namespace game {
         /** SeatOccupant player. */
         player?: (game.PublicPlayer.$Properties|null);
 
-        /** SeatOccupant bot. */
-        bot?: (game.BotPlayer.$Properties|null);
-
         /** SeatOccupant kind. */
-        kind?: ("player"|"bot");
+        kind?: "player";
 
         /**
          * Creates a new SeatOccupant instance using the specified properties.
@@ -2622,11 +2060,8 @@ export namespace game {
             /** SeatOccupant player */
             player?: (game.PublicPlayer.$Properties|null);
 
-            /** SeatOccupant bot */
-            bot?: (game.BotPlayer.$Properties|null);
-
             /** SeatOccupant kind */
-            kind?: ("player"|"bot");
+            kind?: "player";
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -2635,10 +2070,9 @@ export namespace game {
         /** Narrowed shape of a SeatOccupant. */
         type $Shape = {
           player?: game.PublicPlayer.$Shape|null;
-          bot?: game.BotPlayer.$Shape|null;
           $unknowns?: Uint8Array[];
         } & (
-          ({ kind?: undefined; player?: null; bot?: null }|{ kind?: "player"; player: game.PublicPlayer.$Shape; bot?: null }|{ kind?: "bot"; player?: null; bot: game.BotPlayer.$Shape })
+          ({ kind?: undefined; player?: null }|{ kind?: "player"; player: game.PublicPlayer.$Shape })
         );
     }
 
@@ -2690,6 +2124,12 @@ export namespace game {
 
         /** ChatMessage expiresAt. */
         expiresAt: (number|Long);
+
+        /** ChatMessage mentions. */
+        mentions: string[];
+
+        /** ChatMessage seq. */
+        seq: (number|Long);
 
         /**
          * Creates a new ChatMessage instance using the specified properties.
@@ -2804,6 +2244,12 @@ export namespace game {
 
             /** ChatMessage expiresAt */
             expiresAt?: (number|Long|null);
+
+            /** ChatMessage mentions */
+            mentions?: (string[]|null);
+
+            /** ChatMessage seq */
+            seq?: (number|Long|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -2988,12 +2434,6 @@ export namespace game {
         /** RoomSettings gameId. */
         gameId: string;
 
-        /** RoomSettings enableBot. */
-        enableBot: boolean;
-
-        /** RoomSettings botDifficulty. */
-        botDifficulty: string;
-
         /** RoomSettings enablePunishment. */
         enablePunishment: boolean;
 
@@ -3161,12 +2601,6 @@ export namespace game {
 
             /** RoomSettings gameId */
             gameId?: (string|null);
-
-            /** RoomSettings enableBot */
-            enableBot?: (boolean|null);
-
-            /** RoomSettings botDifficulty */
-            botDifficulty?: (string|null);
 
             /** RoomSettings enablePunishment */
             enablePunishment?: (boolean|null);
@@ -7414,9 +6848,6 @@ export namespace game {
         /** VersusSeat player. */
         player?: (game.PublicPlayer.$Properties|null);
 
-        /** VersusSeat bot. */
-        bot?: (game.BotPlayer.$Properties|null);
-
         /**
          * Creates a new VersusSeat instance using the specified properties.
          * @param [properties] Properties to set
@@ -7503,9 +6934,6 @@ export namespace game {
 
             /** VersusSeat player */
             player?: (game.PublicPlayer.$Properties|null);
-
-            /** VersusSeat bot */
-            bot?: (game.BotPlayer.$Properties|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -7684,12 +7112,6 @@ export namespace game {
         /** LobbyRoomInfo roomBackgroundImage. */
         roomBackgroundImage: string;
 
-        /** LobbyRoomInfo enableBot. */
-        enableBot: boolean;
-
-        /** LobbyRoomInfo botDifficulty. */
-        botDifficulty: string;
-
         /** LobbyRoomInfo enablePunishment. */
         enablePunishment: boolean;
 
@@ -7854,12 +7276,6 @@ export namespace game {
 
             /** LobbyRoomInfo roomBackgroundImage */
             roomBackgroundImage?: (string|null);
-
-            /** LobbyRoomInfo enableBot */
-            enableBot?: (boolean|null);
-
-            /** LobbyRoomInfo botDifficulty */
-            botDifficulty?: (string|null);
 
             /** LobbyRoomInfo enablePunishment */
             enablePunishment?: (boolean|null);
@@ -9292,159 +8708,6 @@ export namespace game {
     }
 
     /**
-     * Properties of a BotDifficultyConfig.
-     * @deprecated Use game.BotDifficultyConfig.$Properties instead.
-     */
-    interface IBotDifficultyConfig extends game.BotDifficultyConfig.$Properties {
-    }
-
-    /** Represents a BotDifficultyConfig. */
-    class BotDifficultyConfig {
-
-        /**
-         * Constructs a new BotDifficultyConfig.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: game.BotDifficultyConfig.$Properties);
-
-        /** Unknown fields preserved while decoding when enabled */
-        $unknowns?: Uint8Array[];
-
-        /** BotDifficultyConfig id. */
-        id: string;
-
-        /** BotDifficultyConfig name. */
-        name: string;
-
-        /** BotDifficultyConfig description. */
-        description: string;
-
-        /** BotDifficultyConfig emoji. */
-        emoji: string;
-
-        /** BotDifficultyConfig level. */
-        level: number;
-
-        /** BotDifficultyConfig strategy. */
-        strategy: string;
-
-        /** BotDifficultyConfig cardColor. */
-        cardColor: string;
-
-        /**
-         * Creates a new BotDifficultyConfig instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns BotDifficultyConfig instance
-         */
-        static create(properties: game.BotDifficultyConfig.$Shape): game.BotDifficultyConfig & game.BotDifficultyConfig.$Shape;
-        static create(properties?: game.BotDifficultyConfig.$Properties): game.BotDifficultyConfig;
-
-        /**
-         * Encodes the specified BotDifficultyConfig message. Does not implicitly {@link game.BotDifficultyConfig.verify|verify} messages.
-         * @param message BotDifficultyConfig message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        static encode(message: game.BotDifficultyConfig.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified BotDifficultyConfig message, length delimited. Does not implicitly {@link game.BotDifficultyConfig.verify|verify} messages.
-         * @param message BotDifficultyConfig message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        static encodeDelimited(message: game.BotDifficultyConfig.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a BotDifficultyConfig message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns {game.BotDifficultyConfig & game.BotDifficultyConfig.$Shape} BotDifficultyConfig
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.BotDifficultyConfig & game.BotDifficultyConfig.$Shape;
-
-        /**
-         * Decodes a BotDifficultyConfig message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns {game.BotDifficultyConfig & game.BotDifficultyConfig.$Shape} BotDifficultyConfig
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.BotDifficultyConfig & game.BotDifficultyConfig.$Shape;
-
-        /**
-         * Verifies a BotDifficultyConfig message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a BotDifficultyConfig message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns BotDifficultyConfig
-         */
-        static fromObject(object: { [k: string]: any }): game.BotDifficultyConfig;
-
-        /**
-         * Creates a plain object from a BotDifficultyConfig message. Also converts values to other types if specified.
-         * @param message BotDifficultyConfig
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        static toObject(message: game.BotDifficultyConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this BotDifficultyConfig to JSON.
-         * @returns JSON object
-         */
-        toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the type url for BotDifficultyConfig
-         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
-         * @returns The type url
-         */
-        static getTypeUrl(prefix?: string): string;
-    }
-
-    namespace BotDifficultyConfig {
-
-        /** Properties of a BotDifficultyConfig. */
-        interface $Properties {
-
-            /** BotDifficultyConfig id */
-            id?: (string|null);
-
-            /** BotDifficultyConfig name */
-            name?: (string|null);
-
-            /** BotDifficultyConfig description */
-            description?: (string|null);
-
-            /** BotDifficultyConfig emoji */
-            emoji?: (string|null);
-
-            /** BotDifficultyConfig level */
-            level?: (number|null);
-
-            /** BotDifficultyConfig strategy */
-            strategy?: (string|null);
-
-            /** BotDifficultyConfig cardColor */
-            cardColor?: (string|null);
-
-            /** Unknown fields preserved while decoding when enabled */
-            $unknowns?: Uint8Array[];
-        }
-
-        /** Shape of a BotDifficultyConfig. */
-        type $Shape = game.BotDifficultyConfig.$Properties;
-    }
-
-    /**
      * Properties of a GameConfig.
      * @deprecated Use game.GameConfig.$Properties instead.
      */
@@ -10609,6 +9872,24 @@ export namespace game {
         /** GiveawayConfig emptyText. */
         emptyText: string;
 
+        /** GiveawayConfig activeBoostValue. */
+        activeBoostValue: number;
+
+        /** GiveawayConfig winPenaltyValue. */
+        winPenaltyValue: number;
+
+        /** GiveawayConfig likeVoteLimitPerHour. */
+        likeVoteLimitPerHour: number;
+
+        /** GiveawayConfig likeVoteValue. */
+        likeVoteValue: number;
+
+        /** GiveawayConfig dislikeVoteLimitPerHour. */
+        dislikeVoteLimitPerHour: number;
+
+        /** GiveawayConfig dislikeVoteValue. */
+        dislikeVoteValue: number;
+
         /**
          * Creates a new GiveawayConfig instance using the specified properties.
          * @param [properties] Properties to set
@@ -10705,135 +9986,30 @@ export namespace game {
             /** GiveawayConfig emptyText */
             emptyText?: (string|null);
 
+            /** GiveawayConfig activeBoostValue */
+            activeBoostValue?: (number|null);
+
+            /** GiveawayConfig winPenaltyValue */
+            winPenaltyValue?: (number|null);
+
+            /** GiveawayConfig likeVoteLimitPerHour */
+            likeVoteLimitPerHour?: (number|null);
+
+            /** GiveawayConfig likeVoteValue */
+            likeVoteValue?: (number|null);
+
+            /** GiveawayConfig dislikeVoteLimitPerHour */
+            dislikeVoteLimitPerHour?: (number|null);
+
+            /** GiveawayConfig dislikeVoteValue */
+            dislikeVoteValue?: (number|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
         /** Shape of a GiveawayConfig. */
         type $Shape = game.GiveawayConfig.$Properties;
-    }
-
-    /**
-     * Properties of a BotsConfig.
-     * @deprecated Use game.BotsConfig.$Properties instead.
-     */
-    interface IBotsConfig extends game.BotsConfig.$Properties {
-    }
-
-    /** Represents a BotsConfig. */
-    class BotsConfig {
-
-        /**
-         * Constructs a new BotsConfig.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: game.BotsConfig.$Properties);
-
-        /** Unknown fields preserved while decoding when enabled */
-        $unknowns?: Uint8Array[];
-
-        /** BotsConfig names. */
-        names: string[];
-
-        /** BotsConfig difficulties. */
-        difficulties: game.BotDifficultyConfig.$Properties[];
-
-        /**
-         * Creates a new BotsConfig instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns BotsConfig instance
-         */
-        static create(properties: game.BotsConfig.$Shape): game.BotsConfig & game.BotsConfig.$Shape;
-        static create(properties?: game.BotsConfig.$Properties): game.BotsConfig;
-
-        /**
-         * Encodes the specified BotsConfig message. Does not implicitly {@link game.BotsConfig.verify|verify} messages.
-         * @param message BotsConfig message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        static encode(message: game.BotsConfig.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified BotsConfig message, length delimited. Does not implicitly {@link game.BotsConfig.verify|verify} messages.
-         * @param message BotsConfig message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        static encodeDelimited(message: game.BotsConfig.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a BotsConfig message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns {game.BotsConfig & game.BotsConfig.$Shape} BotsConfig
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.BotsConfig & game.BotsConfig.$Shape;
-
-        /**
-         * Decodes a BotsConfig message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns {game.BotsConfig & game.BotsConfig.$Shape} BotsConfig
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.BotsConfig & game.BotsConfig.$Shape;
-
-        /**
-         * Verifies a BotsConfig message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a BotsConfig message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns BotsConfig
-         */
-        static fromObject(object: { [k: string]: any }): game.BotsConfig;
-
-        /**
-         * Creates a plain object from a BotsConfig message. Also converts values to other types if specified.
-         * @param message BotsConfig
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        static toObject(message: game.BotsConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this BotsConfig to JSON.
-         * @returns JSON object
-         */
-        toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the type url for BotsConfig
-         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
-         * @returns The type url
-         */
-        static getTypeUrl(prefix?: string): string;
-    }
-
-    namespace BotsConfig {
-
-        /** Properties of a BotsConfig. */
-        interface $Properties {
-
-            /** BotsConfig names */
-            names?: (string[]|null);
-
-            /** BotsConfig difficulties */
-            difficulties?: (game.BotDifficultyConfig.$Properties[]|null);
-
-            /** Unknown fields preserved while decoding when enabled */
-            $unknowns?: Uint8Array[];
-        }
-
-        /** Shape of a BotsConfig. */
-        type $Shape = game.BotsConfig.$Properties;
     }
 
     /**
@@ -10893,9 +10069,6 @@ export namespace game {
 
         /** AppConfig extremeMode. */
         extremeMode?: (game.ExtremeModeConfig.$Properties|null);
-
-        /** AppConfig bots. */
-        bots?: (game.BotsConfig.$Properties|null);
 
         /** AppConfig games. */
         games: game.GameConfig.$Properties[];
@@ -11031,9 +10204,6 @@ export namespace game {
 
             /** AppConfig extremeMode */
             extremeMode?: (game.ExtremeModeConfig.$Properties|null);
-
-            /** AppConfig bots */
-            bots?: (game.BotsConfig.$Properties|null);
 
             /** AppConfig games */
             games?: (game.GameConfig.$Properties[]|null);
@@ -12964,5 +12134,459 @@ export namespace google {
               $unknowns?: Uint8Array[];
             };
         }
+    }
+}
+
+/** Namespace wire. */
+export namespace wire {
+
+    /**
+     * Properties of an Envelope.
+     * @deprecated Use wire.Envelope.$Properties instead.
+     */
+    interface IEnvelope extends wire.Envelope.$Properties {
+    }
+
+    /** Represents an Envelope. */
+    class Envelope {
+
+        /**
+         * Constructs a new Envelope.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: wire.Envelope.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** Envelope event. */
+        event: string;
+
+        /** Envelope id. */
+        id: (number|Long);
+
+        /** Envelope err. */
+        err: string;
+
+        /** Envelope kind. */
+        kind: wire.PayloadKind;
+
+        /** Envelope channel. */
+        channel: string;
+
+        /** Envelope seq. */
+        seq: (number|Long);
+
+        /** Envelope hash. */
+        hash: string;
+
+        /** Envelope fullState. */
+        fullState?: (game.StateDocument.$Properties|null);
+
+        /** Envelope delta. */
+        delta?: (wire.StateDelta.$Properties|null);
+
+        /** Envelope rawBody. */
+        rawBody?: (game.RawBody.$Properties|null);
+
+        /**
+         * Creates a new Envelope instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Envelope instance
+         */
+        static create(properties: wire.Envelope.$Shape): wire.Envelope & wire.Envelope.$Shape;
+        static create(properties?: wire.Envelope.$Properties): wire.Envelope;
+
+        /**
+         * Encodes the specified Envelope message. Does not implicitly {@link wire.Envelope.verify|verify} messages.
+         * @param message Envelope message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: wire.Envelope.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Envelope message, length delimited. Does not implicitly {@link wire.Envelope.verify|verify} messages.
+         * @param message Envelope message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: wire.Envelope.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an Envelope message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {wire.Envelope & wire.Envelope.$Shape} Envelope
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): wire.Envelope & wire.Envelope.$Shape;
+
+        /**
+         * Decodes an Envelope message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {wire.Envelope & wire.Envelope.$Shape} Envelope
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): wire.Envelope & wire.Envelope.$Shape;
+
+        /**
+         * Verifies an Envelope message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an Envelope message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Envelope
+         */
+        static fromObject(object: { [k: string]: any }): wire.Envelope;
+
+        /**
+         * Creates a plain object from an Envelope message. Also converts values to other types if specified.
+         * @param message Envelope
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: wire.Envelope, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Envelope to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for Envelope
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace Envelope {
+
+        /** Properties of an Envelope. */
+        interface $Properties {
+
+            /** Envelope event */
+            event?: (string|null);
+
+            /** Envelope id */
+            id?: (number|Long|null);
+
+            /** Envelope err */
+            err?: (string|null);
+
+            /** Envelope kind */
+            kind?: (wire.PayloadKind|null);
+
+            /** Envelope channel */
+            channel?: (string|null);
+
+            /** Envelope seq */
+            seq?: (number|Long|null);
+
+            /** Envelope hash */
+            hash?: (string|null);
+
+            /** Envelope fullState */
+            fullState?: (game.StateDocument.$Properties|null);
+
+            /** Envelope delta */
+            delta?: (wire.StateDelta.$Properties|null);
+
+            /** Envelope rawBody */
+            rawBody?: (game.RawBody.$Properties|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of an Envelope. */
+        type $Shape = {
+          event?: string|null;
+          id?: number|Long|null;
+          err?: string|null;
+          kind?: wire.PayloadKind|null;
+          channel?: string|null;
+          seq?: number|Long|null;
+          hash?: string|null;
+          fullState?: game.StateDocument.$Shape|null;
+          delta?: wire.StateDelta.$Shape|null;
+          rawBody?: game.RawBody.$Shape|null;
+          $unknowns?: Uint8Array[];
+        };
+    }
+
+    /** PayloadKind enum. */
+    enum PayloadKind {
+
+        /** KIND_RAW value */
+        KIND_RAW = 0,
+
+        /** KIND_FULL value */
+        KIND_FULL = 1,
+
+        /** KIND_DELTA value */
+        KIND_DELTA = 2
+    }
+
+    /**
+     * Properties of a StateDelta.
+     * @deprecated Use wire.StateDelta.$Properties instead.
+     */
+    interface IStateDelta extends wire.StateDelta.$Properties {
+    }
+
+    /** Represents a StateDelta. */
+    class StateDelta {
+
+        /**
+         * Constructs a new StateDelta.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: wire.StateDelta.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** StateDelta ops. */
+        ops: wire.PatchOp.$Properties[];
+
+        /**
+         * Creates a new StateDelta instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StateDelta instance
+         */
+        static create(properties: wire.StateDelta.$Shape): wire.StateDelta & wire.StateDelta.$Shape;
+        static create(properties?: wire.StateDelta.$Properties): wire.StateDelta;
+
+        /**
+         * Encodes the specified StateDelta message. Does not implicitly {@link wire.StateDelta.verify|verify} messages.
+         * @param message StateDelta message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: wire.StateDelta.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StateDelta message, length delimited. Does not implicitly {@link wire.StateDelta.verify|verify} messages.
+         * @param message StateDelta message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: wire.StateDelta.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StateDelta message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {wire.StateDelta & wire.StateDelta.$Shape} StateDelta
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): wire.StateDelta & wire.StateDelta.$Shape;
+
+        /**
+         * Decodes a StateDelta message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {wire.StateDelta & wire.StateDelta.$Shape} StateDelta
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): wire.StateDelta & wire.StateDelta.$Shape;
+
+        /**
+         * Verifies a StateDelta message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StateDelta message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StateDelta
+         */
+        static fromObject(object: { [k: string]: any }): wire.StateDelta;
+
+        /**
+         * Creates a plain object from a StateDelta message. Also converts values to other types if specified.
+         * @param message StateDelta
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: wire.StateDelta, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StateDelta to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for StateDelta
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace StateDelta {
+
+        /** Properties of a StateDelta. */
+        interface $Properties {
+
+            /** StateDelta ops */
+            ops?: (wire.PatchOp.$Properties[]|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a StateDelta. */
+        type $Shape = {
+          ops?: wire.PatchOp.$Shape[]|null;
+          $unknowns?: Uint8Array[];
+        };
+    }
+
+    /**
+     * Properties of a PatchOp.
+     * @deprecated Use wire.PatchOp.$Properties instead.
+     */
+    interface IPatchOp extends wire.PatchOp.$Properties {
+    }
+
+    /** Represents a PatchOp. */
+    class PatchOp {
+
+        /**
+         * Constructs a new PatchOp.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: wire.PatchOp.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** PatchOp path. */
+        path: string;
+
+        /** PatchOp value. */
+        value?: (google.protobuf.Value.$Properties|null);
+
+        /** PatchOp remove. */
+        remove: boolean;
+
+        /**
+         * Creates a new PatchOp instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PatchOp instance
+         */
+        static create(properties: wire.PatchOp.$Shape): wire.PatchOp & wire.PatchOp.$Shape;
+        static create(properties?: wire.PatchOp.$Properties): wire.PatchOp;
+
+        /**
+         * Encodes the specified PatchOp message. Does not implicitly {@link wire.PatchOp.verify|verify} messages.
+         * @param message PatchOp message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: wire.PatchOp.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PatchOp message, length delimited. Does not implicitly {@link wire.PatchOp.verify|verify} messages.
+         * @param message PatchOp message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: wire.PatchOp.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PatchOp message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {wire.PatchOp & wire.PatchOp.$Shape} PatchOp
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): wire.PatchOp & wire.PatchOp.$Shape;
+
+        /**
+         * Decodes a PatchOp message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {wire.PatchOp & wire.PatchOp.$Shape} PatchOp
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): wire.PatchOp & wire.PatchOp.$Shape;
+
+        /**
+         * Verifies a PatchOp message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PatchOp message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PatchOp
+         */
+        static fromObject(object: { [k: string]: any }): wire.PatchOp;
+
+        /**
+         * Creates a plain object from a PatchOp message. Also converts values to other types if specified.
+         * @param message PatchOp
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: wire.PatchOp, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PatchOp to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for PatchOp
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace PatchOp {
+
+        /** Properties of a PatchOp. */
+        interface $Properties {
+
+            /** PatchOp path */
+            path?: (string|null);
+
+            /** PatchOp value */
+            value?: (google.protobuf.Value.$Properties|null);
+
+            /** PatchOp remove */
+            remove?: (boolean|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a PatchOp. */
+        type $Shape = {
+          path?: string|null;
+          value?: google.protobuf.Value.$Shape|null;
+          remove?: boolean|null;
+          $unknowns?: Uint8Array[];
+        };
     }
 }

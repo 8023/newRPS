@@ -22,7 +22,7 @@ func TestPlayerStoreUpsertAndLoadRoundTrip(t *testing.T) {
 		Name:          "Alice", GenderID: "male", AvatarURL: "/uploads/avatars/a.webp",
 		Stats: types.PublicStats{
 			Wins: 3, Losses: 1, Draws: 0, Punishments: 2, RankedPoints: 15, Title: "测试",
-			HighestScore: 5000, LowestScore: -6000,
+			HighestScore: 5000, LowestScore: -6000, TotalOnlineMs: 123_456,
 		},
 		GameStats: types.GameStats{
 			RPS:     types.GameWLD{Wins: 2, Losses: 1},
@@ -56,6 +56,9 @@ func TestPlayerStoreUpsertAndLoadRoundTrip(t *testing.T) {
 	}
 	if got.Stats.HighestScore != 5000 || got.Stats.LowestScore != -6000 {
 		t.Fatalf("highest/lowest score round trip: %+v", got.Stats)
+	}
+	if got.Stats.TotalOnlineMs != 123_456 {
+		t.Fatalf("total online ms round trip: %d", got.Stats.TotalOnlineMs)
 	}
 	if got.RankedLastDecayDay == nil || *got.RankedLastDecayDay != 42 {
 		t.Fatalf("ranked last decay day round trip: %v", got.RankedLastDecayDay)

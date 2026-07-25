@@ -50,17 +50,6 @@ func TestFillPlayerDefaults_KeepsRealValues(t *testing.T) {
 	}
 }
 
-func TestFillPlayerDefaults_SkipsBots(t *testing.T) {
-	in := map[string]any{"isBot": true, "name": "机器人"}
-	out, ok := fillPlayerDefaults(in).(map[string]any)
-	if !ok {
-		t.Fatal("not map")
-	}
-	if _, has := out["nameWarEnabled"]; has {
-		t.Fatalf("bot 不应该被补齐玩家字段: %#v", out)
-	}
-}
-
 func TestFillRoomSettingsDefaults_AllowProofImageMissingIsFalse(t *testing.T) {
 	// handlers_room.go 建房时已把 nil 归一化成具体值，线上房间不会真正"未设置"；
 	// false 是它的零值，缺省应还原为 false（true 是非零值，protojson 永远不会丢）。
@@ -148,7 +137,6 @@ func TestRoomProtoToFront_ReadyScoreAndSettings(t *testing.T) {
 		Settings: &wire.RoomSettings{
 			Name:            "t",
 			AllowProofImage: false,
-			EnableBot:       false,
 			EnableRanked:    true,
 			Stake:           1,
 		},

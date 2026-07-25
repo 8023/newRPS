@@ -337,13 +337,15 @@ export function stateDocToPlain(fullState: any): any {
   return fullState;
 }
 
-/** protobufjs defaults:false 会丢掉 int/bool 零值；玩家战绩必须补齐，否则出现 undefined/NaN 文案 */
+/** protobufjs defaults:false 会丢掉 int/bool 零值；玩家战绩必须补齐，否则出现 undefined/NaN 文案。
+ * 自定义性别时 genderId 合法值为空串，同样会被 defaults:false 丢掉——必须补成 ""，
+ * 否则 {...old, ...patch} 合并会残留旧的预设 id（与 Go fillPlayerDefaults 对齐）。 */
 function materializePlayer(player: any): any {
   if (!player || typeof player !== "object") return player;
-  if (player.isBot) return player;
   const p = { ...player };
   for (const k of PLAYER_BOOL_FIELDS) if (p[k] === undefined) p[k] = false;
   for (const k of PLAYER_NUM_FIELDS) if (p[k] === undefined) p[k] = 0;
+  if (typeof p.genderId !== "string") p.genderId = "";
   p.stats = materializePublicStats(p.stats);
   p.gameStats = materializeGameStats(p.gameStats);
   return p;
@@ -365,6 +367,7 @@ function materializePublicStats(stats: any): any {
     sortHighestScore: numOr(s.sortHighestScore, numOr(s.highestScore, 0)),
     sortLowestScore: numOr(s.sortLowestScore, numOr(s.lowestScore, 0)),
     title: title || "暂无称号",
+    totalOnlineMs: numOr(s.totalOnlineMs, 0),
     ...(s.titleSegmentId != null && s.titleSegmentId !== ""
       ? { titleSegmentId: s.titleSegmentId }
       : {}),
@@ -400,7 +403,13 @@ function materializeSeatStats(stats: any): any {
 
 function materializeChat(chat: any): any {
   if (!chat) return chat;
-  return { ...chat, expiresAt: numOr(chat.expiresAt, 0) };
+  return {
+    ...chat,
+    expiresAt: numOr(chat.expiresAt, 0),
+    seq: numOr(chat.seq, 0),
+    // defaults:false 下空 repeated 可能缺省；@ 高亮依赖数组存在。
+    mentions: Array.isArray(chat.mentions) ? chat.mentions : []
+  };
 }
 
 function materializeSuggestion(item: any): any {
@@ -439,7 +448,6 @@ function materializeLobbyRoom(room: any): any {
     const key = item.key;
     const val = item.value || {};
     if (val.player) versus[key] = { player: materializePlayer(val.player) };
-    else if (val.bot) versus[key] = val.bot;
   }
   r.versus = versus;
   return r;
@@ -590,8 +598,8 @@ function materializeConfig(cfg: any): any {
       }
     }
   }
-  // rankedScore / nameWar.penaltyThreshold：proto 漏嵌套消息或 defaults:false 丢字段时，
-  // 在 wire 层先补齐；业务层 normalizeConfig 还会再兜一层（与 extremeMode/bots 同模式）。
+  // rankedScore / nameWar.penaltyThreshold / giveaway 数值：proto 漏嵌套消息或 defaults:false 丢字段时，
+  // 在 wire 层先补齐；业务层 normalizeConfig 还会再兜一层（与 extremeMode 同模式）。
   // 负分必须用 Number.isFinite，不能 ||（0 合法时也不该误替换，这里 min 虽为负但保持一致）。
   {
     const rs = c.rankedScore && typeof c.rankedScore === "object" ? c.rankedScore : {};
@@ -600,6 +608,24 @@ function materializeConfig(cfg: any): any {
       min: numOr(rs.min, -4999),
       nameWarMin: numOr(rs.nameWarMin, -9999),
       dailyDecayRatio: numOr(rs.dailyDecayRatio, 0.98)
+    };
+  }
+  // giveaway 数值字段：历史上曾只写在 Go/TS 类型里、未进 GiveawayConfig proto，
+  // 旧 wire 会整段丢失；0 在业务上非法（Validate 拒绝），按正数回退默认。
+  {
+    const g = c.giveaway && typeof c.giveaway === "object" ? c.giveaway : {};
+    const pos = (v: any, fallback: number) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? n : fallback;
+    };
+    c.giveaway = {
+      ...g,
+      activeBoostValue: pos(g.activeBoostValue, 2),
+      winPenaltyValue: pos(g.winPenaltyValue, 1),
+      likeVoteLimitPerHour: pos(g.likeVoteLimitPerHour, 3),
+      likeVoteValue: pos(g.likeVoteValue, 1),
+      dislikeVoteLimitPerHour: pos(g.dislikeVoteLimitPerHour, 10),
+      dislikeVoteValue: pos(g.dislikeVoteValue, 0.1)
     };
   }
   if (!c.nameWar || typeof c.nameWar !== "object") c.nameWar = {};
@@ -702,7 +728,6 @@ function pairsToOccupantMap(arr: any): any {
       continue;
     }
     if (val.player) out[key] = materializePlayer(val.player);
-    else if (val.bot) out[key] = val.bot;
     else out[key] = null;
   }
   return out;

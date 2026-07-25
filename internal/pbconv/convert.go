@@ -326,7 +326,6 @@ func lobbyRoomToProto(r types.LobbyRoomInfo) (*wire.LobbyRoomInfo, error) {
 		Id: r.ID, GameId: string(r.GameID), Name: r.Name,
 		HasPassword: r.HasPassword, Players: int32(r.Players), Spectators: int32(r.Spectators),
 		Status: r.Status, RoomBackgroundImage: r.RoomBackgroundImage,
-		EnableBot: r.EnableBot, BotDifficulty: string(r.BotDifficulty),
 		EnablePunishment: r.EnablePunishment, PunishmentIds: r.PunishmentIDs, PunishmentId: r.PunishmentID,
 		TieDoublePunish: r.TieDoublePunish, RequireOpponentConfirm: r.RequireOpponentConfirm,
 		EnableRanked: r.EnableRanked, Stake: int32(r.Stake),
@@ -343,11 +342,8 @@ func lobbyRoomToProto(r types.LobbyRoomInfo) (*wire.LobbyRoomInfo, error) {
 		if occ != nil {
 			switch o := occ.(type) {
 			case map[string]any:
-				// lobby summary shape: {player: LobbyPlayer|PublicPlayer} 或 {isBot, name}
-				if bot, _ := o["isBot"].(bool); bot {
-					name, _ := o["name"].(string)
-					vs.Bot = &wire.BotPlayer{Name: name, IsBot: true}
-				} else if o["player"] != nil {
+				// lobby summary shape: {player: LobbyPlayer|PublicPlayer}
+				if o["player"] != nil {
 					pp, err := anyPlayerToProto(o["player"])
 					if err != nil {
 						return nil, err
@@ -368,8 +364,6 @@ func lobbyRoomToProto(r types.LobbyRoomInfo) (*wire.LobbyRoomInfo, error) {
 					}
 					vs.Player = pp
 				}
-			case types.BotPlayer:
-				vs.Bot = &wire.BotPlayer{Id: o.ID, Name: o.Name, Difficulty: string(o.Difficulty), IsBot: true}
 			}
 		}
 		m.Versus = append(m.Versus, &wire.VersusPair{Key: string(seat), Value: vs})
@@ -391,7 +385,6 @@ func RoomToProto(snap types.RoomSnapshot) (*wire.RoomSnapshot, error) {
 		return nil, err
 	}
 	rs.GameId = string(snap.Settings.GameID)
-	rs.BotDifficulty = string(snap.Settings.BotDifficulty)
 	rs.Stake = int32(snap.Settings.Stake)
 	rs.RankMultiplier = int32(snap.Settings.RankMultiplier)
 	m.Settings = rs
@@ -546,17 +539,6 @@ func seatOccupantToProto(occ any) (*wire.SeatOccupant, error) {
 			return nil, err
 		}
 		return &wire.SeatOccupant{Kind: &wire.SeatOccupant_Player{Player: pp}}, nil
-	case types.BotPlayer:
-		return &wire.SeatOccupant{Kind: &wire.SeatOccupant_Bot{Bot: &wire.BotPlayer{
-			Id: o.ID, Name: o.Name, Difficulty: string(o.Difficulty), IsBot: true,
-		}}}, nil
-	case *types.BotPlayer:
-		if o == nil {
-			return nil, nil
-		}
-		return &wire.SeatOccupant{Kind: &wire.SeatOccupant_Bot{Bot: &wire.BotPlayer{
-			Id: o.ID, Name: o.Name, Difficulty: string(o.Difficulty), IsBot: true,
-		}}}, nil
 	default:
 		// try JSON as PublicPlayer
 		b, _ := json.Marshal(o)
@@ -567,12 +549,6 @@ func seatOccupantToProto(occ any) (*wire.SeatOccupant, error) {
 				return nil, err
 			}
 			return &wire.SeatOccupant{Kind: &wire.SeatOccupant_Player{Player: pp}}, nil
-		}
-		var bot types.BotPlayer
-		if json.Unmarshal(b, &bot) == nil && bot.IsBot {
-			return &wire.SeatOccupant{Kind: &wire.SeatOccupant_Bot{Bot: &wire.BotPlayer{
-				Id: bot.ID, Name: bot.Name, Difficulty: string(bot.Difficulty), IsBot: true,
-			}}}, nil
 		}
 	}
 	return nil, nil
@@ -900,6 +876,10 @@ func flattenPlayerPresence(p any) any {
 // （允许真正的"从未设置"，即 nil）。前端从不区分"从未设置"和"设置为 false/0"（全部只做真值
 // 判断），而 protojson EmitUnpopulated:false 又会把 false/0 连 key 一起丢掉——按零值统一补齐，
 // 与前端 wire.ts 的 PLAYER_BOOL_FIELDS/PLAYER_NUM_FIELDS 保持一致。
+//
+// genderId 同理：自定义性别时合法值就是空串，EmitUnpopulated:false 会把 key 整个丢掉；
+// 若不补齐成 ""，前端用 {...old, ...patch} 合并时会残留旧的预设 genderId，表现为
+// 「展示文案已是自定义、genderId 却还是 male」——重连/改资料后会把自定义盖回预设。
 var playerBoolFields = []string{
 	"nameWarEnabled", "nameWarPunished", "nameWarAllowRename",
 	"giveawayEnabled", "rankMultiplierUnlocked", "extremeModeEnabled",
@@ -920,9 +900,6 @@ func fillPlayerDefaults(p any) any {
 	if !ok {
 		return p
 	}
-	if _, isBot := pm["isBot"]; isBot {
-		return pm
-	}
 	for _, k := range playerBoolFields {
 		if _, exists := pm[k]; !exists {
 			pm[k] = false
@@ -932,6 +909,9 @@ func fillPlayerDefaults(p any) any {
 		if _, exists := pm[k]; !exists {
 			pm[k] = float64(0)
 		}
+	}
+	if _, exists := pm["genderId"]; !exists {
+		pm["genderId"] = ""
 	}
 	return pm
 }
@@ -1025,8 +1005,6 @@ func expandLobbyRoom(r any) any {
 			if vm, ok := val.(map[string]any); ok {
 				if vm["player"] != nil {
 					obj[key] = map[string]any{"player": fillPlayerDefaults(vm["player"])}
-				} else if vm["bot"] != nil {
-					obj[key] = vm["bot"]
 				}
 			}
 		}
@@ -1189,8 +1167,6 @@ func pairsToOccupantMap(v any) map[string]any {
 		}
 		if val["player"] != nil {
 			out[key] = val["player"]
-		} else if val["bot"] != nil {
-			out[key] = val["bot"]
 		}
 	}
 	return out

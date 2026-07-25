@@ -98,8 +98,6 @@ export type GomokuState = {
   clockRemaining?: Record<SeatKey, number>;
 };
 export type RankMultiplier = 1 | 2 | 5 | 10;
-export type BotDifficulty = "easy" | "normal" | "chaos";
-export type BotStrategy = "random" | "counter" | "chaos" | "throw" | "win";
 
 export type RoomNamePool = {
   adjectives: string[];
@@ -134,6 +132,8 @@ export type PublicStats = {
   title: string;
   titleSegmentId?: string;
   titleCustom?: boolean;
+  /** 累计在线时长（毫秒）；在线时服务端会加上本会话已持续时长。 */
+  totalOnlineMs?: number;
 };
 
 export type GameWLD = {
@@ -206,14 +206,7 @@ export type PublicPlayer = {
   gameStats: GameStats;
 };
 
-export type BotPlayer = {
-  id: string;
-  name: string;
-  difficulty: BotDifficulty;
-  isBot: true;
-};
-
-export type SeatOccupant = PublicPlayer | BotPlayer | null;
+export type SeatOccupant = PublicPlayer | null;
 
 export type ChatMessage = {
   id: string;
@@ -245,8 +238,6 @@ export type RoomSettings = {
   name: string;
   password?: string;
   gameId: GameId;
-  enableBot: boolean;
-  botDifficulty: BotDifficulty;
   enablePunishment: boolean;
   punishmentSource?: "system" | "player";
   punishmentId?: string;
@@ -435,13 +426,11 @@ export type LobbySnapshot = {
     players: number;
     spectators: number;
     versus: {
-      A: { name: string; isBot: true } | { player: PublicPlayer } | null;
-      B: { name: string; isBot: true } | { player: PublicPlayer } | null;
+      A: { player: PublicPlayer } | null;
+      B: { player: PublicPlayer } | null;
     };
     status: RoomSnapshot["status"];
     roomBackgroundImage?: string;
-    enableBot: boolean;
-    botDifficulty: BotDifficulty;
     enablePunishment: boolean;
     punishmentIds?: string[];
     punishmentId?: string;
@@ -564,18 +553,6 @@ export type AppConfig = {
     min: number;
     nameWarMin: number;
     dailyDecayRatio: number;
-  };
-  bots: {
-    names: string[];
-    difficulties: Array<{
-      id: BotDifficulty;
-      name: string;
-      description: string;
-      emoji?: string;
-      level?: number;
-      strategy?: BotStrategy;
-      cardColor?: string;
-    }>;
   };
   games: Array<{
     id: GameId;

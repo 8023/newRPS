@@ -7,12 +7,12 @@ import { compressAdminImageForUpload } from "../lib/proofImage";
 import { formatBytes, formatDuration } from "../lib/format";
 import { encodeClaimCode } from "../lib/session";
 import {
-  FactionSelect, GenderCustomField, GenderSelectField, PlayerBadge, RoomInfoTagList, RoomTagList, Select, Stat, Toggle, botStars, botStrategyText,
+  FactionSelect, GenderCustomField, GenderSelectField, PlayerBadge, RoomInfoTagList, RoomTagList, Select, Stat, Toggle,
   defaultRoomInfoTagStyle, factionStyle, formatGiveawayValue, genderChoiceError, lobbyRoomInfoTags, nextGenderIdForFaction, punishmentTasks,
   roomInfoTagOrder, roomInfoTagStyle, roomStatusText, safePlayerStats
 } from "./AppViews";
 
-export type AdminSection = "site" | "factions" | "titles" | "punishments" | "roomTags" | "roomInfoTags" | "nameWar" | "giveaway" | "extremeMode" | "rankedScore" | "accessControl" | "bots" | "messages" | "users" | "rooms";
+export type AdminSection = "site" | "factions" | "titles" | "punishments" | "roomTags" | "roomInfoTags" | "nameWar" | "giveaway" | "extremeMode" | "rankedScore" | "accessControl" | "messages" | "users" | "rooms";
 export type AdminRoomTab = "rooms" | "announcement";
 
 /** 用户管理的筛选/排序开关（与后端 admin:listPlayers 字段对应）。 */
@@ -289,7 +289,6 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
     { id: "extremeMode", label: "极限模式", detail: `${draft.extremeMode.emoji} ${draft.extremeMode.label}` },
     { id: "rankedScore", label: "排位分设置", detail: (() => { const rs = withRankedScoreDefaults(draft.rankedScore); return `积分显示上下限`; })() },
     { id: "accessControl", label: "防多开", detail: (() => { const ac = withAccessControlDefaults(draft.accessControl); return ac.registrationDisabled ? "已禁止新用户注册" : `同指纹 ${ac.maxOnlinePerIp} 在线 / ${ac.maxCreatesPer10Min} 新建`; })() },
-    { id: "bots", label: "Bot 设置", detail: `${draft.bots.difficulties.length} 个难度` },
     { id: "messages", label: "提示公告", detail: `${Object.keys(draft.messages).length} 条文案` },
     { id: "users", label: "用户管理", detail: playerFilters.online ? `在线筛选 · ${adminPlayersTotal} 人` : `${adminPlayersTotal} 人` },
     { id: "rooms", label: "房间管理", detail: `${lobby.rooms.length} 房间 · 在线 ${lobby.onlineCount}` }
@@ -632,40 +631,6 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
       );
     }
 
-    if (activeSection === "bots") {
-      return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="Bot 设置" subtitle="修改机器人名字池和难度卡片。难度策略会影响 Bot 出拳逻辑。" />
-          <TagListEditor label="Bot 名字池" placeholder="输入 Bot 名字后回车" values={draft.bots.names} onChange={(names) => patch({ bots: { ...draft.bots, names } })} />
-          {draft.bots.difficulties.map((difficulty, index) => (
-            <div className="mini-card bot-admin-card" key={difficulty.id}>
-              <div className="bot-difficulty-card active" style={{ "--bot-card-color": difficulty.cardColor || "#9ed7ff" } as CSSProperties}>
-                <span className="bot-card-emoji">{difficulty.emoji || "🤖"}</span>
-                <strong>{difficulty.name}</strong>
-                <em>{botStars(difficulty.level || 1)}</em>
-                <small>{difficulty.description}</small>
-                <b>{botStrategyText(difficulty.strategy)}</b>
-              </div>
-              <div className="config-row">
-                <label className="field-label"><span>难度名称</span><input value={difficulty.name} onChange={(event) => patch({ bots: { ...draft.bots, difficulties: draft.bots.difficulties.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item) } })} /></label>
-                <label className="field-label"><span>难度说明</span><input value={difficulty.description} onChange={(event) => patch({ bots: { ...draft.bots, difficulties: draft.bots.difficulties.map((item, itemIndex) => itemIndex === index ? { ...item, description: event.target.value } : item) } })} /></label>
-                <label className="field-label"><span>图标 Emoji</span><input value={difficulty.emoji || ""} onChange={(event) => patch({ bots: { ...draft.bots, difficulties: draft.bots.difficulties.map((item, itemIndex) => itemIndex === index ? { ...item, emoji: event.target.value } : item) } })} /></label>
-                <label className="field-label"><span>星级 1-5</span><input type="number" min={1} max={5} value={difficulty.level || 1} onChange={(event) => patch({ bots: { ...draft.bots, difficulties: draft.bots.difficulties.map((item, itemIndex) => itemIndex === index ? { ...item, level: Number(event.target.value) } : item) } })} /></label>
-                <label className="field-label"><span>策略类型</span><Select value={difficulty.strategy || "random"} onChange={(value) => patch({ bots: { ...draft.bots, difficulties: draft.bots.difficulties.map((item, itemIndex) => itemIndex === index ? { ...item, strategy: value as AppConfig["bots"]["difficulties"][number]["strategy"] } : item) } })} options={[
-                  { value: "random", label: "随机" },
-                  { value: "counter", label: "反制" },
-                  { value: "chaos", label: "混乱连招" },
-                  { value: "throw", label: "白给" },
-                  { value: "win", label: "必胜" }
-                ]} /></label>
-                <ColorInput label="卡片颜色" value={difficulty.cardColor || "#9ed7ff"} onChange={(value) => patch({ bots: { ...draft.bots, difficulties: draft.bots.difficulties.map((item, itemIndex) => itemIndex === index ? { ...item, cardColor: value } : item) } })} />
-              </div>
-            </div>
-          ))}
-        </div>
-      );
-    }
-
     if (activeSection === "nameWar") {
       const preview = `${draft.nameWar.penaltyPrefix || "失名者"}-A7K2`;
       return (
@@ -768,7 +733,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
               <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.dislikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, dislikeVoteValue: Number(event.target.value) } })} />
             </label>
           </div>
-          <p className="hint">胜利扣减仅对已开启白给模式的胜方生效（含断线判负）；真人对战生效，Bot 对战不生效。</p>
+          <p className="hint">胜利扣减仅对已开启白给模式的胜方生效（含断线判负）。</p>
         </div>
       );
     }
@@ -1190,8 +1155,8 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
               {lobby.rooms.map((room) => {
                 const canForceSeatOutcome = room.status === "playing" && room.gameId !== "liarsdice"
                   && room.versus.A != null && room.versus.B != null;
-                const seatALabel = room.versus.A ? ("player" in room.versus.A ? room.versus.A.player.name : room.versus.A.name) : "A方";
-                const seatBLabel = room.versus.B ? ("player" in room.versus.B ? room.versus.B.player.name : room.versus.B.name) : "B方";
+                const seatALabel = room.versus.A?.player?.name || "A方";
+                const seatBLabel = room.versus.B?.player?.name || "B方";
                 return (
                   <div className="admin-room" key={room.id}>
                     <div className="admin-card-title">

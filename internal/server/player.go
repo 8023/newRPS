@@ -375,7 +375,48 @@ func (s *Server) publicPlayer(player *PlayerState) types.PublicPlayer {
 	p.Stats.RankedPoints = s.displayClampScore(player, player.Stats.RankedPoints)
 	p.Stats.HighestScore = s.displayClampScore(player, player.Stats.HighestScore)
 	p.Stats.LowestScore = s.displayClampScore(player, player.Stats.LowestScore)
+	// 累计在线：存储值 + 当前会话（不写回存储，避免与断线累加重叠）。
+	p.Stats.TotalOnlineMs = s.effectiveOnlineMs(player)
 	return p
+}
+
+// effectiveOnlineMs 返回用于展示/排行的累计在线毫秒：已落库的结束会话 + 本会话已持续。
+func (s *Server) effectiveOnlineMs(player *PlayerState) int64 {
+	if player == nil {
+		return 0
+	}
+	total := player.Stats.TotalOnlineMs
+	if !player.Connected || player.SocketID == "" {
+		return total
+	}
+	c := s.clients[player.SocketID]
+	if c == nil || c.connectedAt <= 0 {
+		return total
+	}
+	if d := nowMs() - c.connectedAt; d > 0 {
+		total += d
+	}
+	return total
+}
+
+// accumulateClientOnlineMs 把一条已结束连接的时长累加到绑定玩家（须在 s.mu 内调用）。
+// 游客连接（未关联玩家）直接跳过。
+// 不要求 player.SocketID 仍等于本连接：同 SID 顶替时玩家可能已指向新 socket，
+// 但仍应把旧连接的时长记到该玩家上。
+func (s *Server) accumulateClientOnlineMs(client *Client, disconnectedAt int64) {
+	if client == nil || client.connectedAt <= 0 || client.playerID == "" {
+		return
+	}
+	player := s.players[client.playerID]
+	if player == nil {
+		return
+	}
+	dur := disconnectedAt - client.connectedAt
+	if dur <= 0 {
+		return
+	}
+	player.Stats.TotalOnlineMs += dur
+	s.requestPersist("lazy")
 }
 
 // displayClampScore 仅用于下发展示：真实存储永不改动；按 RankedScore 的 max/min
@@ -393,7 +434,7 @@ func (s *Server) refreshPlayerSnapshots(player *PlayerState) {
 	for _, room := range s.rooms {
 		for _, seat := range []types.SeatKey{types.SeatA, types.SeatB} {
 			occ := room.Seats[seat]
-			if occ == nil || occ.IsBot() {
+			if occ == nil {
 				continue
 			}
 			if occ.GetID() == player.ID {
@@ -525,7 +566,6 @@ func (s *Server) createPlayer(name, genderID, customGenderLabel, factionID, toke
 			GameStats: freshGameStats(),
 		},
 		Token:      token,
-		RecentMoves: nil,
 		Persistent: persistent,
 		PlayerID:   identityPlayerID,
 		CreatedAt:  now,

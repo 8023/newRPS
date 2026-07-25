@@ -252,8 +252,19 @@ func TestResolveLiarsDiceChallenge_BidderWins(t *testing.T) {
 	if b.Stats.Wins != 1 || c.Stats.Losses != 1 {
 		t.Fatalf("stats not updated: b.Wins=%d c.Losses=%d", b.Stats.Wins, c.Stats.Losses)
 	}
+	// 第三人 a 未参与叫点/开牌，应记平；胜/负不应误记。
+	if a.Stats.Draws != 1 || a.Stats.Wins != 0 || a.Stats.Losses != 0 {
+		t.Fatalf("draw participant stats: a wins=%d losses=%d draws=%d, want 0/0/1", a.Stats.Wins, a.Stats.Losses, a.Stats.Draws)
+	}
+	if a.GameStats.LiarsDice.Draws != 1 {
+		t.Fatalf("a.GameStats.LiarsDice.Draws=%d, want 1", a.GameStats.LiarsDice.Draws)
+	}
 	if b.Stats.RankedPoints <= 0 || c.Stats.RankedPoints >= 0 {
 		t.Fatalf("ranked points not applied: b=%d c=%d", b.Stats.RankedPoints, c.Stats.RankedPoints)
+	}
+	// 平局玩家不计排位分。
+	if a.Stats.RankedPoints != 0 {
+		t.Fatalf("draw participant should not get ranked points: a=%d", a.Stats.RankedPoints)
 	}
 	if len(room.RoundHistory) != 1 {
 		t.Fatalf("expected 1 history item, got %d", len(room.RoundHistory))
@@ -360,6 +371,10 @@ func TestLiarsDiceDisconnectForfeit(t *testing.T) {
 	}
 	if a.Stats.Wins != 1 || b.Stats.Losses != 1 {
 		t.Fatalf("stats not applied: a.Wins=%d b.Losses=%d", a.Stats.Wins, b.Stats.Losses)
+	}
+	// 第三人 c 未成为胜/负方，应记平。
+	if c.Stats.Draws != 1 || c.Stats.Wins != 0 || c.Stats.Losses != 0 {
+		t.Fatalf("draw participant stats: c wins=%d losses=%d draws=%d, want 0/0/1", c.Stats.Wins, c.Stats.Losses, c.Stats.Draws)
 	}
 	if room.Phase != types.PhaseResult {
 		t.Fatalf("phase = %v, want result", room.Phase)

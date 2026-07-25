@@ -87,7 +87,6 @@ func (s *Server) lobbySnapshot(includeConfig, includeSuggestions bool) types.Lob
 				types.SeatB: s.lobbySeatSummary(room.Seats[types.SeatB]),
 			},
 			Status: room.Status, RoomBackgroundImage: room.Settings.RoomBackgroundImage,
-			EnableBot: room.Settings.EnableBot, BotDifficulty: room.Settings.BotDifficulty,
 			EnablePunishment: room.Settings.EnablePunishment, PunishmentIDs: room.Settings.PunishmentIDs,
 			PunishmentID: room.Settings.PunishmentID, TieDoublePunish: room.Settings.TieDoublePunish,
 			RequireOpponentConfirm: room.Settings.RequireOpponentConfirm, EnableRanked: room.Settings.EnableRanked,
@@ -123,10 +122,6 @@ func (s *Server) lobbySnapshot(includeConfig, includeSuggestions bool) types.Lob
 func (s *Server) lobbySeatSummary(occupant SeatOccupant) any {
 	if occupant == nil {
 		return nil
-	}
-	if occupant.IsBot() {
-		bot := occupant.(*BotSeat).Bot
-		return map[string]any{"name": bot.Name, "isBot": true}
 	}
 	// 大厅对阵只嵌精简玩家
 	p := occupant.(*HumanSeat).Player

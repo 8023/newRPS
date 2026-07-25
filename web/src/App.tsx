@@ -4,8 +4,8 @@ import { socket } from "./main";
 import type { AppConfig, ChatMessage, LobbySnapshot, PublicPlayer, RoomSnapshot } from "./shared/types";
 import { leaderboardRefreshMs, playerSecretKey, securityDisclaimerKey, tokenKey } from "./lib/constants";
 import {
-  bumpWsAuthRetryCount, clearPlayerIdentity, connectSocketWithSession, getWsAuthRetryCount, hasCachedLogin,
-  joinIdentityPayload, resetWsAuthRetryCount, sessionTokenLooksValid
+  bumpWsAuthRetryCount, cacheJoinProfile, clearPlayerIdentity, connectSocketWithSession, getWsAuthRetryCount, hasCachedLogin,
+  joinIdentityPayload, readCachedJoinGender, resetWsAuthRetryCount, sessionTokenLooksValid
 } from "./lib/session";
 import { ask, isAdminRoute, todayKey } from "./lib/rpc";
 import {
@@ -47,7 +47,7 @@ function checkRoomLevel1Notifications(old: RoomSnapshot | null, next: RoomSnapsh
   const otherOccOld = old.seats[otherSeat];
   const otherOccNext = next.seats[otherSeat];
   const wasEmpty = !otherOccOld;
-  const nowHuman = Boolean(otherOccNext) && !("isBot" in otherOccNext!);
+  const nowHuman = Boolean(otherOccNext);
   if (wasEmpty && nowHuman) notifySeatIfHidden();
 
   // 轮到我了：RPS 靠 choices（对方刚锁定、我还没锁定）；黑白棋/井字棋靠 turn 字段切到我。
@@ -111,9 +111,8 @@ export function App() {
     if (restoreInFlightRef.current) return;
     const token = localStorage.getItem(tokenKey);
     const cachedName = localStorage.getItem("rps-online-name") || "";
-    const cachedGender = localStorage.getItem("rps-online-gender") || "male";
-    const cachedCustomGender = localStorage.getItem("rps-online-custom-gender") || "";
-    const cachedFaction = localStorage.getItem("rps-online-faction") || "";
+    // 自定义性别时 genderId 为空串是合法值，必须用 readCachedJoinGender，不能 || "male"。
+    const { genderId: cachedGender, customGenderLabel: cachedCustomGender, factionId: cachedFaction } = readCachedJoinGender();
     if (!cachedName || !sessionTokenLooksValid(token)) {
       setRestoringSession(false);
       return;
@@ -134,6 +133,8 @@ export function App() {
       }
       if (next.token) localStorage.setItem(tokenKey, next.token);
       if (next.reissuedSecret) localStorage.setItem(playerSecretKey, next.reissuedSecret);
+      // 以服务端确认后的资料为准回写缓存，避免清洗后的自定义性别文案与本地不一致。
+      if (next.player) cacheJoinProfile(next.player);
       setMe(next);
       initPushForPlayer(next.player.id);
       if (next.room) setRoom(normalizeRoomSnapshot(next.room));
@@ -172,6 +173,7 @@ export function App() {
       const next = await ask<MeState>("player:join", { ...restoreKickPending, forceKick: true });
       if (next.token) localStorage.setItem(tokenKey, next.token);
       if (next.reissuedSecret) localStorage.setItem(playerSecretKey, next.reissuedSecret);
+      if (next.player) cacheJoinProfile(next.player);
       setMe(next);
       initPushForPlayer(next.player.id);
       if (next.room) setRoom(normalizeRoomSnapshot(next.room));
@@ -273,8 +275,14 @@ export function App() {
         if (!old) return old;
         const p = byId.get(old.player.id);
         if (!p) return old;
-        // LobbyPlayer 省略空 avatarUrl；合并时必须显式清空，否则旧头像会残留。
-        const merged = { ...old.player, ...p, avatarUrl: p.avatarUrl || undefined };
+        // LobbyPlayer/typed PublicPlayer 会省略空串字段：avatarUrl 清空、自定义性别 genderId=""。
+        // 合并时必须显式写回空值，否则旧头像/旧预设 genderId 会残留在 me 上。
+        const merged = {
+          ...old.player,
+          ...p,
+          genderId: typeof p.genderId === "string" ? p.genderId : "",
+          avatarUrl: p.avatarUrl || undefined
+        };
         return { ...old, player: merged, room: old.room ? replacePlayerInRoom(old.room, merged) : old.room };
       });
     }
@@ -455,8 +463,14 @@ export function App() {
       <header className="topbar">
         <div>
           <h1>{config.site.name}</h1>
-          <span className="top-summary">{view === "room" && room ? `⚔️ ${phaseText(room.phase, room.settings.gameId)}` : lobby ? `当前连接 ${lobbyOnlineCount(lobby)} 人` : "正在连接"}</span>
-          <span className={`connection-pill ${connectionState}`}>{connectionStateText(connectionState)}</span>
+          {view === "room" && room && (
+            <span className="top-summary">⚔️ {phaseText(room.phase, room.settings.gameId)}</span>
+          )}
+          <span className={`connection-pill ${connectionState}`}>
+            {connectionState === "connected"
+              ? `在线 ${lobbyOnlineCount(lobby)} 人`
+              : connectionStateText(connectionState)}
+          </span>
         </div>
         <div className="top-actions">
           {me && <PlayerBadge player={me.player} compact />}
@@ -524,10 +538,7 @@ export function App() {
           onClose={() => setProfileOpen(false)}
           onUpdated={(player) => {
             setMe({ ...me, player });
-            localStorage.setItem("rps-online-name", player.name);
-            localStorage.setItem("rps-online-gender", player.genderId);
-            localStorage.setItem("rps-online-custom-gender", player.genderId ? "" : player.genderLabel);
-            localStorage.setItem("rps-online-faction", player.factionId);
+            cacheJoinProfile(player);
           }}
           onError={setNotice}
           onLoggedOut={() => { window.location.reload(); }}

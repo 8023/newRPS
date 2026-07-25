@@ -600,8 +600,8 @@ func (s *Server) onGiveawayBoost(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "只有战斗席玩家可以白给")
 		return
 	}
-	if !s.isHumanVsHumanRoom(room) {
-		client.reply(env.ID, nil, "Bot 对战不能使用白给模式")
+	if !s.isFullHumanRoom(room) {
+		client.reply(env.ID, nil, "双方都入座后才能使用白给模式")
 		return
 	}
 	if room.Phase == types.PhasePunishment {

@@ -134,10 +134,10 @@ func shouldPush(player *PlayerState, pref *bool) bool {
 }
 
 // notifyOpponentTurn：现在轮到 waitingSeat 这个人动手了（RPS 对手已出拳 / 棋类换到 Ta 的回合）。
-// 座位空/是 Bot/在线/没开偏好都直接跳过。
+// 座位空/在线/没开偏好都直接跳过。
 func (s *Server) notifyOpponentTurn(room *RoomState, waitingSeat types.SeatKey) {
 	occ := room.Seats[waitingSeat]
-	if occ == nil || occ.IsBot() {
+	if occ == nil {
 		return
 	}
 	waiting := s.players[occ.GetID()]
@@ -147,10 +147,10 @@ func (s *Server) notifyOpponentTurn(room *RoomState, waitingSeat types.SeatKey) 
 }
 
 // notifySeatFilled：filledSeat 刚坐进一个人，如果对面座位坐着的是真人玩家且当前离线、
-// 又开了这个推送源，就提醒 Ta「有人进房参战了」。座位空/是 Bot/在线/没开偏好都直接跳过。
+// 又开了这个推送源，就提醒 Ta「有人进房参战了」。座位空/在线/没开偏好都直接跳过。
 func (s *Server) notifySeatFilled(room *RoomState, filledSeat types.SeatKey) {
 	occ := room.Seats[oppositeSeat(filledSeat)]
-	if occ == nil || occ.IsBot() {
+	if occ == nil {
 		return
 	}
 	opponent := s.players[occ.GetID()]

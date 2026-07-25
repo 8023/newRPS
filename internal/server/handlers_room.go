@@ -61,7 +61,6 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		}
 		settings.OthelloMoveSeconds = clampMoveSeconds(settings.OthelloMoveSeconds)
 		settings.OthelloGameMinutes = clampGameMinutes(settings.OthelloGameMinutes)
-		settings.EnableBot = false
 	} else if settings.GameID == types.GameTicTacToe {
 		switch settings.Stake {
 		case 5, 10, 20:
@@ -73,7 +72,6 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		default:
 			settings.TicTacToeBoardTheme = "paper"
 		}
-		settings.EnableBot = false
 	} else if settings.GameID == types.GameLiarsDice {
 		switch settings.Stake {
 		case 5, 10, 20:
@@ -83,7 +81,8 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		minP, maxP := liarsDiceRosterBounds(settings)
 		settings.LiarsDiceMinPlayers = minP
 		settings.LiarsDiceMaxPlayers = maxP
-		settings.EnableBot = false
+		// 大话骰每局永远 1 胜 1 负，旁观者记平但不触发「平局双罚」；强制关闭以免歧义。
+		settings.TieDoublePunish = false
 	} else if settings.GameID == types.GameGomoku {
 		switch settings.Stake {
 		case 5, 10, 20:
@@ -103,7 +102,6 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		}
 		settings.GomokuMoveSeconds = clampMoveSeconds(settings.GomokuMoveSeconds)
 		settings.GomokuGameMinutes = clampGameMinutes(settings.GomokuGameMinutes)
-		settings.EnableBot = false
 	} else {
 		switch settings.Stake {
 		case 5, 10, 20:
@@ -134,10 +132,6 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	settings.EnableTags = len(settings.Tags) > 0
 	settings.Name = s.normalizeRoomName(settings)
 	settings.RoomBackgroundImage = s.randomRoomBackground(settings)
-	if settings.EnableRanked && settings.EnableBot {
-		client.reply(env.ID, nil, "排位战不能开启 Bot")
-		return
-	}
 	if settings.EnableRanked && ptrBool(player.ExtremeModeEnabled) != settings.EnableExtremeRanked {
 		if ptrBool(player.ExtremeModeEnabled) {
 			client.reply(env.ID, nil, "极限模式玩家只能创建极限排位房")
@@ -146,20 +140,12 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		}
 		return
 	}
-	if settings.EnableExtremeRanked && settings.EnableBot {
-		client.reply(env.ID, nil, "极限排位不能开启 Bot")
-		return
-	}
 	if settings.EnableExtremeRanked && settings.EnableRankMultiplier {
 		client.reply(env.ID, nil, "极限排位不能开启倍率模式")
 		return
 	}
 	if settings.EnableRankMultiplier && !ptrBool(player.RankMultiplierUnlocked) {
 		client.reply(env.ID, nil, "请先提交 200 排位积分解锁倍率模式")
-		return
-	}
-	if settings.EnablePunishment && settings.PunishmentSource == "player" && settings.EnableBot {
-		client.reply(env.ID, nil, "玩家发布任务模式不能开启 Bot")
 		return
 	}
 	leaveResult := s.leaveRoom(player, LeaveSwitchRoom)
@@ -173,10 +159,6 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	isLiarsDice := settings.GameID == types.GameLiarsDice
 	if isLiarsDice {
 		seats = map[types.SeatKey]SeatOccupant{types.SeatA: nil, types.SeatB: nil}
-	}
-	if settings.EnableBot {
-		status, phase = "playing", types.PhaseChoosing
-		seats[types.SeatB] = s.makeBot(settings.BotDifficulty)
 	}
 	room := &RoomState{
 		ID: roomID, OwnerID: player.ID, CreatorName: playerShortName(player), Settings: settings,
@@ -464,8 +446,8 @@ func (s *Server) onRoomMove(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "需要双方都坐下才能出拳")
 		return
 	}
-	if p.Move == types.MoveGiveaway && (!ptrBool(player.GiveawayEnabled) || !s.isHumanVsHumanRoom(room)) {
-		client.reply(env.ID, nil, "白给只在真人对战并开启白给模式后可用")
+	if p.Move == types.MoveGiveaway && (!ptrBool(player.GiveawayEnabled) || !s.isFullHumanRoom(room)) {
+		client.reply(env.ID, nil, "白给只在双方都入座并开启白给模式后可用")
 		return
 	}
 	if room.Phase == types.PhasePunishment {
@@ -492,7 +474,6 @@ func (s *Server) onRoomMove(client *Client, env wsEnvelope) {
 	if room.Choices[oppositeSeat(seat)] == "" {
 		s.notifyOpponentTurn(room, oppositeSeat(seat))
 	}
-	s.maybeBotAct(room)
 	oldStatus := room.Status
 	s.finishRoundIfReady(room)
 	s.broadcastRoom(room.ID, oldStatus != room.Status)
@@ -1162,8 +1143,8 @@ func (s *Server) onPunishmentSubmit(client *Client, env wsEnvelope) {
 		return
 	}
 	// 人人对战且开启「需对手确认」时保持 pending，由胜方审批（系统任务与自定义任务一致）。
-	// 仅 Bot 对战 / 无人类对手 / 房间关闭确认 时系统自动通过。
-	approvedBySystem := s.opponentIsBot(room, player.ID) || s.punishmentReviewer(room, player.ID) == nil || !room.Settings.RequireOpponentConfirm
+	// 无人类对手 / 房间关闭确认 时系统自动通过。
+	approvedBySystem := s.punishmentReviewer(room, player.ID) == nil || !room.Settings.RequireOpponentConfirm
 	submittedAt := nowMs()
 	filtered := room.Proofs[:0]
 	for _, pr := range room.Proofs {
@@ -1650,10 +1631,6 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 			}
 			for _, c := range s.clients {
 				c.leaveRoom(p.RoomID)
-			}
-			if t := s.botTimers[p.RoomID]; t != nil {
-				t.Stop()
-				delete(s.botTimers, p.RoomID)
 			}
 			s.clearOthelloSettlementTimer(p.RoomID)
 			s.clearTicTacToeGiveawayTimer(p.RoomID)

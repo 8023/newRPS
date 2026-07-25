@@ -6,7 +6,7 @@
 //	site.json, announcement-board.json, security-disclaimer.json, genders.json, gender-factions.json,
 //	titles.json, punishments.json, player-punishment-room-name-pool.json, room-tags.json,
 //	room-info-tags.json, access-control.json, name-war.json, giveaway.json,
-//	extreme-mode.json, ranked-score.json, bots.json, games.json, messages.json
+//	extreme-mode.json, ranked-score.json, games.json, messages.json
 package config
 
 import (
@@ -41,7 +41,6 @@ var splitConfigFiles = []string{
 	"giveaway.json",
 	"extreme-mode.json",
 	"ranked-score.json",
-	"bots.json",
 	"games.json",
 	"messages.json",
 }
@@ -180,15 +179,6 @@ func clampOpacity(value float64) float64 {
 
 func clampRatio(value float64) float64 {
 	return clampOpacity(value)
-}
-
-func isBotStrategy(value types.BotStrategy) bool {
-	switch value {
-	case "random", "counter", "chaos", "throw", "win":
-		return true
-	default:
-		return false
-	}
 }
 
 func sliceRunes(s string, max int) string {
@@ -345,22 +335,6 @@ func normalizeConfig(input types.AppConfig) types.AppConfig {
 		games = append(games, g)
 	}
 
-	botDifficulties := make([]types.BotDifficultyConfig, 0, len(input.Bots.Difficulties))
-	for _, d := range input.Bots.Difficulties {
-		d.ID = types.BotDifficulty(strings.TrimSpace(string(d.ID)))
-		d.Name = strings.TrimSpace(d.Name)
-		d.Description = strings.TrimSpace(d.Description)
-		d.Emoji = sliceRunes(d.Emoji, 4)
-		d.CardColor = strings.TrimSpace(d.CardColor)
-		if d.Level < 1 {
-			d.Level = 1
-		}
-		if d.Level > 5 {
-			d.Level = 5
-		}
-		botDifficulties = append(botDifficulties, d)
-	}
-
 	roomInfoTags := map[string]types.RoomInfoTagStyle{}
 	for key, tag := range input.RoomInfoTags {
 		tag.Label = sliceRunes(tag.Label, 16)
@@ -403,8 +377,6 @@ func normalizeConfig(input types.AppConfig) types.AppConfig {
 	out.Genders = genders
 	out.Titles = titles
 	out.Punishments = punishments
-	out.Bots.Names = cleanLines(input.Bots.Names)
-	out.Bots.Difficulties = botDifficulties
 	out.RoomTags = cleanLines(input.RoomTags)
 	out.Games = games
 	out.RoomInfoTags = roomInfoTags
@@ -733,17 +705,6 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 	if input.AccessControl.MaxProofUploadsPerPlayer < 1 {
 		return input, fmt.Errorf("同玩家 10 分钟证明图上传上限至少为 1")
 	}
-	if len(input.Bots.Names) == 0 || len(input.Bots.Difficulties) == 0 {
-		return input, fmt.Errorf("bot 名字和难度不能为空")
-	}
-	for _, difficulty := range input.Bots.Difficulties {
-		if !isBotStrategy(difficulty.Strategy) {
-			return input, fmt.Errorf("%s 的 Bot 策略不正确", difficulty.Name)
-		}
-		if difficulty.CardColor == "" || !hexColorRe.MatchString(difficulty.CardColor) {
-			return input, fmt.Errorf("%s 的卡片颜色必须是 #RRGGBB", difficulty.Name)
-		}
-	}
 	if len(input.Games) == 0 {
 		return input, fmt.Errorf("至少需要一个游戏配置")
 	}
@@ -962,7 +923,6 @@ func readSplitConfig() (types.AppConfig, error) {
 		{"giveaway.json", &cfg.Giveaway},
 		{"extreme-mode.json", &cfg.ExtremeMode},
 		{"ranked-score.json", &cfg.RankedScore},
-		{"bots.json", &cfg.Bots},
 		{"games.json", &cfg.Games},
 		{"messages.json", &cfg.Messages},
 	}
@@ -999,7 +959,6 @@ func writeSplitConfig(cfg types.AppConfig) error {
 		{"giveaway.json", cfg.Giveaway},
 		{"extreme-mode.json", cfg.ExtremeMode},
 		{"ranked-score.json", cfg.RankedScore},
-		{"bots.json", cfg.Bots},
 		{"games.json", cfg.Games},
 		{"messages.json", cfg.Messages},
 	}

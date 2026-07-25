@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS players (
 	liarsdice_wins INTEGER NOT NULL DEFAULT 0,
 	liarsdice_losses INTEGER NOT NULL DEFAULT 0,
 	liarsdice_draws INTEGER NOT NULL DEFAULT 0,
+	total_online_ms INTEGER NOT NULL DEFAULT 0,
 	created_at INTEGER NOT NULL DEFAULT 0,
 	last_seen_at INTEGER NOT NULL DEFAULT 0
 );
@@ -127,6 +128,7 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 			tictactoe_wins, tictactoe_losses, tictactoe_draws,
 			gomoku_wins, gomoku_losses, gomoku_draws,
 			liarsdice_wins, liarsdice_losses, liarsdice_draws,
+			total_online_ms,
 			created_at, last_seen_at
 		FROM players`)
 	if err != nil {
@@ -162,6 +164,7 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 			&item.GameStats.TicTacToe.Wins, &item.GameStats.TicTacToe.Losses, &item.GameStats.TicTacToe.Draws,
 			&item.GameStats.Gomoku.Wins, &item.GameStats.Gomoku.Losses, &item.GameStats.Gomoku.Draws,
 			&item.GameStats.LiarsDice.Wins, &item.GameStats.LiarsDice.Losses, &item.GameStats.LiarsDice.Draws,
+			&item.Stats.TotalOnlineMs,
 			&item.CreatedAt, &item.LastSeenAt,
 		)
 		if err != nil {
@@ -294,6 +297,7 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			tictactoe_wins, tictactoe_losses, tictactoe_draws,
 			gomoku_wins, gomoku_losses, gomoku_draws,
 			liarsdice_wins, liarsdice_losses, liarsdice_draws,
+			total_online_ms,
 			created_at, last_seen_at
 		) VALUES (
 			?,?,?,?,?,?,?,?,
@@ -308,6 +312,7 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			?,?,?,
 			?,?,?,
 			?,?,?,
+			?,
 			?,?
 		)
 		ON CONFLICT(id) DO UPDATE SET
@@ -351,6 +356,7 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			tictactoe_wins=excluded.tictactoe_wins, tictactoe_losses=excluded.tictactoe_losses, tictactoe_draws=excluded.tictactoe_draws,
 			gomoku_wins=excluded.gomoku_wins, gomoku_losses=excluded.gomoku_losses, gomoku_draws=excluded.gomoku_draws,
 			liarsdice_wins=excluded.liarsdice_wins, liarsdice_losses=excluded.liarsdice_losses, liarsdice_draws=excluded.liarsdice_draws,
+			total_online_ms=excluded.total_online_ms,
 			created_at=excluded.created_at, last_seen_at=excluded.last_seen_at
 	`,
 		item.ID, item.PlayerID, item.ClaimKey, item.Name, item.GenderID, item.CustomGenderLabel, item.FactionID, item.AvatarURL,
@@ -369,6 +375,7 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 		gs.TicTacToe.Wins, gs.TicTacToe.Losses, gs.TicTacToe.Draws,
 		gs.Gomoku.Wins, gs.Gomoku.Losses, gs.Gomoku.Draws,
 		gs.LiarsDice.Wins, gs.LiarsDice.Losses, gs.LiarsDice.Draws,
+		item.Stats.TotalOnlineMs,
 		item.CreatedAt, item.LastSeenAt,
 	)
 	if err != nil {
