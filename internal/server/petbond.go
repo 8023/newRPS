@@ -825,6 +825,32 @@ func (s *Server) requestToView(r *petBondRequest, viewerID string) petBondReques
 	}
 }
 
+// clearOfflinePetBondRequests 清空 playerID 参与的、要求双方在线才能成立的认主/认宠申请
+// （seek_master/seek_pet）。任一方离线即视为失效，避免对方在其离线期间被迫一直挂着这条申请、
+// 或者重新上线后收到一条早已物是人非的旧申请。
+// release（解除已有关系）不受此限制：那是针对已确立关系的解除流程，离线也应该能被对方处理。
+// 返回是否有申请被清空，供调用方决定是否要 notifyAllOnlinePetBondStates。
+func (s *Server) clearOfflinePetBondRequests(playerID string) bool {
+	if playerID == "" {
+		return false
+	}
+	changed := false
+	for _, r := range s.petBondRequests {
+		if r.Status != petBondStatusPending {
+			continue
+		}
+		if r.Kind != petBondKindSeekMaster && r.Kind != petBondKindSeekPet {
+			continue
+		}
+		if r.FromID != playerID && r.ToID != playerID {
+			continue
+		}
+		s.cancelRequest(r, petBondStatusCancelled)
+		changed = true
+	}
+	return changed
+}
+
 // notifyAllOnlinePetBondStates 向所有在线玩家推送宠物乐园状态。
 // 当有人开关认主/认宠/公开展示，或关系变更时调用，保证他人列表实时刷新。
 func (s *Server) notifyAllOnlinePetBondStates() {

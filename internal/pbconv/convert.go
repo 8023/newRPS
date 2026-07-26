@@ -339,7 +339,7 @@ func lobbyRoomToProto(r types.LobbyRoomInfo) (*wire.LobbyRoomInfo, error) {
 		LiarsDiceMinPlayers: int32(r.LiarsDiceMinPlayers), LiarsDiceMaxPlayers: int32(r.LiarsDiceMaxPlayers),
 		OthelloMoveSeconds: int32(r.OthelloMoveSeconds), OthelloGameMinutes: int32(r.OthelloGameMinutes),
 		GomokuMoveSeconds: int32(r.GomokuMoveSeconds), GomokuGameMinutes: int32(r.GomokuGameMinutes),
-		GomokuUndoLimit: int32(r.GomokuUndoLimit),
+		GomokuUndoLimit:   int32(r.GomokuUndoLimit),
 		JungleMoveSeconds: int32(r.JungleMoveSeconds), JungleGameMinutes: int32(r.JungleGameMinutes),
 	}
 	for _, seat := range []types.SeatKey{types.SeatA, types.SeatB} {
@@ -628,6 +628,7 @@ func othelloToProto(s *types.OthelloState) (*wire.OthelloState, error) {
 			Id: ps.ID, Seat: string(ps.Seat), OpponentSeat: string(ps.OpponentSeat),
 			Flips: int32(ps.Flips), Stake: int32(ps.Stake), NextTurn: string(ps.NextTurn),
 			ExpiresAt: ps.ExpiresAt, Forced: ps.Forced, ResolvedAs: ps.ResolvedAs,
+			ForcedByMasterName: ps.ForcedByMasterName,
 		}
 	}
 	if s.SurrenderRequest != nil {
@@ -675,6 +676,7 @@ func gomokuToProto(s *types.GomokuState) (*wire.GomokuState, error) {
 	m := &wire.GomokuState{
 		Turn: string(s.Turn), BlackSeat: string(s.BlackSeat), MoveCount: int32(s.MoveCount),
 		Ended: s.Ended, Winner: string(s.Winner),
+		GiveawaySeat: string(s.GiveawaySeat), GiveawayForcedByMasterName: s.GiveawayForcedByMasterName,
 		MoveDeadlineAt: s.MoveDeadlineAt, ClockDeadlineAt: s.ClockDeadlineAt,
 	}
 	for k, v := range s.ClockRemaining {

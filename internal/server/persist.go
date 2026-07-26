@@ -187,6 +187,9 @@ func (s *Server) ingestPersistedPlayer(item persistedPlayer) bool {
 				Punishments: item.Stats.Punishments, RankedPoints: item.Stats.RankedPoints,
 				HighestScore: item.Stats.HighestScore, LowestScore: item.Stats.LowestScore,
 				Title: title, TitleSegmentID: item.Stats.TitleSegmentID, TitleCustom: item.Stats.TitleCustom,
+				// 累计在线时长必须从库灌回内存：漏读会导致每次重启从 0 起算，
+				// 随后 flush 把库里的正确值覆盖成仅本进程会话。
+				TotalOnlineMs: item.Stats.TotalOnlineMs,
 			},
 			GameStats: gameStats,
 		},

@@ -230,7 +230,8 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		sendCh: make(chan []byte, 256), done: make(chan struct{}),
 		// connectedAt/compression 只是快照在内存里，断连时才和其余字段一起写进
 		// connection_events 一行（见 activitylog.go），connect 时不落盘。
-		connectedAt: nowMs(), compression: compressionModeName(compMode),
+		// onlineCreditedAt 与 connectedAt 同步起算，供在线时长 checkpoint / 断线累加。
+		connectedAt: nowMs(), onlineCreditedAt: nowMs(), compression: compressionModeName(compMode),
 	}
 	go client.writeLoop()
 
@@ -530,6 +531,8 @@ func (s *Server) onClientDisconnect(client *Client) {
 		}
 		s.broadcastPlayerUpdate(current)
 		s.broadcastLobby()
+		// 认主/认宠申请要求双方在线，断线一方即作废，避免对方对着一条已经过期的申请干等。
+		s.clearOfflinePetBondRequests(current.ID)
 		// 宠物乐园候选/关系图依赖在线状态。
 		s.notifyAllOnlinePetBondStates()
 

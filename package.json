@@ -15,6 +15,6 @@
     "start": "HOST=127.0.0.1 PORT=9988 ./bin/server"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.4"
   }
 }

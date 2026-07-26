@@ -67,6 +67,8 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{10, 60_000, 30_000}, s.onPetBondRequestRelease
 	case "petbond:setTitle":
 		return RateLimitOptions{10, 60_000, 30_000}, s.onPetBondSetTitle
+	case "petbond:forceGiveaway":
+		return RateLimitOptions{6, 60_000, 15_000}, s.onPetBondForceGiveaway
 	case "giveaway:boost":
 		return RateLimitOptions{20, 60_000, 30_000}, s.onGiveawayBoost
 	case "giveaway:submitBoard":
@@ -123,6 +125,8 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{8, 60_000, 30_000}, s.onTicTacToeRestart
 	case "gomoku:ready":
 		return RateLimitOptions{12, 60_000, 30_000}, s.onGomokuReady
+	case "gomoku:giveaway":
+		return RateLimitOptions{20, 10_000, 15_000}, s.onGomokuGiveaway
 	case "gomoku:move":
 		return RateLimitOptions{30, 10_000, 15_000}, s.onGomokuMove
 	case "gomoku:undoRequest":
@@ -175,6 +179,12 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{30, 60_000, 60_000}, s.onAdminAction
 	case "admin:listPlayers":
 		return RateLimitOptions{30, 60_000, 15_000}, s.onAdminListPlayers
+	case "admin:petBondGraph":
+		return RateLimitOptions{30, 60_000, 15_000}, s.onAdminPetBondGraph
+	case "admin:petBondAdd":
+		return RateLimitOptions{20, 60_000, 15_000}, s.onAdminPetBondAdd
+	case "admin:petBondRemove":
+		return RateLimitOptions{20, 60_000, 15_000}, s.onAdminPetBondRemove
 	case "identity:showClaimKey":
 		return RateLimitOptions{10, 60_000, 15_000}, s.onIdentityShowClaimKey
 	case "identity:refreshClaimKey":

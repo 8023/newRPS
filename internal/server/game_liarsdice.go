@@ -578,12 +578,18 @@ func (s *Server) returnLiarsDiceToReady(room *RoomState) {
 // liarsDicePunishmentReviewer 返回大话骰某个受罚玩家的审核人=本局赢家，
 // 以最近一条对局记录里的 winner/loser 为准（结算/断线判负时写入）。大话骰不进 Seats 体系，
 // 所以惩罚系统里所有原本用 seatOf 判断"对手"的地方都要改走这里（见 punishment.go）。
+// 赢家若已离开参战席（roster 里查不到），视为无审核人——与座位制游戏里对手座位被清空后
+// humanPlayerFromSeat 返回 nil 是同一语义，否则赢家掉线离场后，证明会永远卡在待审核
+// （s.players[id] 只要玩家是持久身份就一直存在，不能拿它判断"是否还在这局里"）。
 func (s *Server) liarsDicePunishmentReviewer(room *RoomState, punishedID string) *PlayerState {
 	if len(room.RoundHistory) == 0 {
 		return nil
 	}
 	latest := room.RoundHistory[0]
 	if latest.LiarsDiceWinnerID == "" || latest.LiarsDiceLoserID != punishedID {
+		return nil
+	}
+	if room.LiarsDice == nil || !containsString(room.LiarsDice.ParticipantIDs, latest.LiarsDiceWinnerID) {
 		return nil
 	}
 	return s.players[latest.LiarsDiceWinnerID]

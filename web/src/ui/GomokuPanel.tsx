@@ -4,7 +4,16 @@ import { gomokuBoardThemes } from "../lib/constants";
 import { ask } from "../lib/rpc";
 import { GameClockBar, occupantDisplay } from "./AppViews";
 
-const isTouchDevice = typeof window !== "undefined" && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+// 仅靠 `(hover: none) and (pointer: coarse)` 媒体查询判断触屏在 Android 上并不可靠：
+// 大量国产 Android 浏览器/内嵌 WebView（如微信 X5 内核、UC、QQ 浏览器、部分厂商 ROM 自带浏览器）
+// 出于兼容旧网页鼠标交互的考虑，会把触屏错误上报为 hover:hover / pointer:fine，
+// 导致该查询判断为假、二次确认功能被跳过；iOS 只有 Safari(WebKit) 一种引擎，上报始终准确，
+// 因此现象是"iPhone 正常，安卓大多失效"。改用 ontouchstart/maxTouchPoints 兜底即可覆盖这些设备。
+const isTouchDevice = typeof window !== "undefined" && (
+  window.matchMedia("(hover: none) and (pointer: coarse)").matches ||
+  navigator.maxTouchPoints > 0 ||
+  "ontouchstart" in window
+);
 
 export function gomokuThemeStyle(themeId?: RoomSettings["gomokuBoardTheme"]): CSSProperties {
   const theme = gomokuBoardThemes.find((item) => item.id === themeId) || gomokuBoardThemes.find((item) => item.id === "wood") || gomokuBoardThemes[0];
@@ -80,6 +89,9 @@ export function GomokuPanel({ room, me, now, onError }: { room: RoomSnapshot; me
   }
 
   const isMyTurn = Boolean(mySeat && state && state.turn === mySeat && room.phase === "choosing" && !state.ended && !state.undoRequest && !state.resignRequest);
+  const giveawayArmed = Boolean(mySeat && state?.giveawaySeat === mySeat);
+  const showGiveawayControl = Boolean(mySeat && state && me.giveawayEnabled && room.seats.A && room.seats.B && room.phase === "choosing" && !state.ended);
+  const canChooseGiveaway = Boolean(showGiveawayControl && isMyTurn);
   const turnName = state?.turn === "A" ? occupantDisplay(room.seats.A) : occupantDisplay(room.seats.B);
   const waitingForReady = room.phase === "ready" && Boolean(room.seats.A && room.seats.B);
   const drawingFirst = waitingForReady && room.ready.A && room.ready.B;
@@ -95,10 +107,10 @@ export function GomokuPanel({ room, me, now, onError }: { room: RoomSnapshot; me
   // 不一致——显示"还能悔棋"，点了却被服务端拒绝。
   const undoLimit = room.settings.gomokuUndoLimit ?? 0;
   const canRequestUndo = Boolean(
-    state && mySeat && room.phase === "choosing" && !state.ended && !state.undoRequest && !state.resignRequest &&
+    state && mySeat && room.phase === "choosing" && !state.ended && !state.undoRequest && !state.resignRequest && !giveawayArmed &&
     state.turn === mySeat && state.moveCount >= 2 && (state.undoCount?.[mySeat] ?? 0) < undoLimit
   );
-  const canRequestResign = Boolean(state && mySeat && room.phase === "choosing" && !state.ended && !state.undoRequest && !state.resignRequest);
+  const canRequestResign = Boolean(state && mySeat && room.phase === "choosing" && !state.ended && !state.undoRequest && !state.resignRequest && !giveawayArmed);
 
   const undoRequest = state?.undoRequest;
   const undoToMe = Boolean(mySeat && undoRequest?.toSeat === mySeat);
@@ -125,7 +137,7 @@ export function GomokuPanel({ room, me, now, onError }: { room: RoomSnapshot; me
                   ? "双方准备后随机决定谁执黑先手。"
                   : state?.ended
                     ? room.resultText || "对局结束"
-                    : isMyTurn ? "轮到你落子。" : `轮到 ${turnName} 落子。`}
+                    : giveawayArmed ? "本手已白给，请选择落点；落子将视为对方棋子。" : isMyTurn ? "轮到你落子。" : `轮到 ${turnName} 落子。`}
           </p>
         </div>
         {state && (
@@ -179,12 +191,31 @@ export function GomokuPanel({ room, me, now, onError }: { room: RoomSnapshot; me
           )}
         </div>
       )}
-      {(canRequestUndo || canRequestResign) && (
+      {(showGiveawayControl || canRequestUndo || canRequestResign) && (
         <div className="gomoku-risk-actions">
           {canRequestUndo && (
             <button className="soft-button gomoku-undo-button" disabled={busy} onClick={() => act("gomoku:undoRequest")}>
-              申请悔棋（本局剩 {undoLimit - (state?.undoCount?.[mySeat as SeatKey] ?? 0)} 次）
+              申请悔棋<br />本局剩 {undoLimit - (state?.undoCount?.[mySeat as SeatKey] ?? 0)} 次
             </button>
+          )}
+          {showGiveawayControl && (
+            <div className={`gomoku-giveaway-card ${giveawayArmed ? "armed" : ""}`}>
+              <div>
+                <strong>{giveawayArmed ? "本手已白给" : "选择本手白给"}</strong>
+                <p className="hint">
+                  {giveawayArmed
+                    ? state?.giveawayForcedByMasterName
+                      ? `${state.giveawayForcedByMasterName} 强制本手白给，请选择落点。`
+                      : "你已选择本手白给，请选择落点。"
+                    : !isMyTurn
+                      ? "轮到你时，可在落子前选择本手白给。"
+                      : "本手所选位置将会落为对方棋子。"}
+                </p>
+              </div>
+              <button className="giveaway-move-button" disabled={busy || !canChooseGiveaway || giveawayArmed} onClick={() => act("gomoku:giveaway")}>
+                🫴 {giveawayArmed ? "已白给" : "白给"}
+              </button>
+            </div>
           )}
           {canRequestResign && (
             <button className="soft-button danger-soft gomoku-resign-button" disabled={busy} onClick={() => act("gomoku:resignRequest")}>

@@ -181,6 +181,13 @@ func (s *Server) Run() error {
 	go func() {
 		ticker := time.NewTicker(60 * time.Second)
 		for range ticker.C {
+			// 先把仍在线会话折叠进 TotalOnlineMs 再刷盘，避免进程被 kill -9 /
+			// npm 热重启等非 SIGTERM 路径丢掉整段长会话。
+			s.mu.Lock()
+			if s.checkpointOnlineMs() {
+				s.markPersistDirty()
+			}
+			s.mu.Unlock()
 			s.flushPersist()
 		}
 	}()
@@ -273,6 +280,7 @@ func (s *Server) closeLiveStateOnShutdown() {
 
 	s.mu.Lock()
 	conns := make([]openConn, 0, len(s.clients))
+	onlineMsTouched := false
 	for _, c := range s.clients {
 		// 先打标，防止随后 WS 拆线触发 onClientDisconnect 再写一条 disconnect / 再累加时长。
 		if c.connectionLogged {
@@ -282,10 +290,17 @@ func (s *Server) closeLiveStateOnShutdown() {
 		playerID := ""
 		if p := s.getPlayerByClient(c); p != nil {
 			playerID = p.ID
-			// 优雅关停时本会话时长也计入累计在线（随后 flushPersist 落盘）。
-			if c.connectedAt > 0 {
-				if d := now - c.connectedAt; d > 0 {
+			// 优雅关停时本会话时长也计入累计在线。必须 markPersistDirty：调用方紧接着的
+			// flushPersist 只在 dirty 时写盘；此前这里只改内存不置脏，重启后长会话会丢
+			// （本地库曾出现 connection_events 合计数小时、total_online_ms 只剩最后一次
+			// 正常断线的几十秒）。
+			// 与 accumulateClientOnlineMs 一致：只计尚未 checkpoint 的段落。
+			from := clientOnlineCreditedFrom(c)
+			if from > 0 {
+				if d := now - from; d > 0 {
 					p.Stats.TotalOnlineMs += d
+					c.onlineCreditedAt = now
+					onlineMsTouched = true
 				}
 			}
 		}
@@ -294,6 +309,10 @@ func (s *Server) closeLiveStateOnShutdown() {
 			deviceKey: c.deviceKey, fingerprint: c.fingerprint, userAgent: c.userAgent,
 			compression: c.compression, playerID: playerID,
 		})
+	}
+	if onlineMsTouched {
+		// 持 s.mu 时调用 markPersistDirty 是安全的（与 accumulateClientOnlineMs 同锁序）。
+		s.markPersistDirty()
 	}
 	rooms := make([]closedRoom, 0, len(s.rooms))
 	for id, r := range s.rooms {

@@ -62,6 +62,7 @@ func TestCloseLiveStateOnShutdown(t *testing.T) {
 	s.clients["sock-bound"] = &Client{id: "sock-bound", connectedAt: 1000, sid: "sid-a", ipAddress: "1.1.1.1", compression: "ctx", playerID: "p1"}
 	s.clients["sock-guest"] = &Client{id: "sock-guest", connectedAt: 1100, sid: "sid-b", ipAddress: "2.2.2.2"}
 	s.players["p1"] = &PlayerState{PublicPlayer: types.PublicPlayer{ID: "p1"}, SocketID: "sock-bound"}
+	s.players["p1"].Stats.TotalOnlineMs = 500
 
 	s.rooms["room1"] = &RoomState{
 		ID: "room1", OwnerID: "p1", CreatorName: "小明",
@@ -70,6 +71,17 @@ func TestCloseLiveStateOnShutdown(t *testing.T) {
 	}
 
 	s.closeLiveStateOnShutdown()
+
+	// 关停必须累加本会话时长并置 dirty，否则随后 flushPersist 会跳过写盘。
+	if got := s.players["p1"].Stats.TotalOnlineMs; got <= 500 {
+		t.Fatalf("TotalOnlineMs after shutdown=%d, want >500 (session accumulated)", got)
+	}
+	s.persistMu.Lock()
+	dirty := s.persistDirty
+	s.persistMu.Unlock()
+	if !dirty {
+		t.Fatalf("persistDirty should be true after shutdown online-ms accumulation")
+	}
 
 	var connCount int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM connection_events`).Scan(&connCount); err != nil {

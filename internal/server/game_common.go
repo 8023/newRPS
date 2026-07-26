@@ -45,6 +45,8 @@ func (s *Server) resetTurnBasedRoom(room *RoomState) {
 	room.ResultText = ""
 	room.RevealedChoices = nil
 	room.Choices = map[types.SeatKey]types.Move{}
+	room.ForcedGiveawayBySeat = map[types.SeatKey]string{}
+	room.GiveawayBoostedBySeat = map[types.SeatKey]bool{}
 	room.DisconnectForfeits = map[string]DisconnectForfeit{}
 	room.Ready = map[types.SeatKey]bool{types.SeatA: false, types.SeatB: false}
 }
@@ -55,6 +57,8 @@ func (s *Server) startTurnBasedPlaying(room *RoomState) {
 	room.Status = "playing"
 	room.ResultText = ""
 	room.Choices = map[types.SeatKey]types.Move{}
+	room.ForcedGiveawayBySeat = map[types.SeatKey]string{}
+	room.GiveawayBoostedBySeat = map[types.SeatKey]bool{}
 	room.RevealedChoices = nil
 	room.DisconnectForfeits = map[string]DisconnectForfeit{}
 	room.Ready = map[types.SeatKey]bool{types.SeatA: false, types.SeatB: false}

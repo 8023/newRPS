@@ -58,3 +58,38 @@ func TestApplyForgiveAdvantageCanOverrideNonDraw(t *testing.T) {
 		t.Fatal("applyForgiveAdvantage never overrode a non-draw result across 500 attempts (66% chance each) — mechanism may be broken")
 	}
 }
+
+// TestShouldTriggerGiveawayUsesOnlyPlayerProbability 锁定主人强制不再污染玩家全局状态；
+// 此函数只根据玩家是否开启白给及其白给值判断自然触发。
+func TestShouldTriggerGiveawayUsesOnlyPlayerProbability(t *testing.T) {
+	s := newTestServer(t)
+	player := &PlayerState{PublicPlayer: types.PublicPlayer{
+		GiveawayValue: floatPtr(0), GiveawayEnabled: boolPtr(true),
+	}}
+	if s.shouldTriggerGiveaway(player) {
+		t.Fatal("GiveawayValue=0 时不应自然触发白给")
+	}
+	player.GiveawayValue = floatPtr(100)
+	if !s.shouldTriggerGiveaway(player) {
+		t.Fatal("GiveawayValue=100 时应自然触发白给")
+	}
+	player.GiveawayEnabled = boolPtr(false)
+	if s.shouldTriggerGiveaway(player) {
+		t.Fatal("白给模式关闭后不应自然触发")
+	}
+}
+
+func TestResultWithGiveawayBothPlayersDraw(t *testing.T) {
+	s := newTestServer(t)
+	room := &RoomState{ForgiveAdvantage: &forgiveAdvantage{BeneficiaryID: "A", TargetID: "B"}}
+	result, outcome := s.resultWithGiveaway(room, types.ResultDraw, map[types.SeatKey]types.Move{
+		types.SeatA: types.MoveGiveaway,
+		types.SeatB: types.MoveGiveaway,
+	})
+	if result != types.ResultDraw {
+		t.Fatalf("双方白给应为平局，got %v", result)
+	}
+	if outcome != nil || room.ForgiveAdvantage != nil {
+		t.Fatal("双方白给结算时不应保留命运安排")
+	}
+}

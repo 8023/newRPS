@@ -89,8 +89,8 @@ type PlayerState struct {
 	Token       string
 	IPAddress   string
 	Fingerprint string // 浏览器指纹 visitorId
-	DeviceKey string // sha256(ip||fingerprint)，防多开维度
-	PlayerID  string // long-term identity (not public)
+	DeviceKey   string // sha256(ip||fingerprint)，防多开维度
+	PlayerID    string // long-term identity (not public)
 	// PlayerSecrets：一台设备一条，明文存储（认领/迁移方案已确认不哈希）。
 	// 最多 maxPlayerSecrets 条，超出后挤掉最早的一条（见 addPlayerSecret）。
 	// 服务端新签发用 randomPlayerSecret（16 字节）；前端注册可用 UUID；旧短 secret 仍有效。
@@ -209,11 +209,16 @@ type RoomState struct {
 	OwnerID                     string
 	// CreatorName：创建者的展示名快照（创建时的 playerShortName），供房间关闭时写入
 	// rooms 表用；不能在关闭时现取，届时创建者可能已改名甚至不在房间里了。
-	CreatorName        string
-	LockedSeatIDs      map[string]struct{}
-	ForgiveAdvantage   *forgiveAdvantage
-	DisconnectForfeits map[string]DisconnectForfeit
-	CreatedAt          int64
+	CreatorName      string
+	LockedSeatIDs    map[string]struct{}
+	ForgiveAdvantage *forgiveAdvantage
+	// ForcedGiveawayBySeat 仅属于当前房间/当前局：seat -> 主人昵称。
+	// RPS 会立即覆盖该座位本轮出拳；回合制游戏在该座位本手落子时消费。
+	// GiveawayBoostedBySeat 记录五子棋本手主动白给是否已在点击按钮时加过白给值，避免主人随后强制时重复增加。
+	GiveawayBoostedBySeat map[types.SeatKey]bool
+	ForcedGiveawayBySeat  map[types.SeatKey]string
+	DisconnectForfeits    map[string]DisconnectForfeit
+	CreatedAt             int64
 }
 
 type forgiveAdvantage struct {
@@ -260,7 +265,12 @@ type Client struct {
 	// connectedAt/compression：连接建立时的快照，断连时一起写进 connection_events 一行
 	// （见 activitylog.go），不再在 connect 时单独落盘。
 	connectedAt int64
-	compression string
+	// onlineCreditedAt：上次把在线时长记入玩家 TotalOnlineMs 的时刻。
+	// 初始化为 connectedAt；定期 checkpoint / 断线累加只计 (now - onlineCreditedAt)，
+	// 避免 kill -9 等非优雅退出把整段长会话全部丢掉。connectedAt 本身不变，
+	// connection_events 仍记录完整连接起止。
+	onlineCreditedAt int64
+	compression      string
 	// connectionLogged：优雅关停路径已写过 connection_events 时置 true，
 	// 避免随后 onClientDisconnect 再插一条重复记录。
 	connectionLogged bool

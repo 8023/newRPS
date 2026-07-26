@@ -71,6 +71,7 @@ func (s *Server) cleanupRoomIfEmpty(room *RoomState) bool {
 	s.clearLiarsDiceStartTimer(room.ID)
 	s.clearOthelloClockTimer(room.ID)
 	s.clearGomokuClockTimer(room.ID)
+	s.clearJungleClockTimer(room.ID)
 	s.clearRoomBroadcastTimer(room.ID)
 	s.dropSyncChannel(channelRoom(room.ID))
 	delete(s.rooms, room.ID)
@@ -501,7 +502,13 @@ func (s *Server) clearSeatForPlayer(room *RoomState, seat types.SeatKey) {
 	room.Seats[seat] = nil
 	room.Ready[seat] = false
 	delete(room.Choices, seat)
+	if room.ForcedGiveawayBySeat != nil {
+		delete(room.ForcedGiveawayBySeat, seat)
+	}
 	room.Score[seat] = 0
+	if room.GiveawayBoostedBySeat != nil {
+		delete(room.GiveawayBoostedBySeat, seat)
+	}
 	room.SeatedScore[seat] = 0
 	room.SeatStats[seat] = emptySeatStats()
 	if room.ForgiveAdvantage != nil && leavingID != "" {

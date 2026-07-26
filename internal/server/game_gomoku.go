@@ -47,6 +47,49 @@ func gomokuSeatForMark(state *types.GomokuState, mark types.GomokuCell) types.Se
 	return oppositeSeat(state.BlackSeat)
 }
 
+func gomokuMarkName(mark types.GomokuCell) string {
+	if mark == types.GomokuBlack {
+		return "黑"
+	}
+	return "白"
+}
+
+func (s *Server) chooseGomokuGiveaway(room *RoomState, seat types.SeatKey) (bool, string) {
+	if room.Gomoku == nil || room.Phase != types.PhaseChoosing || room.Gomoku.Ended {
+		return false, "当前不能选择白给"
+	}
+	if room.Gomoku.Turn != seat {
+		return false, "还没轮到你选择白给"
+	}
+	if room.Gomoku.UndoRequest != nil || room.Gomoku.ResignRequest != nil {
+		return false, "请求处理完成前不能选择白给"
+	}
+	player := s.humanPlayerFromSeat(room, seat)
+	if player == nil || !ptrBool(player.GiveawayEnabled) || !s.isFullHumanRoom(room) {
+		return false, "请先开启白给模式并等待双方入座"
+	}
+	if room.Gomoku.GiveawaySeat == seat {
+		return false, "本手已经进入白给状态"
+	}
+	room.Gomoku.GiveawaySeat = seat
+	// 主人先强制、宠物随后主动点击白给：直到这次点击才公开本手状态，
+	// 并同时消费隐藏的“本步必白给”标记，避免残留到宠物下一手。
+	room.Gomoku.GiveawayForcedByMasterName = takeForcedGiveaway(room, seat)
+	player.GiveawayClicks = intPtr(ptrInt(player.GiveawayClicks) + 1)
+	s.addGiveawayValue(player, s.cfg.Giveaway.ActiveBoostValue)
+	s.refreshPlayerSnapshots(player)
+	if room.GiveawayBoostedBySeat == nil {
+		room.GiveawayBoostedBySeat = map[types.SeatKey]bool{}
+	}
+	room.GiveawayBoostedBySeat[seat] = true
+	if masterName := room.Gomoku.GiveawayForcedByMasterName; masterName != "" {
+		room.ResultText = fmt.Sprintf("主人（%s）强制（%s）本手白给，请选择落点。", masterName, occupantName(room.Seats[seat]))
+	} else {
+		room.ResultText = occupantName(room.Seats[seat]) + " 选择本手白给，请选择落点。"
+	}
+	return true, ""
+}
+
 var gomokuDirections = [4][2]int{{0, 1}, {1, 0}, {1, 1}, {1, -1}}
 
 // gomokuWinningLine 从刚落子的位置沿四个方向扫描，找到 >=5 连子即返回整条连线。
@@ -263,6 +306,10 @@ func (s *Server) finishGomokuGame(room *RoomState, result types.RoundResult, win
 	s.clearGomokuUndoTimer(room.ID)
 	s.clearGomokuClockTimer(room.ID)
 	room.Gomoku.UndoRequest = nil
+	room.Gomoku.GiveawaySeat = ""
+	room.Gomoku.GiveawayForcedByMasterName = ""
+	room.ForcedGiveawayBySeat = map[types.SeatKey]string{}
+	room.GiveawayBoostedBySeat = map[types.SeatKey]bool{}
 	room.Gomoku.ResignRequest = nil
 	rankedDelta := room.Gomoku.RankedDelta
 	if rankedDelta == nil {
@@ -350,8 +397,47 @@ func (s *Server) applyGomokuMove(room *RoomState, seat types.SeatKey, row, col i
 	if room.Gomoku.Board[row][col] != nil {
 		return false, "这个位置已经有棋子"
 	}
-	s.pauseGomokuTimers(room)
+
+	player := s.humanPlayerFromSeat(room, seat)
+	probability := 0.0
+	if player != nil {
+		probability = ptrFloat(player.GiveawayValue)
+	}
+	armed := room.Gomoku.GiveawaySeat == seat
+	forcedByMaster := room.Gomoku.GiveawayForcedByMasterName
+	if forcedByMaster == "" {
+		// 情况 5：主人强制但宠物没有点白给。标记只在落子时消费，
+		// 因而落子前不会向宠物暴露，本步则必定按白给结算。
+		forcedByMaster = takeForcedGiveaway(room, seat)
+	}
+	naturalGiveaway := !armed && forcedByMaster == "" && s.shouldTriggerGiveaway(player)
+	giveaway := armed || forcedByMaster != "" || naturalGiveaway
 	mark := gomokuMarkForSeat(room.Gomoku, seat)
+	if giveaway {
+		mark = gomokuMarkForSeat(room.Gomoku, oppositeSeat(seat))
+	}
+
+	boosted := room.GiveawayBoostedBySeat != nil && room.GiveawayBoostedBySeat[seat]
+	if giveaway && !boosted && player != nil {
+		s.addGiveawayValue(player, s.cfg.Giveaway.ActiveBoostValue)
+		s.refreshPlayerSnapshots(player)
+	}
+	if room.GiveawayBoostedBySeat != nil {
+		delete(room.GiveawayBoostedBySeat, seat)
+	}
+	room.Gomoku.GiveawaySeat = ""
+	room.Gomoku.GiveawayForcedByMasterName = ""
+
+	giveawayText := ""
+	if forcedByMaster != "" {
+		giveawayText = fmt.Sprintf("主人（%s）强制（%s）白给，第 %d 行第 %d 列落为%s棋。", forcedByMaster, occupantName(room.Seats[seat]), row+1, col+1, gomokuMarkName(mark))
+	} else if armed {
+		giveawayText = fmt.Sprintf("%s 本手白给，第 %d 行第 %d 列落为对方的%s棋。", occupantName(room.Seats[seat]), row+1, col+1, gomokuMarkName(mark))
+	} else if naturalGiveaway {
+		giveawayText = fmt.Sprintf("%s 按 %.1f%% 白给值触发白给，第 %d 行第 %d 列变为对方的%s棋。", occupantName(room.Seats[seat]), probability, row+1, col+1, gomokuMarkName(mark))
+	}
+
+	s.pauseGomokuTimers(room)
 	board := cloneGomokuBoard(room.Gomoku.Board)
 	m := mark
 	board[row][col] = &m
@@ -362,11 +448,14 @@ func (s *Server) applyGomokuMove(room *RoomState, seat types.SeatKey, row, col i
 	room.Gomoku.Moves = append(room.Gomoku.Moves, types.Pos{Row: row, Col: col})
 	room.Gomoku.Turn = oppositeSeat(seat)
 	if winningLine != nil {
-		s.finishGomokuGame(room, types.RoundResult(gomokuSeatForMark(room.Gomoku, mark)), winningLine, "")
+		s.finishGomokuGame(room, types.RoundResult(gomokuSeatForMark(room.Gomoku, mark)), winningLine, giveawayText)
 	} else if moveCount >= gomokuBoardSize*gomokuBoardSize {
-		s.finishGomokuGame(room, types.ResultDraw, nil, "")
+		s.finishGomokuGame(room, types.ResultDraw, nil, giveawayText)
 	} else {
-		room.ResultText = ""
+		room.ResultText = giveawayText
+		if giveawayText != "" {
+			s.roomNotice(room, giveawayText)
+		}
 		s.armGomokuTimers(room, room.Gomoku.Turn)
 		s.notifyOpponentTurn(room, room.Gomoku.Turn)
 	}
@@ -570,6 +659,10 @@ func (s *Server) applyGomokuDisconnectForfeit(room *RoomState, forfeit Disconnec
 		s.clearGomokuUndoTimer(room.ID)
 		room.Gomoku.UndoRequest = nil
 		room.Gomoku.ResignRequest = nil
+		room.Gomoku.GiveawaySeat = ""
+		room.Gomoku.GiveawayForcedByMasterName = ""
+		room.ForcedGiveawayBySeat = map[types.SeatKey]string{}
+		room.GiveawayBoostedBySeat = map[types.SeatKey]bool{}
 		room.Gomoku.RankedDelta = rankedDelta
 		room.Gomoku.Ended = true
 		room.Gomoku.Winner = types.RoundResult(forfeit.WinnerSeat)

@@ -225,13 +225,13 @@ type PublicPlayer struct {
 	ExtremeRenamedBy                 string       `json:"extremeRenamedBy,omitempty"`
 	ExtremeRenamedByName             string       `json:"extremeRenamedByName,omitempty"`
 	// 认主/认宠玩法偏好（关闭开关不解除已有关系，只禁止新增）。
-	BondMasterEnabled  *bool `json:"bondMasterEnabled,omitempty"`
-	BondPetEnabled     *bool `json:"bondPetEnabled,omitempty"`
-	BondPublicDisplay  *bool `json:"bondPublicDisplay,omitempty"`
-	RoomID                           string       `json:"roomId,omitempty"`
-	IsAdmin                          *bool        `json:"isAdmin,omitempty"`
-	Stats                            PublicStats  `json:"stats"`
-	GameStats                        GameStats    `json:"gameStats"`
+	BondMasterEnabled *bool       `json:"bondMasterEnabled,omitempty"`
+	BondPetEnabled    *bool       `json:"bondPetEnabled,omitempty"`
+	BondPublicDisplay *bool       `json:"bondPublicDisplay,omitempty"`
+	RoomID            string      `json:"roomId,omitempty"`
+	IsAdmin           *bool       `json:"isAdmin,omitempty"`
+	Stats             PublicStats `json:"stats"`
+	GameStats         GameStats   `json:"gameStats"`
 }
 
 // SeatOccupant is *PublicPlayer or null (JSON). Encoded as any in snapshots.
@@ -267,8 +267,8 @@ type RoomSettings struct {
 	Password         string `json:"password,omitempty"`
 	GameID           GameID `json:"gameId"`
 	EnablePunishment bool   `json:"enablePunishment"`
-	PunishmentSource string        `json:"punishmentSource,omitempty"`
-	PunishmentID     string        `json:"punishmentId,omitempty"`
+	PunishmentSource string `json:"punishmentSource,omitempty"`
+	PunishmentID     string `json:"punishmentId,omitempty"`
 	// 数组字段不用 omitempty：空切片会变成 null 或字段缺失，前端 .map/.includes 会挂
 	PunishmentIDs          []string       `json:"punishmentIds"`
 	RoomBackgroundImage    string         `json:"roomBackgroundImage,omitempty"`
@@ -407,15 +407,16 @@ const (
 )
 
 type OthelloPendingSettlement struct {
-	ID           string  `json:"id"`
-	Seat         SeatKey `json:"seat"`
-	OpponentSeat SeatKey `json:"opponentSeat"`
-	Flips        int     `json:"flips"`
-	Stake        int     `json:"stake"`
-	NextTurn     SeatKey `json:"nextTurn"`
-	ExpiresAt    int64   `json:"expiresAt"`
-	Forced       string  `json:"forced,omitempty"` // giveaway | tribute
-	ResolvedAs   string  `json:"resolvedAs,omitempty"`
+	ID                 string  `json:"id"`
+	Seat               SeatKey `json:"seat"`
+	OpponentSeat       SeatKey `json:"opponentSeat"`
+	Flips              int     `json:"flips"`
+	Stake              int     `json:"stake"`
+	NextTurn           SeatKey `json:"nextTurn"`
+	ExpiresAt          int64   `json:"expiresAt"`
+	Forced             string  `json:"forced,omitempty"` // giveaway | tribute
+	ForcedByMasterName string  `json:"forcedByMasterName,omitempty"`
+	ResolvedAs         string  `json:"resolvedAs,omitempty"`
 }
 
 type OthelloSurrenderRequest struct {
@@ -493,18 +494,20 @@ type GomokuResignRequest struct {
 }
 
 type GomokuState struct {
-	Board         [][]*GomokuCell      `json:"board"`
-	Turn          SeatKey              `json:"turn"`
-	BlackSeat     SeatKey              `json:"blackSeat"`
-	MoveCount     int                  `json:"moveCount"`
-	Moves         []Pos                `json:"moves"`
-	WinningLine   []Pos                `json:"winningLine"`
-	RankedDelta   map[SeatKey]int      `json:"rankedDelta"`
-	UndoCount     map[SeatKey]int      `json:"undoCount"`
-	UndoRequest   *GomokuUndoRequest   `json:"undoRequest,omitempty"`
-	ResignRequest *GomokuResignRequest `json:"resignRequest,omitempty"`
-	Ended         bool                 `json:"ended,omitempty"`
-	Winner        RoundResult          `json:"winner,omitempty"`
+	Board                      [][]*GomokuCell      `json:"board"`
+	Turn                       SeatKey              `json:"turn"`
+	BlackSeat                  SeatKey              `json:"blackSeat"`
+	MoveCount                  int                  `json:"moveCount"`
+	Moves                      []Pos                `json:"moves"`
+	WinningLine                []Pos                `json:"winningLine"`
+	RankedDelta                map[SeatKey]int      `json:"rankedDelta"`
+	UndoCount                  map[SeatKey]int      `json:"undoCount"`
+	UndoRequest                *GomokuUndoRequest   `json:"undoRequest,omitempty"`
+	ResignRequest              *GomokuResignRequest `json:"resignRequest,omitempty"`
+	GiveawaySeat               SeatKey              `json:"giveawaySeat,omitempty"`
+	GiveawayForcedByMasterName string               `json:"giveawayForcedByMasterName,omitempty"`
+	Ended                      bool                 `json:"ended,omitempty"`
+	Winner                     RoundResult          `json:"winner,omitempty"`
 	// 计时：语义同 OthelloState 的同名字段。
 	MoveDeadlineAt  int64             `json:"moveDeadlineAt,omitempty"`
 	ClockDeadlineAt int64             `json:"clockDeadlineAt,omitempty"`
@@ -536,18 +539,18 @@ type JungleResignRequest struct {
 
 // JungleState 斗兽棋对局状态。座位 A 执下方棋子（第 6–8 行），座位 B 执上方（第 0–2 行）。
 type JungleState struct {
-	Board         [][]*JungleCell      `json:"board"`
-	Turn          SeatKey              `json:"turn"`
-	MoveCount     int                  `json:"moveCount"`
-	LastFrom      *Pos                 `json:"lastFrom,omitempty"`
-	LastTo        *Pos                 `json:"lastTo,omitempty"`
-	RankedDelta   map[SeatKey]int      `json:"rankedDelta"`
-	ResignRequest *JungleResignRequest `json:"resignRequest,omitempty"`
-	Ended         bool                 `json:"ended,omitempty"`
-	Winner        RoundResult          `json:"winner,omitempty"`
-	MoveDeadlineAt  int64             `json:"moveDeadlineAt,omitempty"`
-	ClockDeadlineAt int64             `json:"clockDeadlineAt,omitempty"`
-	ClockRemaining  map[SeatKey]int64 `json:"clockRemaining,omitempty"`
+	Board           [][]*JungleCell      `json:"board"`
+	Turn            SeatKey              `json:"turn"`
+	MoveCount       int                  `json:"moveCount"`
+	LastFrom        *Pos                 `json:"lastFrom,omitempty"`
+	LastTo          *Pos                 `json:"lastTo,omitempty"`
+	RankedDelta     map[SeatKey]int      `json:"rankedDelta"`
+	ResignRequest   *JungleResignRequest `json:"resignRequest,omitempty"`
+	Ended           bool                 `json:"ended,omitempty"`
+	Winner          RoundResult          `json:"winner,omitempty"`
+	MoveDeadlineAt  int64                `json:"moveDeadlineAt,omitempty"`
+	ClockDeadlineAt int64                `json:"clockDeadlineAt,omitempty"`
+	ClockRemaining  map[SeatKey]int64    `json:"clockRemaining,omitempty"`
 }
 
 type LiarsDiceBid struct {
@@ -627,9 +630,9 @@ type LobbyRoomInfo struct {
 	Players                int             `json:"players"`
 	Spectators             int             `json:"spectators"`
 	Versus                 map[SeatKey]any `json:"versus"`
-	Status                 string `json:"status"`
-	RoomBackgroundImage    string `json:"roomBackgroundImage,omitempty"`
-	EnablePunishment       bool   `json:"enablePunishment"`
+	Status                 string          `json:"status"`
+	RoomBackgroundImage    string          `json:"roomBackgroundImage,omitempty"`
+	EnablePunishment       bool            `json:"enablePunishment"`
 	PunishmentIDs          []string        `json:"punishmentIds"`
 	PunishmentID           string          `json:"punishmentId,omitempty"`
 	TieDoublePunish        bool            `json:"tieDoublePunish"`

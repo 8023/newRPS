@@ -17,7 +17,7 @@ import (
 //
 // 是 var 不是 const，只是为了让测试能临时替换掉去验证迁移机制本身；正常代码路径里
 // 把它当常量对待，不要在业务逻辑里修改它。
-var currentSchemaVersion = 11
+var currentSchemaVersion = 13
 
 // schemaVersionSchema：只有一行的版本表，openDatabase 每次启动都会先确保它存在。
 const schemaVersionSchema = `
@@ -139,6 +139,18 @@ var migrations = []schemaMigration{
 			return err
 		}
 		return addColumnIfMissing(db, "players", "jungle_draws", "INTEGER NOT NULL DEFAULT 0")
+	}},
+	// v12：回填累计在线时长。v9 起会在断线/关停时累加，但优雅关停路径曾漏 markPersistDirty，
+	// 导致大量已写入 connection_events 的 server_shutdown 会话未进 total_online_ms。
+	// 用 connection_events 的时长之和抬升（不降低）已有值；表不存在时跳过。
+	{version: 12, migrate: func(db sqlExecer) error {
+		return backfillTotalOnlineMsFromConnectionEvents(db)
+	}},
+	// v13：再次回填累计在线时长。v12 之后仍有一条致命 bug——ingestPersistedPlayer 加载
+	// 档案时丢掉 TotalOnlineMs，每次重启内存从 0 起算，随后 flush 把库里已回填的正确值
+	// 覆盖成仅本进程会话。此处幂等抬升，配合加载修复把 connection_events 历史时长找回。
+	{version: 13, migrate: func(db sqlExecer) error {
+		return backfillTotalOnlineMsFromConnectionEvents(db)
 	}},
 }
 
@@ -472,6 +484,42 @@ func addColumnIfMissing(db sqlExecer, table, column, decl string) error {
 	_, err = db.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s %s`, table, column, decl))
 	if err != nil {
 		return fmt.Errorf("add %s.%s: %w", table, column, err)
+	}
+	return nil
+}
+
+// backfillTotalOnlineMsFromConnectionEvents 用已结束连接的时长之和抬升 players.total_online_ms。
+// 幂等：只在汇总大于当前值时更新；缺表/缺列时跳过（全新库或尚无 activity 表）。
+func backfillTotalOnlineMsFromConnectionEvents(db sqlExecer) error {
+	okPlayers, err := tableExists(db, "players")
+	if err != nil || !okPlayers {
+		return err
+	}
+	okEvents, err := tableExists(db, "connection_events")
+	if err != nil || !okEvents {
+		return err
+	}
+	hasCol, err := tableHasColumn(db, "players", "total_online_ms")
+	if err != nil || !hasCol {
+		return err
+	}
+	_, err = db.Exec(`
+		UPDATE players
+		SET total_online_ms = (
+			SELECT COALESCE(SUM(ce.disconnected_at - ce.connected_at), 0)
+			FROM connection_events ce
+			WHERE ce.player_id = players.id
+			  AND ce.disconnected_at > ce.connected_at
+		)
+		WHERE total_online_ms < (
+			SELECT COALESCE(SUM(ce.disconnected_at - ce.connected_at), 0)
+			FROM connection_events ce
+			WHERE ce.player_id = players.id
+			  AND ce.disconnected_at > ce.connected_at
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("backfill total_online_ms: %w", err)
 	}
 	return nil
 }

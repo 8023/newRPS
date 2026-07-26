@@ -246,7 +246,9 @@ export function PlayerAvatar({ player, size = 28, className = "" }: { player?: P
     lineHeight: 1
   };
   if (player?.avatarUrl) {
-    return <img className={`player-avatar ${className}`} style={style} src={player.avatarUrl} alt="" />;
+    // draggable=false：避免用作力导向图节点等可拖拽场景时，浏览器把它当成图片触发原生的
+    // "拖拽另存为/打开"效果而不是我们自己的拖拽逻辑。
+    return <img className={`player-avatar ${className}`} style={style} src={player.avatarUrl} alt="" draggable={false} onDragStart={(event) => event.preventDefault()} />;
   }
   return (
     <span className={`player-avatar player-avatar-fallback ${className}`} style={style} aria-hidden="true">
@@ -1410,6 +1412,34 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
   const canChoose = Boolean(mySeat && room.phase !== "punishment" && (room.phase === "choosing" || room.phase === "result") && seats.A && seats.B);
   const canShowGiveawayButton = Boolean(mySeat && me.giveawayEnabled && seats.A && seats.B);
   const canGoSpectate = Boolean(mySeat && room.phase !== "punishment" && !choices[mySeat] && !((room.settings.gameId === "tictactoe" || room.settings.gameId === "gomoku" || room.settings.gameId === "jungle") && room.phase === "choosing"));
+  const opponentSeat = mySeat === "A" ? "B" : mySeat === "B" ? "A" : null;
+  const opponentPlayer = opponentSeat ? seats[opponentSeat] : null;
+  const forceGiveawayEligibleGame = room.settings.gameId === "rps" || room.settings.gameId === "tictactoe" || room.settings.gameId === "gomoku" || (room.settings.gameId === "othello" && room.settings.enableRanked);
+  const [myPetIds, setMyPetIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!forceGiveawayEligibleGame) return;
+    let alive = true;
+    const applyPets = (payload: PetBondState) => {
+      if (!alive || !payload || typeof payload !== "object") return;
+      setMyPetIds(new Set((payload.pets || []).map((p) => p.playerId)));
+    };
+    ask<PetBondState>("petbond:getState", {}).then(applyPets).catch(() => {});
+    socket.on("petbond:update", applyPets);
+    return () => {
+      alive = false;
+      socket.off("petbond:update", applyPets);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me.id, forceGiveawayEligibleGame]);
+  const canForceGiveaway = Boolean(
+    forceGiveawayEligibleGame && mySeat && opponentPlayer &&
+    myPetIds.has(opponentPlayer.id) && opponentPlayer.giveawayEnabled
+  );
+  async function forceGiveaway() {
+    if (!opponentPlayer) return;
+    if (!window.confirm(`确定强制 ${opponentPlayer.displayName || opponentPlayer.name} 白给吗？`)) return;
+    await act("petbond:forceGiveaway", { targetId: opponentPlayer.id });
+  }
   const roomPlayers = roomPlayerList(room);
   // 聊天发言人查找源：房间名单优先（在房间内持续更新），叠加大厅名单兜底
   // （进房后大厅频道会取消订阅，可能不是最新的，但依旧好过完全查不到）。
@@ -1748,7 +1778,12 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
               </div>
             </div>
           )}
-          {canGoSpectate && <button onClick={() => act("room:spectate")}><Eye size={16} /> 去观战席</button>}
+          {(canGoSpectate || canForceGiveaway) && (
+            <div className="seat-action-row">
+              {canGoSpectate && <button onClick={() => act("room:spectate")}><Eye size={16} /> 去观战席</button>}
+              {canForceGiveaway && <button className="force-giveaway-button" onClick={forceGiveaway}><HeartHandshake size={16} /> 强制白给</button>}
+            </div>
+          )}
           {room.phase === "punishment" && (
             <div className="punish-box">
               <div className="punish-head">
@@ -3823,6 +3858,7 @@ function resolveLobbyPlayer(players: PublicPlayer[], id: string, fallback?: Part
   };
 }
 
+/** 宠物乐园用户信息：头像 → 性别 → 称号 → 用户名 → 玩法（名争/白给等）。 */
 function PetBondPlayerInfo({ player, size = 28 }: { player: PublicPlayer; size?: number }) {
   return (
     <span className="pet-bond-player-info">
@@ -3974,7 +4010,7 @@ export function PetBondPanel({
                       </button>
                     )}
                     {m.releasePending && m.releaseRequestId && (
-                      <button type="button" className="small soft-button" disabled={busy} onClick={() => run("petbond:cancel", { requestId: m.releaseRequestId }, "已撤销申请")}>
+                      <button type="button" className="small danger-soft" disabled={busy} onClick={() => run("petbond:cancel", { requestId: m.releaseRequestId }, "已撤销申请")}>
                         撤销申请
                       </button>
                     )}
@@ -4008,7 +4044,7 @@ export function PetBondPanel({
                           {c.incomingLabel || "同意认宠请求"}
                         </button>
                       ) : c.status === "pending" && c.requestId ? (
-                        <button type="button" className="small soft-button" disabled={busy} onClick={() => run("petbond:cancel", { requestId: c.requestId }, "已撤销申请")}>
+                        <button type="button" className="small danger-soft" disabled={busy} onClick={() => run("petbond:cancel", { requestId: c.requestId }, "已撤销申请")}>
                           撤销申请
                         </button>
                       ) : (
@@ -4072,7 +4108,7 @@ export function PetBondPanel({
                       </button>
                     )}
                     {p.releasePending && p.releaseRequestId && (
-                      <button type="button" className="small soft-button" disabled={busy} onClick={() => run("petbond:cancel", { requestId: p.releaseRequestId }, "已撤销申请")}>
+                      <button type="button" className="small danger-soft" disabled={busy} onClick={() => run("petbond:cancel", { requestId: p.releaseRequestId }, "已撤销申请")}>
                         撤销申请
                       </button>
                     )}
@@ -4106,7 +4142,7 @@ export function PetBondPanel({
                           {c.incomingLabel || "同意认主请求"}
                         </button>
                       ) : c.status === "pending" && c.requestId ? (
-                        <button type="button" className="small soft-button" disabled={busy} onClick={() => run("petbond:cancel", { requestId: c.requestId }, "已撤销申请")}>
+                        <button type="button" className="small danger-soft" disabled={busy} onClick={() => run("petbond:cancel", { requestId: c.requestId }, "已撤销申请")}>
                           撤销申请
                         </button>
                       ) : (
@@ -4390,28 +4426,36 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
           <button className="profile-close-button" type="button" aria-label="关闭个人设置" onClick={onClose}>×</button>
         </div>
 
-        <div className="profile-stats">
-          <Stat label="总局数" value={`${total}`} />
-          <Stat label="总胜率" value={`${winRate}%`} />
-          <Stat label="惩罚次数" value={`${stats.punishments}`} />
-          <Stat label="排位积分" value={`${stats.rankedPoints}`} />
-          <Stat label="历史战绩" value={`${stats.lowestScore} ～ ${stats.highestScore}`} />
-          <Stat label="当前称号" value={me.nameWarPunished ? "已隐藏" : stats.title} />
-          <Stat label="白给值" value={`${formatGiveawayValue(giveawayValue)}%`} />
-          <Stat label="极限模式" value={me.extremeModeEnabled ? `连胜 ${me.extremeWinStreak || 0}` : "未开启"} />
+        <div className="profile-edit profile-stats-card">
+          <h3>统计数据</h3>
+          <div className="profile-stats">
+            <Stat label="总局数" value={`${total}`} />
+            <Stat label="总胜率" value={`${winRate}%`} />
+            <Stat label="惩罚次数" value={`${stats.punishments}`} />
+            <Stat label="排位积分" value={`${stats.rankedPoints}`} />
+            <Stat label="历史战绩" value={`${stats.lowestScore} ～ ${stats.highestScore}`} />
+            <Stat label="当前称号" value={me.nameWarPunished ? "已隐藏" : stats.title} />
+            <Stat label="在线时长" value={formatOnlineDuration(totalOnlineMsOf(me))} />
+            <Stat label="白给值" value={`${formatGiveawayValue(giveawayValue)}%`} />
+            <Stat label="极限模式" value={me.extremeModeEnabled ? `连胜 ${me.extremeWinStreak || 0}` : "未开启"} />
+          </div>
         </div>
-        <div className="profile-stats profile-game-stats">
-          <Stat label="对局总计（胜/负/平）" value={`${stats.wins} / ${stats.losses} / ${stats.draws}`} />
-          {([
-            ["锤子剪刀布（胜/负/平）", me.gameStats?.rps],
-            ["黑白棋（胜/负/平）", me.gameStats?.othello],
-            ["井字棋（胜/负/平）", me.gameStats?.tictactoe],
-            ["五子棋（胜/负/平）", me.gameStats?.gomoku],
-            ["斗兽棋（胜/负/平）", me.gameStats?.jungle],
-            ["大话骰（胜/负/平）", me.gameStats?.liarsdice]
-          ] as const).map(([label, g]) => (
-            <Stat key={label} label={label} value={`${g?.wins || 0} / ${g?.losses || 0} / ${g?.draws || 0}`} />
-          ))}
+
+        <div className="profile-edit profile-stats-card">
+          <h3>对局详情（胜/负/平）</h3>
+          <div className="profile-stats profile-game-stats">
+            <Stat label="对局总计" value={`${stats.wins} / ${stats.losses} / ${stats.draws}`} />
+            {([
+              ["锤子剪刀布", me.gameStats?.rps],
+              ["黑白棋", me.gameStats?.othello],
+              ["井字棋", me.gameStats?.tictactoe],
+              ["五子棋", me.gameStats?.gomoku],
+              ["斗兽棋", me.gameStats?.jungle],
+              ["大话骰", me.gameStats?.liarsdice]
+            ] as const).map(([label, g]) => (
+              <Stat key={label} label={label} value={`${g?.wins || 0} / ${g?.losses || 0} / ${g?.draws || 0}`} />
+            ))}
+          </div>
         </div>
 
         <div className="profile-edit">
@@ -4481,7 +4525,7 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
               <small>{me.giveawayEnabled ? `${formatGiveawayValue(giveawayValue)}%` : "未开启"}</small>
             </div>
             <Toggle label="开启白给模式" value={giveawayEnabled} disabled={giveawayCannotClose} onChange={setGiveawayEnabled} />
-            <p className="hint">开启后白给值默认为 0.1%，锤子剪刀布真人对战会按白给值概率触发强制白给；黑白棋排位落子后可选择不白给、白给或上贡。</p>
+            <p className="hint">开启后白给值默认为 0.1%；锤子剪刀布会按概率改为白给，黑白棋排位支持白给/上贡，井字棋支持随机白给，五子棋支持主动选择或按概率把本手落子变成对方棋子。</p>
             <p className="hint">出拳区点击“白给”会让白给值 +{formatGiveawayValue(config.giveaway.activeBoostValue)}%，触发强制白给后也会 +{formatGiveawayValue(config.giveaway.activeBoostValue)}%，最高 100%。</p>
             <p className="hint">黑白棋白给会让本手翻子不结算排位分并按 0.1%/子增加白给值；上贡会把本手分数给对面并按 0.2%/子增加白给值。</p>
             <p className="hint">白给值归零后，该模式自动关闭。游玩任何游戏获胜会让白给值 -{formatGiveawayValue(config.giveaway.winPenaltyValue)}%；也可以在大厅的白给自救板提交宣言，等待其他玩家点赞帮你降低；</p>
@@ -4560,8 +4604,8 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
             <button type="button" className="danger-button" onClick={openLogoutConfirm}>登出（清空本设备登录状态）</button>
           </div>
           <div className="profile-action-row">
-            <button className="primary" disabled={(nameChanged && (cooldownMs > 0 || nameLockedByWar)) || ((nameWarChanged || nameWarAllowRenameChanged) && nameWarCooldownMs > 0) || giveawayCannotClose || extremeCannotEnable || extremeCannotClose} onClick={saveProfile}><Save size={16} /> 保存个人资料</button>
-            <button onClick={onClose}>关闭个人设置</button>
+            <button className="primary" disabled={(nameChanged && (cooldownMs > 0 || nameLockedByWar)) || ((nameWarChanged || nameWarAllowRenameChanged) && nameWarCooldownMs > 0) || giveawayCannotClose || extremeCannotEnable || extremeCannotClose} onClick={saveProfile}><Save size={16} /> 保存资料</button>
+            <button type="button" onClick={onClose}>关闭设置</button>
           </div>
         </div>
       </section>

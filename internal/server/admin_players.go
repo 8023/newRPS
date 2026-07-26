@@ -2,6 +2,7 @@ package server
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/doumiao/newRPS/internal/types"
 )
@@ -29,6 +30,9 @@ type adminPlayerListQuery struct {
 	RecentLogin7d bool `json:"recentLogin7d"`
 	// RankedNonZero：积分不为 0。
 	RankedNonZero bool `json:"rankedNonZero"`
+	// Keyword：按名字/展示名/玩家 id 做不区分大小写的子串匹配；空串不过滤。
+	// 主宠关系图的“添加关系”搜索框复用这个参数，不再另开一个搜索接口。
+	Keyword string `json:"keyword"`
 	// Limit：返回条数上限；0 用默认，超过硬上限会被夹紧。
 	Limit int `json:"limit"`
 }
@@ -79,6 +83,13 @@ func matchAdminPlayerFilters(p *PlayerState, q adminPlayerListQuery, nowMs int64
 	}
 	if q.RankedNonZero && p.Stats.RankedPoints == 0 {
 		return false
+	}
+	if kw := strings.ToLower(strings.TrimSpace(q.Keyword)); kw != "" {
+		if !strings.Contains(strings.ToLower(p.Name), kw) &&
+			!strings.Contains(strings.ToLower(p.DisplayName), kw) &&
+			!strings.Contains(strings.ToLower(p.ID), kw) {
+			return false
+		}
 	}
 	if q.RecentLogin7d {
 		// 当前在线视作最近活跃；否则看 lastSeen 是否在 7 天窗口内。

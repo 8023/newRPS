@@ -2259,24 +2259,26 @@ func (x *GomokuResignRequest) GetCreatedAt() int64 {
 }
 
 type GomokuState struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Board           []*BoardRow            `protobuf:"bytes,1,rep,name=board,proto3" json:"board,omitempty"`
-	Turn            string                 `protobuf:"bytes,2,opt,name=turn,proto3" json:"turn,omitempty"`
-	BlackSeat       string                 `protobuf:"bytes,3,opt,name=black_seat,json=blackSeat,proto3" json:"black_seat,omitempty"`
-	MoveCount       int32                  `protobuf:"varint,4,opt,name=move_count,json=moveCount,proto3" json:"move_count,omitempty"`
-	Moves           []*Pos                 `protobuf:"bytes,5,rep,name=moves,proto3" json:"moves,omitempty"`
-	WinningLine     []*Pos                 `protobuf:"bytes,6,rep,name=winning_line,json=winningLine,proto3" json:"winning_line,omitempty"`
-	RankedDelta     []*IntPair             `protobuf:"bytes,7,rep,name=ranked_delta,json=rankedDelta,proto3" json:"ranked_delta,omitempty"`
-	UndoCount       []*IntPair             `protobuf:"bytes,8,rep,name=undo_count,json=undoCount,proto3" json:"undo_count,omitempty"`
-	UndoRequest     *GomokuUndoRequest     `protobuf:"bytes,9,opt,name=undo_request,json=undoRequest,proto3" json:"undo_request,omitempty"`
-	ResignRequest   *GomokuResignRequest   `protobuf:"bytes,10,opt,name=resign_request,json=resignRequest,proto3" json:"resign_request,omitempty"`
-	Ended           bool                   `protobuf:"varint,11,opt,name=ended,proto3" json:"ended,omitempty"`
-	Winner          string                 `protobuf:"bytes,12,opt,name=winner,proto3" json:"winner,omitempty"`
-	MoveDeadlineAt  int64                  `protobuf:"varint,13,opt,name=move_deadline_at,json=moveDeadlineAt,proto3" json:"move_deadline_at,omitempty"`
-	ClockDeadlineAt int64                  `protobuf:"varint,14,opt,name=clock_deadline_at,json=clockDeadlineAt,proto3" json:"clock_deadline_at,omitempty"`
-	ClockRemaining  []*IntPair             `protobuf:"bytes,15,rep,name=clock_remaining,json=clockRemaining,proto3" json:"clock_remaining,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state                      protoimpl.MessageState `protogen:"open.v1"`
+	Board                      []*BoardRow            `protobuf:"bytes,1,rep,name=board,proto3" json:"board,omitempty"`
+	Turn                       string                 `protobuf:"bytes,2,opt,name=turn,proto3" json:"turn,omitempty"`
+	BlackSeat                  string                 `protobuf:"bytes,3,opt,name=black_seat,json=blackSeat,proto3" json:"black_seat,omitempty"`
+	MoveCount                  int32                  `protobuf:"varint,4,opt,name=move_count,json=moveCount,proto3" json:"move_count,omitempty"`
+	Moves                      []*Pos                 `protobuf:"bytes,5,rep,name=moves,proto3" json:"moves,omitempty"`
+	WinningLine                []*Pos                 `protobuf:"bytes,6,rep,name=winning_line,json=winningLine,proto3" json:"winning_line,omitempty"`
+	RankedDelta                []*IntPair             `protobuf:"bytes,7,rep,name=ranked_delta,json=rankedDelta,proto3" json:"ranked_delta,omitempty"`
+	UndoCount                  []*IntPair             `protobuf:"bytes,8,rep,name=undo_count,json=undoCount,proto3" json:"undo_count,omitempty"`
+	UndoRequest                *GomokuUndoRequest     `protobuf:"bytes,9,opt,name=undo_request,json=undoRequest,proto3" json:"undo_request,omitempty"`
+	ResignRequest              *GomokuResignRequest   `protobuf:"bytes,10,opt,name=resign_request,json=resignRequest,proto3" json:"resign_request,omitempty"`
+	Ended                      bool                   `protobuf:"varint,11,opt,name=ended,proto3" json:"ended,omitempty"`
+	Winner                     string                 `protobuf:"bytes,12,opt,name=winner,proto3" json:"winner,omitempty"`
+	MoveDeadlineAt             int64                  `protobuf:"varint,13,opt,name=move_deadline_at,json=moveDeadlineAt,proto3" json:"move_deadline_at,omitempty"`
+	ClockDeadlineAt            int64                  `protobuf:"varint,14,opt,name=clock_deadline_at,json=clockDeadlineAt,proto3" json:"clock_deadline_at,omitempty"`
+	ClockRemaining             []*IntPair             `protobuf:"bytes,15,rep,name=clock_remaining,json=clockRemaining,proto3" json:"clock_remaining,omitempty"`
+	GiveawaySeat               string                 `protobuf:"bytes,16,opt,name=giveaway_seat,json=giveawaySeat,proto3" json:"giveaway_seat,omitempty"`
+	GiveawayForcedByMasterName string                 `protobuf:"bytes,17,opt,name=giveaway_forced_by_master_name,json=giveawayForcedByMasterName,proto3" json:"giveaway_forced_by_master_name,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *GomokuState) Reset() {
@@ -2412,6 +2414,20 @@ func (x *GomokuState) GetClockRemaining() []*IntPair {
 		return x.ClockRemaining
 	}
 	return nil
+}
+
+func (x *GomokuState) GetGiveawaySeat() string {
+	if x != nil {
+		return x.GiveawaySeat
+	}
+	return ""
+}
+
+func (x *GomokuState) GetGiveawayForcedByMasterName() string {
+	if x != nil {
+		return x.GiveawayForcedByMasterName
+	}
+	return ""
 }
 
 type JungleResignRequest struct {
@@ -3719,18 +3735,19 @@ func (x *LiarsDiceState) GetMaxPlayers() int32 {
 }
 
 type OthelloPendingSettlement struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Seat          string                 `protobuf:"bytes,2,opt,name=seat,proto3" json:"seat,omitempty"`
-	OpponentSeat  string                 `protobuf:"bytes,3,opt,name=opponent_seat,json=opponentSeat,proto3" json:"opponent_seat,omitempty"`
-	Flips         int32                  `protobuf:"varint,4,opt,name=flips,proto3" json:"flips,omitempty"`
-	Stake         int32                  `protobuf:"varint,5,opt,name=stake,proto3" json:"stake,omitempty"`
-	NextTurn      string                 `protobuf:"bytes,6,opt,name=next_turn,json=nextTurn,proto3" json:"next_turn,omitempty"`
-	ExpiresAt     int64                  `protobuf:"varint,7,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	Forced        string                 `protobuf:"bytes,8,opt,name=forced,proto3" json:"forced,omitempty"`
-	ResolvedAs    string                 `protobuf:"bytes,9,opt,name=resolved_as,json=resolvedAs,proto3" json:"resolved_as,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Id                 string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Seat               string                 `protobuf:"bytes,2,opt,name=seat,proto3" json:"seat,omitempty"`
+	OpponentSeat       string                 `protobuf:"bytes,3,opt,name=opponent_seat,json=opponentSeat,proto3" json:"opponent_seat,omitempty"`
+	Flips              int32                  `protobuf:"varint,4,opt,name=flips,proto3" json:"flips,omitempty"`
+	Stake              int32                  `protobuf:"varint,5,opt,name=stake,proto3" json:"stake,omitempty"`
+	NextTurn           string                 `protobuf:"bytes,6,opt,name=next_turn,json=nextTurn,proto3" json:"next_turn,omitempty"`
+	ExpiresAt          int64                  `protobuf:"varint,7,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	Forced             string                 `protobuf:"bytes,8,opt,name=forced,proto3" json:"forced,omitempty"`
+	ResolvedAs         string                 `protobuf:"bytes,9,opt,name=resolved_as,json=resolvedAs,proto3" json:"resolved_as,omitempty"`
+	ForcedByMasterName string                 `protobuf:"bytes,10,opt,name=forced_by_master_name,json=forcedByMasterName,proto3" json:"forced_by_master_name,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *OthelloPendingSettlement) Reset() {
@@ -3822,6 +3839,13 @@ func (x *OthelloPendingSettlement) GetForced() string {
 func (x *OthelloPendingSettlement) GetResolvedAs() string {
 	if x != nil {
 		return x.ResolvedAs
+	}
+	return ""
+}
+
+func (x *OthelloPendingSettlement) GetForcedByMasterName() string {
+	if x != nil {
+		return x.ForcedByMasterName
 	}
 	return ""
 }
@@ -8156,7 +8180,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\tfrom_seat\x18\x01 \x01(\tR\bfromSeat\x12\x17\n" +
 	"\ato_seat\x18\x02 \x01(\tR\x06toSeat\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x03 \x01(\x03R\tcreatedAt\"\xee\x04\n" +
+	"created_at\x18\x03 \x01(\x03R\tcreatedAt\"\xd7\x05\n" +
 	"\vGomokuState\x12$\n" +
 	"\x05board\x18\x01 \x03(\v2\x0e.game.BoardRowR\x05board\x12\x12\n" +
 	"\x04turn\x18\x02 \x01(\tR\x04turn\x12\x1d\n" +
@@ -8176,7 +8200,9 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x06winner\x18\f \x01(\tR\x06winner\x12(\n" +
 	"\x10move_deadline_at\x18\r \x01(\x03R\x0emoveDeadlineAt\x12*\n" +
 	"\x11clock_deadline_at\x18\x0e \x01(\x03R\x0fclockDeadlineAt\x126\n" +
-	"\x0fclock_remaining\x18\x0f \x03(\v2\r.game.IntPairR\x0eclockRemaining\"j\n" +
+	"\x0fclock_remaining\x18\x0f \x03(\v2\r.game.IntPairR\x0eclockRemaining\x12#\n" +
+	"\rgiveaway_seat\x18\x10 \x01(\tR\fgiveawaySeat\x12B\n" +
+	"\x1egiveaway_forced_by_master_name\x18\x11 \x01(\tR\x1agiveawayForcedByMasterName\"j\n" +
 	"\x13JungleResignRequest\x12\x1b\n" +
 	"\tfrom_seat\x18\x01 \x01(\tR\bfromSeat\x12\x17\n" +
 	"\ato_seat\x18\x02 \x01(\tR\x06toSeat\x12\x1d\n" +
@@ -8320,7 +8346,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\vmin_players\x18\x0e \x01(\x05R\n" +
 	"minPlayers\x12\x1f\n" +
 	"\vmax_players\x18\x0f \x01(\x05R\n" +
-	"maxPlayers\"\x84\x02\n" +
+	"maxPlayers\"\xb7\x02\n" +
 	"\x18OthelloPendingSettlement\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04seat\x18\x02 \x01(\tR\x04seat\x12#\n" +
@@ -8332,7 +8358,9 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"expires_at\x18\a \x01(\x03R\texpiresAt\x12\x16\n" +
 	"\x06forced\x18\b \x01(\tR\x06forced\x12\x1f\n" +
 	"\vresolved_as\x18\t \x01(\tR\n" +
-	"resolvedAs\"n\n" +
+	"resolvedAs\x121\n" +
+	"\x15forced_by_master_name\x18\n" +
+	" \x01(\tR\x12forcedByMasterName\"n\n" +
 	"\x17OthelloSurrenderRequest\x12\x1b\n" +
 	"\tfrom_seat\x18\x01 \x01(\tR\bfromSeat\x12\x17\n" +
 	"\ato_seat\x18\x02 \x01(\tR\x06toSeat\x12\x1d\n" +

@@ -79,6 +79,9 @@ export function App() {
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [notice, setNotice] = useState("");
+  /** toast 展示文案与离场态：notice 更新时同步文案，定时先 leave 再清空，以便播放退出动效。 */
+  const [toastText, setToastText] = useState("");
+  const [toastLeaving, setToastLeaving] = useState(false);
   const [announcement, setAnnouncement] = useState<AnnouncementPayload | null>(null);
   // 每天每个浏览器只需确认一次；未过期就跳过声明页，直接走原来的连接流程。
   const [disclaimerConfirmed, setDisclaimerConfirmed] = useState(() => localStorage.getItem(securityDisclaimerKey) === todayKey());
@@ -401,8 +404,18 @@ export function App() {
 
   useEffect(() => {
     if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(""), 3500);
-    return () => window.clearTimeout(timer);
+    setToastText(notice);
+    setToastLeaving(false);
+    const leaveTimer = window.setTimeout(() => setToastLeaving(true), 3200);
+    const clearTimer = window.setTimeout(() => {
+      setToastText("");
+      setToastLeaving(false);
+      setNotice("");
+    }, 3520);
+    return () => {
+      window.clearTimeout(leaveTimer);
+      window.clearTimeout(clearTimer);
+    };
   }, [notice]);
 
   useEffect(() => {
@@ -473,15 +486,25 @@ export function App() {
     <main>
       <header className="topbar">
         <div>
-          <h1>{config.site.name}</h1>
-          {view === "room" && room && (
-            <span className="top-summary">⚔️ {phaseText(room.phase, room.settings.gameId)}</span>
+          {view !== "room" && <h1>{config.site.name}</h1>}
+          {view === "room" ? (
+            <>
+              <span className={`connection-pill ${connectionState}`}>
+                {connectionState === "connected"
+                  ? `在线 ${lobbyOnlineCount(lobby)} 人`
+                  : connectionStateText(connectionState)}
+              </span>
+              {room && (
+                <span className="top-summary">⚔️ {phaseText(room.phase, room.settings.gameId)}</span>
+              )}
+            </>
+          ) : (
+            <span className={`connection-pill ${connectionState}`}>
+              {connectionState === "connected"
+                ? `在线 ${lobbyOnlineCount(lobby)} 人`
+                : connectionStateText(connectionState)}
+            </span>
           )}
-          <span className={`connection-pill ${connectionState}`}>
-            {connectionState === "connected"
-              ? `在线 ${lobbyOnlineCount(lobby)} 人`
-              : connectionStateText(connectionState)}
-          </span>
         </div>
         <div className="top-actions">
           {me && <PlayerBadge player={me.player} compact />}
@@ -503,7 +526,11 @@ export function App() {
           </button>
         </div>
       </header>
-      {notice && <div className="notice">{notice}</div>}
+      {toastText && (
+        <div className={`notice toast-notice ${toastLeaving ? "toast-leave" : "toast-enter"}`} role="status">
+          {toastText}
+        </div>
+      )}
       {announcement && (
         <div className="announcement-popup" role="alert">
           <div>

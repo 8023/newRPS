@@ -952,6 +952,30 @@ func (s *Server) onGomokuReady(client *Client, env wsEnvelope) {
 	s.broadcastRoom(room.ID, true)
 }
 
+func (s *Server) onGomokuGiveaway(client *Client, env wsEnvelope) {
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameGomoku {
+		client.reply(env.ID, nil, "当前房间不是五子棋")
+		return
+	}
+	seat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以选择白给")
+		return
+	}
+	ok2, errMsg := s.chooseGomokuGiveaway(room, seat)
+	if !ok2 {
+		client.reply(env.ID, nil, errMsg)
+		return
+	}
+	s.roomNotice(room, room.ResultText)
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	s.broadcastRoom(room.ID, true)
+}
+
 func (s *Server) onGomokuMove(client *Client, env wsEnvelope) {
 	var p struct {
 		Row int `json:"row"`
@@ -1928,6 +1952,10 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 				if pl.PlayerID != "" {
 					delete(s.playerIdToID, pl.PlayerID)
 				}
+			}
+			// 认主/认宠申请要求双方在线，管理员踢人视同离线，作废其相关申请。
+			if s.clearOfflinePetBondRequests(pl.ID) {
+				s.notifyAllOnlinePetBondStates()
 			}
 		}
 	}

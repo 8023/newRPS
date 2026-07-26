@@ -6,6 +6,7 @@ import { ask } from "../lib/rpc";
 import { compressAdminImageForUpload } from "../lib/proofImage";
 import { formatBytes, formatDuration } from "../lib/format";
 import { encodeClaimCode } from "../lib/session";
+import { PetBondGraphPanel } from "./PetBondGraphPanel";
 import {
   FactionSelect, GenderCustomField, GenderSelectField, PlayerBadge, RoomInfoTagList, RoomTagList, Select, Stat, Toggle,
   defaultRoomInfoTagStyle, factionStyle, formatGiveawayValue, genderChoiceError, lobbyRoomInfoTags, nextGenderIdForFaction, punishmentTasks,
@@ -742,35 +743,40 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
     if (activeSection === "petBond") {
       const pb = draft.petBond || { panelTitle: "宠物乐园", maxPetsPerMaster: 3, maxMastersPerPet: 3, maxTitleLength: 12 };
       return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="宠物乐园（认主/认宠）" subtitle="配置大厅面板标题、主人/宠物数量上限与称号长度。" />
-          <div className="admin-preview-card">
-            <span>预览</span>
-            <strong>🐾 {pb.panelTitle}</strong>
-            <p>主人最多 {pb.maxPetsPerMaster} 宠 · 宠物最多 {pb.maxMastersPerPet} 主 · 称号 {pb.maxTitleLength} 字</p>
+        <>
+          <div className="config-section admin-section-card">
+            <AdminSectionHeader title="宠物乐园（认主/认宠）" subtitle="配置大厅面板标题、主人/宠物数量上限与称号长度。" />
+            <div className="admin-preview-card">
+              <span>预览</span>
+              <strong>🐾 {pb.panelTitle}</strong>
+              <p>主人最多 {pb.maxPetsPerMaster} 宠 · 宠物最多 {pb.maxMastersPerPet} 主 · 称号 {pb.maxTitleLength} 字</p>
+            </div>
+            <div className="config-row">
+              <label className="field-label">
+                <span>大厅面板标题</span>
+                <input value={pb.panelTitle} maxLength={24} onChange={(event) => patch({ petBond: { ...pb, panelTitle: event.target.value } })} placeholder="宠物乐园" />
+              </label>
+              <label className="field-label">
+                <span>宠物称号最大字数</span>
+                <input type="number" min={1} max={24} step={1} value={pb.maxTitleLength} onChange={(event) => patch({ petBond: { ...pb, maxTitleLength: Number(event.target.value) } })} />
+              </label>
+            </div>
+            <div className="config-row">
+              <label className="field-label">
+                <span>每名主人最多宠物数</span>
+                <input type="number" min={1} max={20} step={1} value={pb.maxPetsPerMaster} onChange={(event) => patch({ petBond: { ...pb, maxPetsPerMaster: Number(event.target.value) } })} />
+              </label>
+              <label className="field-label">
+                <span>每名宠物最多主人数</span>
+                <input type="number" min={1} max={20} step={1} value={pb.maxMastersPerPet} onChange={(event) => patch({ petBond: { ...pb, maxMastersPerPet: Number(event.target.value) } })} />
+              </label>
+            </div>
+            <p className="hint">关闭玩家侧「开启认主/认宠」不会解除已有关系，只禁止新增；关闭「公开展示」则不出现在大厅关系图。</p>
           </div>
-          <div className="config-row">
-            <label className="field-label">
-              <span>大厅面板标题</span>
-              <input value={pb.panelTitle} maxLength={24} onChange={(event) => patch({ petBond: { ...pb, panelTitle: event.target.value } })} placeholder="宠物乐园" />
-            </label>
-            <label className="field-label">
-              <span>宠物称号最大字数</span>
-              <input type="number" min={1} max={24} step={1} value={pb.maxTitleLength} onChange={(event) => patch({ petBond: { ...pb, maxTitleLength: Number(event.target.value) } })} />
-            </label>
+          <div className="config-section admin-section-card">
+            <PetBondGraphPanel onError={onError} />
           </div>
-          <div className="config-row">
-            <label className="field-label">
-              <span>每名主人最多宠物数</span>
-              <input type="number" min={1} max={20} step={1} value={pb.maxPetsPerMaster} onChange={(event) => patch({ petBond: { ...pb, maxPetsPerMaster: Number(event.target.value) } })} />
-            </label>
-            <label className="field-label">
-              <span>每名宠物最多主人数</span>
-              <input type="number" min={1} max={20} step={1} value={pb.maxMastersPerPet} onChange={(event) => patch({ petBond: { ...pb, maxMastersPerPet: Number(event.target.value) } })} />
-            </label>
-          </div>
-          <p className="hint">关闭玩家侧「开启认主/认宠」不会解除已有关系，只禁止新增；关闭「公开展示」则不出现在大厅关系图。</p>
-        </div>
+        </>
       );
     }
 

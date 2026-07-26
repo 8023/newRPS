@@ -455,7 +455,11 @@ func (s *Server) settleOthelloPendingMoveClean(room *RoomState, mode, reason str
 		resultText += "（10 秒未选择，自动不白给）"
 	}
 	if pending.Forced == "giveaway" {
-		resultText += "（强制白给）"
+		if pending.ForcedByMasterName != "" {
+			resultText += fmt.Sprintf("（主人（%s）强制（%s）白给）", pending.ForcedByMasterName, occupantName(room.Seats[pending.Seat]))
+		} else {
+			resultText += "（强制白给）"
+		}
 	}
 	if pending.Forced == "tribute" {
 		resultText += "（强制上贡）"
@@ -633,10 +637,14 @@ func (s *Server) applyOthelloMove(room *RoomState, seat types.SeatKey, row, col 
 	useGiveawaySettlement := room.Settings.EnableRanked && player != nil && ptrBool(player.GiveawayEnabled) && s.isFullHumanRoom(room)
 	nextTurn := othelloSeatForColor(room.Othello, oppositeOthelloColor(color))
 	if useGiveawaySettlement {
-		forcedGiveaway := s.shouldTriggerGiveaway(player)
+		// 主人强制只作用于当前房间本局，并保证本手判成 giveaway；自然概率仍可能进入上贡分支。
+		forcedByMaster := takeForcedGiveaway(room, seat)
+		forcedGiveaway := forcedByMaster != "" || s.shouldTriggerGiveaway(player)
 		var forced string
 		if forcedGiveaway {
-			if ptrFloat(player.GiveawayValue) >= 75 && rand.Float64() < 0.5 {
+			if forcedByMaster != "" {
+				forced = "giveaway"
+			} else if ptrFloat(player.GiveawayValue) >= 75 && rand.Float64() < 0.5 {
 				forced = "tribute"
 			} else {
 				forced = "giveaway"
@@ -649,7 +657,7 @@ func (s *Server) applyOthelloMove(room *RoomState, seat types.SeatKey, row, col 
 		pending := &types.OthelloPendingSettlement{
 			ID: randomID(), Seat: seat, OpponentSeat: opponentSeat,
 			Flips: len(flips), Stake: liveStake, NextTurn: nextTurn,
-			ExpiresAt: expires, Forced: forced,
+			ExpiresAt: expires, Forced: forced, ForcedByMasterName: forcedByMaster,
 		}
 		bc, wc := othelloCounts(board)
 		room.Othello.Board = board
@@ -663,7 +671,11 @@ func (s *Server) applyOthelloMove(room *RoomState, seat types.SeatKey, row, col 
 		if forced == "tribute" {
 			room.ResultText = occupantName(room.Seats[seat]) + " 触发强制上贡，正在结算..."
 		} else if forced == "giveaway" {
-			room.ResultText = occupantName(room.Seats[seat]) + " 触发强制白给，正在结算..."
+			if forcedByMaster != "" {
+				room.ResultText = fmt.Sprintf("主人（%s）强制（%s）白给，正在结算...", forcedByMaster, occupantName(room.Seats[seat]))
+			} else {
+				room.ResultText = occupantName(room.Seats[seat]) + " 触发强制白给，正在结算..."
+			}
 		} else {
 			room.ResultText = occupantName(room.Seats[seat]) + " 请在 10 秒内选择：不白给 / 白给 / 上贡。"
 		}

@@ -3,10 +3,15 @@ package server
 import (
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // newTestServer 返回一个字段齐全、可以安全触发 requestPersist 的 Server（写盘路径落在
 // t.TempDir()，测试结束自动清理，不会污染工作目录）。
+// lobby/room 广播防抖设为 1 小时：测试同步调用 handler 后立刻读写 s 的字段，若沿用生产环境
+// 的短延迟，broadcastLobby/broadcastRoom 起的计时器协程会在测试主 goroutine 还没返回时就
+// 触发、并发读写同一个 Server，在 -race 下报数据竞争（各 handler 本身持锁没问题，但测试代码
+// 不持锁）；测试不需要真的等广播落地，拉长延迟等同于禁用。
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	dir := t.TempDir()
@@ -17,6 +22,8 @@ func newTestServer(t *testing.T) *Server {
 		deviceCreateAttempts: map[string][]int64{},
 		ipCreateAttempts:     map[string][]int64{},
 		rateBuckets:          map[string]*rateBucket{},
+		lobbyBroadcastDelay:  time.Hour,
+		roomBroadcastDelay:   time.Hour,
 	}
 }
 

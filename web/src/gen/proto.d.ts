@@ -3527,6 +3527,12 @@ export namespace game {
         /** GomokuState clockRemaining. */
         clockRemaining: game.IntPair.$Properties[];
 
+        /** GomokuState giveawaySeat. */
+        giveawaySeat: string;
+
+        /** GomokuState giveawayForcedByMasterName. */
+        giveawayForcedByMasterName: string;
+
         /**
          * Creates a new GomokuState instance using the specified properties.
          * @param [properties] Properties to set
@@ -3655,6 +3661,12 @@ export namespace game {
 
             /** GomokuState clockRemaining */
             clockRemaining?: (game.IntPair.$Properties[]|null);
+
+            /** GomokuState giveawaySeat */
+            giveawaySeat?: (string|null);
+
+            /** GomokuState giveawayForcedByMasterName */
+            giveawayForcedByMasterName?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -5696,6 +5708,9 @@ export namespace game {
         /** OthelloPendingSettlement resolvedAs. */
         resolvedAs: string;
 
+        /** OthelloPendingSettlement forcedByMasterName. */
+        forcedByMasterName: string;
+
         /**
          * Creates a new OthelloPendingSettlement instance using the specified properties.
          * @param [properties] Properties to set
@@ -5806,6 +5821,9 @@ export namespace game {
 
             /** OthelloPendingSettlement resolvedAs */
             resolvedAs?: (string|null);
+
+            /** OthelloPendingSettlement forcedByMasterName */
+            forcedByMasterName?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

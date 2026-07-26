@@ -11427,6 +11427,8 @@ export const game = $root.game = (() => {
          * @property {number|Long|null} [moveDeadlineAt] GomokuState moveDeadlineAt
          * @property {number|Long|null} [clockDeadlineAt] GomokuState clockDeadlineAt
          * @property {Array.<game.IntPair.$Properties>|null} [clockRemaining] GomokuState clockRemaining
+         * @property {string|null} [giveawaySeat] GomokuState giveawaySeat
+         * @property {string|null} [giveawayForcedByMasterName] GomokuState giveawayForcedByMasterName
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -11585,6 +11587,22 @@ export const game = $root.game = (() => {
         GomokuState.prototype.clockRemaining = $util.emptyArray;
 
         /**
+         * GomokuState giveawaySeat.
+         * @member {string} giveawaySeat
+         * @memberof game.GomokuState
+         * @instance
+         */
+        GomokuState.prototype.giveawaySeat = "";
+
+        /**
+         * GomokuState giveawayForcedByMasterName.
+         * @member {string} giveawayForcedByMasterName
+         * @memberof game.GomokuState
+         * @instance
+         */
+        GomokuState.prototype.giveawayForcedByMasterName = "";
+
+        /**
          * Creates a new GomokuState instance using the specified properties.
          * @function create
          * @memberof game.GomokuState
@@ -11652,6 +11670,10 @@ export const game = $root.game = (() => {
             if (message.clockRemaining != null && message.clockRemaining.length)
                 for (let i = 0; i < message.clockRemaining.length; ++i)
                     $root.game.IntPair.encode(message.clockRemaining[i], writer.uint32(/* id 15, wireType 2 =*/122).fork(), _depth + 1).ldelim();
+            if (message.giveawaySeat != null && $Object.hasOwnProperty.call(message, "giveawaySeat") && message.giveawaySeat !== "")
+                writer.uint32(/* id 16, wireType 2 =*/130).string(message.giveawaySeat);
+            if (message.giveawayForcedByMasterName != null && $Object.hasOwnProperty.call(message, "giveawayForcedByMasterName") && message.giveawayForcedByMasterName !== "")
+                writer.uint32(/* id 17, wireType 2 =*/138).string(message.giveawayForcedByMasterName);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -11822,6 +11844,24 @@ export const game = $root.game = (() => {
                         message.clockRemaining.push($root.game.IntPair.decode(reader, reader.uint32(), $undefined, _depth + 1));
                         continue;
                     }
+                case 16: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.giveawaySeat = value;
+                        else
+                            delete message.giveawaySeat;
+                        continue;
+                    }
+                case 17: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.giveawayForcedByMasterName = value;
+                        else
+                            delete message.giveawayForcedByMasterName;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -11950,6 +11990,12 @@ export const game = $root.game = (() => {
                         return "clockRemaining." + error;
                 }
             }
+            if (message.giveawaySeat != null && $Object.hasOwnProperty.call(message, "giveawaySeat"))
+                if (!$util.isString(message.giveawaySeat))
+                    return "giveawaySeat: string expected";
+            if (message.giveawayForcedByMasterName != null && $Object.hasOwnProperty.call(message, "giveawayForcedByMasterName"))
+                if (!$util.isString(message.giveawayForcedByMasterName))
+                    return "giveawayForcedByMasterName: string expected";
             return null;
         };
 
@@ -12076,6 +12122,12 @@ export const game = $root.game = (() => {
                     message.clockRemaining[i] = $root.game.IntPair.fromObject(object.clockRemaining[i], _depth + 1);
                 }
             }
+            if (object.giveawaySeat != null)
+                if (typeof object.giveawaySeat !== "string" || object.giveawaySeat.length)
+                    message.giveawaySeat = $String(object.giveawaySeat);
+            if (object.giveawayForcedByMasterName != null)
+                if (typeof object.giveawayForcedByMasterName !== "string" || object.giveawayForcedByMasterName.length)
+                    message.giveawayForcedByMasterName = $String(object.giveawayForcedByMasterName);
             return message;
         };
 
@@ -12122,6 +12174,8 @@ export const game = $root.game = (() => {
                     object.clockDeadlineAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.clockDeadlineAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                object.giveawaySeat = "";
+                object.giveawayForcedByMasterName = "";
             }
             if (message.board && message.board.length) {
                 object.board = $Array(message.board.length);
@@ -12181,6 +12235,10 @@ export const game = $root.game = (() => {
                 for (let j = 0; j < message.clockRemaining.length; ++j)
                     object.clockRemaining[j] = $root.game.IntPair.toObject(message.clockRemaining[j], options, _depth + 1);
             }
+            if (message.giveawaySeat != null && $Object.hasOwnProperty.call(message, "giveawaySeat"))
+                object.giveawaySeat = message.giveawaySeat;
+            if (message.giveawayForcedByMasterName != null && $Object.hasOwnProperty.call(message, "giveawayForcedByMasterName"))
+                object.giveawayForcedByMasterName = message.giveawayForcedByMasterName;
             return object;
         };
 
@@ -18595,6 +18653,7 @@ export const game = $root.game = (() => {
          * @property {number|Long|null} [expiresAt] OthelloPendingSettlement expiresAt
          * @property {string|null} [forced] OthelloPendingSettlement forced
          * @property {string|null} [resolvedAs] OthelloPendingSettlement resolvedAs
+         * @property {string|null} [forcedByMasterName] OthelloPendingSettlement forcedByMasterName
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -18699,6 +18758,14 @@ export const game = $root.game = (() => {
         OthelloPendingSettlement.prototype.resolvedAs = "";
 
         /**
+         * OthelloPendingSettlement forcedByMasterName.
+         * @member {string} forcedByMasterName
+         * @memberof game.OthelloPendingSettlement
+         * @instance
+         */
+        OthelloPendingSettlement.prototype.forcedByMasterName = "";
+
+        /**
          * Creates a new OthelloPendingSettlement instance using the specified properties.
          * @function create
          * @memberof game.OthelloPendingSettlement
@@ -18748,6 +18815,8 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 8, wireType 2 =*/66).string(message.forced);
             if (message.resolvedAs != null && $Object.hasOwnProperty.call(message, "resolvedAs") && message.resolvedAs !== "")
                 writer.uint32(/* id 9, wireType 2 =*/74).string(message.resolvedAs);
+            if (message.forcedByMasterName != null && $Object.hasOwnProperty.call(message, "forcedByMasterName") && message.forcedByMasterName !== "")
+                writer.uint32(/* id 10, wireType 2 =*/82).string(message.forcedByMasterName);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -18876,6 +18945,15 @@ export const game = $root.game = (() => {
                             delete message.resolvedAs;
                         continue;
                     }
+                case 10: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.forcedByMasterName = value;
+                        else
+                            delete message.forcedByMasterName;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -18946,6 +19024,9 @@ export const game = $root.game = (() => {
             if (message.resolvedAs != null && $Object.hasOwnProperty.call(message, "resolvedAs"))
                 if (!$util.isString(message.resolvedAs))
                     return "resolvedAs: string expected";
+            if (message.forcedByMasterName != null && $Object.hasOwnProperty.call(message, "forcedByMasterName"))
+                if (!$util.isString(message.forcedByMasterName))
+                    return "forcedByMasterName: string expected";
             return null;
         };
 
@@ -19001,6 +19082,9 @@ export const game = $root.game = (() => {
             if (object.resolvedAs != null)
                 if (typeof object.resolvedAs !== "string" || object.resolvedAs.length)
                     message.resolvedAs = $String(object.resolvedAs);
+            if (object.forcedByMasterName != null)
+                if (typeof object.forcedByMasterName !== "string" || object.forcedByMasterName.length)
+                    message.forcedByMasterName = $String(object.forcedByMasterName);
             return message;
         };
 
@@ -19035,6 +19119,7 @@ export const game = $root.game = (() => {
                     object.expiresAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
                 object.forced = "";
                 object.resolvedAs = "";
+                object.forcedByMasterName = "";
             }
             if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
                 object.id = message.id;
@@ -19059,6 +19144,8 @@ export const game = $root.game = (() => {
                 object.forced = message.forced;
             if (message.resolvedAs != null && $Object.hasOwnProperty.call(message, "resolvedAs"))
                 object.resolvedAs = message.resolvedAs;
+            if (message.forcedByMasterName != null && $Object.hasOwnProperty.call(message, "forcedByMasterName"))
+                object.forcedByMasterName = message.forcedByMasterName;
             return object;
         };
 
@@ -39523,7 +39610,7 @@ export const google = $root.google = (() => {
                                 case 2:
                                     if (wireType !== 2)
                                         break;
-                                    value = $root.google.protobuf.Value.decode(reader, reader.uint32(), $undefined, _depth + 1);
+                                    value = $root.google.protobuf.Value.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
                                     continue;
                                 }
                                 reader.skipType(wireType, _depth, tag2);

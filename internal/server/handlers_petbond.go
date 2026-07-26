@@ -1,7 +1,10 @@
 package server
 
 import (
+	"fmt"
 	"strings"
+
+	"github.com/doumiao/newRPS/internal/types"
 )
 
 func (s *Server) onPetBondGetState(client *Client, env wsEnvelope) {
@@ -10,6 +13,193 @@ func (s *Server) onPetBondGetState(client *Client, env wsEnvelope) {
 		return
 	}
 	client.reply(env.ID, s.buildPetBondState(player.ID), "")
+}
+
+func forcedGiveawayMasterName(room *RoomState, seat types.SeatKey) string {
+	if room == nil || room.ForcedGiveawayBySeat == nil {
+		return ""
+	}
+	return room.ForcedGiveawayBySeat[seat]
+}
+
+func setForcedGiveaway(room *RoomState, seat types.SeatKey, masterName string) {
+	if room.ForcedGiveawayBySeat == nil {
+		room.ForcedGiveawayBySeat = map[types.SeatKey]string{}
+	}
+	room.ForcedGiveawayBySeat[seat] = masterName
+}
+
+func takeForcedGiveaway(room *RoomState, seat types.SeatKey) string {
+	masterName := forcedGiveawayMasterName(room, seat)
+	if room != nil && room.ForcedGiveawayBySeat != nil {
+		delete(room.ForcedGiveawayBySeat, seat)
+	}
+	return masterName
+}
+
+// onPetBondForceGiveaway 把宠物当前局的本轮选择直接改成白给。RPS 立即覆盖已经锁定的出拳；
+// 回合制游戏若正轮到宠物，则立即进入/结算本手白给，否则在宠物本局下一手开始时生效。
+func (s *Server) onPetBondForceGiveaway(client *Client, env wsEnvelope) {
+	var p struct {
+		TargetID string `json:"targetId"`
+	}
+	_ = decodeD(env, &p)
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameRPS && room.Settings.GameID != types.GameOthello &&
+		room.Settings.GameID != types.GameTicTacToe && room.Settings.GameID != types.GameGomoku {
+		client.reply(env.ID, nil, "当前游戏不支持强制白给")
+		return
+	}
+	if room.Settings.GameID == types.GameOthello && !room.Settings.EnableRanked {
+		client.reply(env.ID, nil, "黑白棋只有排位房才支持白给结算")
+		return
+	}
+	masterSeat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以强制白给")
+		return
+	}
+	petSeat := oppositeSeat(masterSeat)
+	petOcc := room.Seats[petSeat]
+	if petOcc == nil {
+		client.reply(env.ID, nil, "对方不在战斗席")
+		return
+	}
+	pet := s.players[petOcc.GetID()]
+	targetID := strings.TrimSpace(p.TargetID)
+	if pet == nil || pet.ID != targetID {
+		client.reply(env.ID, nil, "目标玩家不正确")
+		return
+	}
+	if s.getBond(player.ID, pet.ID) == nil {
+		client.reply(env.ID, nil, "对方不是你的宠物")
+		return
+	}
+	if !ptrBool(pet.GiveawayEnabled) {
+		client.reply(env.ID, nil, "对方未开启白给模式")
+		return
+	}
+	if room.Phase == types.PhasePunishment {
+		client.reply(env.ID, nil, "惩罚阶段不能强制白给")
+		return
+	}
+
+	masterName := playerShortName(player)
+	petName := playerShortName(pet)
+	switch room.Settings.GameID {
+	case types.GameRPS:
+		if room.Phase == types.PhaseResult {
+			s.prepareNextChoice(room)
+		}
+		if room.Phase != types.PhaseChoosing {
+			client.reply(env.ID, nil, "当前不能强制白给")
+			return
+		}
+		if forcedGiveawayMasterName(room, petSeat) != "" {
+			client.reply(env.ID, nil, "已经强制过一次，正在等待本轮结算")
+			return
+		}
+		if room.Choices == nil {
+			room.Choices = map[types.SeatKey]types.Move{}
+		}
+		previous := room.Choices[petSeat]
+		setForcedGiveaway(room, petSeat, masterName)
+		room.Choices[petSeat] = types.MoveGiveaway
+		if previous != types.MoveGiveaway {
+			s.addGiveawayValue(pet, s.cfg.Giveaway.ActiveBoostValue)
+		}
+		s.roomNotice(room, fmt.Sprintf("主人（%s）强制（%s）白给，本轮选择已改为白给。", masterName, petName))
+		oldStatus := room.Status
+		s.finishRoundIfReady(room)
+		client.reply(env.ID, map[string]any{"ok": true}, "")
+		s.broadcastRoom(room.ID, oldStatus != room.Status)
+		return
+
+	case types.GameOthello:
+		if room.Phase != types.PhaseChoosing || room.Othello == nil || room.Othello.Ended {
+			client.reply(env.ID, nil, "当前黑白棋对局不能强制白给")
+			return
+		}
+		if pending := room.Othello.PendingSettlement; pending != nil && pending.Seat == petSeat {
+			if pending.ForcedByMasterName != "" {
+				client.reply(env.ID, nil, "已经强制过一次，正在结算")
+				return
+			}
+			pending.Forced = "giveaway"
+			pending.ForcedByMasterName = masterName
+			if ok, errMsg := s.settleOthelloPendingMoveClean(room, "giveaway", "masterForce"); !ok {
+				client.reply(env.ID, nil, errMsg)
+				return
+			}
+			client.reply(env.ID, map[string]any{"ok": true}, "")
+			s.broadcastRoom(room.ID, true)
+			return
+		}
+
+	case types.GameTicTacToe:
+		if room.Phase != types.PhaseChoosing || room.TicTacToe == nil || room.TicTacToe.Ended {
+			client.reply(env.ID, nil, "当前井字棋对局不能强制白给")
+			return
+		}
+		if room.TicTacToe.Turn == petSeat {
+			s.clearTicTacToeGiveawayTimer(room.ID)
+			takeForcedGiveaway(room, petSeat)
+			ok, row, col, errMsg := s.applyTicTacToeRandomMove(room, petSeat, "forcedGiveaway")
+			if !ok {
+				client.reply(env.ID, nil, errMsg)
+				return
+			}
+			text := fmt.Sprintf("主人（%s）强制（%s）白给，系统随机落在第 %d 行第 %d 列。", masterName, petName, row+1, col+1)
+			if room.TicTacToe != nil && !room.TicTacToe.Ended {
+				room.ResultText = text
+			}
+			s.roomNotice(room, text)
+			client.reply(env.ID, map[string]any{"ok": true}, "")
+			s.broadcastRoom(room.ID, true)
+			return
+		}
+
+	case types.GameGomoku:
+		if room.Phase != types.PhaseChoosing || room.Gomoku == nil || room.Gomoku.Ended {
+			client.reply(env.ID, nil, "当前五子棋对局不能强制白给")
+			return
+		}
+		if room.Gomoku.UndoRequest != nil || room.Gomoku.ResignRequest != nil {
+			client.reply(env.ID, nil, "请求处理期间不能强制白给")
+			return
+		}
+		if room.Gomoku.Turn == petSeat && room.Gomoku.GiveawaySeat == petSeat {
+			if room.Gomoku.GiveawayForcedByMasterName != "" {
+				client.reply(env.ID, nil, "已经强制过一次，正在等待宠物落子")
+				return
+			}
+			// 情况 4：宠物已经主动点了白给，主人随后强制不会改变其已知状态。
+			room.Gomoku.GiveawayForcedByMasterName = masterName
+			room.ResultText = fmt.Sprintf("主人（%s）强制（%s）本手白给，请选择落点。", masterName, petName)
+			s.roomNotice(room, room.ResultText)
+			client.reply(env.ID, map[string]any{"ok": true}, "")
+			s.broadcastRoom(room.ID, true)
+			return
+		}
+	}
+
+	if forcedGiveawayMasterName(room, petSeat) != "" {
+		message := "已经强制过一次，正在等待宠物本局下一手"
+		if room.Settings.GameID == types.GameGomoku && room.Gomoku != nil && room.Gomoku.Turn == petSeat {
+			message = "已经强制过一次，正在等待宠物落子"
+		}
+		client.reply(env.ID, nil, message)
+		return
+	}
+	setForcedGiveaway(room, petSeat, masterName)
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	if room.Settings.GameID != types.GameGomoku {
+		s.roomNotice(room, fmt.Sprintf("主人（%s）强制（%s）白给，将在宠物本局下一手生效。", masterName, petName))
+		s.broadcastRoom(room.ID, true)
+	}
 }
 
 func (s *Server) onPetBondSeekMaster(client *Client, env wsEnvelope) {
@@ -268,5 +458,3 @@ func (s *Server) onPetBondSetTitle(client *Client, env wsEnvelope) {
 	s.broadcastLobby()
 	client.reply(env.ID, s.buildPetBondState(player.ID), "")
 }
-
-

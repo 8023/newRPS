@@ -308,6 +308,8 @@ message GomokuState {
   int64 move_deadline_at = 13;
   int64 clock_deadline_at = 14;
   repeated IntPair clock_remaining = 15;
+  string giveaway_seat = 16;
+  string giveaway_forced_by_master_name = 17;
 }
 
 message JungleResignRequest {
@@ -465,6 +467,7 @@ message OthelloPendingSettlement {
   int64 expires_at = 7;
   string forced = 8;
   string resolved_as = 9;
+  string forced_by_master_name = 10;
 }
 
 message OthelloSurrenderRequest {

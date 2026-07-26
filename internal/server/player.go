@@ -375,7 +375,19 @@ func (s *Server) publicPlayer(player *PlayerState) types.PublicPlayer {
 	return p
 }
 
-// effectiveOnlineMs 返回用于展示/排行的累计在线毫秒：已落库的结束会话 + 本会话已持续。
+// clientOnlineCreditedFrom 返回本连接尚未记入 TotalOnlineMs 的起点。
+// onlineCreditedAt 优先（checkpoint 后会推进）；否则回退到 connectedAt。
+func clientOnlineCreditedFrom(client *Client) int64 {
+	if client == nil {
+		return 0
+	}
+	if client.onlineCreditedAt > 0 {
+		return client.onlineCreditedAt
+	}
+	return client.connectedAt
+}
+
+// effectiveOnlineMs 返回用于展示/排行的累计在线毫秒：已落库（含 checkpoint）+ 尚未记账的本段。
 func (s *Server) effectiveOnlineMs(player *PlayerState) int64 {
 	if player == nil {
 		return 0
@@ -385,33 +397,69 @@ func (s *Server) effectiveOnlineMs(player *PlayerState) int64 {
 		return total
 	}
 	c := s.clients[player.SocketID]
-	if c == nil || c.connectedAt <= 0 {
+	from := clientOnlineCreditedFrom(c)
+	if from <= 0 {
 		return total
 	}
-	if d := nowMs() - c.connectedAt; d > 0 {
+	if d := nowMs() - from; d > 0 {
 		total += d
 	}
 	return total
 }
 
-// accumulateClientOnlineMs 把一条已结束连接的时长累加到绑定玩家（须在 s.mu 内调用）。
+// accumulateClientOnlineMs 把一条已结束连接尚未记账的时长累加到绑定玩家（须在 s.mu 内调用）。
 // 游客连接（未关联玩家）直接跳过。
 // 不要求 player.SocketID 仍等于本连接：同 SID 顶替时玩家可能已指向新 socket，
 // 但仍应把旧连接的时长记到该玩家上。
+// 已 checkpoint 过的段落不会重复计入（从 onlineCreditedAt 起算）。
 func (s *Server) accumulateClientOnlineMs(client *Client, disconnectedAt int64) {
-	if client == nil || client.connectedAt <= 0 || client.playerID == "" {
+	if client == nil || client.playerID == "" {
+		return
+	}
+	from := clientOnlineCreditedFrom(client)
+	if from <= 0 {
 		return
 	}
 	player := s.players[client.playerID]
 	if player == nil {
 		return
 	}
-	dur := disconnectedAt - client.connectedAt
+	dur := disconnectedAt - from
 	if dur <= 0 {
 		return
 	}
 	player.Stats.TotalOnlineMs += dur
+	client.onlineCreditedAt = disconnectedAt
 	s.requestPersist("lazy")
+}
+
+// checkpointOnlineMs 把仍在线连接的已持续时长折叠进 TotalOnlineMs 并推进 onlineCreditedAt。
+// 须在 s.mu 内调用。定期调用可让 kill -9 / 非优雅重启最多只丢一个 checkpoint 间隔。
+// 返回是否有玩家时长被改动（调用方据此 markPersistDirty）。
+func (s *Server) checkpointOnlineMs() bool {
+	now := nowMs()
+	touched := false
+	for _, c := range s.clients {
+		if c == nil || c.playerID == "" || c.connectionLogged {
+			continue
+		}
+		from := clientOnlineCreditedFrom(c)
+		if from <= 0 {
+			continue
+		}
+		dur := now - from
+		if dur <= 0 {
+			continue
+		}
+		player := s.players[c.playerID]
+		if player == nil {
+			continue
+		}
+		player.Stats.TotalOnlineMs += dur
+		c.onlineCreditedAt = now
+		touched = true
+	}
+	return touched
 }
 
 // displayClampScore 仅用于下发展示：真实存储永不改动；按 RankedScore 的 max/min

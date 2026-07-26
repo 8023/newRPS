@@ -252,7 +252,8 @@ func (s *Server) scheduleTicTacToeGiveawayPrompt(room *RoomState) {
 			forcedPlayer := s.ticTacToeTurnPlayer(current)
 			ok, row, col, _ := s.applyTicTacToeRandomMove(current, currentPrompt.Seat, "forcedGiveaway")
 			if ok && forcedPlayer != nil {
-				s.roomNotice(current, fmt.Sprintf("%s 触发强制白给，系统随机落在第 %d 行第 %d 列。", playerShortName(forcedPlayer), row+1, col+1))
+				text := fmt.Sprintf("%s 按白给值触发白给，系统随机落在第 %d 行第 %d 列。", playerShortName(forcedPlayer), row+1, col+1)
+				s.roomNotice(current, text)
 			}
 		} else {
 			current.TicTacToe.GiveawayPrompt = nil
@@ -272,6 +273,18 @@ func (s *Server) prepareTicTacToeGiveawayPrompt(room *RoomState) {
 	if player == nil || !ptrBool(player.GiveawayEnabled) || len(tictactoeEmptyCells(room.TicTacToe.Board)) == 0 {
 		s.clearTicTacToeGiveawayTimer(room.ID)
 		room.TicTacToe.GiveawayPrompt = nil
+		return
+	}
+	if masterName := takeForcedGiveaway(room, seat); masterName != "" {
+		room.TicTacToe.GiveawayPrompt = nil
+		ok, row, col, _ := s.applyTicTacToeRandomMove(room, seat, "forcedGiveaway")
+		if ok {
+			text := fmt.Sprintf("主人（%s）强制（%s）白给，系统随机落在第 %d 行第 %d 列。", masterName, playerShortName(player), row+1, col+1)
+			if room.TicTacToe != nil && !room.TicTacToe.Ended {
+				room.ResultText = text
+			}
+			s.roomNotice(room, text)
+		}
 		return
 	}
 	forced := s.shouldTriggerGiveaway(player)

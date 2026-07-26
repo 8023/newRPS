@@ -31,7 +31,7 @@ func newLiarsDiceTestPlayer(id, name string) *PlayerState {
 
 func newLiarsDiceTestRoom(id string, minP, maxP int) *RoomState {
 	return &RoomState{
-		ID: id,
+		ID:       id,
 		Settings: types.RoomSettings{GameID: types.GameLiarsDice, Stake: 5, LiarsDiceMinPlayers: minP, LiarsDiceMaxPlayers: maxP},
 		Phase:    types.PhaseReady, Status: "waiting",
 		Seats:              map[types.SeatKey]SeatOccupant{types.SeatA: nil, types.SeatB: nil},
@@ -390,6 +390,7 @@ func TestLiarsDicePunishmentReviewerResolvesWinner(t *testing.T) {
 	loser := newLiarsDiceTestPlayer("l", "Loser")
 	other := newLiarsDiceTestPlayer("o", "Other")
 	s.players["w"], s.players["l"], s.players["o"] = winner, loser, other
+	room.LiarsDice.ParticipantIDs = []string{"w", "l", "o"}
 	room.RoundHistory = []types.RoundHistoryItem{{
 		GameID: types.GameLiarsDice, LiarsDiceWinnerID: "w", LiarsDiceLoserID: "l",
 	}}
@@ -416,6 +417,15 @@ func TestLiarsDicePunishmentReviewerResolvesWinner(t *testing.T) {
 	}
 	if s.canReviewPlayer(room, "w", "w") {
 		t.Fatalf("nobody reviews themselves")
+	}
+	// 赢家离场（不在参战名单里）后，审核人应视为空——否则持久身份的玩家对象一直存在，
+	// 证明会永远等一个不会再回来审批的人。
+	room.LiarsDice.ParticipantIDs = []string{"l", "o"}
+	if got := s.liarsDicePunishmentReviewer(room, "l"); got != nil {
+		t.Fatalf("winner has left the roster, reviewer should be nil, got %v", got)
+	}
+	if s.canReviewPlayer(room, "w", "l") {
+		t.Fatalf("winner has left the roster, must not be able to review anymore")
 	}
 }
 

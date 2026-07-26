@@ -3,6 +3,10 @@
   background: #f7fbff;
   font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   color-scheme: light;
+  /* 电脑端页面内容最大宽度（原 1280px，按 1480/1280 等比放大侧栏等固定列） */
+  --page-max-width: 1480px;
+  --page-side-width: 416px;
+  --page-side-min: 347px;
   --page-text: #243447;
   --muted: #5d758a;
   --panel: rgba(255, 255, 255, 0.92);
@@ -148,7 +152,7 @@ main {
 }
 
 .topbar {
-  max-width: 1280px;
+  max-width: var(--page-max-width);
   margin: 0 auto 8px;
   display: flex;
   justify-content: space-between;
@@ -256,6 +260,8 @@ main {
   vertical-align: middle;
   border: 1px solid var(--border-strong);
   box-sizing: border-box;
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 .player-avatar-fallback {
@@ -446,12 +452,84 @@ main {
 
 .notice,
 .loading {
-  max-width: 1280px;
+  max-width: var(--page-max-width);
   margin: 0 auto 14px;
   background: var(--notice-bg);
   border: 1px solid var(--notice-border);
   border-radius: 8px;
   padding: 10px 12px;
+}
+
+/* 全局提示：右下角 toast，置于所有模态/面板之上，避免被个人设置等遮挡。 */
+.toast-notice {
+  position: fixed;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  z-index: 100;
+  min-width: min(220px, calc(100vw - 28px));
+  max-width: min(400px, calc(100vw - 28px));
+  margin: 0;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--pink-border) 88%, var(--border));
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--pink) 72%, var(--panel-solid)),
+      color-mix(in srgb, var(--pink) 48%, color-mix(in srgb, var(--primary) 16%, var(--panel-solid)))
+    );
+  color: var(--page-text);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+  box-shadow:
+    0 14px 36px color-mix(in srgb, var(--pink-border) 42%, transparent),
+    0 4px 12px var(--shadow);
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+:root[data-theme="dark"] .toast-notice {
+  border-color: color-mix(in srgb, var(--pink-border) 90%, var(--border));
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--pink) 78%, var(--panel-solid)),
+      color-mix(in srgb, var(--pink) 55%, color-mix(in srgb, var(--primary) 18%, var(--panel-solid)))
+    );
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.42),
+    0 0 0 1px color-mix(in srgb, var(--pink-border) 35%, transparent);
+}
+
+.toast-notice.toast-enter {
+  animation: toast-slide-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.toast-notice.toast-leave {
+  animation: toast-slide-out 0.28s cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+@keyframes toast-slide-in {
+  from {
+    opacity: 0;
+    transform: translate3d(12px, 16px, 0) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes toast-slide-out {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(10px, 12px, 0) scale(0.96);
+  }
 }
 
 .announcement-popup {
@@ -668,13 +746,13 @@ main {
 .dashboard,
 .room-layout,
 .admin-page {
-  max-width: 1280px;
+  max-width: var(--page-max-width);
   margin: 0 auto;
 }
 
 .dashboard {
   display: grid;
-  grid-template-columns: 1fr 360px;
+  grid-template-columns: 1fr var(--page-side-width);
   gap: 16px;
   align-items: start;
 }
@@ -704,6 +782,11 @@ main {
 
 .panel-title {
   margin-bottom: 12px;
+}
+
+.panel-title.lobby-title {
+  margin-bottom: 8px;
+  align-items: center;
 }
 
 /* 用于没有 .panel-title 包裹的裸 h2/h3 场景，给标题配上折叠按钮时补一行 flex 容器。 */
@@ -859,10 +942,9 @@ main {
 
 .pet-bond-member-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
-  flex-wrap: wrap;
   padding: 8px 10px;
   border-radius: 10px;
   background: var(--panel-solid);
@@ -879,6 +961,8 @@ main {
   gap: 6px;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
+  align-self: flex-end;
 }
 
 .pet-bond-row-actions .small {
@@ -898,7 +982,7 @@ main {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  flex: 1 1 auto;
+  width: 100%;
 }
 
 .pet-bond-chain-node {
@@ -1032,10 +1116,10 @@ main {
   border-radius: 8px;
   background: var(--panel);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22);
-  padding: 16px;
+  padding: 14px;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 12px;
+  gap: 10px;
 }
 
 .modal-title {
@@ -1064,10 +1148,10 @@ main {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel-soft);
-  padding: 12px;
+  padding: 10px;
   display: grid;
   align-content: start;
-  gap: 9px;
+  gap: 8px;
 }
 
 .create-section h3 {
@@ -1085,13 +1169,13 @@ main {
 }
 
 .game-choice-card {
-  min-height: 108px;
+  min-height: 96px;
   align-items: stretch;
   text-align: left;
   display: flex;
   justify-content: flex-start;
   gap: 10px;
-  padding: 12px;
+  padding: 10px;
   border-color: var(--border);
   background: linear-gradient(180deg, var(--panel-solid), var(--panel-soft));
 }
@@ -1304,7 +1388,7 @@ main {
 .lobby-lower-grid {
   display: grid;
   /* 左列：宠物乐园；右列：上=通用改名处，下=白给自救板 */
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.9fr);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
   gap: 12px;
   margin-top: 12px;
   /* 列顶对齐，避免矮列被拉高后出现大段空白 */
@@ -1599,8 +1683,15 @@ main {
 }
 
 .leaderboard-tabs {
-  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+  /* 四字标签（如「在线时长」「历史正」）在 78px 会挤成两行 */
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: 6px;
+}
+
+.leaderboard-tabs button {
+  white-space: nowrap;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
 .sponsor-modal {
@@ -1816,11 +1907,9 @@ main {
   position: relative;
   overflow: hidden;
   border-radius: 8px;
-  padding: 8px;
-  /* 负边距只抵消内边距；左右 auto 保证 Safari/Chrome 水平居中（纯 margin:-8px 会取消居中） */
-  margin: -8px auto;
-  width: min(100%, 1280px);
-  max-width: 1280px;
+  margin: 0 auto;
+  width: min(100%, var(--page-max-width));
+  max-width: var(--page-max-width);
   box-sizing: border-box;
   justify-self: center;
 }
@@ -1909,7 +1998,7 @@ main {
 .room-content-grid {
   order: 3;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  grid-template-columns: minmax(0, 1fr) minmax(var(--page-side-min), var(--page-side-width));
   grid-template-areas:
     "actions side"
     "actions history";
@@ -2022,6 +2111,22 @@ main {
   display: grid;
   gap: 10px;
   align-content: start;
+}
+
+/* "去观战席" / "强制白给" 同一行左右各占 50%；只有一个按钮时自动撑满整行。 */
+.seat-action-row {
+  display: flex;
+  gap: 8px;
+}
+
+.seat-action-row > button {
+  flex: 1 1 50%;
+}
+
+.force-giveaway-button {
+  border-color: color-mix(in srgb, var(--pink-border) 80%, var(--primary));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--pink) 36%, var(--panel-solid)), color-mix(in srgb, var(--primary) 16%, var(--panel-soft)));
+  font-weight: 800;
 }
 
 .battle-panel {
@@ -2802,6 +2907,36 @@ main {
   width: min(100%, 620px);
 }
 
+.gomoku-giveaway-card {
+  width: auto;
+  min-width: 0;
+  flex: 1 1 360px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--pink-border) 80%, var(--primary));
+  border-radius: 8px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--pink) 18%, var(--panel-solid)), color-mix(in srgb, var(--primary) 8%, var(--panel-soft)));
+  padding: 10px;
+}
+
+.gomoku-giveaway-card.armed {
+  border-color: color-mix(in srgb, var(--pink-border) 92%, var(--primary));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--pink) 30%, var(--panel-solid)), color-mix(in srgb, var(--primary) 14%, var(--panel-soft)));
+}
+
+.gomoku-giveaway-card strong,
+.gomoku-giveaway-card p {
+  margin: 0;
+}
+
+.gomoku-giveaway-card .giveaway-move-button {
+  border-color: color-mix(in srgb, var(--pink-border) 80%, var(--primary));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--pink) 36%, var(--panel-solid)), color-mix(in srgb, var(--primary) 16%, var(--panel-soft)));
+  font-weight: 800;
+}
+
 .gomoku-request-card {
   width: min(100%, 680px);
   display: grid;
@@ -2836,9 +2971,16 @@ main {
   width: min(100%, 680px);
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: stretch;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+
+.gomoku-risk-actions > button {
+  min-width: 0;
+  flex: 0 1 auto;
+  align-self: stretch;
+  white-space: normal;
 }
 
 .gomoku-board {
@@ -4596,14 +4738,21 @@ main {
 
 .profile-action-row {
   display: flex;
+  flex-wrap: nowrap;
   gap: 8px;
-  justify-content: flex-end;
-  align-items: center;
-  flex-wrap: wrap;
+  justify-content: stretch;
+  align-items: stretch;
 }
 
 .profile-action-row button {
-  min-width: 150px;
+  flex: 1 1 0;
+  min-width: 0;
+  width: 50%;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .avatar-ring {
@@ -4620,6 +4769,11 @@ main {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
+}
+
+.profile-stats-card {
+  display: grid;
+  gap: 12px;
 }
 
 .profile-edit {
@@ -4907,6 +5061,191 @@ main {
   display: grid;
   width: 100%;
   gap: 8px;
+}
+
+/* 主宠关系（力导向图）管理面板：与「宠物乐园（认主/认宠）」平级的独立卡片 */
+.petbond-graph-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.petbond-graph-arrow {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  padding-bottom: 8px;
+}
+
+.petbond-picker {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  min-width: 200px;
+}
+
+.field-label-caption {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.petbond-picker input {
+  min-height: 36px;
+}
+
+.petbond-picker-hits {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  margin-top: 4px;
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px var(--shadow);
+  max-height: 220px;
+  overflow-y: auto;
+  display: grid;
+}
+
+.petbond-picker-hits button {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  padding: 8px 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: unset;
+}
+
+.petbond-picker-hits button:hover {
+  background: var(--button-hover);
+}
+
+.petbond-picker-hits button small {
+  color: var(--muted);
+}
+
+.petbond-picker-picked {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border));
+  background: color-mix(in srgb, var(--primary) 10%, var(--panel-solid));
+  border-radius: 999px;
+  padding: 5px 6px 5px 12px;
+  font-weight: 700;
+  width: fit-content;
+  min-height: 36px;
+}
+
+.petbond-picker-picked button {
+  border: none;
+  background: transparent;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--muted);
+  min-height: unset;
+}
+
+.petbond-graph-wrap {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-soft);
+  overflow: hidden;
+}
+
+.petbond-graph-svg {
+  display: block;
+  width: 100%;
+  height: 460px;
+  touch-action: none;
+}
+
+.petbond-graph-edge {
+  stroke: color-mix(in srgb, var(--primary) 55%, var(--border));
+  stroke-width: 2;
+}
+
+.petbond-graph-edge-label {
+  cursor: pointer;
+}
+
+.petbond-graph-edge-label rect {
+  fill: var(--panel-solid);
+  stroke: var(--border-strong);
+}
+
+.petbond-graph-edge-label text {
+  fill: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  user-select: none;
+}
+
+.petbond-graph-edge-label:hover rect {
+  fill: var(--pink);
+  stroke: var(--pink-border);
+}
+
+.petbond-graph-node {
+  overflow: visible;
+}
+
+.petbond-graph-node-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.petbond-graph-node.selected .petbond-graph-node-inner .player-avatar {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.petbond-graph-node-label {
+  max-width: 88px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--page-text);
+  background: color-mix(in srgb, var(--panel-solid) 78%, transparent);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+.petbond-graph-popover-wrap {
+  overflow: visible;
+  pointer-events: none;
+}
+
+.petbond-graph-popover {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 300px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--panel-solid);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 10px 28px var(--shadow);
+}
+
+#petbond-arrow path {
+  fill: color-mix(in srgb, var(--primary) 55%, var(--border));
 }
 
 .admin-action-tabs button {
@@ -5511,6 +5850,7 @@ main {
   }
 
   .othello-surrender-card,
+  .gomoku-giveaway-card,
   .gomoku-request-card {
     grid-template-columns: 1fr;
   }
@@ -5691,10 +6031,25 @@ main {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
+    margin-bottom: 6px;
+    gap: 8px;
   }
 
   .panel-title.lobby-title h2 {
     margin-bottom: 0;
+    font-size: 16px;
+  }
+
+  .lobby-main.panel {
+    padding: 10px 12px;
+  }
+
+  .lobby-main .room-list {
+    gap: 8px;
+  }
+
+  .lobby-main .room-card {
+    padding: 10px;
   }
 
   .soft-button {
@@ -5755,7 +6110,8 @@ main {
   }
 
   .game-choice-card {
-    min-height: 88px;
+    min-height: 76px;
+    padding: 8px 10px;
   }
 
   .create-modal,
@@ -5763,6 +6119,16 @@ main {
   .sponsor-modal {
     max-height: calc(100dvh - 16px - env(safe-area-inset-bottom));
     padding: 12px;
+  }
+
+  .create-modal {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .create-modal .create-section {
+    padding: 8px;
+    gap: 6px;
   }
 
   .sponsor-grid {
@@ -5955,6 +6321,29 @@ main {
   .profile-stats,
   .profile-hero {
     grid-template-columns: 1fr;
+  }
+
+  /* 个人设置统计：手机端标签与数值同一行（总局数  0） */
+  .profile-stats-card .stat {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 0;
+    padding: 8px 12px;
+  }
+
+  .profile-stats-card .stat span {
+    display: inline;
+    margin-bottom: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .profile-stats-card .stat b {
+    flex: 0 0 auto;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
   }
 
   .config-row,

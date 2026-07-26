@@ -54,6 +54,7 @@ export type OthelloState = {
     nextTurn: SeatKey;
     expiresAt: number;
     forced?: "giveaway" | "tribute";
+    forcedByMasterName?: string;
     resolvedAs?: "normal" | "giveaway" | "tribute";
   };
   surrenderRequest?: {
@@ -91,6 +92,8 @@ export type GomokuState = {
     toSeat: SeatKey;
     createdAt: number;
   };
+  giveawaySeat?: SeatKey;
+  giveawayForcedByMasterName?: string;
   ended?: boolean;
   winner?: RoundResult;
   moveDeadlineAt?: number;

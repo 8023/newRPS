@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 
 	"github.com/doumiao/newRPS/internal/types"
 )
@@ -42,11 +43,13 @@ func (s *Server) applyForgiveAdvantage(room *RoomState, result types.RoundResult
 	return result, nil
 }
 
-func (s *Server) giveawayForcedSeats(room *RoomState) []types.SeatKey {
+// giveawayForcedSeats 返回本回合按白给值概率触发白给的座位。
+// 主人强制会在点击时直接把 room.Choices 覆盖成 MoveGiveaway，不走概率分支。
+func (s *Server) giveawayForcedSeats(room *RoomState) map[types.SeatKey]string {
 	if !s.isFullHumanRoom(room) {
 		return nil
 	}
-	var seats []types.SeatKey
+	seats := map[types.SeatKey]string{}
 	for _, seat := range []types.SeatKey{types.SeatA, types.SeatB} {
 		if room.Choices[seat] == types.MoveGiveaway {
 			continue
@@ -57,14 +60,15 @@ func (s *Server) giveawayForcedSeats(room *RoomState) []types.SeatKey {
 		}
 		player := s.players[occ.GetID()]
 		if player != nil && s.shouldTriggerGiveaway(player) {
-			seats = append(seats, seat)
+			seats[seat] = ""
 		}
 	}
 	return seats
 }
 
+// shouldTriggerGiveaway 只处理玩家自己的白给值概率；主人强制由房间内本局状态处理。
 func (s *Server) shouldTriggerGiveaway(player *PlayerState) bool {
-	return ptrBool(player.GiveawayEnabled) && ptrFloat(player.GiveawayValue) > 0 &&
+	return player != nil && ptrBool(player.GiveawayEnabled) && ptrFloat(player.GiveawayValue) > 0 &&
 		rand.Float64()*100 < ptrFloat(player.GiveawayValue)
 }
 
@@ -85,7 +89,7 @@ func (s *Server) resultWithGiveaway(room *RoomState, baseResult types.RoundResul
 	}
 	if len(giveawaySeats) >= 2 {
 		room.ForgiveAdvantage = nil
-		return types.ResultDoubleLoss, nil
+		return types.ResultDraw, nil
 	}
 	return s.applyForgiveAdvantage(room, baseResult)
 }
@@ -210,6 +214,7 @@ func (s *Server) prepareNextChoice(room *RoomState) {
 	room.Phase = types.PhaseChoosing
 	room.Status = "playing"
 	room.Choices = map[types.SeatKey]types.Move{}
+	room.ForcedGiveawayBySeat = map[types.SeatKey]string{}
 	room.RevealedChoices = nil
 	room.DisconnectForfeits = map[string]DisconnectForfeit{}
 	room.ResultText = ""
@@ -285,7 +290,7 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 		types.SeatA: choiceA,
 		types.SeatB: choiceB,
 	}
-	for _, seat := range giveawaySeats {
+	for seat := range giveawaySeats {
 		finalChoices[seat] = types.MoveGiveaway
 	}
 	var baseResult types.RoundResult
@@ -309,7 +314,7 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 	playerB := s.humanPlayerFromSeat(room, types.SeatB)
 	rankedMultiplier := rankMultiplierFor(room.Settings)
 	rankedStake := effectiveRankedStake(room.Settings)
-	for _, seat := range giveawaySeats {
+	for seat := range giveawaySeats {
 		var player *PlayerState
 		if seat == types.SeatA {
 			player = playerA
@@ -326,12 +331,18 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 			giveawayResultSeats = append(giveawayResultSeats, seat)
 		}
 	}
-	giveawayText := ""
-	if len(giveawayResultSeats) >= 2 {
-		giveawayText = "双方白给"
-	} else if len(giveawayResultSeats) == 1 {
-		giveawayText = occupantName(room.Seats[giveawayResultSeats[0]]) + " 白给"
+	var giveawayReasons []string
+	for _, seat := range giveawayResultSeats {
+		if masterName := forcedGiveawayMasterName(room, seat); masterName != "" {
+			giveawayReasons = append(giveawayReasons, fmt.Sprintf("主人（%s）强制（%s）白给", masterName, occupantName(room.Seats[seat])))
+		} else {
+			giveawayReasons = append(giveawayReasons, occupantName(room.Seats[seat])+" 白给")
+		}
+		if room.ForcedGiveawayBySeat != nil {
+			delete(room.ForcedGiveawayBySeat, seat)
+		}
 	}
+	giveawayText := strings.Join(giveawayReasons, "；")
 
 	if result == types.ResultDoubleLoss {
 		s.applySeatOutcome(room, result)
@@ -347,14 +358,20 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 		s.applySeatOutcome(room, result)
 		resetExtremeWinStreak(playerA)
 		resetExtremeWinStreak(playerB)
-		if room.Settings.EnableRanked && room.Settings.TieDoublePunish {
+		if len(giveawayResultSeats) >= 2 {
+			room.ResultText = "双方白给，平局"
+			if room.Settings.EnableRanked && room.Settings.TieDoublePunish {
+				dA, dB := s.applyRankedDrawPenaltyStake(playerA, playerB, rankedStake)
+				room.ResultText = fmt.Sprintf("双方白给，平局双罚：A %d 分，B %d 分", dA, dB)
+			}
+			if giveawayText != "" {
+				room.ResultText += "（" + giveawayText + "）"
+			}
+		} else if room.Settings.EnableRanked && room.Settings.TieDoublePunish {
 			dA, dB := s.applyRankedDrawPenaltyStake(playerA, playerB, rankedStake)
 			room.ResultText = fmt.Sprintf("平局双罚：双方都出了 %s，A %d 分，B %d 分", moveText(finalChoices[types.SeatA]), dA, dB)
 		} else {
 			room.ResultText = fmt.Sprintf("平局：双方都出了 %s", moveText(finalChoices[types.SeatA]))
-		}
-		if giveawayText != "" {
-			room.ResultText = giveawayText + "：" + room.ResultText
 		}
 	} else {
 		winnerSeat := types.SeatKey(result)
