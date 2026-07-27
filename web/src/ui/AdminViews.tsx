@@ -8,7 +8,7 @@ import { formatBytes, formatDuration } from "../lib/format";
 import { encodeClaimCode } from "../lib/session";
 import { PetBondGraphPanel } from "./PetBondGraphPanel";
 import {
-  FactionSelect, GenderCustomField, GenderSelectField, PlayerBadge, RoomInfoTagList, RoomTagList, Select, Stat, Toggle,
+  FactionSelect, GenderCustomField, GenderSelectField, PlayerAvatar, PlayerBadge, RoomInfoTagList, RoomTagList, Select, Stat, Toggle,
   defaultRoomInfoTagStyle, factionStyle, formatGiveawayValue, genderChoiceError, lobbyRoomInfoTags, nextGenderIdForFaction, punishmentTasks,
   roomInfoTagOrder, roomInfoTagStyle, roomStatusText, safePlayerStats
 } from "./AppViews";
@@ -1315,7 +1315,7 @@ export function AdminSectionHeader({ title, subtitle }: { title: string; subtitl
 
 export function AdminPlayerEditor({ config, player, onSave, onKick, onError }: { config: AppConfig; player: PublicPlayer; onSave: (payload: Record<string, unknown>) => void; onKick: () => void; onError: (message: string) => void }) {
   const [name, setName] = useState(player.name);
-  const [rankedPoints, setRankedPoints] = useState(String(safePlayerStats(player).rankedPoints));
+  const [rankedPoints, setRankedPoints] = useState(String(safePlayerStats(player).sortRankedPoints));
   const [rankedPointsTouched, setRankedPointsTouched] = useState(false);
   const [title, setTitle] = useState(safePlayerStats(player).title);
   const [titleTouched, setTitleTouched] = useState(false);
@@ -1363,7 +1363,7 @@ export function AdminPlayerEditor({ config, player, onSave, onKick, onError }: {
     const stats = safePlayerStats(player);
     if (focusedFieldRef.current !== "name") setName(player.name);
     if (focusedFieldRef.current !== "rankedPoints") {
-      setRankedPoints(String(stats.rankedPoints));
+      setRankedPoints(String(stats.sortRankedPoints));
       setRankedPointsTouched(false);
     }
     if (focusedFieldRef.current !== "title") {
@@ -1380,11 +1380,12 @@ export function AdminPlayerEditor({ config, player, onSave, onKick, onError }: {
       setFactionId(player.factionId);
       setGenderTouched(false);
     }
-  }, [player.id, player.name, player.stats.rankedPoints, player.stats.title, player.giveawayEnabled, player.giveawayValue, player.genderId, player.genderLabel, player.factionId]);
+  }, [player.id, player.name, player.stats.sortRankedPoints, player.stats.title, player.giveawayEnabled, player.giveawayValue, player.genderId, player.genderLabel, player.factionId]);
 
   return (
     <div className="admin-player-editor">
       <div className="admin-player-head">
+        <PlayerAvatar player={player} size={28} />
         <PlayerBadge player={player} compact />
         {player.nameWarEnabled && (
           <span className="mode-chip">

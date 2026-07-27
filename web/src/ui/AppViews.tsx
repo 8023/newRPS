@@ -258,20 +258,13 @@ export function PlayerAvatar({ player, size = 28, className = "" }: { player?: P
 }
 
 export function PlayerBadge({ player, compact = false }: { player: PublicPlayer; compact?: boolean }) {
-  if (player.nameWarPunished && player.nameWarPenaltyName) {
-    return (
-      <span className={`player-badge name-war-badge ${compact ? "compact" : ""}`}>
-        <strong>{displayPlayerName(player)}</strong>
-        <GiveawayChip player={player} />
-      </span>
-    );
-  }
   const stats = safePlayerStats(player);
+  const punished = Boolean(player.nameWarPunished && player.nameWarPenaltyName);
   return (
     <span className={`player-badge ${compact ? "compact" : ""}`}>
       <span className="gender-chip" style={genderStyle(player)} title={player.factionLabel}>{player.genderLabel}</span>
       <span className={`title-chip ${titleClass(stats.rankedPoints)}`}>{stats.title}</span>
-      <strong>{displayPlayerName(player)}</strong>
+      <strong className={punished ? "name-war-pill" : ""}>{displayPlayerName(player)}</strong>
       <ModeChip player={player} />
       <GiveawayChip player={player} />
     </span>
@@ -2889,20 +2882,13 @@ export function ChatAvatar({ player, onMention }: { player?: PublicPlayer; onMen
 }
 
 export function ChatName({ player }: { player: PublicPlayer }) {
-  if (player.nameWarPunished && player.nameWarPenaltyName) {
-    return (
-      <span className="chat-name name-war-chat-name">
-        <b>{player.nameWarPenaltyName}</b>
-        <GiveawayChip player={player} />
-        {!player.connected && <span className="chat-offline">离线</span>}
-      </span>
-    );
-  }
+  const punished = Boolean(player.nameWarPunished && player.nameWarPenaltyName);
   return (
     <span className="chat-name">
       <span className="chat-gender" style={genderStyle(player)}>{player.genderLabel}</span>
       <span className="chat-title">{safePlayerStats(player).title}</span>
-      <b>{displayPlayerName(player)}</b>
+      <b className={punished ? "name-war-pill" : ""}>{displayPlayerName(player)}</b>
+      <ModeChip player={player} />
       <GiveawayChip player={player} />
       {!player.connected && <span className="chat-offline">离线</span>}
     </span>

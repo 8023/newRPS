@@ -16,35 +16,10 @@ type eventStore struct {
 	mu sync.Mutex
 }
 
-// rooms / room_join_events：房间事件的旧版两表设计（一房间一行的生命周期表 + 可重复
-// 发生的加入事件表），已被下面的 room_events 统一事件日志取代——新代码不再往这两张
-// 表写入，只保留 CREATE TABLE IF NOT EXISTS 让存量历史行继续留在库里，不做迁移搬迁。
-const roomEventSchema = `
-CREATE TABLE IF NOT EXISTS rooms (
-	room_id      TEXT PRIMARY KEY,
-	room_name    TEXT,
-	game_id      TEXT,
-	creator_id   TEXT,
-	creator_name TEXT,
-	created_at   INTEGER NOT NULL,
-	closed_at    INTEGER NOT NULL,
-	close_reason TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS room_join_events (
-	seq         INTEGER PRIMARY KEY AUTOINCREMENT,
-	at          INTEGER NOT NULL,
-	room_id     TEXT NOT NULL,
-	player_id   TEXT,
-	player_name TEXT,
-	role        TEXT,
-	ip          TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_room_join_room   ON room_join_events(room_id, at);
-CREATE INDEX IF NOT EXISTS idx_room_join_player ON room_join_events(player_id, at);
-`
-
-// room_events：房间生命周期的统一事件日志，一个事件一行，纯 append-only，取代上面
-// 已冻结的 rooms/room_join_events 两表。action 取值 "create"/"join"/"close"；
+// room_events：房间生命周期的统一事件日志，一个事件一行，纯 append-only，取代旧版
+// rooms（一房间一行的生命周期表）+ room_join_events（可重复发生的加入事件表）两表——
+// 存量历史数据已由 schema_migrations.go 的 v14 迁移无损转换进本表，旧两表随之整体
+// 删除，不再保留。action 取值 "create"/"join"/"close"；
 // role（战斗席 A/战斗席 B/观战）只在 action="join" 时有意义；reason
 // （admin_close/empty_cleanup/server_shutdown）只在 action="close" 时有意义；
 // password_hash（无盐 SHA256，房间无密码则为空字符串——不对空串取哈希，否则所有无

@@ -1972,8 +1972,8 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 		}
 		pl.Name = cleanName
 		pl.NameWarOriginalName = cleanName
-		// RankedPoints 为 nil 表示管理员没有改动这一栏（前端展示的是按 RankedScore 配置
-		// 封顶后的值，真实存储分可能更高/更低）——不传就保持原值，避免把真实分数误砍到展示上限。
+		// RankedPoints 为 nil 表示管理员没有改动这一栏——前端现在展示/编辑的是真实存储分
+		// （sortRankedPoints），不传就保持原值。
 		if p.RankedPoints != nil {
 			s.setRankedPointsByAdmin(pl, int(*p.RankedPoints))
 		}

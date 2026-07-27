@@ -17,7 +17,7 @@ import (
 //
 // 是 var 不是 const，只是为了让测试能临时替换掉去验证迁移机制本身；正常代码路径里
 // 把它当常量对待，不要在业务逻辑里修改它。
-var currentSchemaVersion = 13
+var currentSchemaVersion = 14
 
 // schemaVersionSchema：只有一行的版本表，openDatabase 每次启动都会先确保它存在。
 const schemaVersionSchema = `
@@ -152,6 +152,71 @@ var migrations = []schemaMigration{
 	{version: 13, migrate: func(db sqlExecer) error {
 		return backfillTotalOnlineMsFromConnectionEvents(db)
 	}},
+	// v14：旧版 rooms（一房间一行的生命周期表）+ room_join_events（可重复发生的加入
+	// 事件表）从未真正并入取代它们的 room_events 统一事件日志——历史数据被留在原地
+	// 冻结，两张旧表也一直没删。这里把它们的历史行无损转换成 room_events 的
+	// create/join/close 行，写完后彻底删表，不再保留中间状态。
+	{version: 14, migrate: func(db sqlExecer) error {
+		return migrateLegacyRoomEvents(db)
+	}},
+}
+
+// migrateLegacyRoomEvents 把旧版 rooms/room_join_events 的历史数据转换进 room_events：
+//   - rooms 每一行拆成一条 create 事件（user_id/user_name 用创建者信息），closed_at
+//     非空时再补一条 close 事件——旧表不记录具体是谁触发的关闭（管理员关闭时也只留了
+//     创建者信息），沿用创建者信息占位，与 insertRoomEvent 文档里"empty_cleanup/
+//     server_shutdown 没有具体操作者，沿用创建者信息占位"的既有约定一致。
+//   - room_join_events 每一行转成一条 join 事件；room_name/game_id 从 rooms 按
+//     room_id 关联补齐，关联不到时留空，不阻塞迁移。
+//   - 房间密码哈希、创建者 IP 等 room_events 独有的新字段，旧表从未记录，一律留空
+//     字符串占位。
+//
+// 两张旧表均不存在（全新库，或已迁移过）时直接跳过，保证幂等；只有 rooms 存在、
+// room_join_events 不存在时，仍会把 rooms 转成 create/close 事件。
+func migrateLegacyRoomEvents(db sqlExecer) error {
+	roomsExist, err := tableExists(db, "rooms")
+	if err != nil || !roomsExist {
+		return err
+	}
+	joinExists, err := tableExists(db, "room_join_events")
+	if err != nil {
+		return err
+	}
+
+	if _, err := db.Exec(`
+		INSERT INTO room_events (at, room_id, room_name, game_id, user_id, user_name, action, role, reason, password_hash, ip)
+		SELECT created_at, room_id, room_name, game_id, creator_id, creator_name, 'create', '', '', '', ''
+		FROM rooms
+	`); err != nil {
+		return fmt.Errorf("migrate rooms create events: %w", err)
+	}
+	if _, err := db.Exec(`
+		INSERT INTO room_events (at, room_id, room_name, game_id, user_id, user_name, action, role, reason, password_hash, ip)
+		SELECT closed_at, room_id, room_name, game_id, creator_id, creator_name, 'close', '', COALESCE(close_reason, ''), '', ''
+		FROM rooms
+		WHERE closed_at IS NOT NULL
+	`); err != nil {
+		return fmt.Errorf("migrate rooms close events: %w", err)
+	}
+
+	if joinExists {
+		if _, err := db.Exec(`
+			INSERT INTO room_events (at, room_id, room_name, game_id, user_id, user_name, action, role, reason, password_hash, ip)
+			SELECT j.at, j.room_id, COALESCE(r.room_name, ''), COALESCE(r.game_id, ''), j.player_id, j.player_name, 'join', COALESCE(j.role, ''), '', '', COALESCE(j.ip, '')
+			FROM room_join_events j
+			LEFT JOIN rooms r ON r.room_id = j.room_id
+		`); err != nil {
+			return fmt.Errorf("migrate room_join_events: %w", err)
+		}
+		if _, err := db.Exec(`DROP TABLE room_join_events`); err != nil {
+			return fmt.Errorf("drop room_join_events: %w", err)
+		}
+	}
+
+	if _, err := db.Exec(`DROP TABLE rooms`); err != nil {
+		return fmt.Errorf("drop rooms: %w", err)
+	}
+	return nil
 }
 
 // legacyPunishmentRow 是隔离表 punishment_events_legacy 的一行（旧 schema：

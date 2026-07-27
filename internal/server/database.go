@@ -14,7 +14,6 @@ import (
 //
 // 早期版本文件名为 chat.db，只存聊天；现在改名 database.db 并入房间/惩罚事件/玩家表。
 // 首次启动时若 database.db 不存在但旧的 chat.db 存在，会自动重命名迁移，不丢历史聊天记录。
-// 旧版玩家档案 players.json：启动时 loadPlayersFromDisk 会幂等导入后改名为 players.json.migrated。
 // WAL 模式下未 checkpoint 的最新数据在 -wal 边车文件里，必须连 -shm/-wal 一起搬，
 // 否则只搬主文件会把最近一批还没落盘的聊天记录留在旧文件名下，等于丢数据。
 //
@@ -55,5 +54,5 @@ func openDatabase(dataDir string) (*sql.DB, error) {
 // 顺序无关紧要——彼此互不引用。始终反映"当前代码期望的最新结构"；已有数据库从旧结构
 // 升到这个结构靠 schema_migrations.go 里的 migrations，不靠改这里的 DDL 文本本身。
 var allSchemas = []string{
-	chatSchema, roomEventSchema, roomEventLogSchema, punishmentEventSchema, pushSubscriptionSchema, playerSchema, activityEventSchema, petBondSchema,
+	chatSchema, roomEventLogSchema, punishmentEventSchema, pushSubscriptionSchema, playerSchema, activityEventSchema, petBondSchema,
 }

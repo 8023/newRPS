@@ -226,9 +226,11 @@ func TestOpenDatabaseConvertsLegacyPunishmentEvents(t *testing.T) {
 	}
 }
 
-// TestOpenDatabaseDropsLegacyRoomCode 验证 v5 迁移会删掉 rooms 表里旧版的 code
-// （DM-xxxx 房间码）列，同时不影响该表其余数据。
-func TestOpenDatabaseDropsLegacyRoomCode(t *testing.T) {
+// TestOpenDatabaseMigratesLegacyRoomsIntoRoomEvents 验证 v14 迁移把旧版 rooms（含
+// 更早版本遗留的 code 列，先经 v5 丢弃）+ room_join_events 两表的历史数据无损转换进
+// room_events，然后把两张旧表彻底删除——覆盖 create/close/join 三种事件、以及
+// join 行按 room_id 反查 room_name/game_id 的场景。
+func TestOpenDatabaseMigratesLegacyRoomsIntoRoomEvents(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "database.db")
 
@@ -244,16 +246,34 @@ func TestOpenDatabaseDropsLegacyRoomCode(t *testing.T) {
 		creator_id   TEXT,
 		creator_name TEXT,
 		created_at   INTEGER NOT NULL,
-		closed_at    INTEGER NOT NULL,
-		close_reason TEXT NOT NULL
+		closed_at    INTEGER,
+		close_reason TEXT
 	)`); err != nil {
 		t.Fatalf("create legacy rooms table: %v", err)
 	}
 	if _, err := seed.Exec(
 		`INSERT INTO rooms (room_id, code, room_name, game_id, creator_id, creator_name, created_at, closed_at, close_reason)
-		 VALUES ('r1', 'DM-1234', '房间一', 'rps', 'p1', '玩家一', 1, 0, '')`,
+		 VALUES ('r1', 'DM-1234', '房间一', 'rps', 'p1', '玩家一', 1, 100, 'empty_cleanup'),
+		        ('r2', NULL, '房间二', 'othello', 'p2', '玩家二', 2, NULL, NULL)`,
 	); err != nil {
-		t.Fatalf("seed row: %v", err)
+		t.Fatalf("seed rooms row: %v", err)
+	}
+	if _, err := seed.Exec(`CREATE TABLE room_join_events (
+		seq         INTEGER PRIMARY KEY AUTOINCREMENT,
+		at          INTEGER NOT NULL,
+		room_id     TEXT NOT NULL,
+		player_id   TEXT,
+		player_name TEXT,
+		role        TEXT,
+		ip          TEXT
+	)`); err != nil {
+		t.Fatalf("create legacy room_join_events table: %v", err)
+	}
+	if _, err := seed.Exec(
+		`INSERT INTO room_join_events (at, room_id, player_id, player_name, role, ip)
+		 VALUES (50, 'r1', 'p3', '玩家三', '观战', '127.0.0.1')`,
+	); err != nil {
+		t.Fatalf("seed room_join_events row: %v", err)
 	}
 	if err := seed.Close(); err != nil {
 		t.Fatalf("close seed: %v", err)
@@ -265,19 +285,45 @@ func TestOpenDatabaseDropsLegacyRoomCode(t *testing.T) {
 	}
 	defer db.Close()
 
-	var codeColCount int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('rooms') WHERE name = 'code'`).Scan(&codeColCount); err != nil {
-		t.Fatalf("query rooms columns: %v", err)
-	}
-	if codeColCount != 0 {
-		t.Fatalf("expected rooms.code to be dropped, still present")
+	for _, table := range []string{"rooms", "room_join_events"} {
+		var name string
+		err := db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&name)
+		if err != sql.ErrNoRows {
+			t.Fatalf("expected legacy table %s to be dropped, err=%v", table, err)
+		}
 	}
 
-	var roomName string
-	if err := db.QueryRow(`SELECT room_name FROM rooms WHERE room_id = 'r1'`).Scan(&roomName); err != nil {
-		t.Fatalf("query surviving row: %v", err)
+	var roomName, userName string
+	if err := db.QueryRow(`SELECT room_name, user_name FROM room_events WHERE room_id = 'r1' AND action = 'create'`).
+		Scan(&roomName, &userName); err != nil {
+		t.Fatalf("query migrated create event: %v", err)
 	}
-	if roomName != "房间一" {
-		t.Fatalf("rooms row data should survive column drop, got room_name=%q", roomName)
+	if roomName != "房间一" || userName != "玩家一" {
+		t.Fatalf("create event = (%q, %q), want (房间一, 玩家一)", roomName, userName)
+	}
+
+	var closeReason string
+	if err := db.QueryRow(`SELECT reason FROM room_events WHERE room_id = 'r1' AND action = 'close'`).Scan(&closeReason); err != nil {
+		t.Fatalf("query migrated close event: %v", err)
+	}
+	if closeReason != "empty_cleanup" {
+		t.Fatalf("close event reason = %q, want empty_cleanup", closeReason)
+	}
+
+	var closeCount int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM room_events WHERE room_id = 'r2' AND action = 'close'`).Scan(&closeCount); err != nil {
+		t.Fatalf("count r2 close events: %v", err)
+	}
+	if closeCount != 0 {
+		t.Fatalf("room r2 never closed (closed_at NULL) should not synthesize a close event, got %d", closeCount)
+	}
+
+	var joinRoomName, joinUserName string
+	if err := db.QueryRow(`SELECT room_name, user_name FROM room_events WHERE room_id = 'r1' AND action = 'join'`).
+		Scan(&joinRoomName, &joinUserName); err != nil {
+		t.Fatalf("query migrated join event: %v", err)
+	}
+	if joinRoomName != "房间一" || joinUserName != "玩家三" {
+		t.Fatalf("join event = (%q, %q), want (房间一, 玩家三)", joinRoomName, joinUserName)
 	}
 }

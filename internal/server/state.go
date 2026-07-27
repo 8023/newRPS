@@ -356,7 +356,7 @@ type Server struct {
 	adminUploadsDir  string
 	avatarUploadsDir string
 	dataDir          string
-	playersFile      string // 旧 players.json 路径，仅用于一次性迁移
+	playersFile      string // players.json 路径，仅用作 SQLite 写失败时的降级保底（见 persist.go writePlayersJSONFallback）
 	distDir          string
 
 	persistMu          sync.Mutex
