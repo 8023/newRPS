@@ -17,7 +17,6 @@ type persistedPlayer struct {
 	ClaimKey                     string            `json:"claimKey,omitempty"`
 	Name                         string            `json:"name"`
 	GenderID                     string            `json:"genderId"`
-	CustomGenderLabel            string            `json:"customGenderLabel,omitempty"`
 	FactionID                    string            `json:"factionId"`
 	AvatarURL                    string            `json:"avatarUrl,omitempty"`
 	NameWarEnabled               *bool             `json:"nameWarEnabled,omitempty"`
@@ -60,14 +59,10 @@ func (s *Server) serializePlayers() []persistedPlayer {
 			continue
 		}
 		p.SyncTotalsFromGameStats()
-		customGenderLabel := ""
-		if p.GenderID == "" {
-			customGenderLabel = p.GenderLabel
-		}
 		out = append(out, persistedPlayer{
 			ID: p.ID, PlayerID: p.PlayerID,
 			PlayerSecrets: p.PlayerSecrets, ClaimKey: p.ClaimKey,
-			Name: p.Name, GenderID: p.GenderID, CustomGenderLabel: customGenderLabel, FactionID: p.FactionID, AvatarURL: p.AvatarURL,
+			Name: p.Name, GenderID: p.GenderID, FactionID: p.FactionID, AvatarURL: p.AvatarURL,
 			NameWarEnabled: p.NameWarEnabled, NameWarAllowRename: p.NameWarAllowRename,
 			NameWarToggledAt: p.NameWarToggledAt, NameWarOriginalName: p.NameWarOriginalName,
 			NameWarPenaltyName: p.NameWarPenaltyName, NameWarPunished: p.NameWarPunished,
@@ -123,11 +118,7 @@ func (s *Server) ingestPersistedPlayer(item persistedPlayer) bool {
 	if name == "" {
 		name = "玩家"
 	}
-	genderID := item.GenderID
-	if genderID == "" && item.CustomGenderLabel == "" {
-		genderID = "male"
-	}
-	gender := s.resolveGender(genderID, item.CustomGenderLabel, item.FactionID)
+	gender := s.resolveGender(item.GenderID)
 	title := item.Stats.Title
 	if title == "" {
 		title = s.randomTitleFromSegment(s.titleSegmentFor(0), gender.FactionID)
@@ -187,6 +178,7 @@ func (s *Server) ingestPersistedPlayer(item persistedPlayer) bool {
 				Punishments: item.Stats.Punishments, RankedPoints: item.Stats.RankedPoints,
 				HighestScore: item.Stats.HighestScore, LowestScore: item.Stats.LowestScore,
 				Title: title, TitleSegmentID: item.Stats.TitleSegmentID, TitleCustom: item.Stats.TitleCustom,
+					SelfTitle: item.Stats.SelfTitle,
 				// 累计在线时长必须从库灌回内存：漏读会导致每次重启从 0 起算，
 				// 随后 flush 把库里的正确值覆盖成仅本进程会话。
 				TotalOnlineMs: item.Stats.TotalOnlineMs,
@@ -277,7 +269,7 @@ func (s *Server) writePlayersJSONFallback(snapshot []persistedPlayer) {
 		return
 	}
 	tmp := s.playersFile + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		s.errorLog("players_persist_failed", err.Error())
 		s.markPersistDirty()
 		return

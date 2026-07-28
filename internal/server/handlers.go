@@ -208,14 +208,12 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 
 func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 	var p struct {
-		Name              string `json:"name"`
-		GenderID          string `json:"genderId"`
-		CustomGenderLabel string `json:"customGenderLabel"`
-		FactionID         string `json:"factionId"`
-		PlayerID          string `json:"playerId"`
-		PlayerSecret      string `json:"playerSecret"`
-		Fingerprint       string `json:"fingerprint"`
-		ForceKick         bool   `json:"forceKick"`
+		Name         string `json:"name"`
+		GenderID     string `json:"genderId"`
+		PlayerID     string `json:"playerId"`
+		PlayerSecret string `json:"playerSecret"`
+		Fingerprint  string `json:"fingerprint"`
+		ForceKick    bool   `json:"forceKick"`
 	}
 	_ = decodeD(env, &p)
 	cleanName := cleanText(p.Name, 12)
@@ -291,7 +289,7 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 			client.reply(env.ID, nil, "当前网络环境 10 分钟内新建玩家过多，请稍后再试")
 			return
 		}
-		player = s.createPlayer(cleanName, p.GenderID, p.CustomGenderLabel, p.FactionID, client.token, p.PlayerID, p.PlayerSecret)
+		player = s.createPlayer(cleanName, p.GenderID, client.token, p.PlayerID, p.PlayerSecret)
 		s.logPlayerActivity("create", player.ID, cleanName, "", ipAddress, device, client.fingerprint, "")
 	}
 	wasDisconnected := !player.Connected
@@ -351,7 +349,7 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 		player.Name = cleanName
 		player.NameWarOriginalName = cleanName
 	}
-	s.applyGender(player, p.GenderID, p.CustomGenderLabel, p.FactionID)
+	s.applyGender(player, p.GenderID)
 	s.refreshNameWarState(player, nowMs())
 	s.clearDisconnectHold(player)
 	s.clearDisconnectForfeit(player)
@@ -470,17 +468,16 @@ func (s *Server) onLobbySuggestionsUnsubscribe(client *Client, env wsEnvelope) {
 
 func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 	var p struct {
-		Name               string `json:"name"`
-		GenderID           string `json:"genderId"`
-		CustomGenderLabel  string `json:"customGenderLabel"`
-		FactionID          string `json:"factionId"`
-		NameWarEnabled     *bool  `json:"nameWarEnabled"`
-		NameWarAllowRename *bool  `json:"nameWarAllowRename"`
-		GiveawayEnabled    *bool  `json:"giveawayEnabled"`
-		ExtremeModeEnabled *bool  `json:"extremeModeEnabled"`
-		BondMasterEnabled  *bool  `json:"bondMasterEnabled"`
-		BondPetEnabled     *bool  `json:"bondPetEnabled"`
-		BondPublicDisplay  *bool  `json:"bondPublicDisplay"`
+		Name               string  `json:"name"`
+		GenderID           string  `json:"genderId"`
+		SelfTitle          *string `json:"selfTitle"`
+		NameWarEnabled     *bool   `json:"nameWarEnabled"`
+		NameWarAllowRename *bool   `json:"nameWarAllowRename"`
+		GiveawayEnabled    *bool   `json:"giveawayEnabled"`
+		ExtremeModeEnabled *bool   `json:"extremeModeEnabled"`
+		BondMasterEnabled  *bool   `json:"bondMasterEnabled"`
+		BondPetEnabled     *bool   `json:"bondPetEnabled"`
+		BondPublicDisplay  *bool   `json:"bondPublicDisplay"`
 	}
 	_ = decodeD(env, &p)
 	player, ok := s.requirePlayer(client, env)
@@ -526,7 +523,7 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "白给值归零前不能关闭白给模式")
 		return
 	}
-	if ok, reason := s.validGenderSubmission(p.GenderID, p.CustomGenderLabel, p.FactionID); !ok {
+	if ok, reason := s.validGenderSubmission(p.GenderID); !ok {
 		client.reply(env.ID, nil, reason)
 		return
 	}
@@ -568,7 +565,7 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 	}
 	oldGenderSignature := player.GenderID + "|" + player.GenderLabel + "|" + player.FactionID
 	oldGenderLabel := player.GenderLabel
-	s.applyGender(player, p.GenderID, p.CustomGenderLabel, p.FactionID)
+	s.applyGender(player, p.GenderID)
 	if newSignature := player.GenderID + "|" + player.GenderLabel + "|" + player.FactionID; newSignature != oldGenderSignature {
 		s.logPlayerActivity("gender_change", player.ID, player.GenderLabel, oldGenderLabel, client.ipAddress, client.deviceKey, client.fingerprint, "")
 	}
@@ -625,6 +622,17 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 	player.BondMasterEnabled = boolPtr(nextBondMaster)
 	player.BondPetEnabled = boolPtr(nextBondPet)
 	player.BondPublicDisplay = boolPtr(nextBondPublic)
+	// SelfTitle 为 nil 表示没有改动这一栏；非空文本是玩家自设称号（展示优先级低于管理员/
+	// 主人设置，高于系统按排位分自动计算的称号，见 petbond.go 的 applyDisplayTitle）；清空
+	// 则视为主动清除自设称号，回退到更下一级的展示。
+	if p.SelfTitle != nil {
+		oldSelfTitle := player.Stats.SelfTitle
+		newSelfTitle := cleanText(*p.SelfTitle, 12)
+		if newSelfTitle != oldSelfTitle {
+			player.Stats.SelfTitle = newSelfTitle
+			s.logPlayerActivity("self_title_change", player.ID, newSelfTitle, oldSelfTitle, client.ipAddress, client.deviceKey, client.fingerprint, "")
+		}
+	}
 	if nameChanged {
 		player.ProfileUpdatedAt = int64Ptr(now)
 	}

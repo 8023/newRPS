@@ -8,7 +8,7 @@ import { formatBytes, formatDuration } from "../lib/format";
 import { encodeClaimCode } from "../lib/session";
 import { PetBondGraphPanel } from "./PetBondGraphPanel";
 import {
-  FactionSelect, GenderCustomField, GenderSelectField, PlayerAvatar, PlayerBadge, RoomInfoTagList, RoomTagList, Select, Stat, Toggle,
+  FactionSelect, GenderSelectField, PlayerAvatar, PlayerBadge, RoomInfoTagList, RoomTagList, Select, Stat, Toggle,
   defaultRoomInfoTagStyle, factionStyle, formatGiveawayValue, genderChoiceError, lobbyRoomInfoTags, nextGenderIdForFaction, punishmentTasks,
   roomInfoTagOrder, roomInfoTagStyle, roomStatusText, safePlayerStats
 } from "./AppViews";
@@ -327,41 +327,90 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
       });
       const factionIndex = Math.max(0, draft.genderFactions.findIndex((faction) => faction.id === activeFactionId));
       const faction = draft.genderFactions[factionIndex];
+      // 性别预设按显示文字分组：同一文案可以同时勾选多个阵营（各自是独立的 GenderOption，
+      // 只是 id 不同），行内的勾选框直接对应"这个文案在这个阵营下是否存在一条预设"。
+      // key 用分组内第一条 GenderOption 的 id（重命名时该条目位置/id 不变），不能用 label 本身
+      // 当 key——否则每敲一个字符 label 就变一次，key 跟着变，React 会把整行（含 input）连同
+      // 焦点一起卸载重建，表现为"输完一个字符就失焦"。
+      const genderGroups: { key: string; label: string; factionIds: Set<string> }[] = [];
+      const groupIndexByLabel = new Map<string, number>();
+      draft.genders.forEach((gender) => {
+        let idx = groupIndexByLabel.get(gender.label);
+        if (idx === undefined) {
+          idx = genderGroups.length;
+          groupIndexByLabel.set(gender.label, idx);
+          genderGroups.push({ key: gender.id, label: gender.label, factionIds: new Set() });
+        }
+        genderGroups[idx].factionIds.add(gender.factionId);
+      });
       return (
         <div className="config-section admin-section-card">
-          <AdminSectionHeader title="性别预设" subtitle="系统预设性别池，玩家可自行输入 1-9 字符的自定义性别" />
+          <AdminSectionHeader title="性别预设" subtitle="系统预设性别池，玩家只能从中选择；同一显示文字可勾选多个阵营，阵营由所选性别查表决定" />
           <div className="faction-gender-list">
-            {draft.genders.map((gender, genderIndex) => (
-              <div className="mini-card faction-gender-card" key={genderIndex}>
-                <div className="config-row faction-gender-row">
-                  <label className="field-label"><span>性别 ID（自动生成，一般不用改）</span><input value={gender.id} onChange={(event) => patchGenders(draft.genders.map((item, itemIndex) => itemIndex === genderIndex ? { ...item, id: event.target.value } : item))} placeholder="性别ID" /></label>
-                  <label className="field-label"><span>显示文字</span><input value={gender.label} onChange={(event) => patchGenders(draft.genders.map((item, itemIndex) => itemIndex === genderIndex ? { ...item, label: event.target.value } : item))} placeholder="显示文字" /></label>
-                  <label className="field-label">
-                    <span>所属阵营</span>
-                    <select value={gender.factionId} onChange={(event) => patchGenders(draft.genders.map((item, itemIndex) => itemIndex === genderIndex ? { ...item, factionId: event.target.value } : item))}>
-                      {draft.genderFactions.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    className="danger-button tiny-danger-button"
-                    onClick={() => {
-                      if (draft.genders.length <= 1) {
-                        onError("至少需要保留 1 个性别预设");
-                        return;
-                      }
-                      patchGenders(draft.genders.filter((_, itemIndex) => itemIndex !== genderIndex));
-                    }}
-                  >
-                    删除
-                  </button>
+            {genderGroups.map((group) => {
+              const label = group.label;
+              return (
+                <div className="mini-card faction-gender-card" key={group.key}>
+                  <div className="config-row faction-gender-row">
+                    <button
+                      type="button"
+                      className="danger-button tiny-danger-button icon-button faction-gender-delete"
+                      title="删除该性别预设"
+                      onClick={() => {
+                        const nextGenders = draft.genders.filter((item) => item.label !== label);
+                        if (nextGenders.length === 0) {
+                          onError("至少需要保留 1 个性别预设");
+                          return;
+                        }
+                        patchGenders(nextGenders);
+                      }}
+                    >
+                      🗑
+                    </button>
+                    <input
+                      className="faction-gender-label-input"
+                      value={label}
+                      onChange={(event) => {
+                        const nextLabel = event.target.value;
+                        patchGenders(draft.genders.map((item) => item.label === label ? { ...item, label: nextLabel } : item));
+                      }}
+                      placeholder="显示文字"
+                    />
+                    <div className="faction-gender-checkboxes">
+                      {draft.genderFactions.map((f) => (
+                        <label className="faction-gender-checkbox" key={f.id}>
+                          <input
+                            type="checkbox"
+                            checked={group.factionIds.has(f.id)}
+                            onChange={(event) => {
+                              let nextGenders: typeof draft.genders;
+                              if (event.target.checked) {
+                                const genderId = nextAdminId("gender", draft.genders.map((item) => item.id));
+                                nextGenders = [...draft.genders, { id: genderId, label, factionId: f.id }];
+                              } else {
+                                nextGenders = draft.genders.filter((item) => !(item.label === label && item.factionId === f.id));
+                              }
+                              if (nextGenders.length === 0) {
+                                onError("至少需要保留 1 个性别预设");
+                                return;
+                              }
+                              patchGenders(nextGenders);
+                            }}
+                          />
+                          <span>{f.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <button onClick={() => {
+            let index = 1;
+            while (groupIndexByLabel.has(`新性别${index}`)) index += 1;
             const genderId = nextAdminId("gender", draft.genders.map((item) => item.id));
-            patchGenders([...draft.genders, { id: genderId, label: "新性别", factionId: draft.genderFactions[0]?.id || "" }]);
+            patchGenders([...draft.genders, { id: genderId, label: `新性别${index}`, factionId: draft.genderFactions[0]?.id || "" }]);
           }}>添加性别预设</button>
 
           <AdminSectionHeader title="阵营" subtitle="玩家选择的阵营分组，标签颜色和任务分组在这里配置。" />
@@ -1322,42 +1371,10 @@ export function AdminPlayerEditor({ config, player, onSave, onKick, onError }: {
   const [giveawayInput, setGiveawayInput] = useState(formatGiveawayValue(player.giveawayEnabled ? player.giveawayValue || 0 : 0));
   const [giveawayTouched, setGiveawayTouched] = useState(false);
   const [genderId, setGenderId] = useState(player.genderId);
-  const [customGenderLabel, setCustomGenderLabel] = useState(player.genderId ? "" : player.genderLabel);
   const [factionId, setFactionId] = useState(player.factionId);
   const [genderTouched, setGenderTouched] = useState(false);
-  const [claimCode, setClaimCode] = useState<string | null>(null);
-  const [claimRevealed, setClaimRevealed] = useState(false);
-  const [claimLoading, setClaimLoading] = useState(false);
-  const [claimCopied, setClaimCopied] = useState(false);
   const focusedFieldRef = useRef<"name" | "rankedPoints" | "title" | "giveaway" | "gender" | null>(null);
   const titleCustom = !!safePlayerStats(player).titleCustom;
-
-  async function showAndCopyClaimKey() {
-    setClaimLoading(true);
-    try {
-      let code = claimCode;
-      if (!code) {
-        const result = await ask<{ claimKey: string; playerId: string }>("admin:action", {
-          action: "showClaimKey",
-          playerId: player.id
-        });
-        code = encodeClaimCode(result.playerId, result.claimKey);
-        setClaimCode(code);
-      }
-      setClaimRevealed(true);
-      try {
-        await navigator.clipboard.writeText(code);
-        setClaimCopied(true);
-        window.setTimeout(() => setClaimCopied(false), 2000);
-      } catch {
-        onError("复制失败，请手动选中密钥");
-      }
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "获取认领密钥失败");
-    } finally {
-      setClaimLoading(false);
-    }
-  }
 
   useEffect(() => {
     const stats = safePlayerStats(player);
@@ -1376,11 +1393,10 @@ export function AdminPlayerEditor({ config, player, onSave, onKick, onError }: {
     }
     if (focusedFieldRef.current !== "gender") {
       setGenderId(player.genderId);
-      setCustomGenderLabel(player.genderId ? "" : player.genderLabel);
       setFactionId(player.factionId);
       setGenderTouched(false);
     }
-  }, [player.id, player.name, player.stats.sortRankedPoints, player.stats.title, player.giveawayEnabled, player.giveawayValue, player.genderId, player.genderLabel, player.factionId]);
+  }, [player.id, player.name, player.stats.sortRankedPoints, player.stats.title, player.giveawayEnabled, player.giveawayValue, player.genderId, player.factionId]);
 
   return (
     <div className="admin-player-editor">
@@ -1464,39 +1480,14 @@ export function AdminPlayerEditor({ config, player, onSave, onKick, onError }: {
           factionId={factionId}
           onGenderChange={(value) => { setGenderId(value); setGenderTouched(true); }}
         />
-        <GenderCustomField
-          genderId={genderId}
-          customGenderLabel={customGenderLabel}
-          onCustomGenderLabelChange={(value) => { setCustomGenderLabel(value); setGenderTouched(true); }}
-        />
-      </div>
-      <div className="admin-player-claim-row">
-        <button
-          type="button"
-          className="admin-claim-key-btn"
-          disabled={claimLoading}
-          onClick={showAndCopyClaimKey}
-          title="显示该玩家的认领密钥并复制到剪贴板，用于协助清空缓存后的账号找回"
-        >
-          {claimLoading ? "获取中…" : claimCopied ? "已复制" : "显示认领密钥"}
-        </button>
-        <input
-          className="admin-claim-key-input"
-          type={claimRevealed ? "text" : "password"}
-          readOnly
-          value={claimCode || ""}
-          placeholder={claimRevealed ? "" : "点击左侧显示并复制"}
-          spellCheck={false}
-          autoComplete="off"
-          onFocus={(event) => event.currentTarget.select()}
-        />
+        <ClaimKeyRevealField playerId={player.id} onError={onError} />
       </div>
       <div className="admin-action-row">
         <button
           className="primary"
           onClick={() => {
             if (genderTouched) {
-              const genderError = genderChoiceError(config, genderId, customGenderLabel, factionId);
+              const genderError = genderChoiceError(config, genderId);
               if (genderError) {
                 onError(genderError);
                 return;
@@ -1508,7 +1499,7 @@ export function AdminPlayerEditor({ config, player, onSave, onKick, onError }: {
               ...(rankedPointsTouched ? { rankedPoints: Number(rankedPoints) } : {}),
               ...(titleTouched ? { title } : {}),
               ...(giveawayTouched ? { giveawayValueInput: giveawayInput } : {}),
-              ...(genderTouched ? { genderId, customGenderLabel, factionId } : {})
+              ...(genderTouched ? { genderId } : {})
             });
           }}
         >
@@ -1517,6 +1508,72 @@ export function AdminPlayerEditor({ config, player, onSave, onKick, onError }: {
         <button className="danger-button" onClick={onKick}>踢出</button>
       </div>
     </div>
+  );
+}
+
+// 认领密钥显示框：默认显示占位文案；聚焦（点击）时签发一把新密钥（旧密钥立即作废，见后端
+// showClaimKey 的无条件轮换）并自动复制到剪贴板；失焦 5 秒后（期间重新聚焦会取消这次复原、
+// 不重新签发）恢复默认文案，再次聚焦视为全新一轮，会再签发一把新密钥。
+function ClaimKeyRevealField({ playerId, onError }: { playerId: string; onError: (message: string) => void }) {
+  const DEFAULT_TEXT = "点击显示认领密钥";
+  const [value, setValue] = useState(DEFAULT_TEXT);
+  const [revealed, setRevealed] = useState(false);
+  const revertTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (revertTimerRef.current != null) window.clearTimeout(revertTimerRef.current);
+    };
+  }, []);
+
+  async function reveal() {
+    try {
+      const result = await ask<{ claimKey: string; playerId: string }>("admin:action", {
+        action: "showClaimKey",
+        playerId
+      });
+      const code = encodeClaimCode(result.playerId, result.claimKey);
+      setValue(code);
+      setRevealed(true);
+      try {
+        await navigator.clipboard.writeText(code);
+      } catch {
+        onError("复制失败，请手动选中密钥");
+      }
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "获取认领密钥失败");
+    }
+  }
+
+  function handleFocus() {
+    if (revertTimerRef.current != null) {
+      window.clearTimeout(revertTimerRef.current);
+      revertTimerRef.current = null;
+    }
+    if (!revealed) void reveal();
+  }
+
+  function handleBlur() {
+    revertTimerRef.current = window.setTimeout(() => {
+      setValue(DEFAULT_TEXT);
+      setRevealed(false);
+      revertTimerRef.current = null;
+    }, 5000);
+  }
+
+  return (
+    <label className="field-label">
+      <span>认领密钥</span>
+      <input
+        className="admin-claim-key-input"
+        readOnly
+        value={value}
+        spellCheck={false}
+        autoComplete="off"
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+      />
+    </label>
   );
 }
 

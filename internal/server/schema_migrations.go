@@ -17,7 +17,7 @@ import (
 //
 // 是 var 不是 const，只是为了让测试能临时替换掉去验证迁移机制本身；正常代码路径里
 // 把它当常量对待，不要在业务逻辑里修改它。
-var currentSchemaVersion = 14
+var currentSchemaVersion = 16
 
 // schemaVersionSchema：只有一行的版本表，openDatabase 每次启动都会先确保它存在。
 const schemaVersionSchema = `
@@ -118,9 +118,8 @@ var migrations = []schemaMigration{
 	{version: 9, migrate: func(db sqlExecer) error {
 		return addColumnIfMissing(db, "players", "total_online_ms", "INTEGER NOT NULL DEFAULT 0")
 	}},
-	// v10：认主/认宠玩法——players 三偏好开关；pet_bonds / pet_bond_requests /
-	// pet_bond_request_approvals 由 petBondSchema 的 CREATE IF NOT EXISTS 建表，
-	// 此处只补 players 列。
+	// v10：认主/认宠玩法——players 三偏好开关；pet_bonds / pet_bond_requests
+	// 由 petBondSchema 的 CREATE IF NOT EXISTS 建表，此处只补 players 列。
 	{version: 10, migrate: func(db sqlExecer) error {
 		if err := addColumnIfMissing(db, "players", "bond_master_enabled", "INTEGER"); err != nil {
 			return err
@@ -159,6 +158,71 @@ var migrations = []schemaMigration{
 	{version: 14, migrate: func(db sqlExecer) error {
 		return migrateLegacyRoomEvents(db)
 	}},
+	// v15：删除自定义性别功能，回归查表法定阵营（性别决定阵营，阵营不再独立提交/存储覆盖）；
+	// 新增 players.self_title（玩家自设称号，展示优先级低于管理员自定义/主人设置，高于系统
+	// 按排位分自动计算的称号）。存量选了自定义性别的玩家（custom_gender_label 非空、
+	// gender_id 为空）按其当前 faction_id 改成该阵营配置的默认（第一个）预设性别；生产库
+	// 需要升级到这一版本才会跑这段一次性回填，回填用的 faction→默认性别映射写死在代码里，
+	// 对应改动时（2026-07-27）的 config/genders.json 内容，不会随后续配置调整而更新。
+	{version: 15, migrate: func(db sqlExecer) error {
+		if err := migrateCustomGenderPlayers(db); err != nil {
+			return err
+		}
+		return addColumnIfMissing(db, "players", "self_title", "TEXT NOT NULL DEFAULT ''")
+	}},
+	// v16：认主/认宠/解除关系的申请统一为"双方须持续在线，任一方提前下线即自动撤销"，
+	// 逐条同意（Approvals）只需要在内存里追踪，重启清空重新来过完全可以接受，不必落库。
+	// 删除只用于记录"谁已经同意"的 pet_bond_request_approvals 表。
+	{version: 16, migrate: func(db sqlExecer) error {
+		_, err := db.Exec(`DROP TABLE IF EXISTS pet_bond_request_approvals`)
+		return err
+	}},
+}
+
+// migrateCustomGenderPlayers 把存量"自定义性别"玩家（gender_id 为空、custom_gender_label
+// 非空）按其当前阵营改写成该阵营配置的默认预设性别，然后删除 custom_gender_label 列。
+// faction_id 无法识别（阵营已被后台改名/删除等异常情况）时统一兜底成 male_faction/boy。
+func migrateCustomGenderPlayers(db sqlExecer) error {
+	hasTable, err := tableExists(db, "players")
+	if err != nil || !hasTable {
+		return err
+	}
+	hasCol, err := tableHasColumn(db, "players", "custom_gender_label")
+	if err != nil || !hasCol {
+		return err
+	}
+	// gender_id/faction_id 本应从表最初创建时就存在，理论上不会缺失；这里仍防御性地跳过
+	// 缺列情况（比如测试里手搭的、只覆盖某一版本新增列的极简旧表），保持迁移幂等不 panic。
+	hasGenderID, err := tableHasColumn(db, "players", "gender_id")
+	if err != nil || !hasGenderID {
+		return err
+	}
+	hasFactionID, err := tableHasColumn(db, "players", "faction_id")
+	if err != nil || !hasFactionID {
+		return err
+	}
+	defaultGenderByFaction := map[string]string{
+		"male_faction":       "boy",
+		"female_faction":     "girl",
+		"femboy_faction":     "femboy",
+		"trans_male_faction": "ftm",
+		"other_faction":      "attack_helicopter",
+	}
+	for factionID, genderID := range defaultGenderByFaction {
+		if _, err := db.Exec(
+			`UPDATE players SET gender_id = ? WHERE custom_gender_label <> '' AND gender_id = '' AND faction_id = ?`,
+			genderID, factionID,
+		); err != nil {
+			return fmt.Errorf("migrate custom gender (%s): %w", factionID, err)
+		}
+	}
+	// 兜底：faction_id 不在上面的已知映射里的残留行。
+	if _, err := db.Exec(
+		`UPDATE players SET gender_id = 'boy', faction_id = 'male_faction' WHERE custom_gender_label <> '' AND gender_id = ''`,
+	); err != nil {
+		return fmt.Errorf("migrate custom gender (fallback): %w", err)
+	}
+	return dropColumnIfExists(db, "players", "custom_gender_label")
 }
 
 // migrateLegacyRoomEvents 把旧版 rooms/room_join_events 的历史数据转换进 room_events：

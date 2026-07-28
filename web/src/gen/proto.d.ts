@@ -1047,6 +1047,9 @@ export namespace game {
         /** PublicStats totalOnlineMs. */
         totalOnlineMs: (number|Long);
 
+        /** PublicStats selfTitle. */
+        selfTitle: string;
+
         /**
          * Creates a new PublicStats instance using the specified properties.
          * @param [properties] Properties to set
@@ -1173,6 +1176,9 @@ export namespace game {
             /** PublicStats totalOnlineMs */
             totalOnlineMs?: (number|Long|null);
 
+            /** PublicStats selfTitle */
+            selfTitle?: (string|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
@@ -1238,6 +1244,9 @@ export namespace game {
 
         /** LobbyStats totalOnlineMs. */
         totalOnlineMs: (number|Long);
+
+        /** LobbyStats selfTitle. */
+        selfTitle: string;
 
         /**
          * Creates a new LobbyStats instance using the specified properties.
@@ -1361,6 +1370,9 @@ export namespace game {
 
             /** LobbyStats totalOnlineMs */
             totalOnlineMs?: (number|Long|null);
+
+            /** LobbyStats selfTitle */
+            selfTitle?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

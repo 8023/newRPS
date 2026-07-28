@@ -478,7 +478,8 @@ func (s *Server) canLeaveRoom(player *PlayerState, reason LeaveReason) LeaveResu
 		}
 	}
 	// RPS 出拳阶段禁止手动离席/换房/观战：否则会留下对手已出拳，新人入座被秒结算或卡死。
-	if (room.Settings.GameID == types.GameRPS || room.Settings.GameID == "") && room.Phase == types.PhaseChoosing {
+	// 但若双方都还没出拳（room.Choices 为空），则不存在"留下对手已出拳"的风险，允许随意离席。
+	if (room.Settings.GameID == types.GameRPS || room.Settings.GameID == "") && room.Phase == types.PhaseChoosing && len(room.Choices) > 0 {
 		if _, ok := s.seatOf(room, player.ID); ok && isProtected {
 			return LeaveResult{OK: false, Error: "出拳进行中不能离开战斗席，请等待本局结算或断线超时"}
 		}

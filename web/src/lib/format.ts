@@ -14,17 +14,18 @@ export function formatDuration(ms: number) {
   return `${hours} 小时 ${minutes % 60} 分钟`;
 }
 
-/** 累计在线时长展示：天/时/分，不足 1 分钟显示秒。 */
+/** 累计在线时长展示：不足 1 分钟显示秒，不足 1 小时显示分钟，1-24 小时显示一位小数的小时数，超过 24 小时显示天+小时。 */
 export function formatOnlineDuration(ms: number) {
   const totalSec = Math.max(0, Math.floor((Number.isFinite(ms) ? ms : 0) / 1000));
   if (totalSec < 60) return `${totalSec} 秒`;
   const totalMin = Math.floor(totalSec / 60);
   if (totalMin < 60) return `${totalMin} 分钟`;
-  const totalHour = Math.floor(totalMin / 60);
-  if (totalHour < 24) {
-    const remMin = totalMin % 60;
-    return remMin ? `${totalHour} 小时 ${remMin} 分钟` : `${totalHour} 小时`;
+  const exactHour = totalMin / 60;
+  if (exactHour < 24) {
+    const rounded = Math.round(exactHour * 10) / 10;
+    return `${Number.isInteger(rounded) ? rounded : rounded.toFixed(1)} 小时`;
   }
+  const totalHour = Math.floor(totalMin / 60);
   const days = Math.floor(totalHour / 24);
   const remHour = totalHour % 24;
   return remHour ? `${days} 天 ${remHour} 小时` : `${days} 天`;

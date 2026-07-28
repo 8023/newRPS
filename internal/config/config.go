@@ -480,15 +480,13 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 	for _, id := range factionIDs {
 		factionIDSet[id] = struct{}{}
 	}
-	genderLabels := make(map[string]struct{}, len(input.Genders))
 	for _, g := range input.Genders {
 		if g.Label == "" {
 			return input, fmt.Errorf("性别显示文字不能为空")
 		}
-		if _, dup := genderLabels[g.Label]; dup {
-			return input, fmt.Errorf("性别显示文字 %s 重复", g.Label)
-		}
-		genderLabels[g.Label] = struct{}{}
+		// 显示文字允许重复：同一文案（如 "SUB"）可以同时挂在多个阵营下，各自是独立的
+		// GenderOption（不同 ID + 不同 FactionID）。唯一性由上面的性别 ID 保证，
+		// 前端 gendersForFaction 按 factionId 过滤下拉池，同一阵营内不会出现重复文案的选项。
 		if g.FactionID == "" {
 			return input, fmt.Errorf("性别 %s 必须归属一个阵营", g.Label)
 		}

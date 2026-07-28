@@ -1,5 +1,5 @@
 import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type ReactNode, type UIEvent as ReactUIEvent, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Coffee, Crown, DoorOpen, ExternalLink, Eye, HeartHandshake, Info, Moon, Pencil, Save, Send, Shield, Sun, Swords, Upload, UserRound, Users } from "lucide-react";
+import { ChevronDown, Coffee, Crown, DoorOpen, ExternalLink, Eye, HeartHandshake, Info, Moon, Pencil, Save, Send, Shield, Sun, Swords, Upload, UserRound, Users, BookOpen } from "lucide-react";
 import type {
   AppConfig, ChatMessage, GenderFaction, LobbySnapshot, Move, PetBondState, PublicPlayer,
   PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant
@@ -49,7 +49,6 @@ export function Login({ config, onDone, onError }: { config: AppConfig; onDone: 
   const [name, setName] = useState("");
   const [factionId, setFactionId] = useState(firstFactionId(config));
   const [genderId, setGenderId] = useState(() => firstGenderId(config, firstFactionId(config)));
-  const [customGenderLabel, setCustomGenderLabel] = useState("");
   const [mode, setMode] = useState<"new" | "restore">("new");
   const [restoreCode, setRestoreCode] = useState("");
   const [restoreBusy, setRestoreBusy] = useState(false);
@@ -62,20 +61,20 @@ export function Login({ config, onDone, onError }: { config: AppConfig; onDone: 
       return;
     }
     localStorage.setItem(tokenKey, result.token);
-    // 以服务端确认后的资料为准缓存；自定义性别 genderId 为空串，必须原样写入（见 cacheJoinProfile）。
+    // 以服务端确认后的资料为准缓存。
     if (result.player) cacheJoinProfile(result.player);
     if (result.reissuedSecret) localStorage.setItem(playerSecretKey, result.reissuedSecret);
     onDone(result);
   }
 
   async function submit() {
-    const genderError = genderChoiceError(config, genderId, customGenderLabel, factionId);
+    const genderError = genderChoiceError(config, genderId);
     if (genderError) {
       onError(genderError);
       return;
     }
     try {
-      await doJoin({ name, genderId, customGenderLabel, factionId, token: localStorage.getItem(tokenKey), ...(await joinIdentityPayload()) });
+      await doJoin({ name, genderId, token: localStorage.getItem(tokenKey), ...(await joinIdentityPayload()) });
     } catch (error) {
       const message = error instanceof Error ? error.message : "进入失败";
       if (message === "玩家身份校验失败") {
@@ -83,7 +82,7 @@ export function Login({ config, onDone, onError }: { config: AppConfig; onDone: 
         // 清掉本地身份重试一次，等价于自动执行"清 localStorage 重新注册"。
         clearPlayerIdentity();
         try {
-          await doJoin({ name, genderId, customGenderLabel, factionId, token: localStorage.getItem(tokenKey), ...(await joinIdentityPayload()) });
+          await doJoin({ name, genderId, token: localStorage.getItem(tokenKey), ...(await joinIdentityPayload()) });
           return;
         } catch (retryError) {
           onError(retryError instanceof Error ? retryError.message : "进入失败");
@@ -103,7 +102,7 @@ export function Login({ config, onDone, onError }: { config: AppConfig; onDone: 
     try {
       const claimed = await claimIdentity(restoreCode);
       await doJoin({
-        name: claimed.name, genderId: claimed.genderId, customGenderLabel: claimed.customGenderLabel, factionId: claimed.factionId,
+        name: claimed.name, genderId: claimed.genderId,
         token: localStorage.getItem(tokenKey), ...(await joinIdentityPayload())
       });
     } catch (error) {
@@ -154,11 +153,8 @@ export function Login({ config, onDone, onError }: { config: AppConfig; onDone: 
           <GenderSelect
             config={config}
             genderId={genderId}
-            customGenderLabel={customGenderLabel}
             factionId={factionId}
             onGenderChange={setGenderId}
-            onCustomGenderLabelChange={setCustomGenderLabel}
-            stacked
           />
           <button className="primary" onClick={submit}>进入大厅</button>
           <button className="link-button" onClick={() => setMode("restore")}>已有账号？用认领密钥恢复</button>
@@ -307,8 +303,8 @@ export function firstGenderId(config: AppConfig, factionId: string) {
   return gendersForFaction(config, factionId)[0]?.id || "";
 }
 
-// 切换阵营时性别是否需要跟着重置：自定义性别（genderId 为空）不受阵营限制，原样保留；
-// 预设性别只有在还落在新阵营的可选池内才保留，否则退回新阵营的第一个预设。
+// 切换阵营时性别是否需要跟着重置：当前性别只有在还落在新阵营的可选池内才保留，
+// 否则退回新阵营的第一个预设。
 export function nextGenderIdForFaction(config: AppConfig, factionId: string, currentGenderId: string) {
   if (!currentGenderId) return currentGenderId;
   const pool = gendersForFaction(config, factionId);
@@ -351,97 +347,42 @@ export function FactionSelect({ config, factionId, onFactionChange }: { config: 
   );
 }
 
-const CUSTOM_GENDER_OPTION = "__custom__";
-
-// 与后端 validGenderSubmission 保持一致：选中预设要求该预设归属当前阵营（未设归属阵营的
-// 预设不限）；选中"自定义…"（genderId 为空）则要求 customGenderLabel 去空格后落在 1-9
-// 字符内且不能和任何预设性别文案重复。返回空字符串表示校验通过，否则返回给用户看的原因。
-export function genderChoiceError(config: AppConfig, genderId: string, customGenderLabel: string, factionId: string) {
-  if (genderId) {
-    const preset = config.genders.find((gender) => gender.id === genderId);
-    if (!preset) return "所选性别不存在";
-    if (preset.factionId && preset.factionId !== factionId) return "所选性别不属于当前阵营";
-    return "";
-  }
-  const trimmed = customGenderLabel.trim();
-  if (trimmed.length < 1 || trimmed.length > 9) return "请输入 1-9 个字符的自定义性别";
-  if (config.genders.some((gender) => gender.label === trimmed)) return "自定义性别不能与已有性别重复";
-  if (!config.genderFactions.some((faction) => faction.id === factionId)) return "所选阵营不存在";
+// 与后端 validGenderSubmission 保持一致：genderId 必须命中某个预设，阵营由该预设的
+// factionId 查表决定，不再单独提交/校验。返回空字符串表示校验通过，否则返回给用户看的原因。
+export function genderChoiceError(config: AppConfig, genderId: string) {
+  if (!config.genders.some((gender) => gender.id === genderId)) return "所选性别不存在";
   return "";
 }
 
-export function isValidGenderChoice(config: AppConfig, genderId: string, customGenderLabel: string, factionId: string) {
-  return genderChoiceError(config, genderId, customGenderLabel, factionId) === "";
+export function isValidGenderChoice(config: AppConfig, genderId: string) {
+  return genderChoiceError(config, genderId) === "";
 }
 
-// 性别下拉本体（不含外层 label/自定义输入框），供 GenderSelect（登录/个人资料，选择框与
-// 自定义输入框绑在同一个字段里）和 GenderSelectField（后台，三栏里独立占一栏）共用。选项按
-// factionId 过滤；若当前 genderId 不在过滤后的池子里（比如阵营调整前的历史数据），额外把它
-// 补回选项列表，避免原生 <select> 因 value 找不到匹配 <option> 而静默显示错乱。
+// 性别下拉本体，供 GenderSelect（登录/个人资料/后台）共用。选项按 factionId 过滤；若当前
+// genderId 不在过滤后的池子里（比如阵营调整前的历史数据），额外把它补回选项列表，避免原生
+// <select> 因 value 找不到匹配 <option> 而静默显示错乱。
 function GenderSelectControl({ config, genderId, factionId, onGenderChange }: {
   config: AppConfig;
   genderId: string;
   factionId: string;
   onGenderChange: (genderId: string) => void;
 }) {
-  const isCustom = !genderId;
   const pool = gendersForFaction(config, factionId);
   const options = genderId && !pool.some((gender) => gender.id === genderId)
     ? [...pool, ...config.genders.filter((gender) => gender.id === genderId)]
     : pool;
   return (
-    <select
-      value={isCustom ? CUSTOM_GENDER_OPTION : genderId}
-      onChange={(event) => {
-        const next = event.target.value;
-        onGenderChange(next === CUSTOM_GENDER_OPTION ? "" : next);
-      }}
-    >
+    <select value={genderId} onChange={(event) => onGenderChange(event.target.value)}>
       {options.map((gender) => (
         <option key={gender.id} value={gender.id}>{gender.label}</option>
       ))}
-      <option value={CUSTOM_GENDER_OPTION}>自定义…</option>
     </select>
   );
 }
 
-// 性别：预设下拉 + 选“自定义…”后出现的文本框（1-9 个字符）。
-// 用回原生 <select>，不用 <input list> 组合框——Safari 下 datalist 弹出列表的配色不跟随页面暗色主题，
-// 会出现白底白字看不清的问题，<select> 的原生下拉在 Safari 上表现正常。
-// stacked=true（进入游戏页）：下拉和自定义输入框上下各占一行；默认二分布局，下拉与自定义输入框
-// 各占一半宽度——未选中自定义时输入框不渲染，但那一半宽度仍然保留（CSS 网格留白），不会被下拉占满。
-export function GenderSelect({
-  config, genderId, customGenderLabel, factionId, onGenderChange, onCustomGenderLabelChange, stacked = false
-}: {
-  config: AppConfig;
-  genderId: string;
-  customGenderLabel: string;
-  factionId: string;
-  onGenderChange: (genderId: string) => void;
-  onCustomGenderLabelChange: (label: string) => void;
-  stacked?: boolean;
-}) {
-  const isCustom = !genderId;
-  return (
-    <label className="field-label">
-      <span>性别</span>
-      <div className={`gender-select-row ${stacked ? "stacked" : ""}`}>
-        <GenderSelectControl config={config} genderId={genderId} factionId={factionId} onGenderChange={onGenderChange} />
-        {isCustom && (
-          <input
-            value={customGenderLabel}
-            maxLength={9}
-            placeholder="输入 1-9 个字符"
-            onChange={(event) => onCustomGenderLabelChange(event.target.value)}
-          />
-        )}
-      </div>
-    </label>
-  );
-}
-
-// 后台用：性别下拉单独占一栏（与阵营下拉、自定义输入框三栏等分），不内嵌自定义输入框。
-export function GenderSelectField({ config, genderId, factionId, onGenderChange }: {
+// 性别：查表法预设下拉，候选池按已选阵营过滤。用原生 <select>——Safari 下 <input list>
+// 组合框弹出列表的配色不跟随页面暗色主题，会出现白底白字看不清的问题，<select> 原生下拉正常。
+export function GenderSelect({ config, genderId, factionId, onGenderChange }: {
   config: AppConfig;
   genderId: string;
   factionId: string;
@@ -455,29 +396,9 @@ export function GenderSelectField({ config, genderId, factionId, onGenderChange 
   );
 }
 
-// 后台用：自定义性别文本框单独占一栏。未选中"自定义"时不渲染输入框，但保留该栏位置（留空）。
-export function GenderCustomField({ genderId, customGenderLabel, onCustomGenderLabelChange }: {
-  genderId: string;
-  customGenderLabel: string;
-  onCustomGenderLabelChange: (label: string) => void;
-}) {
-  const isCustom = !genderId;
-  return (
-    <label className="field-label gender-custom-field">
-      <span>&nbsp;</span>
-      {isCustom ? (
-        <input
-          value={customGenderLabel}
-          maxLength={9}
-          placeholder="输入 1-9 个字符"
-          onChange={(event) => onCustomGenderLabelChange(event.target.value)}
-        />
-      ) : (
-        <span className="gender-custom-placeholder" aria-hidden="true">{" "}</span>
-      )}
-    </label>
-  );
-}
+// 后台用：与 GenderSelect 完全一样，保留独立导出名字是为了不打乱调用点（三栏布局曾经把
+// 性别单独占一栏，现在阵营/性别各占一栏，行为上两者已无差异）。
+export const GenderSelectField = GenderSelect;
 
 export function titleClass(points: number) {
   const p = Number.isFinite(points) ? points : 0;
@@ -1416,7 +1337,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
       if (!alive || !payload || typeof payload !== "object") return;
       setMyPetIds(new Set((payload.pets || []).map((p) => p.playerId)));
     };
-    ask<PetBondState>("petbond:getState", {}).then(applyPets).catch(() => {});
+    ask<PetBondState>("petbond:getState", {}).then(applyPets).catch(() => { });
     socket.on("petbond:update", applyPets);
     return () => {
       alive = false;
@@ -1459,7 +1380,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
         ? "五子棋对局进行中不能离开战斗席"
         : room.settings.gameId === "jungle" && room.phase === "choosing" && mySeat
           ? "斗兽棋对局进行中不能离开战斗席"
-        : "离开房间";
+          : "离开房间";
 
   useEffect(() => {
     if (!mySeat || room.phase === "choosing" && !choices[mySeat]) setLocalChoice(null);
@@ -1704,7 +1625,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
       historyStickRef.current = nextStick;
       setHistoryStick(nextStick);
     }
-    if (el.scrollTop < 48 && hasMoreHistory && !historyLoadingRef.current) {
+    if (el.scrollTop < 200 && hasMoreHistory && !historyLoadingRef.current) {
       const prevHeight = el.scrollHeight;
       const added = await loadMoreHistory();
       if (added > 0) {
@@ -1955,7 +1876,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
           <h3 className="sticky-panel-title">
             📜 对局记录
             <span className="panel-title-actions">
-              <span>{visibleRoundHistory.length} / {room.roundHistoryTotal}</span>
+              <span>共 {room.roundHistoryTotal || 0} 场对局</span>
               <CollapseToggle collapsed={roundHistoryCollapsed} onToggle={toggleRoundHistoryCollapsed} label="对局记录" />
             </span>
           </h3>
@@ -2574,34 +2495,58 @@ export function OfflineBadge({ player, now }: { player: PublicPlayer; now: numbe
   return <em className="offline-badge">离线 {seconds}s</em>;
 }
 
-/** 证明图：blob 立刻显示；远端图显示加载态。处理缓存图 onLoad 不触发导致一直「加载中」。 */
+/** 证明图：blob 立刻显示；远端图先占位，滚入视口附近（IntersectionObserver）才挂载 <img>，
+ * 避免对局记录瀑布流一次性发起大量图片请求。处理缓存图 onLoad 不触发导致一直「加载中」。 */
 export function ProofImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
   const isLocal = src.startsWith("blob:") || src.startsWith("data:");
   const [loaded, setLoaded] = useState(isLocal);
   const [failed, setFailed] = useState(false);
+  const [visible, setVisible] = useState(isLocal);
   const imgRef = useRef<HTMLImageElement | null>(null);
+  const wrapRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
     const local = src.startsWith("blob:") || src.startsWith("data:");
     setFailed(false);
-    if (local) {
-      setLoaded(true);
+    setLoaded(local);
+    setVisible(local);
+  }, [src]);
+
+  useEffect(() => {
+    if (isLocal || visible) return;
+    const el = wrapRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setVisible(true);
       return;
     }
-    setLoaded(false);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "400px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isLocal, visible, src]);
+
+  useEffect(() => {
+    if (!visible) return;
     // 下一帧检查：缓存命中时 complete 已为 true，不会再触发 onLoad
     const id = window.requestAnimationFrame(() => {
       const el = imgRef.current;
       if (el && el.complete && el.naturalWidth > 0) setLoaded(true);
     });
     return () => window.cancelAnimationFrame(id);
-  }, [src]);
+  }, [visible, src]);
 
   if (isLocal) {
     return <img className={className} src={src} alt={alt} />;
   }
   return (
-    <span className={`proof-image-wrap ${loaded ? "is-ready" : ""} ${className || ""}`}>
+    <span ref={wrapRef} className={`proof-image-wrap ${loaded ? "is-ready" : ""} ${className || ""}`}>
       {!loaded && !failed && (
         <span className="proof-image-loading">
           <span>图片加载中…</span>
@@ -2610,7 +2555,7 @@ export function ProofImage({ src, alt, className }: { src: string; alt: string; 
       )}
       {failed ? (
         <span className="proof-image-loading">图片加载失败</span>
-      ) : (
+      ) : visible ? (
         <img
           ref={imgRef}
           src={src}
@@ -2621,7 +2566,7 @@ export function ProofImage({ src, alt, className }: { src: string; alt: string; 
           onLoad={() => setLoaded(true)}
           onError={() => setFailed(true)}
         />
-      )}
+      ) : null}
     </span>
   );
 }
@@ -2766,7 +2711,7 @@ export function ChatPanel({
       setStick(nextStick);
     }
     // 滚到顶部附近且还有更早历史：瀑布流加载并保持视口位置。
-    if (el.scrollTop < 48 && hasMore && !loading) {
+    if (el.scrollTop < 200 && hasMore && !loading) {
       const prevHeight = el.scrollHeight;
       const added = await loadOlderChat(scope);
       if (added > 0) {
@@ -3230,7 +3175,7 @@ function gameWLDOf(player: PublicPlayer, tab: GlobalLeaderboardTab) {
   };
 }
 
-export function AboutPanel({ config, onClose }: { config: AppConfig; onClose: () => void }) {
+export function AboutPanel({ config, onClose, onOpenHelp }: { config: AppConfig; onClose: () => void; onOpenHelp?: () => void }) {
   const board = config.announcementBoard;
   const showBoard = board.enabled && (board.title.trim() || board.content.trim());
   return (
@@ -3240,6 +3185,11 @@ export function AboutPanel({ config, onClose }: { config: AppConfig; onClose: ()
           <div>
             <h2><Info size={20} /> 关于</h2>
             <p className="hint">喜欢这个小站的话，可以在这里关注、进群或请作者喝杯咖啡。</p>
+            {onOpenHelp && (
+              <p className="hint" style={{ marginTop: "0.4em" }}>
+                {" "}第一次来？<a href="#" onClick={(e) => { e.preventDefault(); onOpenHelp(); }}>看看怎么玩</a>。
+              </p>
+            )}
           </div>
           <button type="button" className="icon-button" onClick={onClose}>×</button>
         </div>
@@ -4000,7 +3950,7 @@ export function PetBondPanel({
                         撤销申请
                       </button>
                     )}
-                    {!m.releasePending && !m.releaseIncoming && (
+                    {!m.releasePending && !m.releaseIncoming && m.connected && (
                       <button type="button" className="small soft-button" disabled={busy} onClick={() => run("petbond:requestRelease", { masterId: m.playerId, petId: me.id })}>
                         申请解除关系
                       </button>
@@ -4098,7 +4048,7 @@ export function PetBondPanel({
                         撤销申请
                       </button>
                     )}
-                    {!p.releasePending && !p.releaseIncoming && (
+                    {!p.releasePending && !p.releaseIncoming && p.connected && (
                       <button type="button" className="small soft-button" disabled={busy} onClick={() => run("petbond:requestRelease", { masterId: me.id, petId: p.playerId })}>
                         申请解除关系
                       </button>
@@ -4180,10 +4130,10 @@ export function PetBondPanel({
   );
 }
 
-export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLoggedOut }: { config: AppConfig; me: PublicPlayer; onClose: () => void; onUpdated: (player: PublicPlayer) => void; onError: (message: string) => void; onLoggedOut: () => void }) {
+export function ProfilePanel({ config, me, theme, onThemeChange, onClose, onUpdated, onError, onLoggedOut }: { config: AppConfig; me: PublicPlayer; theme: "light" | "dark"; onThemeChange: (theme: "light" | "dark") => void; onClose: () => void; onUpdated: (player: PublicPlayer) => void; onError: (message: string) => void; onLoggedOut: () => void }) {
   const [name, setName] = useState(me.name);
+  const [selfTitle, setSelfTitle] = useState(me.stats.selfTitle || "");
   const [genderId, setGenderId] = useState(me.genderId);
-  const [customGenderLabel, setCustomGenderLabel] = useState(me.genderId ? "" : me.genderLabel);
   const [factionId, setFactionId] = useState(me.factionId);
   const [nameWarEnabled, setNameWarEnabled] = useState(Boolean(me.nameWarEnabled));
   const [nameWarAllowRename, setNameWarAllowRename] = useState(Boolean(me.nameWarAllowRename));
@@ -4264,7 +4214,7 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
   }, [nameWarEnabled]);
 
   async function saveProfile() {
-    const genderError = genderChoiceError(config, genderId, customGenderLabel, factionId);
+    const genderError = genderChoiceError(config, genderId);
     if (genderError) {
       onError(genderError);
       return;
@@ -4299,7 +4249,7 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
     }
     try {
       const result = await ask<{ player: PublicPlayer }>("player:updateProfile", {
-        name, genderId, customGenderLabel, factionId,
+        name, genderId, selfTitle,
         nameWarEnabled, nameWarAllowRename, giveawayEnabled, extremeModeEnabled,
         bondMasterEnabled, bondPetEnabled, bondPublicDisplay
       });
@@ -4407,7 +4357,7 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
           <div className="avatar-ring">{me.avatarUrl ? <PlayerAvatar player={me} size={56} /> : <UserRound size={34} />}</div>
           <div>
             <h2><PlayerBadge player={me} /></h2>
-            <p>{me.nameWarPunished ? "名字争夺战惩罚名生效中" : `${stats.title} · ${stats.rankedPoints} 排位积分`}</p>
+            <p>{`${stats.title} · ${stats.rankedPoints} 排位积分`}</p>
           </div>
           <button className="profile-close-button" type="button" aria-label="关闭个人设置" onClick={onClose}>×</button>
         </div>
@@ -4420,7 +4370,7 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
             <Stat label="惩罚次数" value={`${stats.punishments}`} />
             <Stat label="排位积分" value={`${stats.rankedPoints}`} />
             <Stat label="历史战绩" value={`${stats.lowestScore} ～ ${stats.highestScore}`} />
-            <Stat label="当前称号" value={me.nameWarPunished ? "已隐藏" : stats.title} />
+            <Stat label="当前称号" value={stats.title} />
             <Stat label="在线时长" value={formatOnlineDuration(totalOnlineMsOf(me))} />
             <Stat label="白给值" value={`${formatGiveawayValue(giveawayValue)}%`} />
             <Stat label="极限模式" value={me.extremeModeEnabled ? `连胜 ${me.extremeWinStreak || 0}` : "未开启"} />
@@ -4452,6 +4402,10 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
               <input value={name} maxLength={12} disabled={nameLockedByWar} onChange={(event) => setName(event.target.value)} placeholder="新的名字" />
               <small>{nameLockedByWar ? "名字争夺战开启后不能修改名字" : nameChanged && cooldownMs > 0 ? `改名冷却：${nameCooldownSeconds} 秒` : "名字会显示在大厅、房间和聊天里"}</small>
             </label>
+            <label className="field-label">
+              <span>称号</span>
+              <input value={selfTitle} maxLength={12} onChange={(event) => setSelfTitle(event.target.value)} placeholder="称号" />
+            </label>
             <FactionSelect
               config={config}
               factionId={factionId}
@@ -4460,16 +4414,12 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
                 setGenderId((old) => nextGenderIdForFaction(config, nextFactionId, old));
               }}
             />
-            <div className="profile-edit-grid-full">
-              <GenderSelect
-                config={config}
-                genderId={genderId}
-                customGenderLabel={customGenderLabel}
-                factionId={factionId}
-                onGenderChange={setGenderId}
-                onCustomGenderLabelChange={setCustomGenderLabel}
-              />
-            </div>
+            <GenderSelect
+              config={config}
+              genderId={genderId}
+              factionId={factionId}
+              onGenderChange={setGenderId}
+            />
             <div className="profile-edit-grid-full profile-avatar-upload-row">
               <input
                 ref={avatarInputRef}
@@ -4491,6 +4441,13 @@ export function ProfilePanel({ config, me, onClose, onUpdated, onError, onLogged
             </div>
           </div>
           <p className="hint">上次改名：{me.profileUpdatedAt ? new Date(me.profileUpdatedAt).toLocaleString() : "还没有修改过"}</p>
+          <div className="name-war-card">
+            <div className="admin-card-title">
+              <strong>夜间模式</strong>
+              <small>{theme === "dark" ? "已开启" : "未开启"}</small>
+            </div>
+            <Toggle label="开启夜间模式" value={theme === "dark"} onChange={(value) => onThemeChange(value ? "dark" : "light")} />
+          </div>
           <div className="name-war-card">
             <div className="admin-card-title">
               <strong>名字争夺战</strong>

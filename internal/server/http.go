@@ -525,6 +525,14 @@ func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 	}
 	fi, err := os.Stat(full)
 	if err != nil || fi.IsDir() {
+		// /assets/ 下是带 hash 的构建产物（js/wasm/css），缺失多半是浏览器还拿着旧 index.html
+		// 引用了上一次构建的文件名——应该让它 404 触发浏览器报错/重试，而不是悄悄回退成
+		// index.html（text/html），那样动态 import() 会报 "'text/html' is not a valid
+		// JavaScript MIME type" 这种难排查的错误。SPA 客户端路由（如 /room/xyz）仍走下面的回退。
+		if strings.HasPrefix(path, "/assets/") {
+			http.NotFound(w, r)
+			return
+		}
 		w.Header().Set("Cache-Control", "no-cache")
 		http.ServeFile(w, r, filepath.Join(s.distDir, "index.html"))
 		return

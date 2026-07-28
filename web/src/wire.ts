@@ -274,6 +274,7 @@ export function normalizeStateTree(doc: any): any {
   for (const k of ["spectators", "proofs", "roundHistory", "chat", "punishedPlayerIds", "players", "rooms", "suggestions", "lobbyChat"]) {
     if (k in out && out[k] == null) out[k] = [];
   }
+  if ("roundHistoryTotal" in out) out.roundHistoryTotal = numOr(out.roundHistoryTotal, 0);
   if (Array.isArray(out.roundHistory)) {
     out.roundHistory = out.roundHistory.map((item: any) => ({
       ...item,
@@ -349,8 +350,8 @@ export function stateDocToPlain(fullState: any): any {
 }
 
 /** protobufjs defaults:false 会丢掉 int/bool 零值；玩家战绩必须补齐，否则出现 undefined/NaN 文案。
- * 自定义性别时 genderId 合法值为空串，同样会被 defaults:false 丢掉——必须补成 ""，
- * 否则 {...old, ...patch} 合并会残留旧的预设 id（与 Go fillPlayerDefaults 对齐）。 */
+ * genderId 空串同样会被 defaults:false 丢掉——必须补成 ""，否则 {...old, ...patch} 合并
+ * 会残留旧的预设 id（与 Go fillPlayerDefaults 对齐）。 */
 function materializePlayer(player: any): any {
   if (!player || typeof player !== "object") return player;
   const p = { ...player };
@@ -378,6 +379,7 @@ function materializePublicStats(stats: any): any {
     sortHighestScore: numOr(s.sortHighestScore, numOr(s.highestScore, 0)),
     sortLowestScore: numOr(s.sortLowestScore, numOr(s.lowestScore, 0)),
     title: title || "暂无称号",
+    selfTitle: typeof s.selfTitle === "string" ? s.selfTitle : "",
     totalOnlineMs: numOr(s.totalOnlineMs, 0),
     ...(s.titleSegmentId != null && s.titleSegmentId !== ""
       ? { titleSegmentId: s.titleSegmentId }

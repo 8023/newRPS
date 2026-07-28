@@ -116,8 +116,8 @@ func TestSchemaMigrationV10V11FromV9(t *testing.T) {
 		t.Fatalf("secret = %q, want legacy-device-secret", secret)
 	}
 
-	// pet_bonds 表已建出
-	for _, table := range []string{"pet_bonds", "pet_bond_requests", "pet_bond_request_approvals"} {
+	// pet_bonds 表已建出（pet_bond_request_approvals 自 v16 起不再建表，同意记录只存内存）
+	for _, table := range []string{"pet_bonds", "pet_bond_requests"} {
 		ok, err := tableExists(db, table)
 		if err != nil || !ok {
 			t.Fatalf("table %s should exist after migration, ok=%v err=%v", table, ok, err)

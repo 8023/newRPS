@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
-import { Crown, Info, Moon, Sun, UserRound } from "lucide-react";
+import { Crown, Info, UserRound } from "lucide-react";
 import { socket } from "./main";
 import type { AppConfig, ChatMessage, LobbySnapshot, PublicPlayer, RoomSnapshot } from "./shared/types";
 import { leaderboardRefreshMs, playerSecretKey, securityDisclaimerKey, tokenKey } from "./lib/constants";
@@ -19,6 +19,7 @@ import {
   AboutPanel, GlobalLeaderboardPanel, Lobby, Login, PlayerBadge, ProfilePanel, Room, SecurityDisclaimer,
   connectionStateText, phaseText
 } from "./ui/AppViews";
+import { HelpPanel } from "./ui/HelpPanel";
 
 // 后台管理面板（含可能新增的图表等重型组件）单独打包，普通玩家不会触发这次 import。
 const AdminPanel = lazy(() => import("./ui/AdminViews").then((module) => ({ default: module.AdminPanel })));
@@ -78,6 +79,7 @@ export function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [notice, setNotice] = useState("");
   /** toast 展示文案与离场态：notice 更新时同步文案，定时先 leave 再清空，以便播放退出动效。 */
   const [toastText, setToastText] = useState("");
@@ -116,19 +118,16 @@ export function App() {
     if (restoreInFlightRef.current) return;
     const token = localStorage.getItem(tokenKey);
     const cachedName = localStorage.getItem("rps-online-name") || "";
-    // 自定义性别时 genderId 为空串是合法值，必须用 readCachedJoinGender，不能 || "male"。
-    const { genderId: cachedGender, customGenderLabel: cachedCustomGender, factionId: cachedFaction } = readCachedJoinGender();
+    const { genderId: cachedGender } = readCachedJoinGender();
     if (!cachedName || !sessionTokenLooksValid(token)) {
       setRestoringSession(false);
       return;
     }
-    // 未连上时绝不尝试 join，更不能因此清 token（旧逻辑会把“未连接”误判成坏 token）。
+    // 未连上时绝不尝试 join，更不能因此清 token（旧逻辑会把”未连接”误判成坏 token）。
     if (!socket.connected) return;
 
     restoreInFlightRef.current = true;
-    // 阵营现在独立于性别选择，重连/刷新页面时必须把缓存的 factionId/customGenderLabel
-    // 一起带上——不传就会被服务端 applyGender 兜底成第一个已配置阵营，等于每次刷新都重置阵营。
-    const payload = { name: cachedName, genderId: cachedGender, customGenderLabel: cachedCustomGender, factionId: cachedFaction, token, ...(await joinIdentityPayload()) };
+    const payload = { name: cachedName, genderId: cachedGender, token, ...(await joinIdentityPayload()) };
     try {
       const next = await ask<MeState & { alreadyOnline?: true }>("player:join", payload);
       if (next.alreadyOnline) {
@@ -138,7 +137,7 @@ export function App() {
       }
       if (next.token) localStorage.setItem(tokenKey, next.token);
       if (next.reissuedSecret) localStorage.setItem(playerSecretKey, next.reissuedSecret);
-      // 以服务端确认后的资料为准回写缓存，避免清洗后的自定义性别文案与本地不一致。
+      // 以服务端确认后的资料为准回写缓存，避免清洗后的资料与本地不一致。
       if (next.player) cacheJoinProfile(next.player);
       setMe(next);
       initPushForPlayer(next.player.id);
@@ -280,8 +279,8 @@ export function App() {
         if (!old) return old;
         const p = byId.get(old.player.id);
         if (!p) return old;
-        // LobbyPlayer/typed PublicPlayer 会省略空串字段：avatarUrl 清空、自定义性别 genderId=""。
-        // 合并时必须显式写回空值，否则旧头像/旧预设 genderId 会残留在 me 上。
+        // LobbyPlayer/typed PublicPlayer 会省略空串字段：avatarUrl 清空时会变成 undefined。
+        // 合并时必须显式写回空值，否则旧头像会残留在 me 上。
         const merged = {
           ...old.player,
           ...p,
@@ -486,7 +485,7 @@ export function App() {
     <main>
       <header className="topbar">
         <div>
-          {view !== "room" && <h1>{config.site.name}</h1>}
+          <h1>{config.site.name}</h1>
           {view === "room" ? (
             <>
               <span className={`connection-pill ${connectionState}`}>
@@ -521,9 +520,6 @@ export function App() {
               <Crown size={18} /> <span>排行榜</span>
             </button>
           )}
-          <button className="icon-button" title={theme === "dark" ? "切换到日间模式" : "切换到夜间模式"} onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
         </div>
       </header>
       {toastText && (
@@ -568,11 +564,14 @@ export function App() {
         </Suspense>
       )}
       {view === "room" && !room && <section className="panel">你暂时不在房间里。</section>}
-      {aboutOpen && <AboutPanel config={config} onClose={() => setAboutOpen(false)} />}
+      {aboutOpen && <AboutPanel config={config} onClose={() => setAboutOpen(false)} onOpenHelp={() => { setAboutOpen(false); setHelpOpen(true); }} />}
+      {helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} />}
       {profileOpen && me && (
         <ProfilePanel
           config={config}
           me={me.player}
+          theme={theme}
+          onThemeChange={setTheme}
           onClose={() => setProfileOpen(false)}
           onUpdated={(player) => {
             setMe({ ...me, player });

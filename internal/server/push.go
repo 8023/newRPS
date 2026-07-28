@@ -161,42 +161,48 @@ func (s *Server) notifySeatFilled(room *RoomState, filledSeat types.SeatKey) {
 
 // sendPush 给这个玩家名下所有登记过的设备发一条 push；410/404（订阅已失效，用户卸载/清缓存）
 // 会顺手把这条订阅删掉，避免越攒越多打没人收的空气。
+// sendPush 的调用方通常持有 s.mu；subscriptionsForPlayer 是同步 SQLite 查询，
+// 绝不能在锁内执行（会和其它所有 WS 事件/广播/计时器争抢唯一的 DB 连接），
+// 因此整个查询+发送都挪到异步 goroutine 里，仅在锁内做最基本的 nil 判断和值捕获。
 func (s *Server) sendPush(player *PlayerState, title, body, tag string) {
 	if s.pushDB == nil || s.vapid.PublicKey == "" || player == nil {
 		return
 	}
-	subs, err := s.pushDB.subscriptionsForPlayer(player.ID)
-	if err != nil || len(subs) == 0 {
-		return
-	}
-	payload, err := json.Marshal(pushPayload{Title: title, Body: body, Tag: tag})
-	if err != nil {
-		return
-	}
-	opts := &webpush.Options{
-		Subscriber:      "mailto:support@example.com",
-		VAPIDPublicKey:  s.vapid.PublicKey,
-		VAPIDPrivateKey: s.vapid.PrivateKey,
-		TTL:             300,
-	}
-	for _, sub := range subs {
-		go func(sub storedSubscription) {
-			resp, err := webpush.SendNotification(payload, &webpush.Subscription{
-				Endpoint: sub.Endpoint,
-				Keys:     webpush.Keys{P256dh: sub.P256dh, Auth: sub.Auth},
-			}, opts)
-			if err != nil {
-				s.errorLog("push_send_failed", err.Error())
-				return
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode == 404 || resp.StatusCode == 410 {
-				_ = s.pushDB.removeSubscription(sub.Endpoint)
-			} else if resp.StatusCode >= 300 {
-				s.securityLog("push_send_rejected", map[string]any{
-					"playerId": player.ID, "status": resp.StatusCode, "tag": tag,
-				})
-			}
-		}(sub)
-	}
+	playerID := player.ID
+	go func() {
+		subs, err := s.pushDB.subscriptionsForPlayer(playerID)
+		if err != nil || len(subs) == 0 {
+			return
+		}
+		payload, err := json.Marshal(pushPayload{Title: title, Body: body, Tag: tag})
+		if err != nil {
+			return
+		}
+		opts := &webpush.Options{
+			Subscriber:      "mailto:support@example.com",
+			VAPIDPublicKey:  s.vapid.PublicKey,
+			VAPIDPrivateKey: s.vapid.PrivateKey,
+			TTL:             300,
+		}
+		for _, sub := range subs {
+			go func(sub storedSubscription) {
+				resp, err := webpush.SendNotification(payload, &webpush.Subscription{
+					Endpoint: sub.Endpoint,
+					Keys:     webpush.Keys{P256dh: sub.P256dh, Auth: sub.Auth},
+				}, opts)
+				if err != nil {
+					s.errorLog("push_send_failed", err.Error())
+					return
+				}
+				defer resp.Body.Close()
+				if resp.StatusCode == 404 || resp.StatusCode == 410 {
+					_ = s.pushDB.removeSubscription(sub.Endpoint)
+				} else if resp.StatusCode >= 300 {
+					s.securityLog("push_send_rejected", map[string]any{
+						"playerId": playerID, "status": resp.StatusCode, "tag": tag,
+					})
+				}
+			}(sub)
+		}
+	}()
 }

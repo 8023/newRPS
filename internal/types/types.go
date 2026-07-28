@@ -114,6 +114,10 @@ type PublicStats struct {
 	// TitleCustom：true 表示 Title 是管理员在后台手动设置的，syncTitleForRankSegment
 	// 不会因排位分变动/跨档而自动改写；管理员把称号清空即可清除该标记、恢复自动计算。
 	TitleCustom bool `json:"titleCustom,omitempty"`
+	// SelfTitle：玩家自己在个人设置里设置的称号。展示优先级：管理员自定义（TitleCustom）>
+	// 主人为宠物设置的称号（petbond.PetTitle）> SelfTitle > 系统按排位分自动计算的称号，
+	// 见 internal/server/petbond.go 的 applyDisplayTitle。清空即回退到更下一级展示。
+	SelfTitle string `json:"selfTitle,omitempty"`
 	// TotalOnlineMs：累计在线时长（毫秒）。存储值为已结束会话之和；
 	// publicPlayer 下发时若当前在线会加上本会话已持续时长（不写回存储）。
 	TotalOnlineMs int64 `json:"totalOnlineMs,omitempty"`
@@ -382,6 +386,8 @@ type PunishmentTask struct {
 	AssignedByName    string   `json:"assignedByName,omitempty"`
 	// EventID：punishment_events 表里对应行的 id，仅服务端用于后续 update，不下发前端。
 	EventID string `json:"-"`
+	// RejectCount：本局（本条任务）已被胜方连续审核不通过的次数，仅服务端用于额外扣分判定，不下发前端。
+	RejectCount int `json:"-"`
 }
 
 type HistoryProof struct {

@@ -294,6 +294,38 @@ func (s *Server) updateProofInLatestHistory(room *RoomState, playerID string, ne
 	}
 }
 
+// proofRejectionPenaltyPoints：同一惩罚任务在同一局内被胜方连续第 N 次审核不通过时的额外扣分。
+// 第 1、2 次不扣分；第 3 次起 100，第 4 次 200，第 5 次 300……此后每多一次连续不通过再加罚 100。
+func proofRejectionPenaltyPoints(rejectCount int) int {
+	if rejectCount < 3 {
+		return 0
+	}
+	return (rejectCount - 2) * 100
+}
+
+// applyProofRejectionPenalty 在审核方驳回证明（要求重做）后调用：递增该任务的连续驳回计数，
+// 从第 3 次起扣分并通过房间系统提示让双方都能看到扣除情况。全游戏通用（走同一套 onPunishmentReview）。
+func (s *Server) applyProofRejectionPenalty(room *RoomState, punishedPlayerID string) {
+	task := latestPunishmentTask(room, punishedPlayerID)
+	if task == nil {
+		return
+	}
+	task.RejectCount++
+	penalty := proofRejectionPenaltyPoints(task.RejectCount)
+	if penalty <= 0 {
+		return
+	}
+	punished := s.players[punishedPlayerID]
+	if punished == nil {
+		return
+	}
+	s.updateRankedPoints(punished, -penalty)
+	s.roomNotice(room, fmt.Sprintf(
+		"%s 的惩罚任务已连续第 %d 次审核不通过，系统额外扣除其 %d 积分。",
+		playerShortName(punished), task.RejectCount, penalty,
+	))
+}
+
 func (s *Server) updatePunishmentTask(room *RoomState, playerID, taskText string, assignedBy *PlayerState) {
 	if len(room.RoundHistory) == 0 {
 		return

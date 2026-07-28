@@ -57,6 +57,8 @@ message PublicStats {
   bool title_custom = 13;
   // 累计在线时长（毫秒）。下发时若当前在线，会加上本会话已持续时长。
   int64 total_online_ms = 14;
+  // 玩家自设称号，展示优先级：管理员自定义 > 主人为宠物设置的称号 > self_title > 系统自动称号。
+  string self_title = 15;
 }
 
 message LobbyStats {
@@ -74,6 +76,8 @@ message LobbyStats {
   bool title_custom = 12;
   // 累计在线时长（毫秒）。下发时若当前在线，会加上本会话已持续时长。
   int64 total_online_ms = 13;
+  // 玩家自设称号，展示优先级：管理员自定义 > 主人为宠物设置的称号 > self_title > 系统自动称号。
+  string self_title = 14;
 }
 
 message GameWLD {

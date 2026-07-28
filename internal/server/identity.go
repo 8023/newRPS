@@ -101,20 +101,13 @@ func (s *Server) onIdentityClaim(client *Client, env wsEnvelope) {
 	if evicted != "" {
 		s.notifyDeviceEvicted(player, evicted)
 	}
-	// 顺带把当前名字/性别/阵营带回去，前端接着重新 player:join 时要用这份真实值，
-	// 不能用输入框里随手打的名字，否则会把认领回来的账号名字/阵营覆盖掉——阵营现在独立
-	// 于性别选择，join 时不传 factionId 会被 applyGender 兜底成第一个已配置阵营。
-	customGenderLabel := ""
-	if player.GenderID == "" {
-		customGenderLabel = player.GenderLabel
-	}
+	// 顺带把当前名字/性别带回去，前端接着重新 player:join 时要用这份真实值，不能用输入框里
+	// 随手打的名字，否则会把认领回来的账号名字覆盖掉——阵营由性别查表决定，不用单独带回。
 	client.reply(env.ID, map[string]any{
-		"playerId":          player.PlayerID,
-		"playerSecret":      newSecret,
-		"name":              player.Name,
-		"genderId":          player.GenderID,
-		"customGenderLabel": customGenderLabel,
-		"factionId":         player.FactionID,
+		"playerId":     player.PlayerID,
+		"playerSecret": newSecret,
+		"name":         player.Name,
+		"genderId":     player.GenderID,
 	}, "")
 }
 

@@ -30,6 +30,16 @@
     "factionId": "femboy_faction"
   },
   {
+    "id": "ftm",
+    "label": "FTM",
+    "factionId": "trans_male_faction"
+  },
+  {
+    "id": "tomboy",
+    "label": "假小子",
+    "factionId": "trans_male_faction"
+  },
+  {
     "id": "attack_helicopter",
     "label": "武装直升机",
     "factionId": "other_faction"

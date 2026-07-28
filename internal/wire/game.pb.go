@@ -299,6 +299,8 @@ type PublicStats struct {
 	TitleCustom bool `protobuf:"varint,13,opt,name=title_custom,json=titleCustom,proto3" json:"title_custom,omitempty"`
 	// 累计在线时长（毫秒）。下发时若当前在线，会加上本会话已持续时长。
 	TotalOnlineMs int64 `protobuf:"varint,14,opt,name=total_online_ms,json=totalOnlineMs,proto3" json:"total_online_ms,omitempty"`
+	// 玩家自设称号，展示优先级：管理员自定义 > 主人为宠物设置的称号 > self_title > 系统自动称号。
+	SelfTitle     string `protobuf:"bytes,15,opt,name=self_title,json=selfTitle,proto3" json:"self_title,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -431,6 +433,13 @@ func (x *PublicStats) GetTotalOnlineMs() int64 {
 	return 0
 }
 
+func (x *PublicStats) GetSelfTitle() string {
+	if x != nil {
+		return x.SelfTitle
+	}
+	return ""
+}
+
 type LobbyStats struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Wins             int32                  `protobuf:"varint,1,opt,name=wins,proto3" json:"wins,omitempty"`
@@ -447,6 +456,8 @@ type LobbyStats struct {
 	TitleCustom      bool                   `protobuf:"varint,12,opt,name=title_custom,json=titleCustom,proto3" json:"title_custom,omitempty"`
 	// 累计在线时长（毫秒）。下发时若当前在线，会加上本会话已持续时长。
 	TotalOnlineMs int64 `protobuf:"varint,13,opt,name=total_online_ms,json=totalOnlineMs,proto3" json:"total_online_ms,omitempty"`
+	// 玩家自设称号，展示优先级：管理员自定义 > 主人为宠物设置的称号 > self_title > 系统自动称号。
+	SelfTitle     string `protobuf:"bytes,14,opt,name=self_title,json=selfTitle,proto3" json:"self_title,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -570,6 +581,13 @@ func (x *LobbyStats) GetTotalOnlineMs() int64 {
 		return x.TotalOnlineMs
 	}
 	return 0
+}
+
+func (x *LobbyStats) GetSelfTitle() string {
+	if x != nil {
+		return x.SelfTitle
+	}
+	return ""
 }
 
 type GameWLD struct {
@@ -7956,7 +7974,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"task_group\x18\a \x01(\tR\ttaskGroupJ\x04\b\x06\x10\aR\agenders\")\n" +
 	"\x03Pos\x12\x10\n" +
 	"\x03row\x18\x01 \x01(\x05R\x03row\x12\x10\n" +
-	"\x03col\x18\x02 \x01(\x05R\x03col\"\xf1\x03\n" +
+	"\x03col\x18\x02 \x01(\x05R\x03col\"\x90\x04\n" +
 	"\vPublicStats\x12\x12\n" +
 	"\x04wins\x18\x01 \x01(\x05R\x04wins\x12\x16\n" +
 	"\x06losses\x18\x02 \x01(\x05R\x06losses\x12\x14\n" +
@@ -7972,7 +7990,9 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x12sort_highest_score\x18\v \x01(\x05R\x10sortHighestScore\x12*\n" +
 	"\x11sort_lowest_score\x18\f \x01(\x05R\x0fsortLowestScore\x12!\n" +
 	"\ftitle_custom\x18\r \x01(\bR\vtitleCustom\x12&\n" +
-	"\x0ftotal_online_ms\x18\x0e \x01(\x03R\rtotalOnlineMs\"\xc6\x03\n" +
+	"\x0ftotal_online_ms\x18\x0e \x01(\x03R\rtotalOnlineMs\x12\x1d\n" +
+	"\n" +
+	"self_title\x18\x0f \x01(\tR\tselfTitle\"\xe5\x03\n" +
 	"\n" +
 	"LobbyStats\x12\x12\n" +
 	"\x04wins\x18\x01 \x01(\x05R\x04wins\x12\x16\n" +
@@ -7988,7 +8008,9 @@ const file_api_proto_game_proto_rawDesc = "" +
 	" \x01(\x05R\x10sortHighestScore\x12*\n" +
 	"\x11sort_lowest_score\x18\v \x01(\x05R\x0fsortLowestScore\x12!\n" +
 	"\ftitle_custom\x18\f \x01(\bR\vtitleCustom\x12&\n" +
-	"\x0ftotal_online_ms\x18\r \x01(\x03R\rtotalOnlineMs\"K\n" +
+	"\x0ftotal_online_ms\x18\r \x01(\x03R\rtotalOnlineMs\x12\x1d\n" +
+	"\n" +
+	"self_title\x18\x0e \x01(\tR\tselfTitle\"K\n" +
 	"\aGameWLD\x12\x12\n" +
 	"\x04wins\x18\x01 \x01(\x05R\x04wins\x12\x16\n" +
 	"\x06losses\x18\x02 \x01(\x05R\x06losses\x12\x14\n" +

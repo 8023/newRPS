@@ -472,11 +472,9 @@ main {
   border-radius: 12px;
   border: 1px solid color-mix(in srgb, var(--pink-border) 88%, var(--border));
   background:
-    linear-gradient(
-      145deg,
+    linear-gradient(145deg,
       color-mix(in srgb, var(--pink) 72%, var(--panel-solid)),
-      color-mix(in srgb, var(--pink) 48%, color-mix(in srgb, var(--primary) 16%, var(--panel-solid)))
-    );
+      color-mix(in srgb, var(--pink) 48%, color-mix(in srgb, var(--primary) 16%, var(--panel-solid))));
   color: var(--page-text);
   font-size: 14px;
   font-weight: 700;
@@ -491,11 +489,9 @@ main {
 :root[data-theme="dark"] .toast-notice {
   border-color: color-mix(in srgb, var(--pink-border) 90%, var(--border));
   background:
-    linear-gradient(
-      145deg,
+    linear-gradient(145deg,
       color-mix(in srgb, var(--pink) 78%, var(--panel-solid)),
-      color-mix(in srgb, var(--pink) 55%, color-mix(in srgb, var(--primary) 18%, var(--panel-solid)))
-    );
+      color-mix(in srgb, var(--pink) 55%, color-mix(in srgb, var(--primary) 18%, var(--panel-solid))));
   box-shadow:
     0 16px 40px rgba(0, 0, 0, 0.42),
     0 0 0 1px color-mix(in srgb, var(--pink-border) 35%, transparent);
@@ -514,6 +510,7 @@ main {
     opacity: 0;
     transform: translate3d(12px, 16px, 0) scale(0.94);
   }
+
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0) scale(1);
@@ -525,6 +522,7 @@ main {
     opacity: 1;
     transform: translate3d(0, 0, 0) scale(1);
   }
+
   to {
     opacity: 0;
     transform: translate3d(10px, 12px, 0) scale(0.96);
@@ -718,28 +716,6 @@ main {
   border: 1px solid var(--border);
   font-size: 12px;
   font-weight: 900;
-}
-
-/* 性别下拉 + 自定义文本框：默认二分布局（个人资料等紧凑场景），下拉与输入框各占一半宽度——
-   用 grid 而不是 flex，这样未选中"自定义"、输入框不渲染时，下拉也不会被拉伸占满整行，
-   右边那一半留白即可，不需要跟着调整布局。stacked 时各占一行（进入游戏页）。 */
-.gender-select-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.gender-select-row select {
-  min-width: 0;
-}
-
-.gender-select-row input {
-  min-width: 0;
-}
-
-.gender-select-row.stacked {
-  display: flex;
-  flex-direction: column;
 }
 
 .dashboard,
@@ -1403,7 +1379,7 @@ main {
   align-items: stretch;
 }
 
-.lobby-lower-col > .panel {
+.lobby-lower-col>.panel {
   /* 防止 grid/flex 子项被默认 stretch 产生视觉空洞 */
   height: auto;
   align-self: stretch;
@@ -1704,6 +1680,145 @@ main {
   box-shadow: 0 18px 60px var(--shadow);
   padding: 14px;
   overflow: auto;
+}
+
+/* ── 帮助面板（游戏说明）────────────────────── */
+
+.help-modal {
+  width: min(800px, 100%);
+  max-height: min(820px, calc(100dvh - 28px));
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-solid);
+  box-shadow: 0 18px 60px var(--shadow);
+  padding: 14px;
+  overflow: auto;
+}
+
+.help-content {
+  font-size: 0.92em;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.help-content h1 {
+  font-size: 1.4em;
+  font-weight: 700;
+  margin-top: 0;
+  margin-bottom: 0.5em;
+  color: var(--text);
+}
+
+.help-content h2 {
+  font-size: 1.15em;
+  font-weight: 700;
+  margin-top: 1.4em;
+  margin-bottom: 0.35em;
+  padding-bottom: 0.2em;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.help-content h3 {
+  font-size: 1.02em;
+  font-weight: 700;
+  margin-top: 1.2em;
+  margin-bottom: 0.25em;
+  color: var(--text);
+}
+
+.help-content h4 {
+  font-size: 0.96em;
+  font-weight: 700;
+  margin-top: 1em;
+  margin-bottom: 0.25em;
+  color: var(--text);
+}
+
+.help-content p {
+  margin: 0.4em 0;
+}
+
+.help-content ul,
+.help-content ol {
+  padding-left: 1.5em;
+  margin: 0.4em 0;
+}
+
+.help-content li {
+  margin: 0.2em 0;
+}
+
+.help-content li > ul,
+.help-content li > ol {
+  margin: 0.2em 0;
+}
+
+.help-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.6em 0;
+  font-size: 0.88em;
+}
+
+.help-content th,
+.help-content td {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+.help-content th {
+  color: var(--text);
+  background: var(--bg-secondary);
+}
+
+.help-content td:first-child {
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--bg-secondary);
+}
+
+.help-content blockquote {
+  margin: 0.5em 0;
+  padding: 6px 12px;
+  border-left: 3px solid var(--pink);
+  background: color-mix(in srgb, var(--pink) 8%, var(--panel-solid));
+  border-radius: 0 4px 4px 0;
+  color: var(--text);
+}
+
+.help-content blockquote p {
+  margin: 0.3em 0;
+}
+
+.help-content blockquote p:first-child {
+  margin-top: 0;
+}
+
+.help-content blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+.help-content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1em 0;
+}
+
+.help-content code {
+  font-size: 0.92em;
+  padding: 1px 4px;
+  background: var(--bg-secondary);
+  border-radius: 3px;
+  border: 1px solid var(--border);
+}
+
+.help-content a {
+  color: var(--pink);
+  text-decoration: underline;
 }
 
 .sponsor-title h2 {
@@ -2118,7 +2233,7 @@ main {
   gap: 8px;
 }
 
-.seat-action-row > button {
+.seat-action-row>button {
   flex: 1 1 50%;
 }
 
@@ -2975,7 +3090,7 @@ main {
   flex-wrap: nowrap;
 }
 
-.gomoku-risk-actions > button {
+.gomoku-risk-actions>button {
   min-width: 0;
   flex: 0 1 auto;
   align-self: stretch;
@@ -3059,11 +3174,25 @@ main {
 }
 
 .gomoku-stone.last-move {
-  box-shadow: 0 0 0 2px #ff6f91, inset 0 3px 4px rgba(255, 255, 255, 0.22), inset 0 -3px 5px rgba(0, 0, 0, 0.22), 0 2px 3px rgba(0, 0, 0, 0.28);
+  /* 双层描边：先用白色内环把棋子边缘从棋盘/棋子色里"抠"出来，再叠一层高饱和红粉外环并配合
+     外发光，无论棋盘配的是深色、浅色还是同色系（如粉蓝白主题），至少一层都能保持清晰对比。 */
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.9),
+    0 0 0 4.5px #ff2d55,
+    0 0 7px 1.5px rgba(255, 45, 85, 0.6),
+    inset 0 3px 4px rgba(255, 255, 255, 0.22),
+    inset 0 -3px 5px rgba(0, 0, 0, 0.22),
+    0 2px 3px rgba(0, 0, 0, 0.28);
 }
 
 .gomoku-stone.last-move.white {
-  box-shadow: 0 0 0 2px #ff6f91, inset 0 3px 4px rgba(255, 255, 255, 0.5), inset 0 -3px 5px rgba(0, 0, 0, 0.14), 0 2px 3px rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 0 0 2px rgba(20, 20, 26, 0.55),
+    0 0 0 4.5px #ff2d55,
+    0 0 7px 1.5px rgba(255, 45, 85, 0.6),
+    inset 0 3px 4px rgba(255, 255, 255, 0.5),
+    inset 0 -3px 5px rgba(0, 0, 0, 0.14),
+    0 2px 3px rgba(0, 0, 0, 0.2);
 }
 
 .gomoku-crosshair {
@@ -4780,7 +4909,7 @@ main {
   margin: 0;
 }
 
-/* 名字、阵营、性别、头像按钮同属一个框，不再各自分开单独装框。 */
+/* 名字、称号、阵营、性别、头像按钮同属一个框，不再各自分开单独装框。 */
 .profile-edit-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5351,44 +5480,19 @@ main {
   margin: 0;
 }
 
-/* 第二行：阵营下拉、性别下拉、自定义性别输入框三等分，跟第一行一样平级展示，不再单独装框。
-   自定义输入框只有选中"自定义"才渲染（GenderCustomField 内部判断），未选中时该栏留空，
-   不回收给另外两栏——三栏宽度始终固定。 */
+/* 第二行：阵营下拉、性别下拉固定 14em，剩余空间给认领密钥显示框（内容比下拉框长得多）。 */
 .admin-player-row2 {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 14em 14em minmax(0, 1fr);
   gap: 8px;
 }
 
-/* 认领密钥行：固定宽按钮 + 占满剩余空间的只读 input（默认 password 掩码，点击按钮后明文并复制）。 */
-.admin-player-claim-row {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-  min-width: 0;
-}
-
-.admin-claim-key-btn {
-  flex: 0 0 8.5em;
-  width: 8.5em;
-  white-space: nowrap;
-}
-
+/* 认领密钥显示框：默认展示占位文案，聚焦后替换成密钥明文并高亮等宽字体。 */
 .admin-claim-key-input {
-  flex: 1 1 auto;
   min-width: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.92em;
   letter-spacing: 0.02em;
-}
-
-/* 自定义性别输入框未显示时的占位：边框/内边距跟输入框同一套盒模型，撑出一致的高度，
-   让三栏保持同一行对齐（不设背景/可见边框，视觉上是空的）。 */
-.gender-custom-placeholder {
-  display: block;
-  border: 1px solid transparent;
-  padding: 10px 12px;
-  line-height: 1.2;
 }
 
 .field-label {
@@ -5527,8 +5631,37 @@ main {
 }
 
 .faction-gender-row {
-  grid-template-columns: 1fr 1fr 1fr auto;
-  align-items: end;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.faction-gender-delete {
+  flex: none;
+  font-size: 15px;
+}
+
+.faction-gender-label-input {
+  flex: none;
+  width: 12em;
+}
+
+.faction-gender-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.faction-gender-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .color-grid,
@@ -5979,7 +6112,7 @@ main {
   .panel-title,
   .room-card {
     flex-direction: column;
-    min-height: 122px;
+    min-height: 60px;
   }
 
   .panel-title.compact-title {
@@ -6342,19 +6475,6 @@ main {
   .admin-player-row1,
   .admin-player-row2 {
     grid-template-columns: 1fr;
-  }
-
-  .admin-player-claim-row {
-    flex-wrap: wrap;
-  }
-
-  .admin-claim-key-btn {
-    flex: 0 0 auto;
-    width: auto;
-  }
-
-  .admin-claim-key-input {
-    flex: 1 1 100%;
   }
 
   .title-faction-grid {

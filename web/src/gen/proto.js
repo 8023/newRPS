@@ -2587,6 +2587,7 @@ export const game = $root.game = (() => {
          * @property {number|null} [sortLowestScore] PublicStats sortLowestScore
          * @property {boolean|null} [titleCustom] PublicStats titleCustom
          * @property {number|Long|null} [totalOnlineMs] PublicStats totalOnlineMs
+         * @property {string|null} [selfTitle] PublicStats selfTitle
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -2731,6 +2732,14 @@ export const game = $root.game = (() => {
         PublicStats.prototype.totalOnlineMs = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
+         * PublicStats selfTitle.
+         * @member {string} selfTitle
+         * @memberof game.PublicStats
+         * @instance
+         */
+        PublicStats.prototype.selfTitle = "";
+
+        /**
          * Creates a new PublicStats instance using the specified properties.
          * @function create
          * @memberof game.PublicStats
@@ -2790,6 +2799,8 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 13, wireType 0 =*/104).bool(message.titleCustom);
             if (message.totalOnlineMs != null && $Object.hasOwnProperty.call(message, "totalOnlineMs") && (typeof message.totalOnlineMs === "object" ? message.totalOnlineMs.low || message.totalOnlineMs.high : message.totalOnlineMs !== 0))
                 writer.uint32(/* id 14, wireType 0 =*/112).int64(message.totalOnlineMs);
+            if (message.selfTitle != null && $Object.hasOwnProperty.call(message, "selfTitle") && message.selfTitle !== "")
+                writer.uint32(/* id 15, wireType 2 =*/122).string(message.selfTitle);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -2963,6 +2974,15 @@ export const game = $root.game = (() => {
                             delete message.totalOnlineMs;
                         continue;
                     }
+                case 15: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.selfTitle = value;
+                        else
+                            delete message.selfTitle;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -3048,6 +3068,9 @@ export const game = $root.game = (() => {
             if (message.totalOnlineMs != null && $Object.hasOwnProperty.call(message, "totalOnlineMs"))
                 if (!$util.isInteger(message.totalOnlineMs) && !(message.totalOnlineMs && $util.isInteger(message.totalOnlineMs.low) && $util.isInteger(message.totalOnlineMs.high)))
                     return "totalOnlineMs: integer|Long expected";
+            if (message.selfTitle != null && $Object.hasOwnProperty.call(message, "selfTitle"))
+                if (!$util.isString(message.selfTitle))
+                    return "selfTitle: string expected";
             return null;
         };
 
@@ -3118,6 +3141,9 @@ export const game = $root.game = (() => {
                         message.totalOnlineMs = object.totalOnlineMs;
                     else if (typeof object.totalOnlineMs === "object")
                         message.totalOnlineMs = new $util.LongBits(object.totalOnlineMs.low >>> 0, object.totalOnlineMs.high >>> 0).toNumber();
+            if (object.selfTitle != null)
+                if (typeof object.selfTitle !== "string" || object.selfTitle.length)
+                    message.selfTitle = $String(object.selfTitle);
             return message;
         };
 
@@ -3157,6 +3183,7 @@ export const game = $root.game = (() => {
                     object.totalOnlineMs = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.totalOnlineMs = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                object.selfTitle = "";
             }
             if (message.wins != null && $Object.hasOwnProperty.call(message, "wins"))
                 object.wins = message.wins;
@@ -3191,6 +3218,8 @@ export const game = $root.game = (() => {
                     object.totalOnlineMs = options.longs === $String ? $String(message.totalOnlineMs) : message.totalOnlineMs;
                 else
                     object.totalOnlineMs = options.longs === $String ? $util.Long.prototype.toString.call(message.totalOnlineMs) : options.longs === $Number ? new $util.LongBits(message.totalOnlineMs.low >>> 0, message.totalOnlineMs.high >>> 0).toNumber() : message.totalOnlineMs;
+            if (message.selfTitle != null && $Object.hasOwnProperty.call(message, "selfTitle"))
+                object.selfTitle = message.selfTitle;
             return object;
         };
 
@@ -3240,6 +3269,7 @@ export const game = $root.game = (() => {
          * @property {number|null} [sortLowestScore] LobbyStats sortLowestScore
          * @property {boolean|null} [titleCustom] LobbyStats titleCustom
          * @property {number|Long|null} [totalOnlineMs] LobbyStats totalOnlineMs
+         * @property {string|null} [selfTitle] LobbyStats selfTitle
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -3376,6 +3406,14 @@ export const game = $root.game = (() => {
         LobbyStats.prototype.totalOnlineMs = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
+         * LobbyStats selfTitle.
+         * @member {string} selfTitle
+         * @memberof game.LobbyStats
+         * @instance
+         */
+        LobbyStats.prototype.selfTitle = "";
+
+        /**
          * Creates a new LobbyStats instance using the specified properties.
          * @function create
          * @memberof game.LobbyStats
@@ -3433,6 +3471,8 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 12, wireType 0 =*/96).bool(message.titleCustom);
             if (message.totalOnlineMs != null && $Object.hasOwnProperty.call(message, "totalOnlineMs") && (typeof message.totalOnlineMs === "object" ? message.totalOnlineMs.low || message.totalOnlineMs.high : message.totalOnlineMs !== 0))
                 writer.uint32(/* id 13, wireType 0 =*/104).int64(message.totalOnlineMs);
+            if (message.selfTitle != null && $Object.hasOwnProperty.call(message, "selfTitle") && message.selfTitle !== "")
+                writer.uint32(/* id 14, wireType 2 =*/114).string(message.selfTitle);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -3597,6 +3637,15 @@ export const game = $root.game = (() => {
                             delete message.totalOnlineMs;
                         continue;
                     }
+                case 14: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.selfTitle = value;
+                        else
+                            delete message.selfTitle;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -3679,6 +3728,9 @@ export const game = $root.game = (() => {
             if (message.totalOnlineMs != null && $Object.hasOwnProperty.call(message, "totalOnlineMs"))
                 if (!$util.isInteger(message.totalOnlineMs) && !(message.totalOnlineMs && $util.isInteger(message.totalOnlineMs.low) && $util.isInteger(message.totalOnlineMs.high)))
                     return "totalOnlineMs: integer|Long expected";
+            if (message.selfTitle != null && $Object.hasOwnProperty.call(message, "selfTitle"))
+                if (!$util.isString(message.selfTitle))
+                    return "selfTitle: string expected";
             return null;
         };
 
@@ -3746,6 +3798,9 @@ export const game = $root.game = (() => {
                         message.totalOnlineMs = object.totalOnlineMs;
                     else if (typeof object.totalOnlineMs === "object")
                         message.totalOnlineMs = new $util.LongBits(object.totalOnlineMs.low >>> 0, object.totalOnlineMs.high >>> 0).toNumber();
+            if (object.selfTitle != null)
+                if (typeof object.selfTitle !== "string" || object.selfTitle.length)
+                    message.selfTitle = $String(object.selfTitle);
             return message;
         };
 
@@ -3784,6 +3839,7 @@ export const game = $root.game = (() => {
                     object.totalOnlineMs = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.totalOnlineMs = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                object.selfTitle = "";
             }
             if (message.wins != null && $Object.hasOwnProperty.call(message, "wins"))
                 object.wins = message.wins;
@@ -3816,6 +3872,8 @@ export const game = $root.game = (() => {
                     object.totalOnlineMs = options.longs === $String ? $String(message.totalOnlineMs) : message.totalOnlineMs;
                 else
                     object.totalOnlineMs = options.longs === $String ? $util.Long.prototype.toString.call(message.totalOnlineMs) : options.longs === $Number ? new $util.LongBits(message.totalOnlineMs.low >>> 0, message.totalOnlineMs.high >>> 0).toNumber() : message.totalOnlineMs;
+            if (message.selfTitle != null && $Object.hasOwnProperty.call(message, "selfTitle"))
+                object.selfTitle = message.selfTitle;
             return object;
         };
 

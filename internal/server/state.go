@@ -15,7 +15,8 @@ const (
 	// 都加入此频道以收 chat:new 增量推送（历史与首屏走 chat:load RPC，读 SQLite）。
 	lobbySuggestionChannel = "lobby:suggestions"
 	chatPageSize           = 100
-	roomHistoryPageSize    = 20
+	chatLoadMorePageSize   = 50
+	roomHistoryPageSize    = 10
 	giveawayBoardDuration  = 12 * time.Hour
 	broadcastMetricWindow  = 60 * time.Second
 )

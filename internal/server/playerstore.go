@@ -22,7 +22,6 @@ CREATE TABLE IF NOT EXISTS players (
 	claim_key TEXT NOT NULL DEFAULT '',
 	name TEXT NOT NULL DEFAULT '',
 	gender_id TEXT NOT NULL DEFAULT '',
-	custom_gender_label TEXT NOT NULL DEFAULT '',
 	faction_id TEXT NOT NULL DEFAULT '',
 	avatar_url TEXT NOT NULL DEFAULT '',
 	name_war_enabled INTEGER,
@@ -57,6 +56,7 @@ CREATE TABLE IF NOT EXISTS players (
 	title TEXT NOT NULL DEFAULT '',
 	title_segment_id TEXT NOT NULL DEFAULT '',
 	title_custom INTEGER NOT NULL DEFAULT 0,
+	self_title TEXT NOT NULL DEFAULT '',
 	highest_score INTEGER NOT NULL DEFAULT 0,
 	lowest_score INTEGER NOT NULL DEFAULT 0,
 	rps_wins INTEGER NOT NULL DEFAULT 0,
@@ -119,7 +119,7 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 	// 注意：db.SetMaxOpenConns(1)，不能在 rows 未 Close 时再 Query（会死锁）。
 	// 先扫完 players，再一次性加载全部 secrets。
 	rows, err := ps.db.Query(`
-		SELECT id, player_id, claim_key, name, gender_id, custom_gender_label, faction_id, avatar_url,
+		SELECT id, player_id, claim_key, name, gender_id, faction_id, avatar_url,
 			name_war_enabled, name_war_allow_rename, name_war_toggled_at, name_war_original_name,
 			name_war_penalty_name, name_war_punished, name_war_rename_protected_until,
 			name_war_renamed_by, name_war_renamed_by_name, name_war_rename_window_started_at, name_war_rename_count,
@@ -128,7 +128,7 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 			extreme_mode_enabled, extreme_mode_toggled_at, extreme_mode_cooldown_until,
 			extreme_win_streak, extreme_last_decay_hour, ranked_last_decay_day,
 			push_mention_enabled, push_turn_enabled, push_seat_enabled,
-			wins, losses, draws, punishments, ranked_points, highest_score, lowest_score, title, title_segment_id, title_custom,
+			wins, losses, draws, punishments, ranked_points, highest_score, lowest_score, title, title_segment_id, title_custom, self_title,
 			rps_wins, rps_losses, rps_draws,
 			othello_wins, othello_losses, othello_draws,
 			tictactoe_wins, tictactoe_losses, tictactoe_draws,
@@ -158,7 +158,7 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 			bondMaster, bondPet, bondPublic         sql.NullInt64
 		)
 		err := rows.Scan(
-			&item.ID, &item.PlayerID, &item.ClaimKey, &item.Name, &item.GenderID, &item.CustomGenderLabel, &item.FactionID, &item.AvatarURL,
+			&item.ID, &item.PlayerID, &item.ClaimKey, &item.Name, &item.GenderID, &item.FactionID, &item.AvatarURL,
 			&nwEnabled, &nwAllow, &nwToggled, &item.NameWarOriginalName,
 			&item.NameWarPenaltyName, &nwPunished, &nwProt,
 			&item.NameWarRenamedBy, &item.NameWarRenamedByName, &nwWinStart, &nwRename,
@@ -167,7 +167,7 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 			&exEnabled, &exToggled, &exCool,
 			&exStreak, &exDecay, &rankedDecay,
 			&pushM, &pushT, &pushS,
-			&item.Stats.Wins, &item.Stats.Losses, &item.Stats.Draws, &item.Stats.Punishments, &item.Stats.RankedPoints, &item.Stats.HighestScore, &item.Stats.LowestScore, &item.Stats.Title, &item.Stats.TitleSegmentID, &item.Stats.TitleCustom,
+			&item.Stats.Wins, &item.Stats.Losses, &item.Stats.Draws, &item.Stats.Punishments, &item.Stats.RankedPoints, &item.Stats.HighestScore, &item.Stats.LowestScore, &item.Stats.Title, &item.Stats.TitleSegmentID, &item.Stats.TitleCustom, &item.Stats.SelfTitle,
 			&item.GameStats.RPS.Wins, &item.GameStats.RPS.Losses, &item.GameStats.RPS.Draws,
 			&item.GameStats.Othello.Wins, &item.GameStats.Othello.Losses, &item.GameStats.Othello.Draws,
 			&item.GameStats.TicTacToe.Wins, &item.GameStats.TicTacToe.Losses, &item.GameStats.TicTacToe.Draws,
@@ -296,7 +296,7 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 	gs := item.GameStats
 	_, err := tx.Exec(`
 		INSERT INTO players (
-			id, player_id, claim_key, name, gender_id, custom_gender_label, faction_id, avatar_url,
+			id, player_id, claim_key, name, gender_id, faction_id, avatar_url,
 			name_war_enabled, name_war_allow_rename, name_war_toggled_at, name_war_original_name,
 			name_war_penalty_name, name_war_punished, name_war_rename_protected_until,
 			name_war_renamed_by, name_war_renamed_by_name, name_war_rename_window_started_at, name_war_rename_count,
@@ -305,7 +305,7 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			extreme_mode_enabled, extreme_mode_toggled_at, extreme_mode_cooldown_until,
 			extreme_win_streak, extreme_last_decay_hour, ranked_last_decay_day,
 			push_mention_enabled, push_turn_enabled, push_seat_enabled,
-			wins, losses, draws, punishments, ranked_points, highest_score, lowest_score, title, title_segment_id, title_custom,
+			wins, losses, draws, punishments, ranked_points, highest_score, lowest_score, title, title_segment_id, title_custom, self_title,
 			rps_wins, rps_losses, rps_draws,
 			othello_wins, othello_losses, othello_draws,
 			tictactoe_wins, tictactoe_losses, tictactoe_draws,
@@ -316,13 +316,13 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			bond_master_enabled, bond_pet_enabled, bond_public_display,
 			created_at, last_seen_at
 		) VALUES (
-			?,?,?,?,?,?,?,?,
+			?,?,?,?,?,?,?,
 			?,?,?,?,?,?,?,?,?,?,?,
 			?,?,?,
 			?,
 			?,?,?,?,?,?,
 			?,?,?,
-			?,?,?,?,?,?,?,?,?,?,
+			?,?,?,?,?,?,?,?,?,?,?,
 			?,?,?,
 			?,?,?,
 			?,?,?,
@@ -338,7 +338,6 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			claim_key=excluded.claim_key,
 			name=excluded.name,
 			gender_id=excluded.gender_id,
-			custom_gender_label=excluded.custom_gender_label,
 			faction_id=excluded.faction_id,
 			avatar_url=excluded.avatar_url,
 			name_war_enabled=excluded.name_war_enabled,
@@ -368,7 +367,7 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			wins=excluded.wins, losses=excluded.losses, draws=excluded.draws,
 			punishments=excluded.punishments, ranked_points=excluded.ranked_points,
 			highest_score=excluded.highest_score, lowest_score=excluded.lowest_score,
-			title=excluded.title, title_segment_id=excluded.title_segment_id, title_custom=excluded.title_custom,
+			title=excluded.title, title_segment_id=excluded.title_segment_id, title_custom=excluded.title_custom, self_title=excluded.self_title,
 			rps_wins=excluded.rps_wins, rps_losses=excluded.rps_losses, rps_draws=excluded.rps_draws,
 			othello_wins=excluded.othello_wins, othello_losses=excluded.othello_losses, othello_draws=excluded.othello_draws,
 			tictactoe_wins=excluded.tictactoe_wins, tictactoe_losses=excluded.tictactoe_losses, tictactoe_draws=excluded.tictactoe_draws,
@@ -381,7 +380,7 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			bond_public_display=excluded.bond_public_display,
 			created_at=excluded.created_at, last_seen_at=excluded.last_seen_at
 	`,
-		item.ID, item.PlayerID, item.ClaimKey, item.Name, item.GenderID, item.CustomGenderLabel, item.FactionID, item.AvatarURL,
+		item.ID, item.PlayerID, item.ClaimKey, item.Name, item.GenderID, item.FactionID, item.AvatarURL,
 		boolPtrToSQL(item.NameWarEnabled), boolPtrToSQL(item.NameWarAllowRename), int64PtrToSQL(item.NameWarToggledAt), item.NameWarOriginalName,
 		item.NameWarPenaltyName, boolPtrToSQL(item.NameWarPunished), int64PtrToSQL(item.NameWarRenameProtectedUntil),
 		item.NameWarRenamedBy, item.NameWarRenamedByName, int64PtrToSQL(item.NameWarRenameWindowStartedAt), intPtrToSQL(item.NameWarRenameCount),
@@ -391,7 +390,7 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 		intPtrToSQL(item.ExtremeWinStreak), int64PtrToSQL(item.ExtremeLastDecayHour),
 		int64PtrToSQL(item.RankedLastDecayDay),
 		boolPtrToSQL(item.PushMentionEnabled), boolPtrToSQL(item.PushTurnEnabled), boolPtrToSQL(item.PushSeatEnabled),
-		item.Stats.Wins, item.Stats.Losses, item.Stats.Draws, item.Stats.Punishments, item.Stats.RankedPoints, item.Stats.HighestScore, item.Stats.LowestScore, item.Stats.Title, item.Stats.TitleSegmentID, item.Stats.TitleCustom,
+		item.Stats.Wins, item.Stats.Losses, item.Stats.Draws, item.Stats.Punishments, item.Stats.RankedPoints, item.Stats.HighestScore, item.Stats.LowestScore, item.Stats.Title, item.Stats.TitleSegmentID, item.Stats.TitleCustom, item.Stats.SelfTitle,
 		gs.RPS.Wins, gs.RPS.Losses, gs.RPS.Draws,
 		gs.Othello.Wins, gs.Othello.Losses, gs.Othello.Draws,
 		gs.TicTacToe.Wins, gs.TicTacToe.Losses, gs.TicTacToe.Draws,

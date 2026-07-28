@@ -70,6 +70,10 @@ type LobbyStats struct {
 	TitleCustom      bool   `json:"titleCustom,omitempty"`
 	// TotalOnlineMs：累计在线时长（毫秒）；与 PublicStats 同语义。
 	TotalOnlineMs int64 `json:"totalOnlineMs,omitempty"`
+	// SelfTitle：与 PublicStats.SelfTitle 同语义。这里必须带上，否则 player:batch 广播
+	// （大厅刷新、他人上下线等很频繁）合并进 App.tsx 的 me.player 时会把已设置的自设称号
+	// 覆盖抹掉——AppViews.tsx 的 ProfilePanel 重新打开时读到的就是被抹空后的值。
+	SelfTitle string `json:"selfTitle,omitempty"`
 }
 
 // ToLobbyPlayer 从完整公开资料裁剪。
@@ -119,7 +123,7 @@ func ToLobbyPlayer(p PublicPlayer) LobbyPlayer {
 			HighestScore: p.Stats.HighestScore, LowestScore: p.Stats.LowestScore,
 			SortRankedPoints: p.Stats.SortRankedPoints, SortHighestScore: p.Stats.SortHighestScore,
 			SortLowestScore: p.Stats.SortLowestScore, TitleCustom: p.Stats.TitleCustom,
-			TotalOnlineMs: p.Stats.TotalOnlineMs,
+			TotalOnlineMs: p.Stats.TotalOnlineMs, SelfTitle: p.Stats.SelfTitle,
 		},
 		GameStats: p.GameStats,
 	}
@@ -152,7 +156,7 @@ func (p LobbyPlayer) AsPublicPlayer() PublicPlayer {
 			HighestScore: p.Stats.HighestScore, LowestScore: p.Stats.LowestScore,
 			SortRankedPoints: p.Stats.SortRankedPoints, SortHighestScore: p.Stats.SortHighestScore,
 			SortLowestScore: p.Stats.SortLowestScore, TitleCustom: p.Stats.TitleCustom,
-			TotalOnlineMs: p.Stats.TotalOnlineMs,
+			TotalOnlineMs: p.Stats.TotalOnlineMs, SelfTitle: p.Stats.SelfTitle,
 		},
 		GameStats: p.GameStats,
 	}

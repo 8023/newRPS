@@ -410,6 +410,7 @@ export function normalizeRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
     punishedPlayerIds: room.punishedPlayerIds || [],
     proofs: room.proofs || [],
     roundHistory: (room.roundHistory || []).map(normalizeRoundHistoryItem),
+    roundHistoryTotal: room.roundHistoryTotal || 0,
     chat: room.chat || [],
     choices: room.choices || {},
     ready: room.ready || { A: false, B: false },

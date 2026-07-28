@@ -33,13 +33,6 @@ CREATE TABLE IF NOT EXISTS pet_bond_requests (
 	created_at INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_pet_bond_requests_status ON pet_bond_requests(status);
-CREATE TABLE IF NOT EXISTS pet_bond_request_approvals (
-	request_id TEXT NOT NULL,
-	player_id TEXT NOT NULL,
-	approved_at INTEGER NOT NULL DEFAULT 0,
-	PRIMARY KEY (request_id, player_id),
-	FOREIGN KEY (request_id) REFERENCES pet_bond_requests(id) ON DELETE CASCADE
-);
 `
 
 // petBondRow / petBondRequestRow 与库表一一对应。
@@ -60,7 +53,6 @@ type petBondRequestRow struct {
 	PetID     string
 	Status    string
 	CreatedAt int64
-	Approvals []string
 }
 
 func newPetBondStore(db *sql.DB) *petBondStore {
@@ -95,43 +87,16 @@ func (ps *petBondStore) loadPendingRequests() ([]petBondRequestRow, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	var reqs []petBondRequestRow
 	for rows.Next() {
 		var r petBondRequestRow
 		if err := rows.Scan(&r.ID, &r.Kind, &r.FromID, &r.ToID, &r.MasterID, &r.PetID, &r.Status, &r.CreatedAt); err != nil {
-			_ = rows.Close()
 			return nil, err
 		}
 		reqs = append(reqs, r)
 	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return nil, err
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	// 另查 approvals（MaxOpenConns=1，必须先关 rows）
-	approvals := map[string][]string{}
-	aRows, err := ps.db.Query(`SELECT request_id, player_id FROM pet_bond_request_approvals`)
-	if err != nil {
-		return nil, err
-	}
-	defer aRows.Close()
-	for aRows.Next() {
-		var rid, pid string
-		if err := aRows.Scan(&rid, &pid); err != nil {
-			return nil, err
-		}
-		approvals[rid] = append(approvals[rid], pid)
-	}
-	if err := aRows.Err(); err != nil {
-		return nil, err
-	}
-	for i := range reqs {
-		reqs[i].Approvals = approvals[reqs[i].ID]
-	}
-	return reqs, nil
+	return reqs, rows.Err()
 }
 
 func (ps *petBondStore) upsertBond(r petBondRow) error {
@@ -168,32 +133,5 @@ func (ps *petBondStore) setRequestStatus(id, status string) error {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	_, err := ps.db.Exec(`UPDATE pet_bond_requests SET status = ? WHERE id = ?`, status, id)
-	return err
-}
-
-func (ps *petBondStore) addApproval(requestID, playerID string, at int64) error {
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
-	_, err := ps.db.Exec(`
-		INSERT OR IGNORE INTO pet_bond_request_approvals (request_id, player_id, approved_at)
-		VALUES (?, ?, ?)
-	`, requestID, playerID, at)
-	return err
-}
-
-func (ps *petBondStore) deleteApprovals(requestID string) error {
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
-	_, err := ps.db.Exec(`DELETE FROM pet_bond_request_approvals WHERE request_id = ?`, requestID)
-	return err
-}
-
-func (ps *petBondStore) removeApproval(requestID, playerID string) error {
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
-	_, err := ps.db.Exec(
-		`DELETE FROM pet_bond_request_approvals WHERE request_id = ? AND player_id = ?`,
-		requestID, playerID,
-	)
 	return err
 }

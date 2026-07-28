@@ -1510,6 +1510,7 @@ func (s *Server) onPunishmentReview(client *Client, env wsEnvelope) {
 			Status: "rejected", ReviewedBy: player.ID, ReviewedAt: &reviewedAt,
 			RejectReason: "需要重做", RedoTaskText: cleanTask,
 		})
+		s.applyProofRejectionPenalty(room, p.PlayerID)
 		s.broadcastRoom(room.ID, false)
 		client.reply(env.ID, map[string]any{"ok": true}, "")
 		return
@@ -1681,7 +1682,7 @@ func (s *Server) onChatLoad(client *Client, env wsEnvelope) {
 			return
 		}
 	}
-	messages, hasMore, err := s.loadChatPage(p.RoomID, 0)
+	messages, hasMore, err := s.loadChatPage(p.RoomID, 0, chatPageSize)
 	if err != nil {
 		client.reply(env.ID, nil, "聊天记录加载失败")
 		return
@@ -1710,7 +1711,7 @@ func (s *Server) onChatLoadOlder(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "游标无效")
 		return
 	}
-	messages, hasMore, err := s.loadChatPage(p.RoomID, p.BeforeSeq)
+	messages, hasMore, err := s.loadChatPage(p.RoomID, p.BeforeSeq, chatLoadMorePageSize)
 	if err != nil {
 		client.reply(env.ID, nil, "聊天记录加载失败")
 		return
@@ -1721,11 +1722,11 @@ func (s *Server) onChatLoadOlder(client *Client, env wsEnvelope) {
 	}, "")
 }
 
-func (s *Server) loadChatPage(roomID string, beforeSeq int64) ([]types.ChatMessage, bool, error) {
+func (s *Server) loadChatPage(roomID string, beforeSeq int64, limit int) ([]types.ChatMessage, bool, error) {
 	if s.chatDB == nil {
 		return []types.ChatMessage{}, false, nil
 	}
-	return s.chatDB.older(roomID, beforeSeq, chatPageSize)
+	return s.chatDB.older(roomID, beforeSeq, limit)
 }
 
 // chatAuthorsFor 按消息里的 playerId 从内存 s.players 取**当前**公开资料（含离线玩家）。
@@ -1756,8 +1757,6 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 		RankedPoints       *float64          `json:"rankedPoints"`
 		Title              *string           `json:"title"`
 		GenderID           *string           `json:"genderId"`
-		CustomGenderLabel  *string           `json:"customGenderLabel"`
-		FactionID          *string           `json:"factionId"`
 		GiveawayValueInput *string           `json:"giveawayValueInput"`
 		Message            string            `json:"message"`
 		DurationSeconds    *float64          `json:"durationSeconds"`
@@ -1907,7 +1906,8 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 	}
 	if p.Action == "showClaimKey" && p.PlayerID != "" {
 		// 管理员协助玩家找回账号：返回与个人资料「显示认领密钥」相同的 playerId.claimKey。
-		// 只回给当前管理员 socket，不广播；非持久身份没有认领体系。
+		// 只回给当前管理员 socket，不广播；非持久身份没有认领体系。后台改成单个"点击即显示"
+		// 输入框后，每次调用都轮换一把新密钥（旧密钥立即作废），语义对齐 identity:refreshClaimKey。
 		pl := s.players[p.PlayerID]
 		if pl == nil {
 			client.reply(env.ID, nil, "玩家不存在")
@@ -1917,10 +1917,8 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 			client.reply(env.ID, nil, "该玩家身份不支持认领密钥")
 			return
 		}
-		if pl.ClaimKey == "" {
-			pl.ClaimKey = randomClaimKey()
-			s.requestPersist("lazy")
-		}
+		pl.ClaimKey = randomClaimKey()
+		s.requestPersist("lazy")
 		client.reply(env.ID, map[string]any{"claimKey": pl.ClaimKey, "playerId": pl.PlayerID}, "")
 		return
 	}
@@ -1990,31 +1988,14 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 				s.syncTitleForRankSegment(pl, true)
 			}
 		}
-		// GenderID/CustomGenderLabel/FactionID 都为 nil 表示管理员没有改动性别/阵营；三者
-		// 任一非 nil 就用玩家当前值补齐缺省项后统一走 resolveGender（与玩家自己改资料同一条
-		// 解析逻辑：genderId 命中预设用预设文案，否则 customGenderLabel 当自定义文本清洗到
-		// 1-9 字符；factionId 始终独立解析，与性别选择无关）。
-		if p.GenderID != nil || p.CustomGenderLabel != nil || p.FactionID != nil {
-			genderID := pl.GenderID
-			if p.GenderID != nil {
-				genderID = *p.GenderID
-			}
-			customGenderLabel := ""
-			if pl.GenderID == "" {
-				customGenderLabel = pl.GenderLabel
-			}
-			if p.CustomGenderLabel != nil {
-				customGenderLabel = *p.CustomGenderLabel
-			}
-			factionID := pl.FactionID
-			if p.FactionID != nil {
-				factionID = *p.FactionID
-			}
-			if ok, reason := s.validGenderSubmission(genderID, customGenderLabel, factionID); !ok {
+		// GenderID 为 nil 表示管理员没有改动这一栏；非 nil 时按查表法解析（genderId 命中预设
+		// 才合法，阵营由预设的 factionId 决定，不再单独提交）。
+		if p.GenderID != nil {
+			if ok, reason := s.validGenderSubmission(*p.GenderID); !ok {
 				client.reply(env.ID, nil, reason)
 				return
 			}
-			s.applyGender(pl, genderID, customGenderLabel, factionID)
+			s.applyGender(pl, *p.GenderID)
 		}
 		// GiveawayValueInput 为 nil 表示管理员没有改动这一栏；否则按数字语义解析（0-100，1 位小数）：
 		// 大于 0 直接设为白给值并开启；0 或任何解析失败/超范围的内容都视为清空白给值并关闭白给

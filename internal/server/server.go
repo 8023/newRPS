@@ -81,7 +81,7 @@ func New() (*Server, error) {
 			port = n
 		}
 	}
-	// 可信反向代理层数：决定 X-Forwarded-For/Host 的信任方式（默认 1，直连可设 0）。
+	// 可信反向代理层数：决定 X-Forwarded-For/Host 的信任方式（默认 0=直连；部署在反代之后需显式设置）。
 	if v := os.Getenv("TRUSTED_PROXY_COUNT"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			trustedProxyCount = n

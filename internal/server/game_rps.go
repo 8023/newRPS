@@ -175,6 +175,8 @@ func (s *Server) maybeStartChoosing(room *RoomState) {
 	room.Phase = types.PhaseChoosing
 	room.Status = "playing"
 	room.Choices = map[types.SeatKey]types.Move{}
+	room.ForcedGiveawayBySeat = map[types.SeatKey]string{}
+	room.GiveawayBoostedBySeat = map[types.SeatKey]bool{}
 	room.RevealedChoices = nil
 	room.DisconnectForfeits = map[string]DisconnectForfeit{}
 	room.ResultText = ""
@@ -207,6 +209,8 @@ func (s *Server) prepareNextChoice(room *RoomState) {
 		room.Phase = types.PhaseReady
 		room.Status = "waiting"
 		room.Choices = map[types.SeatKey]types.Move{}
+		room.ForcedGiveawayBySeat = map[types.SeatKey]string{}
+		room.GiveawayBoostedBySeat = map[types.SeatKey]bool{}
 		room.RevealedChoices = nil
 		room.DisconnectForfeits = map[string]DisconnectForfeit{}
 		return
@@ -215,6 +219,7 @@ func (s *Server) prepareNextChoice(room *RoomState) {
 	room.Status = "playing"
 	room.Choices = map[types.SeatKey]types.Move{}
 	room.ForcedGiveawayBySeat = map[types.SeatKey]string{}
+	room.GiveawayBoostedBySeat = map[types.SeatKey]bool{}
 	room.RevealedChoices = nil
 	room.DisconnectForfeits = map[string]DisconnectForfeit{}
 	room.ResultText = ""

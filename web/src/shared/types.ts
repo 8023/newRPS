@@ -156,6 +156,8 @@ export type PublicStats = {
   title: string;
   titleSegmentId?: string;
   titleCustom?: boolean;
+  /** 玩家自设称号；展示优先级：管理员自定义 > 主人设置的宠物称号 > selfTitle > 系统自动称号。 */
+  selfTitle?: string;
   /** 累计在线时长（毫秒）；在线时服务端会加上本会话已持续时长。 */
   totalOnlineMs?: number;
 };

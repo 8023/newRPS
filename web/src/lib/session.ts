@@ -43,20 +43,11 @@ export function hasCachedLogin(): boolean {
   return Boolean(localStorage.getItem("rps-online-name"));
 }
 
-/**
- * 读取自动 player:join 所需的性别/阵营本地缓存。
- *
- * 自定义性别时 genderId 的合法值就是空串（展示文案在 rps-online-custom-gender）。
- * 绝不能写成 `getItem("rps-online-gender") || "male"`——空串在 JS 里是 falsy，
- * 会被错误兜底成 "male"，导致每次刷新/重连都把自定义性别覆盖成默认预设。
- */
-export function readCachedJoinGender(): { genderId: string; customGenderLabel: string; factionId: string } {
-  const customGenderLabel = localStorage.getItem("rps-online-custom-gender") || "";
-  const rawGender = localStorage.getItem("rps-online-gender");
-  // null = 从未写入；"" = 明确选了自定义。仅在从未写入且也没有自定义文案时兜底 male。
-  const genderId = rawGender !== null ? rawGender : (customGenderLabel ? "" : "male");
+/** 读取自动 player:join 所需的性别/阵营本地缓存。 */
+export function readCachedJoinGender(): { genderId: string; factionId: string } {
+  const genderId = localStorage.getItem("rps-online-gender") || "male";
   const factionId = localStorage.getItem("rps-online-faction") || "";
-  return { genderId, customGenderLabel, factionId };
+  return { genderId, factionId };
 }
 
 /** 把服务端确认过的名字/性别/阵营写回本地，供下次自动 join 使用。 */
@@ -65,7 +56,6 @@ export function cacheJoinProfile(player: { name: string; genderId?: string | nul
   const genderId = typeof player.genderId === "string" ? player.genderId : "";
   localStorage.setItem("rps-online-name", player.name || "");
   localStorage.setItem("rps-online-gender", genderId);
-  localStorage.setItem("rps-online-custom-gender", genderId ? "" : (player.genderLabel || ""));
   localStorage.setItem("rps-online-faction", player.factionId || "");
 }
 
@@ -219,13 +209,13 @@ export async function refreshClaimKey(): Promise<{ playerId: string; claimKey: s
 
 /**
  * 用另一台设备的认领码认领身份：成功后覆写本地 playerId/playerSecret，调用方需要接着
- * 重新 player:join——务必用返回的 name/genderId/customGenderLabel/factionId（认领回来的
- * 账号真实值），不要用输入框里随手打的名字/性别/阵营，否则会把认领回来的账号资料覆盖掉。
+ * 重新 player:join——务必用返回的 name/genderId（认领回来的账号真实值），不要用输入框里
+ * 随手打的名字/性别，否则会把认领回来的账号资料覆盖掉。
  */
-export async function claimIdentity(code: string): Promise<{ playerId: string; playerSecret: string; name: string; genderId: string; customGenderLabel: string; factionId: string }> {
+export async function claimIdentity(code: string): Promise<{ playerId: string; playerSecret: string; name: string; genderId: string }> {
   const parsed = decodeClaimCode(code);
   if (!parsed) throw new Error("认领码格式不对");
-  const result = await ask<{ playerId: string; playerSecret: string; name: string; genderId: string; customGenderLabel: string; factionId: string }>("identity:claim", parsed);
+  const result = await ask<{ playerId: string; playerSecret: string; name: string; genderId: string }>("identity:claim", parsed);
   localStorage.setItem(playerIdKey, result.playerId);
   localStorage.setItem(playerSecretKey, result.playerSecret);
   return result;
@@ -244,6 +234,5 @@ export async function logout() {
   localStorage.removeItem(tokenKey);
   localStorage.removeItem("rps-online-name");
   localStorage.removeItem("rps-online-gender");
-  localStorage.removeItem("rps-online-custom-gender");
   localStorage.removeItem("rps-online-faction");
 }

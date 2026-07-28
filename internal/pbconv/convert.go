@@ -1712,6 +1712,16 @@ func NormalizeFrontTree(v any) any {
 			jungle["moveCount"] = numAny(jungle["moveCount"], 0)
 			jungle["moveDeadlineAt"] = numAny(jungle["moveDeadlineAt"], 0)
 			jungle["clockDeadlineAt"] = numAny(jungle["clockDeadlineAt"], 0)
+			// protojson 会丢弃 row/col 为 0 的 key；必须与 web/src/wire.ts:255-256 的
+			// normalizeStateTree 逐字节对齐，否则落在第 0 行/列的落子会让两端状态树
+			// 少一个 key，DELTA 的 CRC32 哈希立即分歧，触发 sync:full。
+			for _, k := range []string{"lastFrom", "lastTo"} {
+				if p, ok := jungle[k].(map[string]any); ok {
+					p["row"] = numAny(p["row"], 0)
+					p["col"] = numAny(p["col"], 0)
+					jungle[k] = p
+				}
+			}
 			out["jungle"] = jungle
 		}
 		if ss, ok := out["serverStats"].(map[string]any); ok {

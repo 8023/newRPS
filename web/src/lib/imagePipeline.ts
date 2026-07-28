@@ -3,7 +3,7 @@
  *
  * 兼容要点：
  * - Safari 的 canvas.toBlob('image/webp') 常实际产出 PNG，必须校验魔数并用 WASM 编码器兜底
- * - Chrome 不解 HEIC：heic2any（需 CSP worker-src blob:）
+ * - Chrome 不解 HEIC：libheif-js（按需动态 import，独立 .wasm 文件而非 base64 内联，体积/流量显著更小）
  */
 
 export function isHeicLike(file: File): boolean {
@@ -21,19 +21,39 @@ export async function blobIsWebp(blob: Blob): Promise<boolean> {
   );
 }
 
-async function heicToDecodableBlob(file: File): Promise<Blob> {
+/** libheif-js 的独立 .wasm 变体：解到 ImageData 后转 ImageBitmap，按需动态 import 触发 WASM 加载 */
+async function heicToImageBitmap(file: File): Promise<ImageBitmap> {
   try {
-    const heic2any = (await import("heic2any")).default;
-    const out = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.92 });
-    const blob = Array.isArray(out) ? out[0] : out;
-    if (!blob || !(blob instanceof Blob) || blob.size === 0) {
+    const [{ default: createHeifModule }, { default: wasmUrl }] = await Promise.all([
+      import("libheif-js/libheif-wasm/libheif.js"),
+      import("libheif-js/libheif-wasm/libheif.wasm?url")
+    ]);
+    // Emscripten 的异步 fetch 路径在这套打包环境下会走同步 XHR 兜底并失败
+    // （"sync fetching of the wasm failed"），必须自己 fetch 后以 wasmBinary 传入。
+    const wasmBinary = new Uint8Array(await (await fetch(wasmUrl)).arrayBuffer());
+    const heif = await createHeifModule({ wasmBinary, locateFile: (path) => (path.endsWith(".wasm") ? wasmUrl : path) });
+    const decoder = new heif.HeifDecoder();
+    const buffer = new Uint8Array(await file.arrayBuffer());
+    const images = decoder.decode(buffer);
+    if (!images.length) {
       throw new Error("HEIC 转换结果为空");
     }
-    return blob;
+    const image = images[0];
+    const width = image.get_width();
+    const height = image.get_height();
+    if (!width || !height) {
+      throw new Error("HEIC 转换结果为空");
+    }
+    const imageData = new ImageData(width, height);
+    await new Promise<void>((resolve, reject) => {
+      image.display(imageData, (result) => (result ? resolve() : reject(new Error("HEIC 解码失败"))));
+    });
+    image.free();
+    return await createImageBitmap(imageData);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (/Content Security Policy|worker/i.test(msg)) {
-      throw new Error("HEIC 解码被浏览器安全策略拦截，请改用 jpg/png，或联系管理员放开 worker-src");
+    if (/Content Security Policy/i.test(msg)) {
+      throw new Error("HEIC 解码被浏览器安全策略拦截，请改用 jpg/png，或联系管理员放开 script-src wasm-unsafe-eval");
     }
     throw new Error("无法解码 HEIC 图片，请换 jpg/png，或在相册中导出为 JPEG");
   }
@@ -81,8 +101,8 @@ async function tryDecodeBlob(blob: Blob): Promise<Decoded | null> {
 export async function decodeToImageSource(file: File): Promise<Decoded> {
   let decoded = await tryDecodeBlob(file);
   if (!decoded && isHeicLike(file)) {
-    const jpegBlob = await heicToDecodableBlob(file);
-    decoded = await tryDecodeBlob(jpegBlob);
+    const bitmap = await heicToImageBitmap(file);
+    decoded = { source: bitmap, width: bitmap.width, height: bitmap.height, close: () => bitmap.close?.() };
   }
   if (!decoded) {
     throw new Error("无法读取图片，请换一张有效的图片文件（jpg/png/webp/heic 等）");

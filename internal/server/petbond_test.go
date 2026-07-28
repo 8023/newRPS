@@ -8,25 +8,18 @@ import (
 )
 
 func TestBuildPetBondChainsSplitLong(t *testing.T) {
-	// a→b→c→d 四级：应拆成 a-b-c 与 b-c-d（以及可能的 2 人边）
+	// a→b→c→d 四级：不再拆窗，应整链展示为 a-b-c-d，且不重复展示其子区间（a-b-c、b-c-d、a-b 等）。
 	edges := []types.PetBondEdge{
 		{MasterID: "a", PetID: "b"},
 		{MasterID: "b", PetID: "c"},
 		{MasterID: "c", PetID: "d"},
 	}
 	chains := buildPetBondChains(edges)
-	joined := map[string]bool{}
-	for _, c := range chains {
-		if len(c) < 2 || len(c) > 3 {
-			t.Fatalf("chain length out of range: %v", c)
-		}
-		joined[strings.Join(c, ">")] = true
+	if len(chains) != 1 {
+		t.Fatalf("expected exactly 1 full chain, got %v", chains)
 	}
-	if !joined["a>b>c"] {
-		t.Fatalf("expected a>b>c, got %v", chains)
-	}
-	if !joined["b>c>d"] {
-		t.Fatalf("expected b>c>d, got %v", chains)
+	if strings.Join(chains[0], ">") != "a>b>c>d" {
+		t.Fatalf("expected a>b>c>d, got %v", chains)
 	}
 }
 
@@ -60,8 +53,8 @@ func TestDirectReverseForbidden(t *testing.T) {
 	}
 }
 
-// TestClearOfflinePetBondRequests 认主/认宠申请要求双方在线：任一方离线应作废该申请；
-// 但已确立关系的解除（release）申请不受此限制，不应被清空。
+// TestClearOfflinePetBondRequests 认主/认宠/解除关系申请均要求双方在同意前保持在线：
+// 任一方离线应作废该申请，三种类型规则统一。
 func TestClearOfflinePetBondRequests(t *testing.T) {
 	s := &Server{
 		players:  map[string]*PlayerState{},
@@ -85,8 +78,8 @@ func TestClearOfflinePetBondRequests(t *testing.T) {
 	if _, ok := s.petBondRequests["unrelated"]; !ok {
 		t.Fatal("unrelated request should be untouched")
 	}
-	if _, ok := s.petBondRequests["release"]; !ok {
-		t.Fatal("release request should not be cancelled by going offline")
+	if _, ok := s.petBondRequests["release"]; ok {
+		t.Fatal("release request should have been cancelled by going offline")
 	}
 	if changed := s.clearOfflinePetBondRequests("nobody"); changed {
 		t.Fatal("expected changed=false for unrelated player")

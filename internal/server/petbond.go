@@ -73,16 +73,14 @@ func (s *Server) loadPetBondsFromDisk() {
 		s.petBondRequests = map[string]*petBondRequest{}
 		return
 	}
+	// Approvals（谁已经点过同意）只在内存里追踪，重启即清空重新开始——
+	// 请求本身双方都要求持续在线才有效，重启造成的一次性"重新同意"可以接受。
 	s.petBondRequests = make(map[string]*petBondRequest, len(reqs))
 	for _, r := range reqs {
-		approvals := map[string]bool{}
-		for _, pid := range r.Approvals {
-			approvals[pid] = true
-		}
 		s.petBondRequests[r.ID] = &petBondRequest{
 			ID: r.ID, Kind: r.Kind, FromID: r.FromID, ToID: r.ToID,
 			MasterID: r.MasterID, PetID: r.PetID, Status: r.Status,
-			CreatedAt: r.CreatedAt, Approvals: approvals,
+			CreatedAt: r.CreatedAt, Approvals: map[string]bool{},
 		}
 	}
 }
@@ -205,8 +203,8 @@ func (s *Server) bestPetTitle(petID string) string {
 	return best
 }
 
-// applyDisplayTitle 在 publicPlayer 出站时：管理员自定义 > 宠物称号 > 积分档称号。
-// 名争惩罚态由调用方 / 展示层处理（不在此改 Title）。
+// applyDisplayTitle 在 publicPlayer 出站时：管理员自定义 > 宠物称号（主人设置）> 玩家自设
+// 称号 > 积分档称号。名争惩罚态由调用方 / 展示层处理（不在此改 Title）。
 func (s *Server) applyDisplayTitle(player *PlayerState, p *types.PublicPlayer) {
 	if player == nil || p == nil {
 		return
@@ -218,6 +216,10 @@ func (s *Server) applyDisplayTitle(player *PlayerState, p *types.PublicPlayer) {
 		return
 	}
 	if title := s.bestPetTitle(player.ID); title != "" {
+		p.Stats.Title = title
+		return
+	}
+	if title := strings.TrimSpace(player.Stats.SelfTitle); title != "" {
 		p.Stats.Title = title
 	}
 }
@@ -250,7 +252,8 @@ func (s *Server) publicPetBondEdges() []types.PetBondEdge {
 	return edges
 }
 
-// buildPetBondChains 把公开边拆成 2~3 级关系链（超过 3 级滑动窗口拆分）。
+// buildPetBondChains 把公开边组装成完整关系链（2 级起，长度不设上限），每条边只出现在
+// 其所属的最长链里，不会同时展示链本身与被链覆盖的子区间（如 A-B-C 不再重复展示 A-B/B-C）。
 func buildPetBondChains(edges []types.PetBondEdge) [][]string {
 	if len(edges) == 0 {
 		return nil
@@ -271,10 +274,15 @@ func buildPetBondChains(edges []types.PetBondEdge) [][]string {
 	for m := range adj {
 		sort.Strings(adj[m])
 	}
-	// 从入度为 0 的节点出发 DFS 找极大简单路径；对环上节点也兜底扫一遍。
+	// 从入度为 0 的节点出发 DFS 找极大简单路径；对纯环（没有入度为 0 的起点）兜底扫一遍。
+	// reached 记录"已经在某条从真正起点出发的路径上出现过"的节点——一个节点即便有多个上级
+	// （MaxMastersPerPet 允许多主），也只应作为某条已发现路径的中间/末尾节点，不能再被当成
+	// 独立起点重新 DFS 一遍，否则会把同一条长链的后半段又当成一条新的"整链"重复展示出来。
 	var paths [][]string
+	reached := map[string]bool{}
 	var dfs func(cur string, path []string, onPath map[string]bool)
 	dfs = func(cur string, path []string, onPath map[string]bool) {
+		reached[cur] = true
 		children := adj[cur]
 		extended := false
 		for _, next := range children {
@@ -298,25 +306,23 @@ func buildPetBondChains(edges []types.PetBondEdge) [][]string {
 		}
 	}
 	sort.Strings(starts)
-	visitedStart := map[string]bool{}
 	for _, st := range starts {
-		visitedStart[st] = true
 		onPath := map[string]bool{st: true}
 		dfs(st, []string{st}, onPath)
 	}
-	// 纯环 / 未覆盖边：对每个未作为路径起点的节点再尝试
+	// 纯环：没有入度为 0 的起点时，任选环上一点兜底展开整环。
 	for id := range nodes {
-		if visitedStart[id] {
+		if reached[id] {
 			continue
 		}
 		onPath := map[string]bool{id: true}
 		dfs(id, []string{id}, onPath)
 	}
-	// 拆成 2~3 级窗口
+	// 每条极大路径整链展示（不再按 3 级滑动窗口拆分），避免同一条链既显示全链又显示其子区间。
 	seen := map[string]bool{}
 	var chains [][]string
 	add := func(c []string) {
-		if len(c) < 2 || len(c) > 3 {
+		if len(c) < 2 {
 			return
 		}
 		key := strings.Join(c, ">")
@@ -326,20 +332,18 @@ func buildPetBondChains(edges []types.PetBondEdge) [][]string {
 		seen[key] = true
 		chains = append(chains, c)
 	}
+	coveredEdge := map[string]bool{}
 	for _, path := range paths {
-		n := len(path)
-		if n <= 3 {
-			add(path)
+		add(path)
+		for i := 0; i+1 < len(path); i++ {
+			coveredEdge[path[i]+">"+path[i+1]] = true
+		}
+	}
+	// 若某条边没被任何路径覆盖（孤立边，例如纯环里落单的边），补 2 人链；已被整链覆盖的边不再重复展示。
+	for _, e := range edges {
+		if coveredEdge[e.MasterID+">"+e.PetID] {
 			continue
 		}
-		for i := 0; i+2 < n; i++ {
-			add(path[i : i+3])
-		}
-		// 末尾若只剩 2 人边且未出现在任何 3 人窗里，也补上（一般已覆盖）
-		add(path[n-2 : n])
-	}
-	// 若某条边没被任何路径覆盖（孤立边），补 2 人链
-	for _, e := range edges {
 		add([]string{e.MasterID, e.PetID})
 	}
 	sort.Slice(chains, func(i, j int) bool {
@@ -419,7 +423,6 @@ func (s *Server) cancelRequest(r *petBondRequest, status string) {
 	delete(s.petBondRequests, r.ID)
 	if s.petBondDB != nil {
 		_ = s.petBondDB.setRequestStatus(r.ID, status)
-		_ = s.petBondDB.deleteApprovals(r.ID)
 	}
 }
 
@@ -460,9 +463,6 @@ func (s *Server) approvePetBondRequest(r *petBondRequest, playerID string) error
 		r.Approvals = map[string]bool{}
 	}
 	r.Approvals[playerID] = true
-	if s.petBondDB != nil {
-		_ = s.petBondDB.addApproval(r.ID, playerID, nowMs())
-	}
 	if !s.requestFullyApproved(r) {
 		return nil
 	}
@@ -477,11 +477,8 @@ func (s *Server) approvePetBondRequest(r *petBondRequest, playerID string) error
 		s.removeBond(r.MasterID, r.PetID)
 	}
 	if err != nil {
-		// 执行失败时撤回本票同意（内存 + 落盘），保留申请让人重试/取消
+		// 执行失败时撤回本票同意，保留申请让人重试/取消
 		delete(r.Approvals, playerID)
-		if s.petBondDB != nil {
-			_ = s.petBondDB.removeApproval(r.ID, playerID)
-		}
 		return err
 	}
 	s.cancelRequest(r, petBondStatusDone)
@@ -825,10 +822,9 @@ func (s *Server) requestToView(r *petBondRequest, viewerID string) petBondReques
 	}
 }
 
-// clearOfflinePetBondRequests 清空 playerID 参与的、要求双方在线才能成立的认主/认宠申请
-// （seek_master/seek_pet）。任一方离线即视为失效，避免对方在其离线期间被迫一直挂着这条申请、
-// 或者重新上线后收到一条早已物是人非的旧申请。
-// release（解除已有关系）不受此限制：那是针对已确立关系的解除流程，离线也应该能被对方处理。
+// clearOfflinePetBondRequests 清空 playerID 参与的所有待处理申请（认主/认宠/解除关系），
+// 只要双方未在同意前一直保持在线。任一方离线即视为失效，避免对方在其离线期间被迫一直挂着
+// 这条申请、或者重新上线后收到一条早已物是人非的旧申请——认主/认宠/解除三者规则统一。
 // 返回是否有申请被清空，供调用方决定是否要 notifyAllOnlinePetBondStates。
 func (s *Server) clearOfflinePetBondRequests(playerID string) bool {
 	if playerID == "" {
@@ -837,9 +833,6 @@ func (s *Server) clearOfflinePetBondRequests(playerID string) bool {
 	changed := false
 	for _, r := range s.petBondRequests {
 		if r.Status != petBondStatusPending {
-			continue
-		}
-		if r.Kind != petBondKindSeekMaster && r.Kind != petBondKindSeekPet {
 			continue
 		}
 		if r.FromID != playerID && r.ToID != playerID {

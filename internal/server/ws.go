@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -34,9 +35,12 @@ func (c *Client) writeBinary(data []byte) error {
 		return nil
 	default:
 		c.writeMu.Unlock()
-		// 慢消费者：发送队列已满，断开以免拖累全局锁
-		_ = c.conn.Close(websocket.StatusPolicyViolation, "slow consumer")
+		// 慢消费者：发送队列已满，断开以免拖累全局锁。
+		// shutdown() 只关 channel，无 I/O，可在持有 s.mu 时同步执行；
+		// conn.Close() 会阻塞发送 WS close 帧（最坏约 5s 写超时），必须挪出锁外异步执行，
+		// 否则会在持有 s.mu 期间冻结全服所有玩家/计时器/断线流程。
 		c.shutdown()
+		go func() { _ = c.conn.Close(websocket.StatusPolicyViolation, "slow consumer") }()
 		return fmt.Errorf("send queue full")
 	}
 }
@@ -569,10 +573,14 @@ func (s *Server) onClientDisconnect(client *Client) {
 	})
 }
 
-// trustedProxyCount 表示前置可信反向代理层数（TRUSTED_PROXY_COUNT，默认 1）。
+// trustedProxyCount 表示前置可信反向代理层数（TRUSTED_PROXY_COUNT，默认 0）。
 // X-Forwarded-For 由每一跳代理向右追加，客户端可伪造最左侧条目；因此真实客户端
-// 位于从右数第 trustedProxyCount 个。设为 0 表示直连、完全忽略 XFF（防伪造）。
-var trustedProxyCount = 1
+// 位于从右数第 trustedProxyCount 个。默认 0 表示直连、完全忽略 XFF（防伪造）——
+// 部署在反向代理之后必须显式设置该环境变量，否则限流/反多开会退化为按代理 IP 计算
+// （fail-closed：过严但安全），而不是像旧默认值 1 那样在没有代理时可被任意伪造 IP（fail-open）。
+var trustedProxyCount = 0
+
+var warnUntrustedXFFOnce sync.Once
 
 func clientIP(r *http.Request) string {
 	if trustedProxyCount > 0 {
@@ -586,6 +594,10 @@ func clientIP(r *http.Request) string {
 				return ip
 			}
 		}
+	} else if r.Header.Get("X-Forwarded-For") != "" {
+		warnUntrustedXFFOnce.Do(func() {
+			fmt.Println("WARNING: 收到 X-Forwarded-For 头，但 TRUSTED_PROXY_COUNT=0（默认值）——若部署在反向代理之后，请显式设置该环境变量，否则限流/反多开会按代理自身 IP 计算")
+		})
 	}
 	host := r.RemoteAddr
 	if i := strings.LastIndex(host, ":"); i >= 0 {
