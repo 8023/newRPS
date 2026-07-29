@@ -27,3 +27,5 @@ vendor/
 
 # docker local env
 .env
+online/
+*.tar.gz

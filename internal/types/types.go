@@ -118,6 +118,13 @@ type PublicStats struct {
 	// 主人为宠物设置的称号（petbond.PetTitle）> SelfTitle > 系统按排位分自动计算的称号，
 	// 见 internal/server/petbond.go 的 applyDisplayTitle。清空即回退到更下一级展示。
 	SelfTitle string `json:"selfTitle,omitempty"`
+	// TitleSource：当前 Title 的赋予来源，"system"（系统按排位分自动分配）/ "self"（玩家自定义）/
+	// "master"（主人为宠物设置）/ "admin"（管理员后台手动设置，即 TitleCustom）。仅供称号标签着色用，
+	// 见 internal/server/petbond.go 的 applyDisplayTitle 与前端 titleTagStyles 配置。
+	TitleSource string `json:"titleSource,omitempty"`
+	// TitleColors：按 TitleSource 从 AppConfig.TitleTagStyles 解出的配色，服务端下发前已解析好
+	// （与 PublicPlayer.FactionColors 同模式），前端直接当行内样式用。
+	TitleColors GenderColors `json:"titleColors"`
 	// TotalOnlineMs：累计在线时长（毫秒）。存储值为已结束会话之和；
 	// publicPlayer 下发时若当前在线会加上本会话已持续时长（不写回存储）。
 	TotalOnlineMs int64 `json:"totalOnlineMs,omitempty"`
@@ -773,6 +780,9 @@ type AppConfig struct {
 	PlayerPunishmentRoomNamePool *RoomNamePool               `json:"playerPunishmentRoomNamePool,omitempty"`
 	RoomTags                     []string                    `json:"roomTags"`
 	RoomInfoTags                 map[string]RoomInfoTagStyle `json:"roomInfoTags"`
+	// TitleTagStyles：称号标签按赋予来源（system/self/master/admin）的颜色，形状与 RoomInfoTagStyle
+	// 一致（label + 三色）；见 PublicStats.TitleSource 与 internal/server/petbond.go 的 applyDisplayTitle。
+	TitleTagStyles map[string]RoomInfoTagStyle `json:"titleTagStyles"`
 	AccessControl                struct {
 		MaxOnlinePerIP     int `json:"maxOnlinePerIp"`
 		MaxCreatesPer10Min int `json:"maxCreatesPer10Min"`

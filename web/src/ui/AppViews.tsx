@@ -1,7 +1,7 @@
 import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type ReactNode, type UIEvent as ReactUIEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Coffee, Crown, DoorOpen, ExternalLink, Eye, HeartHandshake, Info, Moon, Pencil, Save, Send, Shield, Sun, Swords, Upload, UserRound, Users, BookOpen } from "lucide-react";
 import type {
-  AppConfig, ChatMessage, GenderFaction, LobbySnapshot, Move, PetBondState, PublicPlayer,
+  AppConfig, ChatMessage, GenderColors, GenderFaction, LobbySnapshot, Move, PetBondState, PublicPlayer,
   PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant
 } from "../shared/types";
 import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, withPetBondDefaults, withRankedScoreDefaults } from "../lib/normalize";
@@ -259,7 +259,7 @@ export function PlayerBadge({ player, compact = false }: { player: PublicPlayer;
   return (
     <span className={`player-badge ${compact ? "compact" : ""}`}>
       <span className="gender-chip" style={genderStyle(player)} title={player.factionLabel}>{player.genderLabel}</span>
-      <span className={`title-chip ${titleClass(stats.rankedPoints)}`}>{stats.title}</span>
+      <span className="title-chip" style={titleStyle(stats.titleColors)}>{stats.title}</span>
       <strong className={punished ? "name-war-pill" : ""}>{displayPlayerName(player)}</strong>
       <ModeChip player={player} />
       <GiveawayChip player={player} />
@@ -317,6 +317,19 @@ export function genderStyle(player: PublicPlayer): CSSProperties {
     color: player.factionColors.textColor,
     backgroundColor: player.factionColors.backgroundColor,
     borderColor: player.factionColors.borderColor
+  };
+}
+
+// 称号标签底色按赋予来源着色，服务端已解析好（见 PublicStats.titleColors），
+// 这里兜底一份中性灰以防旧缓存数据缺该字段。
+export const DEFAULT_TITLE_COLORS: GenderColors = { textColor: "#4d5c6f", backgroundColor: "#eef3f8", borderColor: "#c9d6e4" };
+
+export function titleStyle(colors: GenderColors | null | undefined): CSSProperties {
+  const c = colors || DEFAULT_TITLE_COLORS;
+  return {
+    color: c.textColor,
+    backgroundColor: c.backgroundColor,
+    borderColor: c.borderColor
   };
 }
 
@@ -400,14 +413,6 @@ export function GenderSelect({ config, genderId, factionId, onGenderChange }: {
 // 性别单独占一栏，现在阵营/性别各占一栏，行为上两者已无差异）。
 export const GenderSelectField = GenderSelect;
 
-export function titleClass(points: number) {
-  const p = Number.isFinite(points) ? points : 0;
-  if (p < -500) return "title-bad";
-  if (p < 0) return "title-low";
-  if (p < 500) return "title-mid";
-  return "title-high";
-}
-
 /** 展示用战绩：缺省/非数字按 0，称号空则「暂无称号」 */
 /** 排行榜排序用真实分（有 sort* 用 sort*，否则退回展示分）。 */
 export function sortRankedPointsOf(player: PublicPlayer) {
@@ -445,6 +450,7 @@ export function safePlayerStats(player: PublicPlayer | null | undefined) {
     sortLowestScore: Number.isFinite(Number(s.sortLowestScore)) ? Number(s.sortLowestScore) : lowestScore,
     title: title || "暂无称号",
     titleCustom: !!s.titleCustom,
+    titleColors: s.titleColors && typeof s.titleColors === "object" ? s.titleColors : DEFAULT_TITLE_COLORS,
     totalOnlineMs: Number.isFinite(Number(s.totalOnlineMs)) ? Number(s.totalOnlineMs) : 0
   };
 }
@@ -1876,7 +1882,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
           <h3 className="sticky-panel-title">
             📜 对局记录
             <span className="panel-title-actions">
-              <span>共 {room.roundHistoryTotal || 0} 场对局</span>
+              <span>{room.roundHistoryTotal || 0} 局</span>
               <CollapseToggle collapsed={roundHistoryCollapsed} onToggle={toggleRoundHistoryCollapsed} label="对局记录" />
             </span>
           </h3>
@@ -4599,6 +4605,14 @@ export const roomInfoTagOrder = [
 export function defaultRoomInfoTagStyle(label: string): RoomInfoTagStyle {
   return { label, textColor: "#4d5c6f", backgroundColor: "#eef3f8", borderColor: "#c9d6e4" };
 }
+
+// 称号标签按赋予来源着色的固定 4 档；顺序即后台"称号池"里色卡的展示顺序。
+export const titleTagStyleOrder = [
+  { key: "system", label: "系统默认" },
+  { key: "self", label: "自定义" },
+  { key: "master", label: "主人赋予" },
+  { key: "admin", label: "管理员赋予" }
+];
 
 export function punishmentTasks(punishment: AppConfig["punishments"][number], draft: AppConfig): PunishmentTaskConfig[] {
   if (punishment.tasks?.length) return punishment.tasks;

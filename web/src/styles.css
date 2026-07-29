@@ -320,6 +320,18 @@ main {
   white-space: nowrap;
 }
 
+.title-chip.preview {
+  width: fit-content;
+}
+
+.title-tag-style-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+
 .giveaway-chip {
   border-color: color-mix(in srgb, var(--primary) 55%, var(--pink-border));
   background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 16%, var(--panel-solid)), color-mix(in srgb, var(--pink) 24%, var(--panel-solid)));
@@ -360,39 +372,19 @@ main {
   border-color: #cfc4e4;
 }
 
-.title-bad {
-  color: #7b3e58;
-  background: #f8dbe5;
-  border-color: #e5a7bd;
-}
-
-.title-low {
-  color: #5d516f;
-  background: #eee9fb;
-  border-color: #cabceb;
-}
-
-.title-mid {
-  color: #23617b;
-  background: #def5ff;
-  border-color: #9cd7ee;
-}
-
-.title-high {
-  color: #80562c;
-  background: linear-gradient(135deg, #fff0bd, #ffd8eb);
-  border-color: #e6b866;
-}
-
 :root[data-theme="dark"] .gender-female,
 :root[data-theme="dark"] .gender-male,
 :root[data-theme="dark"] .gender-secret,
-:root[data-theme="dark"] .gender-other,
-:root[data-theme="dark"] .title-bad,
-:root[data-theme="dark"] .title-low,
-:root[data-theme="dark"] .title-mid,
-:root[data-theme="dark"] .title-high {
+:root[data-theme="dark"] .gender-other {
   color: #f3f8ff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+
+/* 称号标签颜色改为服务端下发的行内样式（PublicStats.titleColors），深色模式下同样直接叠加轻微
+   饱和度/阴影而不覆写颜色本身，避免后台自定义的配色在深色主题下失真。 */
+:root[data-theme="dark"] .title-chip {
+  filter: brightness(0.92) saturate(1.08);
+  box-shadow: inset 0 0 0 999px rgba(0, 0, 0, 0.12);
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
 }
 
@@ -410,26 +402,6 @@ main {
 :root[data-theme="dark"] .gender-other {
   background: #44375c;
   border-color: #c7b5ff;
-}
-
-:root[data-theme="dark"] .title-bad {
-  background: #673144;
-  border-color: #ff9cb8;
-}
-
-:root[data-theme="dark"] .title-low {
-  background: #453469;
-  border-color: #bfa8ff;
-}
-
-:root[data-theme="dark"] .title-mid {
-  background: #1d526b;
-  border-color: #8de7ff;
-}
-
-:root[data-theme="dark"] .title-high {
-  background: linear-gradient(135deg, #765522, #7a3458);
-  border-color: #ffd36f;
 }
 
 .soft-button {
@@ -1751,8 +1723,8 @@ main {
   margin: 0.2em 0;
 }
 
-.help-content li > ul,
-.help-content li > ol {
+.help-content li>ul,
+.help-content li>ol {
   margin: 0.2em 0;
 }
 
@@ -5637,11 +5609,6 @@ main {
   gap: 10px;
 }
 
-.faction-gender-delete {
-  flex: none;
-  font-size: 15px;
-}
-
 .faction-gender-label-input {
   flex: none;
   width: 12em;
@@ -6618,8 +6585,12 @@ main {
 
 .liarsdice-bid-controls input,
 .liarsdice-bid-controls select {
-  padding: 6px 8px;
+  width: 5em;
   border-radius: 8px;
+}
+
+.liarsdice-challenge-btn {
+  margin-top: 10px;
 }
 
 .liarsdice-reveal-list {

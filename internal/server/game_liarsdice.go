@@ -368,8 +368,8 @@ func (s *Server) onLiarsDiceChallenge(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "现在还不能开牌")
 		return
 	}
-	if room.LiarsDice.CurrentTurn != player.ID {
-		client.reply(env.ID, nil, "还没轮到你开牌")
+	if !containsString(room.LiarsDice.ParticipantIDs, player.ID) {
+		client.reply(env.ID, nil, "只有参战玩家可以开牌")
 		return
 	}
 	s.resolveLiarsDiceChallenge(room, player.ID)

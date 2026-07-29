@@ -10,7 +10,7 @@ import { PetBondGraphPanel } from "./PetBondGraphPanel";
 import {
   FactionSelect, GenderSelectField, PlayerAvatar, PlayerBadge, RoomInfoTagList, RoomTagList, Select, Stat, Toggle,
   defaultRoomInfoTagStyle, factionStyle, formatGiveawayValue, genderChoiceError, lobbyRoomInfoTags, nextGenderIdForFaction, punishmentTasks,
-  roomInfoTagOrder, roomInfoTagStyle, roomStatusText, safePlayerStats
+  roomInfoTagOrder, roomInfoTagStyle, roomStatusText, safePlayerStats, titleStyle, titleTagStyleOrder
 } from "./AppViews";
 
 export type AdminSection = "site" | "factions" | "titles" | "punishments" | "roomTags" | "roomInfoTags" | "nameWar" | "giveaway" | "petBond" | "extremeMode" | "rankedScore" | "accessControl" | "messages" | "users" | "rooms";
@@ -343,6 +343,15 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
         }
         genderGroups[idx].factionIds.add(gender.factionId);
       });
+      // 新增一条性别选项时插入到同一 label 现有条目之后（而非数组末尾），
+      // 这样某条目被取消勾选删除后，该分组在 genderGroups 里的显示顺序不会因为
+      // "仅存条目排到了数组更靠后位置"而发生跳动。
+      const insertGenderOption = (list: AppConfig["genders"], label: string, item: AppConfig["genders"][number]) => {
+        let lastIndex = -1;
+        list.forEach((g, idx) => { if (g.label === label) lastIndex = idx; });
+        if (lastIndex === -1) return [...list, item];
+        return [...list.slice(0, lastIndex + 1), item, ...list.slice(lastIndex + 1)];
+      };
       return (
         <div className="config-section admin-section-card">
           <AdminSectionHeader title="性别预设" subtitle="系统预设性别池，玩家只能从中选择；同一显示文字可勾选多个阵营，阵营由所选性别查表决定" />
@@ -352,21 +361,6 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
               return (
                 <div className="mini-card faction-gender-card" key={group.key}>
                   <div className="config-row faction-gender-row">
-                    <button
-                      type="button"
-                      className="danger-button tiny-danger-button icon-button faction-gender-delete"
-                      title="删除该性别预设"
-                      onClick={() => {
-                        const nextGenders = draft.genders.filter((item) => item.label !== label);
-                        if (nextGenders.length === 0) {
-                          onError("至少需要保留 1 个性别预设");
-                          return;
-                        }
-                        patchGenders(nextGenders);
-                      }}
-                    >
-                      🗑
-                    </button>
                     <input
                       className="faction-gender-label-input"
                       value={label}
@@ -386,7 +380,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                               let nextGenders: typeof draft.genders;
                               if (event.target.checked) {
                                 const genderId = nextAdminId("gender", draft.genders.map((item) => item.id));
-                                nextGenders = [...draft.genders, { id: genderId, label, factionId: f.id }];
+                                nextGenders = insertGenderOption(draft.genders, label, { id: genderId, label, factionId: f.id });
                               } else {
                                 nextGenders = draft.genders.filter((item) => !(item.label === label && item.factionId === f.id));
                               }
@@ -409,8 +403,14 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
           <button onClick={() => {
             let index = 1;
             while (groupIndexByLabel.has(`新性别${index}`)) index += 1;
-            const genderId = nextAdminId("gender", draft.genders.map((item) => item.id));
-            patchGenders([...draft.genders, { id: genderId, label: `新性别${index}`, factionId: draft.genderFactions[0]?.id || "" }]);
+            const label = `新性别${index}`;
+            const usedIds = draft.genders.map((item) => item.id);
+            const newItems = draft.genderFactions.map((f) => {
+              const id = nextAdminId("gender", usedIds);
+              usedIds.push(id);
+              return { id, label, factionId: f.id };
+            });
+            patchGenders([...draft.genders, ...newItems]);
           }}>添加性别预设</button>
 
           <AdminSectionHeader title="阵营" subtitle="玩家选择的阵营分组，标签颜色和任务分组在这里配置。" />
@@ -523,6 +523,38 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                 </div>
               </div>
             )}
+          </div>
+          <AdminSectionHeader title="称号标签配色" subtitle="称号标签的底色按该称号的赋予来源区分：系统自动分配 / 玩家自定义 / 主人为宠物设置 / 管理员后台手动设置。" />
+          <div className="admin-preview-card">
+            <span>预览</span>
+            <div className="title-tag-style-preview">
+              {titleTagStyleOrder.map((item) => {
+                const style = draft.titleTagStyles?.[item.key] || defaultRoomInfoTagStyle(item.label);
+                return <span className="title-chip" key={item.key} style={titleStyle(style)}>{style.label}</span>;
+              })}
+            </div>
+          </div>
+          <div className="room-info-tag-admin-grid">
+            {titleTagStyleOrder.map((item) => {
+              const style = draft.titleTagStyles?.[item.key] || defaultRoomInfoTagStyle(item.label);
+              const nextStyles = draft.titleTagStyles || {};
+              const update = (nextStyle: RoomInfoTagStyle) => patch({ titleTagStyles: { ...nextStyles, [item.key]: nextStyle } });
+              return (
+                <div className="mini-card room-info-tag-admin-card" key={item.key}>
+                  <div className="admin-card-title">
+                    <strong>{item.label}</strong>
+                    <small>{item.key}</small>
+                  </div>
+                  <span className="title-chip preview" style={titleStyle(style)}>{style.label}</span>
+                  <label className="field-label"><span>显示名字</span><input value={style.label} onChange={(event) => update({ ...style, label: event.target.value })} /></label>
+                  <div className="color-grid">
+                    <ColorInput label="文字颜色" value={style.textColor} onChange={(textColor) => update({ ...style, textColor })} />
+                    <ColorInput label="背景颜色" value={style.backgroundColor} onChange={(backgroundColor) => update({ ...style, backgroundColor })} />
+                    <ColorInput label="边框颜色" value={style.borderColor} onChange={(borderColor) => update({ ...style, borderColor })} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       );

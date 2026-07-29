@@ -59,6 +59,12 @@ message PublicStats {
   int64 total_online_ms = 14;
   // 玩家自设称号，展示优先级：管理员自定义 > 主人为宠物设置的称号 > self_title > 系统自动称号。
   string self_title = 15;
+  // 当前 title 的赋予来源："system"/"self"/"master"/"admin"，用于称号标签按来源着色；
+  // 见 internal/server/petbond.go 的 applyDisplayTitle。
+  string title_source = 16;
+  // 按 title_source 从 AppConfig.title_tag_styles 解出的配色，服务端下发时已解析好
+  // （与 faction_colors 同模式），前端直接拿来当行内样式用，无需再查配置。
+  GenderColors title_colors = 17;
 }
 
 message LobbyStats {
@@ -78,6 +84,10 @@ message LobbyStats {
   int64 total_online_ms = 13;
   // 玩家自设称号，展示优先级：管理员自定义 > 主人为宠物设置的称号 > self_title > 系统自动称号。
   string self_title = 14;
+  // 与 PublicStats.title_source 同语义，供称号标签按来源着色。
+  string title_source = 15;
+  // 与 PublicStats.title_colors 同语义。
+  GenderColors title_colors = 16;
 }
 
 message GameWLD {
@@ -688,6 +698,12 @@ message RoomInfoTagEntry {
   RoomInfoTagStyle style = 2;
 }
 
+// 称号标签按赋予来源（system/self/master/admin）着色；形状与 RoomInfoTagStyle 一致，直接复用。
+message TitleTagStyleEntry {
+  string key = 1;
+  RoomInfoTagStyle style = 2;
+}
+
 message PunishmentTaskConfig {
   string id = 1;
   string name = 2;
@@ -839,6 +855,7 @@ message AppConfig {
   SecurityDisclaimerConfig security_disclaimer = 17;
   RankedScoreConfig ranked_score = 18;
   PetBondConfig pet_bond = 19;
+  repeated TitleTagStyleEntry title_tag_styles = 20;
 }
 
 message RankedScoreConfig {

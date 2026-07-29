@@ -791,6 +791,17 @@ func ConfigToProto(cfg types.AppConfig) (*wire.AppConfig, error) {
 		}
 		generic["roomInfoTags"] = arr
 	}
+	// titleTagStyles object → array (形状与 roomInfoTags 一致)
+	if tags, ok := generic["titleTagStyles"].(map[string]any); ok {
+		arr := make([]any, 0, len(tags))
+		for k, v := range tags {
+			if vm, ok := v.(map[string]any); ok {
+				vm["key"] = k
+				arr = append(arr, map[string]any{"key": k, "style": v})
+			}
+		}
+		generic["titleTagStyles"] = arr
+	}
 	// messages object → pairs
 	if msgs, ok := generic["messages"].(map[string]any); ok {
 		arr := make([]any, 0, len(msgs))
@@ -992,6 +1003,9 @@ func fillPublicStatsDefaults(s any) any {
 	if _, exists := sm["title"]; !exists {
 		sm["title"] = "暂无称号"
 	}
+	if _, exists := sm["titleSource"]; !exists {
+		sm["titleSource"] = "system"
+	}
 	return sm
 }
 
@@ -1136,6 +1150,20 @@ func fixConfigMaps(cfg map[string]any) {
 			}
 		}
 		cfg["roomInfoTags"] = obj
+	}
+	if tags, ok := cfg["titleTagStyles"].([]any); ok {
+		obj := map[string]any{}
+		for _, t := range tags {
+			tm, ok := t.(map[string]any)
+			if !ok {
+				continue
+			}
+			k, _ := tm["key"].(string)
+			if st := tm["style"]; st != nil {
+				obj[k] = st
+			}
+		}
+		cfg["titleTagStyles"] = obj
 	}
 	if msgs, ok := cfg["messages"].([]any); ok {
 		obj := map[string]any{}

@@ -380,6 +380,8 @@ function materializePublicStats(stats: any): any {
     sortLowestScore: numOr(s.sortLowestScore, numOr(s.lowestScore, 0)),
     title: title || "暂无称号",
     selfTitle: typeof s.selfTitle === "string" ? s.selfTitle : "",
+    titleSource: (typeof s.titleSource === "string" && s.titleSource) || "system",
+    titleColors: s.titleColors && typeof s.titleColors === "object" ? s.titleColors : null,
     totalOnlineMs: numOr(s.totalOnlineMs, 0),
     ...(s.titleSegmentId != null && s.titleSegmentId !== ""
       ? { titleSegmentId: s.titleSegmentId }
@@ -586,6 +588,13 @@ function materializeConfig(cfg: any): any {
       if (item?.key) obj[item.key] = item.style || item;
     }
     c.roomInfoTags = obj;
+  }
+  if (Array.isArray(c.titleTagStyles)) {
+    const obj: any = {};
+    for (const item of c.titleTagStyles) {
+      if (item?.key) obj[item.key] = item.style || item;
+    }
+    c.titleTagStyles = obj;
   }
   if (Array.isArray(c.messages)) {
     const obj: any = {};

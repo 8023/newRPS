@@ -2588,6 +2588,8 @@ export const game = $root.game = (() => {
          * @property {boolean|null} [titleCustom] PublicStats titleCustom
          * @property {number|Long|null} [totalOnlineMs] PublicStats totalOnlineMs
          * @property {string|null} [selfTitle] PublicStats selfTitle
+         * @property {string|null} [titleSource] PublicStats titleSource
+         * @property {game.GenderColors.$Properties|null} [titleColors] PublicStats titleColors
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -2740,6 +2742,22 @@ export const game = $root.game = (() => {
         PublicStats.prototype.selfTitle = "";
 
         /**
+         * PublicStats titleSource.
+         * @member {string} titleSource
+         * @memberof game.PublicStats
+         * @instance
+         */
+        PublicStats.prototype.titleSource = "";
+
+        /**
+         * PublicStats titleColors.
+         * @member {game.GenderColors.$Properties|null|undefined} titleColors
+         * @memberof game.PublicStats
+         * @instance
+         */
+        PublicStats.prototype.titleColors = null;
+
+        /**
          * Creates a new PublicStats instance using the specified properties.
          * @function create
          * @memberof game.PublicStats
@@ -2801,6 +2819,10 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 14, wireType 0 =*/112).int64(message.totalOnlineMs);
             if (message.selfTitle != null && $Object.hasOwnProperty.call(message, "selfTitle") && message.selfTitle !== "")
                 writer.uint32(/* id 15, wireType 2 =*/122).string(message.selfTitle);
+            if (message.titleSource != null && $Object.hasOwnProperty.call(message, "titleSource") && message.titleSource !== "")
+                writer.uint32(/* id 16, wireType 2 =*/130).string(message.titleSource);
+            if (message.titleColors != null && $Object.hasOwnProperty.call(message, "titleColors"))
+                $root.game.GenderColors.encode(message.titleColors, writer.uint32(/* id 17, wireType 2 =*/138).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -2983,6 +3005,21 @@ export const game = $root.game = (() => {
                             delete message.selfTitle;
                         continue;
                     }
+                case 16: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.titleSource = value;
+                        else
+                            delete message.titleSource;
+                        continue;
+                    }
+                case 17: {
+                        if (wireType !== 2)
+                            break;
+                        message.titleColors = $root.game.GenderColors.decode(reader, reader.uint32(), $undefined, _depth + 1, message.titleColors);
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -3071,6 +3108,14 @@ export const game = $root.game = (() => {
             if (message.selfTitle != null && $Object.hasOwnProperty.call(message, "selfTitle"))
                 if (!$util.isString(message.selfTitle))
                     return "selfTitle: string expected";
+            if (message.titleSource != null && $Object.hasOwnProperty.call(message, "titleSource"))
+                if (!$util.isString(message.titleSource))
+                    return "titleSource: string expected";
+            if (message.titleColors != null && $Object.hasOwnProperty.call(message, "titleColors")) {
+                let error = $root.game.GenderColors.verify(message.titleColors, _depth + 1);
+                if (error)
+                    return "titleColors." + error;
+            }
             return null;
         };
 
@@ -3144,6 +3189,14 @@ export const game = $root.game = (() => {
             if (object.selfTitle != null)
                 if (typeof object.selfTitle !== "string" || object.selfTitle.length)
                     message.selfTitle = $String(object.selfTitle);
+            if (object.titleSource != null)
+                if (typeof object.titleSource !== "string" || object.titleSource.length)
+                    message.titleSource = $String(object.titleSource);
+            if (object.titleColors != null) {
+                if (!$util.isObject(object.titleColors))
+                    throw $TypeError(".game.PublicStats.titleColors: object expected");
+                message.titleColors = $root.game.GenderColors.fromObject(object.titleColors, _depth + 1);
+            }
             return message;
         };
 
@@ -3184,6 +3237,8 @@ export const game = $root.game = (() => {
                 } else
                     object.totalOnlineMs = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
                 object.selfTitle = "";
+                object.titleSource = "";
+                object.titleColors = null;
             }
             if (message.wins != null && $Object.hasOwnProperty.call(message, "wins"))
                 object.wins = message.wins;
@@ -3220,6 +3275,10 @@ export const game = $root.game = (() => {
                     object.totalOnlineMs = options.longs === $String ? $util.Long.prototype.toString.call(message.totalOnlineMs) : options.longs === $Number ? new $util.LongBits(message.totalOnlineMs.low >>> 0, message.totalOnlineMs.high >>> 0).toNumber() : message.totalOnlineMs;
             if (message.selfTitle != null && $Object.hasOwnProperty.call(message, "selfTitle"))
                 object.selfTitle = message.selfTitle;
+            if (message.titleSource != null && $Object.hasOwnProperty.call(message, "titleSource"))
+                object.titleSource = message.titleSource;
+            if (message.titleColors != null && $Object.hasOwnProperty.call(message, "titleColors"))
+                object.titleColors = $root.game.GenderColors.toObject(message.titleColors, options, _depth + 1);
             return object;
         };
 
@@ -3270,6 +3329,8 @@ export const game = $root.game = (() => {
          * @property {boolean|null} [titleCustom] LobbyStats titleCustom
          * @property {number|Long|null} [totalOnlineMs] LobbyStats totalOnlineMs
          * @property {string|null} [selfTitle] LobbyStats selfTitle
+         * @property {string|null} [titleSource] LobbyStats titleSource
+         * @property {game.GenderColors.$Properties|null} [titleColors] LobbyStats titleColors
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -3414,6 +3475,22 @@ export const game = $root.game = (() => {
         LobbyStats.prototype.selfTitle = "";
 
         /**
+         * LobbyStats titleSource.
+         * @member {string} titleSource
+         * @memberof game.LobbyStats
+         * @instance
+         */
+        LobbyStats.prototype.titleSource = "";
+
+        /**
+         * LobbyStats titleColors.
+         * @member {game.GenderColors.$Properties|null|undefined} titleColors
+         * @memberof game.LobbyStats
+         * @instance
+         */
+        LobbyStats.prototype.titleColors = null;
+
+        /**
          * Creates a new LobbyStats instance using the specified properties.
          * @function create
          * @memberof game.LobbyStats
@@ -3473,6 +3550,10 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 13, wireType 0 =*/104).int64(message.totalOnlineMs);
             if (message.selfTitle != null && $Object.hasOwnProperty.call(message, "selfTitle") && message.selfTitle !== "")
                 writer.uint32(/* id 14, wireType 2 =*/114).string(message.selfTitle);
+            if (message.titleSource != null && $Object.hasOwnProperty.call(message, "titleSource") && message.titleSource !== "")
+                writer.uint32(/* id 15, wireType 2 =*/122).string(message.titleSource);
+            if (message.titleColors != null && $Object.hasOwnProperty.call(message, "titleColors"))
+                $root.game.GenderColors.encode(message.titleColors, writer.uint32(/* id 16, wireType 2 =*/130).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -3646,6 +3727,21 @@ export const game = $root.game = (() => {
                             delete message.selfTitle;
                         continue;
                     }
+                case 15: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.titleSource = value;
+                        else
+                            delete message.titleSource;
+                        continue;
+                    }
+                case 16: {
+                        if (wireType !== 2)
+                            break;
+                        message.titleColors = $root.game.GenderColors.decode(reader, reader.uint32(), $undefined, _depth + 1, message.titleColors);
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -3731,6 +3827,14 @@ export const game = $root.game = (() => {
             if (message.selfTitle != null && $Object.hasOwnProperty.call(message, "selfTitle"))
                 if (!$util.isString(message.selfTitle))
                     return "selfTitle: string expected";
+            if (message.titleSource != null && $Object.hasOwnProperty.call(message, "titleSource"))
+                if (!$util.isString(message.titleSource))
+                    return "titleSource: string expected";
+            if (message.titleColors != null && $Object.hasOwnProperty.call(message, "titleColors")) {
+                let error = $root.game.GenderColors.verify(message.titleColors, _depth + 1);
+                if (error)
+                    return "titleColors." + error;
+            }
             return null;
         };
 
@@ -3801,6 +3905,14 @@ export const game = $root.game = (() => {
             if (object.selfTitle != null)
                 if (typeof object.selfTitle !== "string" || object.selfTitle.length)
                     message.selfTitle = $String(object.selfTitle);
+            if (object.titleSource != null)
+                if (typeof object.titleSource !== "string" || object.titleSource.length)
+                    message.titleSource = $String(object.titleSource);
+            if (object.titleColors != null) {
+                if (!$util.isObject(object.titleColors))
+                    throw $TypeError(".game.LobbyStats.titleColors: object expected");
+                message.titleColors = $root.game.GenderColors.fromObject(object.titleColors, _depth + 1);
+            }
             return message;
         };
 
@@ -3840,6 +3952,8 @@ export const game = $root.game = (() => {
                 } else
                     object.totalOnlineMs = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
                 object.selfTitle = "";
+                object.titleSource = "";
+                object.titleColors = null;
             }
             if (message.wins != null && $Object.hasOwnProperty.call(message, "wins"))
                 object.wins = message.wins;
@@ -3874,6 +3988,10 @@ export const game = $root.game = (() => {
                     object.totalOnlineMs = options.longs === $String ? $util.Long.prototype.toString.call(message.totalOnlineMs) : options.longs === $Number ? new $util.LongBits(message.totalOnlineMs.low >>> 0, message.totalOnlineMs.high >>> 0).toNumber() : message.totalOnlineMs;
             if (message.selfTitle != null && $Object.hasOwnProperty.call(message, "selfTitle"))
                 object.selfTitle = message.selfTitle;
+            if (message.titleSource != null && $Object.hasOwnProperty.call(message, "titleSource"))
+                object.titleSource = message.titleSource;
+            if (message.titleColors != null && $Object.hasOwnProperty.call(message, "titleColors"))
+                object.titleColors = $root.game.GenderColors.toObject(message.titleColors, options, _depth + 1);
             return object;
         };
 
@@ -29049,6 +29167,297 @@ export const game = $root.game = (() => {
         return RoomInfoTagEntry;
     })();
 
+    game.TitleTagStyleEntry = (function() {
+
+        /**
+         * Properties of a TitleTagStyleEntry.
+         * @typedef {Object} game.TitleTagStyleEntry.$Properties
+         * @property {string|null} [key] TitleTagStyleEntry key
+         * @property {game.RoomInfoTagStyle.$Properties|null} [style] TitleTagStyleEntry style
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a TitleTagStyleEntry.
+         * @memberof game
+         * @interface ITitleTagStyleEntry
+         * @augments game.TitleTagStyleEntry.$Properties
+         * @deprecated Use game.TitleTagStyleEntry.$Properties instead.
+         */
+
+        /**
+         * Shape of a TitleTagStyleEntry.
+         * @typedef {game.TitleTagStyleEntry.$Properties} game.TitleTagStyleEntry.$Shape
+         */
+
+        /**
+         * Constructs a new TitleTagStyleEntry.
+         * @memberof game
+         * @classdesc Represents a TitleTagStyleEntry.
+         * @constructor
+         * @param {game.TitleTagStyleEntry.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const TitleTagStyleEntry = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * TitleTagStyleEntry key.
+         * @member {string} key
+         * @memberof game.TitleTagStyleEntry
+         * @instance
+         */
+        TitleTagStyleEntry.prototype.key = "";
+
+        /**
+         * TitleTagStyleEntry style.
+         * @member {game.RoomInfoTagStyle.$Properties|null|undefined} style
+         * @memberof game.TitleTagStyleEntry
+         * @instance
+         */
+        TitleTagStyleEntry.prototype.style = null;
+
+        /**
+         * Creates a new TitleTagStyleEntry instance using the specified properties.
+         * @function create
+         * @memberof game.TitleTagStyleEntry
+         * @static
+         * @param {game.TitleTagStyleEntry.$Properties=} [properties] Properties to set
+         * @returns {game.TitleTagStyleEntry} TitleTagStyleEntry instance
+         * @type {{
+         *   (properties: game.TitleTagStyleEntry.$Shape): game.TitleTagStyleEntry & game.TitleTagStyleEntry.$Shape;
+         *   (properties?: game.TitleTagStyleEntry.$Properties): game.TitleTagStyleEntry;
+         * }}
+         */
+        TitleTagStyleEntry.create = function(properties) {
+            return new TitleTagStyleEntry(properties);
+        };
+
+        /**
+         * Encodes the specified TitleTagStyleEntry message. Does not implicitly {@link game.TitleTagStyleEntry.verify|verify} messages.
+         * @function encode
+         * @memberof game.TitleTagStyleEntry
+         * @static
+         * @param {game.TitleTagStyleEntry.$Properties} message TitleTagStyleEntry message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        TitleTagStyleEntry.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.key != null && $Object.hasOwnProperty.call(message, "key") && message.key !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.key);
+            if (message.style != null && $Object.hasOwnProperty.call(message, "style"))
+                $root.game.RoomInfoTagStyle.encode(message.style, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified TitleTagStyleEntry message, length delimited. Does not implicitly {@link game.TitleTagStyleEntry.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.TitleTagStyleEntry
+         * @static
+         * @param {game.TitleTagStyleEntry.$Properties} message TitleTagStyleEntry message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        TitleTagStyleEntry.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a TitleTagStyleEntry message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.TitleTagStyleEntry
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.TitleTagStyleEntry & game.TitleTagStyleEntry.$Shape} TitleTagStyleEntry
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        TitleTagStyleEntry.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.TitleTagStyleEntry(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.key = value;
+                        else
+                            delete message.key;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        message.style = $root.game.RoomInfoTagStyle.decode(reader, reader.uint32(), $undefined, _depth + 1, message.style);
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a TitleTagStyleEntry message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.TitleTagStyleEntry
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.TitleTagStyleEntry & game.TitleTagStyleEntry.$Shape} TitleTagStyleEntry
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        TitleTagStyleEntry.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a TitleTagStyleEntry message.
+         * @function verify
+         * @memberof game.TitleTagStyleEntry
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        TitleTagStyleEntry.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.key != null && $Object.hasOwnProperty.call(message, "key"))
+                if (!$util.isString(message.key))
+                    return "key: string expected";
+            if (message.style != null && $Object.hasOwnProperty.call(message, "style")) {
+                let error = $root.game.RoomInfoTagStyle.verify(message.style, _depth + 1);
+                if (error)
+                    return "style." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a TitleTagStyleEntry message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.TitleTagStyleEntry
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.TitleTagStyleEntry} TitleTagStyleEntry
+         */
+        TitleTagStyleEntry.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.TitleTagStyleEntry)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.TitleTagStyleEntry: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.TitleTagStyleEntry();
+            if (object.key != null)
+                if (typeof object.key !== "string" || object.key.length)
+                    message.key = $String(object.key);
+            if (object.style != null) {
+                if (!$util.isObject(object.style))
+                    throw $TypeError(".game.TitleTagStyleEntry.style: object expected");
+                message.style = $root.game.RoomInfoTagStyle.fromObject(object.style, _depth + 1);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a TitleTagStyleEntry message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.TitleTagStyleEntry
+         * @static
+         * @param {game.TitleTagStyleEntry} message TitleTagStyleEntry
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        TitleTagStyleEntry.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.key = "";
+                object.style = null;
+            }
+            if (message.key != null && $Object.hasOwnProperty.call(message, "key"))
+                object.key = message.key;
+            if (message.style != null && $Object.hasOwnProperty.call(message, "style"))
+                object.style = $root.game.RoomInfoTagStyle.toObject(message.style, options, _depth + 1);
+            return object;
+        };
+
+        /**
+         * Converts this TitleTagStyleEntry to JSON.
+         * @function toJSON
+         * @memberof game.TitleTagStyleEntry
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        TitleTagStyleEntry.prototype.toJSON = function() {
+            return TitleTagStyleEntry.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for TitleTagStyleEntry
+         * @function getTypeUrl
+         * @memberof game.TitleTagStyleEntry
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        TitleTagStyleEntry.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.TitleTagStyleEntry";
+        };
+
+        return TitleTagStyleEntry;
+    })();
+
     game.PunishmentTaskConfig = (function() {
 
         /**
@@ -34699,6 +35108,7 @@ export const game = $root.game = (() => {
          * @property {game.SecurityDisclaimerConfig.$Properties|null} [securityDisclaimer] AppConfig securityDisclaimer
          * @property {game.RankedScoreConfig.$Properties|null} [rankedScore] AppConfig rankedScore
          * @property {game.PetBondConfig.$Properties|null} [petBond] AppConfig petBond
+         * @property {Array.<game.TitleTagStyleEntry.$Properties>|null} [titleTagStyles] AppConfig titleTagStyles
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -34732,6 +35142,7 @@ export const game = $root.game = (() => {
             this.roomInfoTags = [];
             this.games = [];
             this.messages = [];
+            this.titleTagStyles = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -34883,6 +35294,14 @@ export const game = $root.game = (() => {
         AppConfig.prototype.petBond = null;
 
         /**
+         * AppConfig titleTagStyles.
+         * @member {Array.<game.TitleTagStyleEntry.$Properties>} titleTagStyles
+         * @memberof game.AppConfig
+         * @instance
+         */
+        AppConfig.prototype.titleTagStyles = $util.emptyArray;
+
+        /**
          * Creates a new AppConfig instance using the specified properties.
          * @function create
          * @memberof game.AppConfig
@@ -34958,6 +35377,9 @@ export const game = $root.game = (() => {
                 $root.game.RankedScoreConfig.encode(message.rankedScore, writer.uint32(/* id 18, wireType 2 =*/146).fork(), _depth + 1).ldelim();
             if (message.petBond != null && $Object.hasOwnProperty.call(message, "petBond"))
                 $root.game.PetBondConfig.encode(message.petBond, writer.uint32(/* id 19, wireType 2 =*/154).fork(), _depth + 1).ldelim();
+            if (message.titleTagStyles != null && message.titleTagStyles.length)
+                for (let i = 0; i < message.titleTagStyles.length; ++i)
+                    $root.game.TitleTagStyleEntry.encode(message.titleTagStyles[i], writer.uint32(/* id 20, wireType 2 =*/162).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -35129,6 +35551,14 @@ export const game = $root.game = (() => {
                         message.petBond = $root.game.PetBondConfig.decode(reader, reader.uint32(), $undefined, _depth + 1, message.petBond);
                         continue;
                     }
+                case 20: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.titleTagStyles && message.titleTagStyles.length))
+                            message.titleTagStyles = [];
+                        message.titleTagStyles.push($root.game.TitleTagStyleEntry.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -35292,6 +35722,15 @@ export const game = $root.game = (() => {
                 if (error)
                     return "petBond." + error;
             }
+            if (message.titleTagStyles != null && $Object.hasOwnProperty.call(message, "titleTagStyles")) {
+                if (!$Array.isArray(message.titleTagStyles))
+                    return "titleTagStyles: array expected";
+                for (let i = 0; i < message.titleTagStyles.length; ++i) {
+                    let error = $root.game.TitleTagStyleEntry.verify(message.titleTagStyles[i], _depth + 1);
+                    if (error)
+                        return "titleTagStyles." + error;
+                }
+            }
             return null;
         };
 
@@ -35440,6 +35879,16 @@ export const game = $root.game = (() => {
                     throw $TypeError(".game.AppConfig.petBond: object expected");
                 message.petBond = $root.game.PetBondConfig.fromObject(object.petBond, _depth + 1);
             }
+            if (object.titleTagStyles) {
+                if (!$Array.isArray(object.titleTagStyles))
+                    throw $TypeError(".game.AppConfig.titleTagStyles: array expected");
+                message.titleTagStyles = $Array(object.titleTagStyles.length);
+                for (let i = 0; i < object.titleTagStyles.length; ++i) {
+                    if (!$util.isObject(object.titleTagStyles[i]))
+                        throw $TypeError(".game.AppConfig.titleTagStyles: object expected");
+                    message.titleTagStyles[i] = $root.game.TitleTagStyleEntry.fromObject(object.titleTagStyles[i], _depth + 1);
+                }
+            }
             return message;
         };
 
@@ -35469,6 +35918,7 @@ export const game = $root.game = (() => {
                 object.roomInfoTags = [];
                 object.games = [];
                 object.messages = [];
+                object.titleTagStyles = [];
             }
             if (options.defaults) {
                 object.site = null;
@@ -35542,6 +35992,11 @@ export const game = $root.game = (() => {
                 object.rankedScore = $root.game.RankedScoreConfig.toObject(message.rankedScore, options, _depth + 1);
             if (message.petBond != null && $Object.hasOwnProperty.call(message, "petBond"))
                 object.petBond = $root.game.PetBondConfig.toObject(message.petBond, options, _depth + 1);
+            if (message.titleTagStyles && message.titleTagStyles.length) {
+                object.titleTagStyles = $Array(message.titleTagStyles.length);
+                for (let j = 0; j < message.titleTagStyles.length; ++j)
+                    object.titleTagStyles[j] = $root.game.TitleTagStyleEntry.toObject(message.titleTagStyles[j], options, _depth + 1);
+            }
             return object;
         };
 

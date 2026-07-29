@@ -1,0 +1,26 @@
+{
+  "admin": {
+    "textColor": "#7c5900",
+    "backgroundColor": "#fff1c4",
+    "borderColor": "#ffd875",
+    "label": "管理员赋予"
+  },
+  "master": {
+    "textColor": "#5c3b82",
+    "backgroundColor": "#f0e7ff",
+    "borderColor": "#c7a8f5",
+    "label": "主人赋予"
+  },
+  "self": {
+    "textColor": "#225c8d",
+    "backgroundColor": "#e1f2ff",
+    "borderColor": "#8fcaf0",
+    "label": "自定义"
+  },
+  "system": {
+    "textColor": "#1f6f45",
+    "backgroundColor": "#e3f7ea",
+    "borderColor": "#96d9b1",
+    "label": "系统默认"
+  }
+}

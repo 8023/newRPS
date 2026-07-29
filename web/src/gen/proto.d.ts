@@ -1050,6 +1050,12 @@ export namespace game {
         /** PublicStats selfTitle. */
         selfTitle: string;
 
+        /** PublicStats titleSource. */
+        titleSource: string;
+
+        /** PublicStats titleColors. */
+        titleColors?: (game.GenderColors.$Properties|null);
+
         /**
          * Creates a new PublicStats instance using the specified properties.
          * @param [properties] Properties to set
@@ -1179,6 +1185,12 @@ export namespace game {
             /** PublicStats selfTitle */
             selfTitle?: (string|null);
 
+            /** PublicStats titleSource */
+            titleSource?: (string|null);
+
+            /** PublicStats titleColors */
+            titleColors?: (game.GenderColors.$Properties|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
@@ -1247,6 +1259,12 @@ export namespace game {
 
         /** LobbyStats selfTitle. */
         selfTitle: string;
+
+        /** LobbyStats titleSource. */
+        titleSource: string;
+
+        /** LobbyStats titleColors. */
+        titleColors?: (game.GenderColors.$Properties|null);
 
         /**
          * Creates a new LobbyStats instance using the specified properties.
@@ -1373,6 +1391,12 @@ export namespace game {
 
             /** LobbyStats selfTitle */
             selfTitle?: (string|null);
+
+            /** LobbyStats titleSource */
+            titleSource?: (string|null);
+
+            /** LobbyStats titleColors */
+            titleColors?: (game.GenderColors.$Properties|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -9148,6 +9172,129 @@ export namespace game {
     }
 
     /**
+     * Properties of a TitleTagStyleEntry.
+     * @deprecated Use game.TitleTagStyleEntry.$Properties instead.
+     */
+    interface ITitleTagStyleEntry extends game.TitleTagStyleEntry.$Properties {
+    }
+
+    /** Represents a TitleTagStyleEntry. */
+    class TitleTagStyleEntry {
+
+        /**
+         * Constructs a new TitleTagStyleEntry.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: game.TitleTagStyleEntry.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** TitleTagStyleEntry key. */
+        key: string;
+
+        /** TitleTagStyleEntry style. */
+        style?: (game.RoomInfoTagStyle.$Properties|null);
+
+        /**
+         * Creates a new TitleTagStyleEntry instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns TitleTagStyleEntry instance
+         */
+        static create(properties: game.TitleTagStyleEntry.$Shape): game.TitleTagStyleEntry & game.TitleTagStyleEntry.$Shape;
+        static create(properties?: game.TitleTagStyleEntry.$Properties): game.TitleTagStyleEntry;
+
+        /**
+         * Encodes the specified TitleTagStyleEntry message. Does not implicitly {@link game.TitleTagStyleEntry.verify|verify} messages.
+         * @param message TitleTagStyleEntry message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: game.TitleTagStyleEntry.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified TitleTagStyleEntry message, length delimited. Does not implicitly {@link game.TitleTagStyleEntry.verify|verify} messages.
+         * @param message TitleTagStyleEntry message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: game.TitleTagStyleEntry.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a TitleTagStyleEntry message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {game.TitleTagStyleEntry & game.TitleTagStyleEntry.$Shape} TitleTagStyleEntry
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.TitleTagStyleEntry & game.TitleTagStyleEntry.$Shape;
+
+        /**
+         * Decodes a TitleTagStyleEntry message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {game.TitleTagStyleEntry & game.TitleTagStyleEntry.$Shape} TitleTagStyleEntry
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.TitleTagStyleEntry & game.TitleTagStyleEntry.$Shape;
+
+        /**
+         * Verifies a TitleTagStyleEntry message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a TitleTagStyleEntry message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns TitleTagStyleEntry
+         */
+        static fromObject(object: { [k: string]: any }): game.TitleTagStyleEntry;
+
+        /**
+         * Creates a plain object from a TitleTagStyleEntry message. Also converts values to other types if specified.
+         * @param message TitleTagStyleEntry
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: game.TitleTagStyleEntry, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this TitleTagStyleEntry to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for TitleTagStyleEntry
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace TitleTagStyleEntry {
+
+        /** Properties of a TitleTagStyleEntry. */
+        interface $Properties {
+
+            /** TitleTagStyleEntry key */
+            key?: (string|null);
+
+            /** TitleTagStyleEntry style */
+            style?: (game.RoomInfoTagStyle.$Properties|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a TitleTagStyleEntry. */
+        type $Shape = game.TitleTagStyleEntry.$Properties;
+    }
+
+    /**
      * Properties of a PunishmentTaskConfig.
      * @deprecated Use game.PunishmentTaskConfig.$Properties instead.
      */
@@ -11230,6 +11377,9 @@ export namespace game {
         /** AppConfig petBond. */
         petBond?: (game.PetBondConfig.$Properties|null);
 
+        /** AppConfig titleTagStyles. */
+        titleTagStyles: game.TitleTagStyleEntry.$Properties[];
+
         /**
          * Creates a new AppConfig instance using the specified properties.
          * @param [properties] Properties to set
@@ -11367,6 +11517,9 @@ export namespace game {
 
             /** AppConfig petBond */
             petBond?: (game.PetBondConfig.$Properties|null);
+
+            /** AppConfig titleTagStyles */
+            titleTagStyles?: (game.TitleTagStyleEntry.$Properties[]|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

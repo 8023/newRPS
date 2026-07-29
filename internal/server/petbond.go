@@ -209,7 +209,10 @@ func (s *Server) applyDisplayTitle(player *PlayerState, p *types.PublicPlayer) {
 	if player == nil || p == nil {
 		return
 	}
+	p.Stats.TitleSource = "system"
+	defer func() { p.Stats.TitleColors = s.titleColorsFor(p.Stats.TitleSource) }()
 	if p.Stats.TitleCustom {
+		p.Stats.TitleSource = "admin"
 		return
 	}
 	if ptrBool(p.NameWarPunished) {
@@ -217,11 +220,22 @@ func (s *Server) applyDisplayTitle(player *PlayerState, p *types.PublicPlayer) {
 	}
 	if title := s.bestPetTitle(player.ID); title != "" {
 		p.Stats.Title = title
+		p.Stats.TitleSource = "master"
 		return
 	}
 	if title := strings.TrimSpace(player.Stats.SelfTitle); title != "" {
 		p.Stats.Title = title
+		p.Stats.TitleSource = "self"
 	}
+}
+
+// titleColorsFor 按称号来源查 AppConfig.TitleTagStyles；缺失该 key 时兜底为中性灰
+// （与 web 端 defaultRoomInfoTagStyle 同一套兜底色，避免管理员误删某个来源的样式后标签变透明）。
+func (s *Server) titleColorsFor(source string) types.GenderColors {
+	if style, ok := s.cfg.TitleTagStyles[source]; ok {
+		return style.GenderColors
+	}
+	return types.GenderColors{TextColor: "#4d5c6f", BackgroundColor: "#eef3f8", BorderColor: "#c9d6e4"}
 }
 
 // publicPetBondEdges 大厅可公开展示的边：双方在线且都开了公开展示。

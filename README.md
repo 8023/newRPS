@@ -250,6 +250,7 @@ docker compose up -d
 | `punishments.json` | 系统惩罚池 |
 | `player-punishment-room-name-pool.json` | 玩家发布任务房名词库 |
 | `room-tags.json` / `room-info-tags.json` | 房间 Tag 与信息标签样式 |
+| `title-tag-styles.json` | 称号标签按赋予来源（系统默认/自定义/主人赋予/管理员赋予）的配色 |
 | `access-control.json` | 防多开 |
 | `name-war.json` / `giveaway.json` / `extreme-mode.json` | 名争 / 白给 / 极限模式文案与参数 |
 | `ranked-score.json` | 排位分「展示」上下限（含名字争夺战下限）与每日衰减比例；存储分数本身不设上下限，仅展示时封顶，详见「排位积分」章节 |
@@ -273,7 +274,7 @@ docker compose up -d
 
 - **入席**：进房间默认观战，对局未开始前可自由 `liarsdice:joinRoster` / `liarsdice:leaveRoster`；房间设置里 `liarsDiceMinPlayers`（2~上限，默认 3）/`liarsDiceMaxPlayers`（默认 3，上限 8）。
 - **开局**：参战名单全员 `liarsdice:ready` 且名单 5 秒无变动 → 每人现摇 5 颗骰子，随机选首个叫点者（按入席顺序循环叫点）。
-- **叫点规则**：每回合只能"叫"（`liarsdice:bid`，颗数更多，或颗数不变但点数更大）或"开"（`liarsdice:challenge`，质疑上家），没有"过"。第一个叫点数至少是"在场人数 + 1"。1 是万能点，但只要本局有人喊过 1，之后 1 不再算万能，仅算实际点数。
+- **叫点规则**：叫点（`liarsdice:bid`，颗数更多，或颗数不变但点数更大）按入席顺序循环，只有 `CurrentTurn` 指向的玩家能叫，没有"过"。开牌（`liarsdice:challenge`，质疑当前叫点）不受回合顺序限制——只要 `room.Phase == PhaseChoosing` 且存在 `CurrentBid`，任意在场参战玩家（`ParticipantIDs` 里任意一个，不要求等于 `CurrentTurn`）随时都能发起，不推进 `CurrentTurn`、直接结算并进入 `PhaseResult`。第一个叫点数至少是"在场人数 + 1"。1 是万能点，但只要本局有人喊过 1，之后 1 不再算万能，仅算实际点数。
 - **结算**：开牌揭晓全体参战玩家骰子（不只叫点者和质疑者），按叫点面值（含万能 1，若未禁用）计数；成立则叫点者胜、质疑者负，反之相反；其余参战玩家本局"平"，不计分不受罚。下一局重新摇骰，不延续骰子数量、不淘汰。
 - **断线判负**：断线判负的规则是"上家"（入席顺序里的前一位，固定关系，与谁最后叫过点无关）胜——`createLiarsDiceDisconnectForfeit`/`applyLiarsDiceDisconnectForfeit`，与其它三个游戏的 `DisconnectForfeit` 走独立的 `LiarsDiceDisconnectForfeit`（字段是 playerID 而非 SeatKey）。
 - **惩罚**：`punishment.go` 的 `setupPunishmentForPlayers` 从原来 Seat/RoundResult 耦合的 `setupPunishmentOrNext` 里抽出通用尾段（按 playerID 列表工作），大话骰和其它三个游戏共用这一段；`buildLiarsDicePunishmentTasks` 单独实现（赢家直接作为"玩家发布任务"模式下的任务发布人，不走 Seat 反查）。

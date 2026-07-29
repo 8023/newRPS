@@ -538,6 +538,7 @@ export function normalizeConfig(config: AppConfig): AppConfig {
     })),
     roomTags: config.roomTags || [],
     roomInfoTags: config.roomInfoTags || {},
+    titleTagStyles: config.titleTagStyles || {},
     accessControl: withAccessControlDefaults(config.accessControl),
     nameWar: {
       ...config.nameWar,

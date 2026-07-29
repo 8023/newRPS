@@ -158,6 +158,10 @@ export type PublicStats = {
   titleCustom?: boolean;
   /** 玩家自设称号；展示优先级：管理员自定义 > 主人设置的宠物称号 > selfTitle > 系统自动称号。 */
   selfTitle?: string;
+  /** 当前 title 的赋予来源，供称号标签按来源着色（见 AppConfig.titleTagStyles）。 */
+  titleSource?: "system" | "self" | "master" | "admin";
+  /** 服务端已按 titleSource 从 AppConfig.titleTagStyles 解析好的配色，直接当行内样式用。 */
+  titleColors?: GenderColors;
   /** 累计在线时长（毫秒）；在线时服务端会加上本会话已持续时长。 */
   totalOnlineMs?: number;
 };
@@ -608,6 +612,8 @@ export type AppConfig = {
   playerPunishmentRoomNamePool?: RoomNamePool;
   roomTags: string[];
   roomInfoTags: Record<string, RoomInfoTagStyle>;
+  /** 称号标签按赋予来源（system/self/master/admin）的配色，形状与 roomInfoTags 一致。 */
+  titleTagStyles: Record<string, RoomInfoTagStyle>;
   accessControl: {
     maxOnlinePerIp: number;
     maxCreatesPer10Min: number;

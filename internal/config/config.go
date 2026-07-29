@@ -5,8 +5,8 @@
 //
 //	site.json, announcement-board.json, security-disclaimer.json, genders.json, gender-factions.json,
 //	titles.json, punishments.json, player-punishment-room-name-pool.json, room-tags.json,
-//	room-info-tags.json, access-control.json, name-war.json, giveaway.json, pet-bond.json,
-//	extreme-mode.json, ranked-score.json, games.json, messages.json
+//	room-info-tags.json, title-tag-styles.json, access-control.json, name-war.json, giveaway.json,
+//	pet-bond.json, extreme-mode.json, ranked-score.json, games.json, messages.json
 package config
 
 import (
@@ -36,6 +36,7 @@ var splitConfigFiles = []string{
 	"player-punishment-room-name-pool.json",
 	"room-tags.json",
 	"room-info-tags.json",
+	"title-tag-styles.json",
 	"access-control.json",
 	"name-war.json",
 	"giveaway.json",
@@ -348,6 +349,15 @@ func normalizeConfig(input types.AppConfig) types.AppConfig {
 		roomInfoTags[key] = tag
 	}
 
+	titleTagStyles := map[string]types.RoomInfoTagStyle{}
+	for key, tag := range input.TitleTagStyles {
+		tag.Label = sliceRunes(tag.Label, 16)
+		tag.TextColor = strings.TrimSpace(tag.TextColor)
+		tag.BackgroundColor = strings.TrimSpace(tag.BackgroundColor)
+		tag.BorderColor = strings.TrimSpace(tag.BorderColor)
+		titleTagStyles[key] = tag
+	}
+
 	em := input.ExtremeMode
 	em.Label = sliceRunes(em.Label, 16)
 	em.Emoji = sliceRunes(em.Emoji, 4)
@@ -384,6 +394,7 @@ func normalizeConfig(input types.AppConfig) types.AppConfig {
 	out.RoomTags = cleanLines(input.RoomTags)
 	out.Games = games
 	out.RoomInfoTags = roomInfoTags
+	out.TitleTagStyles = titleTagStyles
 	out.ExtremeMode = em
 	out.PlayerPunishmentRoomNamePool = normalizeRoomNamePool(input.PlayerPunishmentRoomNamePool)
 	out.NameWar.PenaltyPrefix = sliceRunes(input.NameWar.PenaltyPrefix, 16)
@@ -591,6 +602,20 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 			return input, err
 		}
 	}
+	for key, tag := range input.TitleTagStyles {
+		if strings.TrimSpace(tag.Label) == "" {
+			return input, fmt.Errorf("称号标签 %s 的名字不能为空", key)
+		}
+		if err := assertHexColor(tag.TextColor, tag.Label+" 文字颜色"); err != nil {
+			return input, err
+		}
+		if err := assertHexColor(tag.BackgroundColor, tag.Label+" 背景颜色"); err != nil {
+			return input, err
+		}
+		if err := assertHexColor(tag.BorderColor, tag.Label+" 边框颜色"); err != nil {
+			return input, err
+		}
+	}
 	if strings.TrimSpace(input.NameWar.PenaltyPrefix) == "" {
 		return input, fmt.Errorf("名字争夺战前缀不能为空")
 	}
@@ -758,6 +783,9 @@ func LoadConfig() (types.AppConfig, error) {
 	if err := migrateGendersFile(); err != nil {
 		return types.AppConfig{}, err
 	}
+	if err := ensureTitleTagStylesFile(); err != nil {
+		return types.AppConfig{}, err
+	}
 	cfg, err := readSplitConfig()
 	if err != nil {
 		return types.AppConfig{}, err
@@ -816,6 +844,21 @@ func ensureSecurityDisclaimerFile() error {
 		return nil
 	}
 	return writeJSONFile(path, types.SecurityDisclaimerConfig{Enabled: true})
+}
+
+// ensureTitleTagStylesFile：本版本新增的称号标签按来源着色配置，老部署目录里没有对应旧文件可迁移，
+// 直接补写默认四色（系统默认/自定义/主人赋予/管理员赋予），否则老实例升级后会因缺文件启动失败。
+func ensureTitleTagStylesFile() error {
+	path := configPath("title-tag-styles.json")
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+	return writeJSONFile(path, map[string]types.RoomInfoTagStyle{
+		"system": {Label: "系统默认", GenderColors: types.GenderColors{TextColor: "#1f6f45", BackgroundColor: "#e3f7ea", BorderColor: "#96d9b1"}},
+		"self":   {Label: "自定义", GenderColors: types.GenderColors{TextColor: "#225c8d", BackgroundColor: "#e1f2ff", BorderColor: "#8fcaf0"}},
+		"master": {Label: "主人赋予", GenderColors: types.GenderColors{TextColor: "#5c3b82", BackgroundColor: "#f0e7ff", BorderColor: "#c7a8f5"}},
+		"admin":  {Label: "管理员赋予", GenderColors: types.GenderColors{TextColor: "#7c5900", BackgroundColor: "#fff1c4", BorderColor: "#ffd875"}},
+	})
 }
 
 // legacyFactionTaskGroups 仅用于旧库升级时的一次性回填：性别/阵营解耦前，只有这 4 个默认
@@ -948,6 +991,7 @@ func readSplitConfig() (types.AppConfig, error) {
 		{"player-punishment-room-name-pool.json", &cfg.PlayerPunishmentRoomNamePool},
 		{"room-tags.json", &cfg.RoomTags},
 		{"room-info-tags.json", &cfg.RoomInfoTags},
+		{"title-tag-styles.json", &cfg.TitleTagStyles},
 		{"access-control.json", &cfg.AccessControl},
 		{"name-war.json", &cfg.NameWar},
 		{"giveaway.json", &cfg.Giveaway},
@@ -985,6 +1029,7 @@ func writeSplitConfig(cfg types.AppConfig) error {
 		{"player-punishment-room-name-pool.json", pool},
 		{"room-tags.json", cfg.RoomTags},
 		{"room-info-tags.json", cfg.RoomInfoTags},
+		{"title-tag-styles.json", cfg.TitleTagStyles},
 		{"access-control.json", cfg.AccessControl},
 		{"name-war.json", cfg.NameWar},
 		{"giveaway.json", cfg.Giveaway},

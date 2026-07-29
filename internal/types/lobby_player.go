@@ -68,6 +68,10 @@ type LobbyStats struct {
 	SortLowestScore  int    `json:"sortLowestScore"`
 	Title            string `json:"title"`
 	TitleCustom      bool   `json:"titleCustom,omitempty"`
+	// TitleSource：与 PublicStats.TitleSource 同语义，供称号标签按来源着色。
+	TitleSource string `json:"titleSource,omitempty"`
+	// TitleColors：与 PublicStats.TitleColors 同语义。
+	TitleColors GenderColors `json:"titleColors"`
 	// TotalOnlineMs：累计在线时长（毫秒）；与 PublicStats 同语义。
 	TotalOnlineMs int64 `json:"totalOnlineMs,omitempty"`
 	// SelfTitle：与 PublicStats.SelfTitle 同语义。这里必须带上，否则 player:batch 广播
@@ -124,6 +128,7 @@ func ToLobbyPlayer(p PublicPlayer) LobbyPlayer {
 			SortRankedPoints: p.Stats.SortRankedPoints, SortHighestScore: p.Stats.SortHighestScore,
 			SortLowestScore: p.Stats.SortLowestScore, TitleCustom: p.Stats.TitleCustom,
 			TotalOnlineMs: p.Stats.TotalOnlineMs, SelfTitle: p.Stats.SelfTitle,
+			TitleSource: p.Stats.TitleSource, TitleColors: p.Stats.TitleColors,
 		},
 		GameStats: p.GameStats,
 	}
@@ -157,6 +162,7 @@ func (p LobbyPlayer) AsPublicPlayer() PublicPlayer {
 			SortRankedPoints: p.Stats.SortRankedPoints, SortHighestScore: p.Stats.SortHighestScore,
 			SortLowestScore: p.Stats.SortLowestScore, TitleCustom: p.Stats.TitleCustom,
 			TotalOnlineMs: p.Stats.TotalOnlineMs, SelfTitle: p.Stats.SelfTitle,
+			TitleSource: p.Stats.TitleSource, TitleColors: p.Stats.TitleColors,
 		},
 		GameStats: p.GameStats,
 	}
