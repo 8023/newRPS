@@ -6,6 +6,46 @@
  * - Chrome 不解 HEIC：libheif-js（按需动态 import，独立 .wasm 文件而非 base64 内联，体积/流量显著更小）
  */
 
+/**
+ * 根因：`vite.config.ts` 用 `emptyOutDir: true`，每次发布都会把 dist/ 整个清空重建，
+ * 分包 chunk 的文件名带内容哈希，旧哈希文件在发布后即被删除、不会保留。iOS Safari 的标签页
+ * 后台常年不回收（不像 Chrome 会更激进地丢弃/重建后台标签），只要用户在发布前就打开了页面、
+ * 发布后才第一次触发这类按需加载（HEIC 解码 / WebP WASM 编码器都是 `import()` 动态加载的），
+ * 浏览器请求的还是旧哈希文件名，服务端已经 404——这就是 "Importing a module script failed"
+ * 的真实成因，不是网络抖动，单纯重试同一个 import() 毫无意义（文件确实已经不在了）。
+ * 真正的解法：整页刷新去拿这次发布最新的 index.html（里面引用的就是当前发布的新哈希文件名），
+ * 刷新后旧引用问题自然消失。用 sessionStorage 打一个时间戳标记防止在真正无解的情况下
+ * （比如网络本身就不通）反复刷新造成死循环。
+ */
+const STALE_CHUNK_RELOAD_KEY = "__doumiao_stale_chunk_reload_at";
+const STALE_CHUNK_RELOAD_WINDOW_MS = 30_000;
+
+function isModuleLoadFailure(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /importing a module script failed|failed to fetch dynamically imported module|error loading dynamically imported module/i.test(msg);
+}
+
+/** 标记这是「换新版本需要整页刷新」类错误，调用方不应该再靠缩小尺寸/降质量重试——那对这类错误没有意义。 */
+export class StaleChunkReloadError extends Error {}
+
+/** 命中动态 import 失败时的兜底：整页刷新一次以换取最新构建产物；短时间内重复命中则不再刷新，避免死循环。 */
+function recoverFromStaleChunk(e: unknown): never {
+  let alreadyTriedRecently = false;
+  try {
+    const last = Number(sessionStorage.getItem(STALE_CHUNK_RELOAD_KEY) || "0");
+    alreadyTriedRecently = Date.now() - last < STALE_CHUNK_RELOAD_WINDOW_MS;
+    sessionStorage.setItem(STALE_CHUNK_RELOAD_KEY, String(Date.now()));
+  } catch {
+    // 隐私模式下 sessionStorage 可能不可用，退化为总是允许刷新一次
+  }
+  if (!alreadyTriedRecently) {
+    window.location.reload();
+    throw new StaleChunkReloadError("检测到新版本，正在刷新页面，请刷新完成后重新上传一次");
+  }
+  const msg = e instanceof Error ? e.message : String(e);
+  throw new StaleChunkReloadError(`图片处理组件加载失败：${msg}（已尝试刷新页面仍未恢复，请检查网络连接后重试）`);
+}
+
 export function isHeicLike(file: File): boolean {
   const t = (file.type || "").toLowerCase();
   const n = (file.name || "").toLowerCase();
@@ -51,6 +91,7 @@ async function heicToImageBitmap(file: File): Promise<ImageBitmap> {
     image.free();
     return await createImageBitmap(imageData);
   } catch (e) {
+    if (isModuleLoadFailure(e)) recoverFromStaleChunk(e);
     const msg = e instanceof Error ? e.message : String(e);
     if (/Content Security Policy/i.test(msg)) {
       throw new Error("HEIC 解码被浏览器安全策略拦截，请改用 jpg/png，或联系管理员放开 script-src wasm-unsafe-eval");
@@ -133,7 +174,13 @@ async function encodeWebpWithWasm(canvas: HTMLCanvasElement, quality01: number):
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   // quality: 0–100
   const q = Math.round(Math.min(100, Math.max(1, quality01 * 100)));
-  const encode = (await import("@jsquash/webp/encode")).default;
+  let encode: (typeof import("@jsquash/webp/encode"))["default"];
+  try {
+    encode = (await import("@jsquash/webp/encode")).default;
+  } catch (e) {
+    if (isModuleLoadFailure(e)) recoverFromStaleChunk(e);
+    throw e instanceof Error ? e : new Error("图片压缩组件加载失败，请刷新页面后重试");
+  }
   const buffer = await encode(imageData, { quality: q });
   return new Blob([buffer], { type: "image/webp" });
 }

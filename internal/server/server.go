@@ -161,7 +161,8 @@ func New() (*Server, error) {
 	}
 	s.petBonds = map[string]*petBond{}
 	s.petBondRequests = map[string]*petBondRequest{}
-	// VAPID 密钥：失败不阻断启动，Web Push 功能会静默不可用（sendPush 会因 vapid.PublicKey=="" 直接跳过）。
+	// VAPID 密钥：失败不阻断游戏服务，但会记错误日志；公钥接口返回 503，
+	// 设置页会明确显示订阅失败，sendPush 也会因公钥为空跳过。
 	if keys, err := loadOrGenerateVAPIDKeys(root); err != nil {
 		s.errorLog("vapid_keys_failed", err.Error())
 	} else {

@@ -1,14 +1,19 @@
 import { ask } from "./rpc";
 
-// Level 1（页面还开着、只是切了后台/最小化）：直接用 Notification API，不需要 Service Worker，
-// 不需要订阅。服务端只有在这个玩家完全断线（player.Connected===false）时才会走 Level 2 Web
-// Push——只要 WS 还连着，判断"要不要弹"这件事完全在前端本地做，不用服务端参与，也不会和
-// Level 2 重复弹（见 shouldPush 的服务端注释）。
-
 export type PushPreferences = { mentionEnabled: boolean; turnEnabled: boolean; seatEnabled: boolean };
 
+export type PushSubscriptionStatus =
+  | { state: "checking"; message: string }
+  | { state: "active"; message: string }
+  | { state: "stopped"; message: string }
+  | { state: "permission-required"; message: string }
+  | { state: "denied"; message: string }
+  | { state: "unsupported"; message: string }
+  | { state: "error"; message: string };
+
+const pushStoppedKey = "rps-push-stopped";
 let prefs: PushPreferences = { mentionEnabled: false, turnEnabled: false, seatEnabled: false };
-let meId = "";
+let ensureInFlight: Promise<PushSubscriptionStatus> | null = null;
 
 export function setPushPreferencesCache(next: PushPreferences) {
   prefs = next;
@@ -16,43 +21,6 @@ export function setPushPreferencesCache(next: PushPreferences) {
 
 export function getPushPreferencesCache() {
   return prefs;
-}
-
-export function setPushMeId(id: string) {
-  meId = id;
-}
-
-export function getPushMeId() {
-  return meId;
-}
-
-function canShowNotification() {
-  return typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden;
-}
-
-function showNotification(title: string, body: string, tag: string) {
-  if (!canShowNotification()) return;
-  try {
-    // eslint-disable-next-line no-new
-    new Notification(title, { body, tag });
-  } catch {
-    // 部分浏览器/权限状态下 new Notification() 会抛，静默忽略即可（不影响页面内其它功能）。
-  }
-}
-
-export function notifyMentionIfHidden(author: string, text: string) {
-  if (!prefs.mentionEnabled) return;
-  showNotification("有人 @ 了你", `${author}：${text}`, "mention");
-}
-
-export function notifyTurnIfHidden() {
-  if (!prefs.turnEnabled) return;
-  showNotification("轮到你了", "对方已经行动，轮到你出招/落子了。", "turn");
-}
-
-export function notifySeatIfHidden() {
-  if (!prefs.seatEnabled) return;
-  showNotification("你的房间来人了", "有玩家坐上了对面的战斗席，快回来看看吧。", "seat");
 }
 
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
@@ -73,7 +41,17 @@ export async function updatePushPreferences(partial: Partial<PushPreferences>): 
   setPushPreferencesCache({ ...prefs, ...partial });
 }
 
-// ---- Level 2：Web Push 订阅（可选，权限允许时才会用到） ----
+function pushSupported() {
+  return typeof window !== "undefined"
+    && typeof navigator !== "undefined"
+    && "serviceWorker" in navigator
+    && "PushManager" in window
+    && typeof Notification !== "undefined";
+}
+
+function stoppedLocally() {
+  return typeof localStorage !== "undefined" && localStorage.getItem(pushStoppedKey) === "1";
+}
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -84,41 +62,117 @@ function urlBase64ToUint8Array(base64String: string) {
   return outputArray;
 }
 
-export async function ensurePushSubscription(): Promise<boolean> {
-  if (typeof navigator === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) return false;
-  if (Notification.permission !== "granted") return false;
+function sameApplicationServerKey(subscription: PushSubscription, expected: Uint8Array) {
+  const current = subscription.options.applicationServerKey;
+  if (!current) return false;
+  const bytes = new Uint8Array(current);
+  return bytes.length === expected.length && bytes.every((value, index) => value === expected[index]);
+}
+
+function errorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) return error.message.trim();
+  return "浏览器推送订阅失败";
+}
+
+export function currentPushSubscriptionStatus(): PushSubscriptionStatus {
+  if (!pushSupported()) {
+    return { state: "unsupported", message: "当前浏览器不支持 Web Push" };
+  }
+  if (Notification.permission === "denied") {
+    return { state: "denied", message: "浏览器已拒绝通知权限" };
+  }
+  if (Notification.permission !== "granted") {
+    return { state: "permission-required", message: "尚未授予通知权限" };
+  }
+  if (stoppedLocally()) {
+    return { state: "stopped", message: "这台设备已停止推送" };
+  }
+  return { state: "checking", message: "正在检查设备订阅…" };
+}
+
+// 校验浏览器订阅、VAPID 公钥和服务器登记三层状态。登录恢复、打开设置及用户主动
+// 开启时都会调用，因此清站点数据、换账号或 VAPID 轮换后可以自动修复。
+async function performEnsurePushSubscription(options: { force?: boolean } = {}): Promise<PushSubscriptionStatus> {
+  const initial = currentPushSubscriptionStatus();
+  if (initial.state === "unsupported" || initial.state === "denied" || initial.state === "permission-required") {
+    return initial;
+  }
+  if (initial.state === "stopped" && !options.force) return initial;
+  if (options.force && typeof localStorage !== "undefined") localStorage.removeItem(pushStoppedKey);
+
   try {
-    const registration = await navigator.serviceWorker.register("/sw.js");
+    const registration = await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
     await navigator.serviceWorker.ready;
+
+    const res = await fetch("/api/push/vapid-key", { cache: "no-store" });
+    if (!res.ok) throw new Error(`VAPID 公钥请求失败（HTTP ${res.status}）`);
+    const data = await res.json() as { publicKey?: string };
+    if (!data.publicKey) throw new Error("服务器未提供 VAPID 公钥");
+    const applicationServerKey = urlBase64ToUint8Array(data.publicKey);
+
     let subscription = await registration.pushManager.getSubscription();
+    if (subscription && !sameApplicationServerKey(subscription, applicationServerKey)) {
+      await ask("push:unsubscribe", { endpoint: subscription.endpoint }).catch(() => undefined);
+      await subscription.unsubscribe();
+      subscription = null;
+    }
     if (!subscription) {
-      const res = await fetch("/api/push/vapid-key");
-      const data = await res.json();
-      if (!data.publicKey) return false;
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(data.publicKey)
+        applicationServerKey
       });
     }
+
     const json = subscription.toJSON();
-    if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return false;
-    await ask("push:subscribe", { endpoint: json.endpoint, keys: { p256dh: json.keys.p256dh, auth: json.keys.auth } });
-    return true;
-  } catch {
-    return false;
+    if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+      throw new Error("浏览器返回的订阅信息不完整");
+    }
+    await ask("push:subscribe", {
+      endpoint: json.endpoint,
+      keys: { p256dh: json.keys.p256dh, auth: json.keys.auth }
+    });
+    return { state: "active", message: "本设备推送已启用" };
+  } catch (error) {
+    const message = errorMessage(error);
+    console.error("push subscription failed", error);
+    return { state: "error", message };
   }
 }
 
-export async function disablePushSubscription(): Promise<void> {
-  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+export function ensurePushSubscription(options: { force?: boolean } = {}): Promise<PushSubscriptionStatus> {
+  if (ensureInFlight) return ensureInFlight;
+  ensureInFlight = performEnsurePushSubscription(options).finally(() => {
+    ensureInFlight = null;
+  });
+  return ensureInFlight;
+}
+
+export async function disablePushSubscription(): Promise<PushSubscriptionStatus> {
+  if (typeof localStorage !== "undefined") localStorage.setItem(pushStoppedKey, "1");
+  if (!pushSupported()) return { state: "unsupported", message: "当前浏览器不支持 Web Push" };
   try {
-    const registration = await navigator.serviceWorker.getRegistration();
+    const registration = await navigator.serviceWorker.getRegistration("/");
     const subscription = await registration?.pushManager.getSubscription();
     if (subscription) {
-      await ask("push:unsubscribe", { endpoint: subscription.endpoint }).catch(() => undefined);
+      let removeError: unknown;
+      try {
+        await ask("push:unsubscribe", { endpoint: subscription.endpoint });
+      } catch (error) {
+        removeError = error;
+      }
       await subscription.unsubscribe();
+      if (removeError) {
+        console.warn("push server unsubscribe failed; local subscription removed", removeError);
+      }
     }
-  } catch {
-    // 取消订阅失败不影响本地偏好关闭，静默忽略。
+    return { state: "stopped", message: "这台设备已停止推送" };
+  } catch (error) {
+    const message = errorMessage(error);
+    console.error("push unsubscribe failed", error);
+    return { state: "error", message };
   }
+}
+
+export async function sendTestPush(): Promise<void> {
+  await ask("push:test", {});
 }

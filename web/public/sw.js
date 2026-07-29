@@ -1,8 +1,15 @@
-// Web Push Service Worker：只做一件事——收到 push 就弹通知。
-// 不缓存任何资源（不是 PWA 离线方案），所以不需要 install/activate 里的预缓存逻辑。
+// Web Push Service Worker：不缓存业务资源，只负责接管更新、展示通知和点击导航。
+
+self.addEventListener("install", () => {
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
 
 self.addEventListener("push", (event) => {
-  let payload = { title: "抖喵游戏屋", body: "你有一条新消息" };
+  let payload = { title: "抖喵游戏屋", body: "你有一条新消息", url: "/" };
   try {
     if (event.data) payload = { ...payload, ...event.data.json() };
   } catch {
@@ -12,15 +19,17 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     (async () => {
       // 如果用户已经有一个可见的标签页在看这个站点，就不重复弹系统通知——
-      // 那边的页面早就通过 WebSocket 实时收到同一个事件了（Level 1 会自己决定要不要弹）。
-      // 服务端理论上已经用 player.Connected 过滤过，这里只是双重保险。
+      // 服务端始终投递，由这里统一抑制用户正在前台查看时的重复通知。
       const clientsList = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       const hasVisibleClient = clientsList.some((c) => c.visibilityState === "visible" && c.focused);
       if (hasVisibleClient) return;
 
       await self.registration.showNotification(payload.title, {
         body: payload.body,
-        tag: payload.tag
+        tag: payload.tag,
+        icon: "/icon.svg",
+        badge: "/icon.svg",
+        data: { url: payload.url || "/" }
       });
     })()
   );
@@ -28,14 +37,17 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  const targetUrl = new URL(event.notification.data?.url || "/", self.location.origin).href;
   event.waitUntil(
     (async () => {
       const clientsList = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-      if (clientsList.length > 0) {
-        await clientsList[0].focus();
+      for (const client of clientsList) {
+        if (new URL(client.url).origin !== self.location.origin) continue;
+        if ("navigate" in client && client.url !== targetUrl) await client.navigate(targetUrl);
+        await client.focus();
         return;
       }
-      await self.clients.openWindow("/");
+      await self.clients.openWindow(targetUrl);
     })()
   );
 });

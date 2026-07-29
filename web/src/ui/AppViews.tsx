@@ -18,8 +18,9 @@ import { prepareAvatarImageForUpload } from "../lib/avatarImage";
 import { isNearScrollBottom, scrollToBottomSoon, stickChatToBottom, useMobileCollapse } from "../lib/uiHelpers";
 import { appendMentionText, loadChat, loadOlderChat, useChat } from "../lib/chatStore";
 import {
-  disablePushSubscription, ensurePushSubscription, fetchPushPreferences,
-  requestNotificationPermission, updatePushPreferences, type PushPreferences
+  currentPushSubscriptionStatus, disablePushSubscription, ensurePushSubscription, fetchPushPreferences,
+  requestNotificationPermission, sendTestPush, updatePushPreferences, type PushPreferences,
+  type PushSubscriptionStatus
 } from "../lib/pushNotify";
 import type { MeState } from "../lib/types";
 import { LiarsDicePanel } from "./LiarsDicePanel";
@@ -4177,6 +4178,7 @@ export function ProfilePanel({ config, me, theme, onThemeChange, onClose, onUpda
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
     () => (typeof Notification === "undefined" ? "denied" : Notification.permission)
   );
+  const [pushStatus, setPushStatus] = useState<PushSubscriptionStatus>(() => currentPushSubscriptionStatus());
   const [pushBusy, setPushBusy] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
@@ -4189,6 +4191,9 @@ export function ProfilePanel({ config, me, theme, onThemeChange, onClose, onUpda
 
   useEffect(() => {
     fetchPushPreferences().then(setPushPrefs).catch(() => undefined);
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      ensurePushSubscription().then(setPushStatus).catch(() => undefined);
+    }
   }, []);
 
   async function enableNotifications() {
@@ -4197,8 +4202,11 @@ export function ProfilePanel({ config, me, theme, onThemeChange, onClose, onUpda
       const permission = await requestNotificationPermission();
       setNotificationPermission(permission);
       if (permission === "granted") {
-        await ensurePushSubscription();
+        const status = await ensurePushSubscription({ force: true });
+        setPushStatus(status);
+        if (status.state !== "active") onError(status.message);
       } else {
+        setPushStatus(currentPushSubscriptionStatus());
         onError("需要允许通知权限才能开启推送");
       }
     } finally {
@@ -4207,6 +4215,16 @@ export function ProfilePanel({ config, me, theme, onThemeChange, onClose, onUpda
   }
 
   async function togglePushPref(key: keyof PushPreferences, value: boolean) {
+    if (value && pushStatus.state !== "active") {
+      setPushBusy(true);
+      const status = await ensurePushSubscription({ force: true });
+      setPushStatus(status);
+      setPushBusy(false);
+      if (status.state !== "active") {
+        onError(status.message);
+        return;
+      }
+    }
     const next = { ...pushPrefs, [key]: value };
     setPushPrefs(next);
     try {
@@ -4214,6 +4232,29 @@ export function ProfilePanel({ config, me, theme, onThemeChange, onClose, onUpda
     } catch (error) {
       setPushPrefs(pushPrefs); // 回滚
       onError(error instanceof Error ? error.message : "保存推送偏好失败");
+    }
+  }
+
+  async function stopNotificationsOnDevice() {
+    setPushBusy(true);
+    try {
+      const status = await disablePushSubscription();
+      setPushStatus(status);
+      onError(status.message);
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function testNotifications() {
+    setPushBusy(true);
+    try {
+      await sendTestPush();
+      onError("测试通知将在 3 秒后发出；请立即切到后台或锁屏");
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "发送测试通知失败");
+    } finally {
+      setPushBusy(false);
     }
   }
 
@@ -4519,12 +4560,14 @@ export function ProfilePanel({ config, me, theme, onThemeChange, onClose, onUpda
             <div className="admin-card-title">
               <strong>🔔 推送通知</strong>
               <small>
-                {notificationPermission === "granted" ? "已允许" : notificationPermission === "denied" ? "已拒绝" : "未设置"}
+                {pushStatus.state === "active" ? "已启用" : pushStatus.state === "checking" ? "检查中" : pushStatus.state === "stopped" ? "已停止" : "未启用"}
               </small>
             </div>
-            {notificationPermission !== "granted" && (
+            <p className={`hint ${pushStatus.state === "error" || pushStatus.state === "unsupported" || pushStatus.state === "denied" ? "danger-hint" : ""}`}>{pushStatus.message}</p>
+            {pushStatus.state === "unsupported" && <p className="hint">iPhone/iPad 请先将本站“添加到主屏幕”，再从主屏幕图标打开；其他设备请使用支持 Web Push 的现代浏览器。</p>}
+            {notificationPermission !== "granted" && pushStatus.state !== "unsupported" && (
               <>
-                <p className="hint">开启后，你离线时（关闭页面/手机后台被系统冻结）也能收到系统通知；页面还开着时会优先在页面内提醒，不会重复弹。</p>
+                <p className="hint">开启后，页面在后台、手机锁屏或浏览器关闭时均可收到通知；前台正在查看本站时不会重复弹出。</p>
                 <button type="button" disabled={pushBusy} onClick={enableNotifications}>
                   {pushBusy ? "请求中…" : "开启推送通知"}
                 </button>
@@ -4533,16 +4576,20 @@ export function ProfilePanel({ config, me, theme, onThemeChange, onClose, onUpda
             )}
             {notificationPermission === "granted" && (
               <>
+                {pushStatus.state !== "active" && (
+                  <button type="button" disabled={pushBusy} onClick={enableNotifications}>
+                    {pushBusy ? "订阅中…" : "启用或重新订阅这台设备"}
+                  </button>
+                )}
                 <Toggle label="有人 @ 我" value={pushPrefs.mentionEnabled} onChange={(v) => togglePushPref("mentionEnabled", v)} />
                 <Toggle label="轮到我出招/落子" value={pushPrefs.turnEnabled} onChange={(v) => togglePushPref("turnEnabled", v)} />
                 <Toggle label="我的房间参战席被坐满" value={pushPrefs.seatEnabled} onChange={(v) => togglePushPref("seatEnabled", v)} />
-                <button
-                  type="button"
-                  className="link-button"
-                  onClick={async () => { await disablePushSubscription(); onError("已停止这台设备的推送订阅"); }}
-                >
-                  停止这台设备的推送
-                </button>
+                {pushStatus.state === "active" && (
+                  <div className="profile-action-row">
+                    <button type="button" disabled={pushBusy} onClick={testNotifications}>发送测试通知</button>
+                    <button type="button" className="link-button" disabled={pushBusy} onClick={stopNotificationsOnDevice}>停止这台设备的推送</button>
+                  </div>
+                )}
               </>
             )}
           </div>

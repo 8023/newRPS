@@ -1,5 +1,5 @@
 import { maxAspectRatio, maxOriginalImageBytes, maxProofPixels, maxProofUploadBytes } from "./constants";
-import { decodeToImageSource, encodeCanvasToWebpFile } from "./imagePipeline";
+import { decodeToImageSource, encodeCanvasToWebpFile, StaleChunkReloadError } from "./imagePipeline";
 
 /**
  * 证明图上传前处理（固定流水线，输出必须是 WebP）：
@@ -55,6 +55,8 @@ export async function prepareProofImageForUpload(file: File): Promise<File> {
       try {
         return await encodeCanvasToWebpFile(canvas, baseName, quality, maxProofUploadBytes);
       } catch (e) {
+        // 换新版本需要整页刷新的错误：缩小尺寸/降质量重试没有意义，直接抛出。
+        if (e instanceof StaleChunkReloadError) throw e;
         const msg = e instanceof Error ? e.message : String(e);
         if (msg === "SIZE" || /超过 2MB|too large/i.test(msg)) {
           const next = 0.85;

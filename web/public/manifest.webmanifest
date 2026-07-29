@@ -1,0 +1,19 @@
+{
+  "name": "抖喵游戏屋",
+  "short_name": "抖喵游戏屋",
+  "description": "在线小游戏与房间聊天",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#101827",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

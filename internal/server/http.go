@@ -539,6 +539,12 @@ func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 	}
 	// hashed assets get long cache
 	base := filepath.Base(full)
+	// Service Worker 与 Manifest 必须及时更新，不能落入下面对普通静态文件的一年 immutable。
+	if base == "sw.js" || base == "manifest.webmanifest" {
+		w.Header().Set("Cache-Control", "no-cache")
+		http.ServeFile(w, r, full)
+		return
+	}
 	if strings.Contains(base, ".") && (strings.Contains(base, "-") || strings.Contains(base, ".")) {
 		// assets with hash typically have long names with dots
 		if filepath.Ext(base) != ".html" {
@@ -556,6 +562,11 @@ func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlePushVapidKey(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	if s.vapid.PublicKey == "" {
+		http.Error(w, "push unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"publicKey": s.vapid.PublicKey})

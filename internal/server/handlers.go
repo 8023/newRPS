@@ -201,6 +201,8 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{10, 60_000, 15_000}, s.onPushGetPreferences
 	case "push:updatePreferences":
 		return RateLimitOptions{10, 60_000, 15_000}, s.onPushUpdatePreferences
+	case "push:test":
+		return RateLimitOptions{5, 60_000, 15_000}, s.onPushTest
 	default:
 		return RateLimitOptions{}, nil
 	}

@@ -1,5 +1,10 @@
 # 更新记录
 
+### 未发布
+
+- **修复图片上传偶发「Importing a module script failed」**：证明图/头像压缩流水线里 HEIC 解码与 WebP WASM 编码器都是按需 `import()` 加载的分包 chunk；构建用 `emptyOutDir` 每次发布整体清空重建 `dist/`，旧哈希文件名会被删除。若用户页面停留跨越了一次发布（iOS Safari 尤其容易长时间不回收后台标签页），发布后首次触发这类按需加载时浏览器还在请求旧哈希文件名，服务端已 404，报出这句原始英文异常。现在 `imagePipeline.ts` 捕获到这类动态 import 失败会自动整页刷新一次以换取最新构建产物（`StaleChunkReloadError`，短时间内重复命中不再刷新，避免死循环），证明图/头像上传流程都不再靠缩小尺寸重试这类无意义的重试。
+- **Web Push 全链路修复**：权限、浏览器订阅与服务器登记改为独立状态并自动校验/修复，订阅失败不再静默；新增测试通知、PWA Manifest 与 iOS 主屏引导。服务端不再因 WebSocket 仍标记在线而跳过推送，前台去重统一交给 Service Worker；同时修复移动端 `new Notification()` 不可用、VAPID 密钥落盘失败未上报及 `sw.js` 被缓存一年等问题。
+
 ### v2.3.2（2026-07-28）
 
 - **删除自定义性别，回归查表法定阵营**：v2.2.5 引入的「自定义…」性别文本与阵营独立选择被撤销，性别只能从预设列表里选，阵营完全由所选性别的 `factionId` 查表决定（`resolveGender`/`validGenderSubmission` 不再接受自定义文本/独立阵营参数）；「女跨男」阵营（`trans_male_faction`，此前只有自定义文本能选中）新增 `FTM`/`假小子` 两个预设性别，使其重新可选。schema v15：存量选了自定义性别的玩家按其当前阵营改写成该阵营的默认预设性别，`players.custom_gender_label` 列随后删除。

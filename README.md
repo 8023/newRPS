@@ -116,6 +116,7 @@ docker compose logs -f gamehouse
 | `data/database.db`（及 `-wal`/`-shm`） | 玩家档案、聊天、房间/惩罚事件、Web Push | **核心存档**；`data/players.json` → SQLite 的一次性导入代码已删除（现网存量部署已全部迁移完成），仍停留在 pre-v2.1.28 `players.json` 且从未启动过带迁移代码版本的部署，需先在某个旧版本上启动一次完成迁移，再升级到当前版本 |
 | `work/uploads/` | 证明图、后台上传图 | 丢了历史图片链会 404 |
 | `work/session.secret` | 会话 HMAC（未设 `SESSION_SECRET` 时） | 丢了则旧浏览器 token 全部失效 |
+| `work/vapid.json` | Web Push VAPID 密钥对（未设 `VAPID_*` 时） | **必须保留**；丢失或更换会使所有已有浏览器推送订阅失效 |
 | `config/*.json` | 后台改过的运行时配置（按功能拆分） | **整目录备份**；升级勿用空包覆盖已改配置 |
 | `.env` | `SESSION_SECRET`、`ADMIN_PASSWORD` 等 | **`SESSION_SECRET` 不要换**，否则等同全员掉登录 |
 
@@ -204,6 +205,7 @@ docker compose up -d
 | `PORT` | `9988` | 监听端口 |
 | `ADMIN_PASSWORD` | （空） | 后台口令 |
 | `SESSION_SECRET` | `work/session.secret` | 会话 HMAC；未设置则落盘复用 |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | `work/vapid.json` | Web Push 密钥对；环境变量必须成对设置，多实例必须共享同一对 |
 | `SESSION_TTL_MS` | 24h | 会话有效期 |
 | `ALLOWED_ORIGINS` | 本机 | 额外 Origin |
 | `TRUSTED_PROXY_COUNT` | `0` | 可信反向代理层数，决定 `X-Forwarded-For`/`X-Forwarded-Host` 信任方式；默认 `0`=直连。部署在反向代理之后（Nginx/Caddy/云 LB 等）必须显式设为实际代理层数，否则会退化为按代理自身 IP 计算（限流过严但不会被伪造） |

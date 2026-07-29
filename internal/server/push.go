@@ -3,6 +3,7 @@ package server
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -15,9 +16,9 @@ import (
 // 推送网关是浏览器厂商自己的公共端点（Chrome→Google、Firefox→Mozilla…），
 // 服务端只是往这个端点发一条签名过的消息。
 //
-// 去重策略：只有当玩家当前没有任何活跃 WebSocket 连接（player.Connected==false）时
-// 才发送 push——只要还连着，前端自己已经实时收到了同一个事件，能自己决定要不要弹
-// Notification（Level 1），不需要服务端重复推一次。
+// 只要偏好开启就发送 Web Push，不再用 WebSocket Connected 状态做互斥。手机切后台后
+// JavaScript 可能被冻结但连接仍被服务端视为在线；旧互斥会让前后端两条路径同时不发送。
+// 是否存在前台可见页面由 Service Worker 最终判断并抑制通知，避免重复弹出。
 
 const pushSubscriptionSchema = `
 CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -99,24 +100,42 @@ type vapidKeys struct {
 }
 
 func loadOrGenerateVAPIDKeys(root string) (vapidKeys, error) {
-	if pub, priv := os.Getenv("VAPID_PUBLIC_KEY"), os.Getenv("VAPID_PRIVATE_KEY"); pub != "" && priv != "" {
+	pub, priv := os.Getenv("VAPID_PUBLIC_KEY"), os.Getenv("VAPID_PRIVATE_KEY")
+	if (pub == "") != (priv == "") {
+		return vapidKeys{}, fmt.Errorf("VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must be configured together")
+	}
+	if pub != "" {
 		return vapidKeys{PublicKey: pub, PrivateKey: priv}, nil
 	}
 	path := filepath.Join(root, "work", "vapid.json")
-	if data, err := os.ReadFile(path); err == nil {
+	data, err := os.ReadFile(path)
+	if err == nil {
 		var keys vapidKeys
-		if json.Unmarshal(data, &keys) == nil && keys.PublicKey != "" && keys.PrivateKey != "" {
-			return keys, nil
+		if err := json.Unmarshal(data, &keys); err != nil {
+			return vapidKeys{}, fmt.Errorf("decode persisted VAPID keys: %w", err)
 		}
+		if keys.PublicKey == "" || keys.PrivateKey == "" {
+			return vapidKeys{}, fmt.Errorf("persisted VAPID key pair is incomplete")
+		}
+		return keys, nil
 	}
-	priv, pub, err := webpush.GenerateVAPIDKeys()
+	if !os.IsNotExist(err) {
+		return vapidKeys{}, fmt.Errorf("read persisted VAPID keys: %w", err)
+	}
+	priv, pub, err = webpush.GenerateVAPIDKeys()
 	if err != nil {
 		return vapidKeys{}, err
 	}
 	keys := vapidKeys{PublicKey: pub, PrivateKey: priv}
-	if data, err := json.Marshal(keys); err == nil {
-		_ = os.MkdirAll(filepath.Dir(path), 0o755)
-		_ = os.WriteFile(path, data, 0o600)
+	data, err = json.Marshal(keys)
+	if err != nil {
+		return vapidKeys{}, fmt.Errorf("encode VAPID keys: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return vapidKeys{}, fmt.Errorf("create VAPID directory: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return vapidKeys{}, fmt.Errorf("persist VAPID keys: %w", err)
 	}
 	return keys, nil
 }
@@ -128,13 +147,13 @@ type pushPayload struct {
 	Tag   string `json:"tag,omitempty"` // 同 tag 的通知会被浏览器合并/替换，避免刷屏
 }
 
-// shouldPush：只在玩家当前完全没有活跃连接、且对应偏好开启时才发送。
+// shouldPush：偏好开启就发送；前台可见页面由 Service Worker 抑制重复通知。
 func shouldPush(player *PlayerState, pref *bool) bool {
-	return player != nil && !player.Connected && ptrBool(pref)
+	return player != nil && ptrBool(pref)
 }
 
 // notifyOpponentTurn：现在轮到 waitingSeat 这个人动手了（RPS 对手已出拳 / 棋类换到 Ta 的回合）。
-// 座位空/在线/没开偏好都直接跳过。
+// 座位空/没开偏好都直接跳过。
 func (s *Server) notifyOpponentTurn(room *RoomState, waitingSeat types.SeatKey) {
 	occ := room.Seats[waitingSeat]
 	if occ == nil {
@@ -146,8 +165,8 @@ func (s *Server) notifyOpponentTurn(room *RoomState, waitingSeat types.SeatKey) 
 	}
 }
 
-// notifySeatFilled：filledSeat 刚坐进一个人，如果对面座位坐着的是真人玩家且当前离线、
-// 又开了这个推送源，就提醒 Ta「有人进房参战了」。座位空/在线/没开偏好都直接跳过。
+// notifySeatFilled：filledSeat 刚坐进一个人，如果对面座位坐着的是真人玩家且开了这个
+// 推送源，就提醒 Ta「有人进房参战了」。座位空/没开偏好都直接跳过。
 func (s *Server) notifySeatFilled(room *RoomState, filledSeat types.SeatKey) {
 	occ := room.Seats[oppositeSeat(filledSeat)]
 	if occ == nil {
@@ -198,9 +217,9 @@ func (s *Server) sendPush(player *PlayerState, title, body, tag string) {
 				if resp.StatusCode == 404 || resp.StatusCode == 410 {
 					_ = s.pushDB.removeSubscription(sub.Endpoint)
 				} else if resp.StatusCode >= 300 {
-					s.securityLog("push_send_rejected", map[string]any{
-						"playerId": playerID, "status": resp.StatusCode, "tag": tag,
-					})
+					s.errorLog("push_send_rejected", fmt.Sprintf(
+						"player=%s status=%d tag=%s", playerID, resp.StatusCode, tag,
+					))
 				}
 			}(sub)
 		}

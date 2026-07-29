@@ -1,5 +1,5 @@
 import { avatarSquareSize, maxAvatarOriginalBytes, maxAvatarSquareDiffPx, maxAvatarUploadBytes } from "./constants";
-import { decodeToImageSource, encodeCanvasToWebpFile } from "./imagePipeline";
+import { decodeToImageSource, encodeCanvasToWebpFile, StaleChunkReloadError } from "./imagePipeline";
 
 /**
  * 头像上传前处理（固定流水线，输出必须是 WebP）：
@@ -51,6 +51,7 @@ export async function prepareAvatarImageForUpload(file: File): Promise<File> {
       try {
         return await encodeCanvasToWebpFile(canvas, baseName, quality, maxAvatarUploadBytes);
       } catch (e) {
+        if (e instanceof StaleChunkReloadError) throw e;
         const msg = e instanceof Error ? e.message : String(e);
         if (msg === "SIZE" || attempt < 5) {
           size = Math.max(64, Math.round(size * 0.85));

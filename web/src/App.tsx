@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Crown, Info, UserRound } from "lucide-react";
 import { socket } from "./main";
-import type { AppConfig, ChatMessage, LobbySnapshot, PublicPlayer, RoomSnapshot } from "./shared/types";
+import type { AppConfig, LobbySnapshot, PublicPlayer, RoomSnapshot } from "./shared/types";
 import { leaderboardRefreshMs, playerSecretKey, securityDisclaimerKey, tokenKey } from "./lib/constants";
 import {
   bumpWsAuthRetryCount, cacheJoinProfile, clearPlayerIdentity, connectSocketWithSession, getWsAuthRetryCount, hasCachedLogin,
@@ -13,7 +13,7 @@ import {
   normalizeRoomSnapshot, normalizeRoundHistoryItem, playerSyncKey, replacePlayerInLobby, replacePlayerInRoom
 } from "./lib/normalize";
 import { refreshActiveChats } from "./lib/chatStore";
-import { fetchPushPreferences, notifyMentionIfHidden, notifySeatIfHidden, notifyTurnIfHidden, setPushMeId } from "./lib/pushNotify";
+import { ensurePushSubscription, fetchPushPreferences } from "./lib/pushNotify";
 import type { AnnouncementPayload, MeState } from "./lib/types";
 import {
   AboutPanel, GlobalLeaderboardPanel, Lobby, Login, PlayerBadge, ProfilePanel, Room, SecurityDisclaimer,
@@ -24,48 +24,6 @@ import { HelpPanel } from "./ui/HelpPanel";
 // 后台管理面板（含可能新增的图表等重型组件）单独打包，普通玩家不会触发这次 import。
 const AdminPanel = lazy(() => import("./ui/AdminViews").then((module) => ({ default: module.AdminPanel })));
 
-// Level 1（页面在前台开着但被切到后台/最小化）：对比新旧房间快照，检测"对手座位刚被
-// 坐满"和"轮到我了"这两类事件，命中就交给 notify* 决定要不要弹 Notification（它们内部
-// 会检查 document.hidden 和用户的推送偏好开关，这里只管"事件本身有没有发生"）。
-// 只在 old 和 new 是同一个房间时才比较，避免切房间那一刻误判成"状态变化"。
-function checkRoomLevel1Notifications(old: RoomSnapshot | null, next: RoomSnapshot, me: MeState | null) {
-  const meId = me?.player.id;
-  if (!meId || !old || old.id !== next.id) return;
-  const mySeat = next.seats.A && "id" in next.seats.A && next.seats.A.id === meId ? "A"
-    : next.seats.B && "id" in next.seats.B && next.seats.B.id === meId ? "B" : null;
-
-  // 大话骰不用 A/B 座位（参战名单在 liarsDice.participantIds 里），轮到我叫点/开牌靠
-  // currentTurn（playerId，不是座位）切到我；没有"对面座位坐满"这个概念，不发那类通知。
-  if (!mySeat) {
-    if (next.settings.gameId === "liarsdice" && next.liarsDice) {
-      if (old.liarsDice?.currentTurn !== meId && next.liarsDice.currentTurn === meId) notifyTurnIfHidden();
-    }
-    return;
-  }
-  const otherSeat = mySeat === "A" ? "B" : "A";
-
-  // 对面座位刚从空/无人变成有真人坐下。
-  const otherOccOld = old.seats[otherSeat];
-  const otherOccNext = next.seats[otherSeat];
-  const wasEmpty = !otherOccOld;
-  const nowHuman = Boolean(otherOccNext);
-  if (wasEmpty && nowHuman) notifySeatIfHidden();
-
-  // 轮到我了：RPS 靠 choices（对方刚锁定、我还没锁定）；黑白棋/井字棋靠 turn 字段切到我。
-  if (next.settings.gameId === "rps") {
-    const otherJustChose = !old.choices?.[otherSeat] && Boolean(next.choices?.[otherSeat]);
-    const iHaventChosen = !next.choices?.[mySeat];
-    if (otherJustChose && iHaventChosen) notifyTurnIfHidden();
-  } else if (next.settings.gameId === "othello" && next.othello) {
-    if (old.othello?.turn !== mySeat && next.othello.turn === mySeat) notifyTurnIfHidden();
-  } else if (next.settings.gameId === "tictactoe" && next.tictactoe) {
-    if (old.tictactoe?.turn !== mySeat && next.tictactoe.turn === mySeat) notifyTurnIfHidden();
-  } else if (next.settings.gameId === "gomoku" && next.gomoku) {
-    if (old.gomoku?.turn !== mySeat && next.gomoku.turn === mySeat) notifyTurnIfHidden();
-  } else if (next.settings.gameId === "jungle" && next.jungle) {
-    if (old.jungle?.turn !== mySeat && next.jungle.turn === mySeat) notifyTurnIfHidden();
-  }
-}
 
 export function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -95,16 +53,6 @@ export function App() {
   const hadConnectedRef = useRef(socket.connected);
   const latestLobbyPlayersRef = useRef<PublicPlayer[]>([]);
   const leaderboardSnapshotAtRef = useRef(0);
-  // meRef/roomRef：socket 事件回调注册一次（[] deps）就不会再拿到最新的闭包，读 ref 才是当前值。
-  const meRef = useRef<MeState | null>(null);
-  const roomRef = useRef<RoomSnapshot | null>(null);
-
-  useEffect(() => {
-    meRef.current = me;
-  }, [me]);
-  useEffect(() => {
-    roomRef.current = room;
-  }, [room]);
 
   useEffect(() => {
     connectSocketWithSession().catch(() => {
@@ -191,9 +139,11 @@ export function App() {
     }
   }
 
-  function initPushForPlayer(playerId: string) {
-    setPushMeId(playerId);
+  function initPushForPlayer(_playerId: string) {
     fetchPushPreferences().catch(() => undefined);
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      ensurePushSubscription().catch(() => undefined);
+    }
   }
 
   function refreshLeaderboardSnapshot(players: PublicPlayer[], now = Date.now()) {
@@ -203,11 +153,6 @@ export function App() {
   }
 
   useEffect(() => {
-    function handleChatNewForMention(msg: ChatMessage) {
-      const meId = meRef.current?.player.id;
-      if (!meId || !msg || !Array.isArray(msg.mentions) || !msg.mentions.includes(meId)) return;
-      notifyMentionIfHidden(msg.author, msg.text);
-    }
     socket.on("lobby:update", (nextLobby: LobbySnapshot) => {
       if (nextLobby.config) setConfig(normalizeConfig(nextLobby.config));
       const normalized = normalizeLobbySnapshot(nextLobby);
@@ -219,7 +164,6 @@ export function App() {
       setLobby((old) => normalizeLobbySnapshot(nextLobby, old));
     });
     socket.on("room:update", (nextRoom: RoomSnapshot) => {
-      checkRoomLevel1Notifications(roomRef.current, normalizeRoomSnapshot(nextRoom), meRef.current);
       setRoom((old) => {
         const normalized = normalizeRoomSnapshot(nextRoom);
         // updatedAt 缺失/非数字时不要丢弃更新（protobuf 漏字段会导致永远用旧房态）
@@ -239,11 +183,6 @@ export function App() {
       });
       if (!isAdminRoute()) setView("room");
     });
-    // Level 1 @提及提醒：只做检测/弹通知，不参与消息列表渲染（那是 chatStore 自己的事）。
-    // 注意：chatStore.ts 在模块加载时也注册了一个独立的 "chat:new" 监听（渲染消息列表用），
-    // socket.off(event) 不带 handler 参数会清空该事件的整个监听集合——必须传具体函数引用，
-    // 否则下面 cleanup 里的 socket.off("chat:new") 会把 chatStore 的监听也一起干掉。
-    socket.on("chat:new", handleChatNewForMention);
     socket.on("room:historyAppend", (payload: { roomId?: string; item?: RoomSnapshot["roundHistory"][number]; total?: number }) => {
       const roomId = payload?.roomId;
       const item = payload?.item;
@@ -374,7 +313,6 @@ export function App() {
       socket.off("lobby:update");
       socket.off("room:update");
       socket.off("room:historyAppend");
-      socket.off("chat:new", handleChatNewForMention);
       socket.off("player:update");
       socket.off("player:batch");
       socket.off("player:kicked");
