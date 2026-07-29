@@ -637,6 +637,9 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 	if input.NameWar.PenaltyThreshold >= 0 {
 		return input, fmt.Errorf("名字争夺战失格分阈值必须为负数")
 	}
+	if input.NameWar.RenameMinPoints < 1 {
+		return input, fmt.Errorf("名字争夺战改名最低分至少为 1")
+	}
 	if strings.TrimSpace(input.Giveaway.PanelTitle) == "" {
 		return input, fmt.Errorf("白给模式面板标题不能为空")
 	}

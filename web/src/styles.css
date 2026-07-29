@@ -5631,16 +5631,21 @@ main {
   white-space: nowrap;
 }
 
-.color-grid,
 .variant-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
+.color-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
 .color-input {
   display: grid;
-  grid-template-columns: minmax(58px, 76px) 42px minmax(0, 1fr);
+  grid-template-columns: 4em 42px minmax(0, 1fr);
   align-items: center;
   gap: 6px;
   min-width: 0;
@@ -6591,6 +6596,10 @@ main {
 
 .liarsdice-challenge-btn {
   margin-top: 10px;
+}
+
+.liarsdice-bid-controls .liarsdice-challenge-btn {
+  margin-top: 0;
 }
 
 .liarsdice-reveal-list {

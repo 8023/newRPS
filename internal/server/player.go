@@ -16,6 +16,11 @@ import (
 // 非负值，正常运行时这条分支理论上走不到。
 const defaultNameWarPenaltyThreshold = -4999
 
+// defaultNameWarRenameMinPoints 与 config/name-war.json 的 renameMinPoints 默认值一致，
+// 供 nameWarRenameMinPoints 在配置异常（小于 1）时兜底；ValidateConfig 已在启动/保存时拒绝
+// 小于 1 的值，正常运行时这条分支理论上走不到。
+const defaultNameWarRenameMinPoints = 500
+
 func (s *Server) publicConfig() types.AppConfig {
 	cfg := s.cfg
 	cfg.Site.AdminPassword = ""
@@ -330,7 +335,7 @@ func (s *Server) publicPlayer(player *PlayerState) types.PublicPlayer {
 	p.Stats.LowestScore = s.displayClampScore(player, player.Stats.LowestScore)
 	// 累计在线：存储值 + 当前会话（不写回存储，避免与断线累加重叠）。
 	p.Stats.TotalOnlineMs = s.effectiveOnlineMs(player)
-	// 主人设定的宠物称号覆盖积分档称号（管理员自定义 / 名争惩罚优先）。
+	// 展示称号优先级见 applyDisplayTitle：管理员自定义 > 宠物称号 > 玩家自设称号 > 积分档称号。
 	s.applyDisplayTitle(player, &p)
 	return p
 }
@@ -927,6 +932,15 @@ func (s *Server) nameWarPenaltyThreshold() int {
 		return defaultNameWarPenaltyThreshold
 	}
 	return th
+}
+
+func (s *Server) nameWarRenameMinPoints() int {
+	pts := s.cfg.NameWar.RenameMinPoints
+	if pts < 1 {
+		// 配置异常时的安全兜底。
+		return defaultNameWarRenameMinPoints
+	}
+	return pts
 }
 
 func (s *Server) isNameWarRenameTarget(player types.PublicPlayer) bool {

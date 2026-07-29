@@ -148,6 +148,26 @@ func TestNameWarPenaltyThresholdUsesRealScore(t *testing.T) {
 	}
 }
 
+func TestSelfTitleOutranksSystemTitleWhileNameWarPunished(t *testing.T) {
+	s := newRankedScoreTestServer(t)
+	p := newRankedScoreTestPlayer("nw2")
+	p.NameWarEnabled = boolPtr(true)
+	p.NameWarAllowRename = boolPtr(true)
+	p.Stats.RankedPoints = -5444
+	p.Stats.SelfTitle = "abcd"
+	s.refreshNameWarState(p, nowMs())
+	if !ptrBool(p.NameWarPunished) {
+		t.Fatal("real -5444 should trigger name-war punishment at threshold -4999")
+	}
+	pub := s.publicPlayer(p)
+	if pub.Stats.Title != "abcd" {
+		t.Fatalf("self-set title must outrank the system rank-tier title even while name-war punished, got %q", pub.Stats.Title)
+	}
+	if pub.Stats.TitleSource != "self" {
+		t.Fatalf("title source should be self, got %q", pub.Stats.TitleSource)
+	}
+}
+
 func TestRankedDailyDecayTruncatesTowardZeroAndIsIdempotentPerDay(t *testing.T) {
 	s := newRankedScoreTestServer(t)
 	pos := newRankedScoreTestPlayer("pos")

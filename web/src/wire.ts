@@ -2,7 +2,7 @@
 // 依赖 protobufjs 静态模块：src/gen/proto.js
 
 import { game, wire as wireNs } from "./gen/proto.js";
-import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD } from "./lib/normalize";
+import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, DEFAULT_NAME_WAR_RENAME_MIN_POINTS } from "./lib/normalize";
 
 export type PayloadKind = 0 | 1 | 2; // RAW FULL DELTA
 
@@ -664,6 +664,7 @@ function materializeConfig(cfg: any): any {
   }
   if (!c.nameWar || typeof c.nameWar !== "object") c.nameWar = {};
   c.nameWar.penaltyThreshold = numOr(c.nameWar.penaltyThreshold, DEFAULT_NAME_WAR_PENALTY_THRESHOLD);
+  c.nameWar.renameMinPoints = numOr(c.nameWar.renameMinPoints, DEFAULT_NAME_WAR_RENAME_MIN_POINTS);
   {
     const pb = c.petBond && typeof c.petBond === "object" ? c.petBond : {};
     c.petBond = {

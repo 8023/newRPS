@@ -33792,6 +33792,7 @@ export const game = $root.game = (() => {
          * @property {string|null} [nameWarLoserLabel] NameWarConfig nameWarLoserLabel
          * @property {string|null} [extremeForceClosedLabel] NameWarConfig extremeForceClosedLabel
          * @property {number|null} [penaltyThreshold] NameWarConfig penaltyThreshold
+         * @property {number|null} [renameMinPoints] NameWarConfig renameMinPoints
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -33880,6 +33881,14 @@ export const game = $root.game = (() => {
         NameWarConfig.prototype.penaltyThreshold = 0;
 
         /**
+         * NameWarConfig renameMinPoints.
+         * @member {number} renameMinPoints
+         * @memberof game.NameWarConfig
+         * @instance
+         */
+        NameWarConfig.prototype.renameMinPoints = 0;
+
+        /**
          * Creates a new NameWarConfig instance using the specified properties.
          * @function create
          * @memberof game.NameWarConfig
@@ -33925,6 +33934,8 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 6, wireType 2 =*/50).string(message.extremeForceClosedLabel);
             if (message.penaltyThreshold != null && $Object.hasOwnProperty.call(message, "penaltyThreshold") && message.penaltyThreshold !== 0)
                 writer.uint32(/* id 7, wireType 0 =*/56).int32(message.penaltyThreshold);
+            if (message.renameMinPoints != null && $Object.hasOwnProperty.call(message, "renameMinPoints") && message.renameMinPoints !== 0)
+                writer.uint32(/* id 8, wireType 0 =*/64).int32(message.renameMinPoints);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -34035,6 +34046,15 @@ export const game = $root.game = (() => {
                             delete message.penaltyThreshold;
                         continue;
                     }
+                case 8: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.renameMinPoints = value;
+                        else
+                            delete message.renameMinPoints;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -34099,6 +34119,9 @@ export const game = $root.game = (() => {
             if (message.penaltyThreshold != null && $Object.hasOwnProperty.call(message, "penaltyThreshold"))
                 if (!$util.isInteger(message.penaltyThreshold))
                     return "penaltyThreshold: integer expected";
+            if (message.renameMinPoints != null && $Object.hasOwnProperty.call(message, "renameMinPoints"))
+                if (!$util.isInteger(message.renameMinPoints))
+                    return "renameMinPoints: integer expected";
             return null;
         };
 
@@ -34141,6 +34164,9 @@ export const game = $root.game = (() => {
             if (object.penaltyThreshold != null)
                 if ($Number(object.penaltyThreshold) !== 0)
                     message.penaltyThreshold = object.penaltyThreshold | 0;
+            if (object.renameMinPoints != null)
+                if ($Number(object.renameMinPoints) !== 0)
+                    message.renameMinPoints = object.renameMinPoints | 0;
             return message;
         };
 
@@ -34169,6 +34195,7 @@ export const game = $root.game = (() => {
                 object.nameWarLoserLabel = "";
                 object.extremeForceClosedLabel = "";
                 object.penaltyThreshold = 0;
+                object.renameMinPoints = 0;
             }
             if (message.penaltyPrefix != null && $Object.hasOwnProperty.call(message, "penaltyPrefix"))
                 object.penaltyPrefix = message.penaltyPrefix;
@@ -34184,6 +34211,8 @@ export const game = $root.game = (() => {
                 object.extremeForceClosedLabel = message.extremeForceClosedLabel;
             if (message.penaltyThreshold != null && $Object.hasOwnProperty.call(message, "penaltyThreshold"))
                 object.penaltyThreshold = message.penaltyThreshold;
+            if (message.renameMinPoints != null && $Object.hasOwnProperty.call(message, "renameMinPoints"))
+                object.renameMinPoints = message.renameMinPoints;
             return object;
         };
 

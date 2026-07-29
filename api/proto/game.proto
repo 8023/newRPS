@@ -808,6 +808,8 @@ message NameWarConfig {
   string extreme_force_closed_label = 6;
   // 真实排位分 ≤ 此值时进入名争失格（默认 -4999）。
   int32 penalty_threshold = 7;
+  // 真实排位分 ≥ 此值才能给失格者改名（默认 500）。
+  int32 rename_min_points = 8;
 }
 
 message GiveawayConfig {

@@ -635,6 +635,8 @@ export type AppConfig = {
     extremeForceClosedLabel?: string;
     /** 真实排位分 ≤ 此值时名争失格（默认 -4999） */
     penaltyThreshold: number;
+    /** 真实排位分 ≥ 此值才能给失格者改名（默认 500） */
+    renameMinPoints: number;
   };
   giveaway: {
     panelTitle: string;

@@ -810,6 +810,8 @@ type AppConfig struct {
 		// PenaltyThreshold：真实排位分 ≤ 此值时进入名争失格（显示惩罚名、可被改名）。
 		// 默认 -4999；按真实存储分判定，不受展示封顶影响。
 		PenaltyThreshold int `json:"penaltyThreshold"`
+		// RenameMinPoints：真实排位分 ≥ 此值才能给失格者改名。默认 500。
+		RenameMinPoints int `json:"renameMinPoints"`
 	} `json:"nameWar"`
 	Giveaway struct {
 		PanelTitle        string `json:"panelTitle"`

@@ -13,7 +13,7 @@ type PetBondGraphEdge = {
 
 type PetBondGraphData = { nodes: PublicPlayer[]; edges: PetBondGraphEdge[] };
 
-type PlayerHit = { id: string; name: string; displayName: string; connected: boolean };
+type PlayerHit = { id: string; name: string; connected: boolean };
 
 type SimNode = { x: number; y: number; vx: number; vy: number; fx?: number; fy?: number };
 
@@ -137,7 +137,7 @@ function PlayerPicker({
       <span className="field-label-caption">{label}</span>
       {picked ? (
         <div className="petbond-picker-picked">
-          <span>{picked.displayName || picked.name}</span>
+          <span>{picked.name}</span>
           <button type="button" onClick={() => onPick(null)} aria-label={`清除已选${label}`}>×</button>
         </div>
       ) : (
@@ -151,7 +151,7 @@ function PlayerPicker({
             <div className="petbond-picker-hits">
               {hits.map((hit) => (
                 <button type="button" key={hit.id} onClick={() => onPick(hit)}>
-                  <span>{hit.displayName || hit.name}</span>
+                  <span>{hit.name}</span>
                   <small>{hit.connected ? "在线" : "离线"}</small>
                 </button>
               ))}
@@ -202,11 +202,11 @@ export function PetBondGraphPanel({ onError }: { onError: (message: string) => v
       setHits([]);
       return;
     }
-    ask<{ players?: Array<{ id: string; name: string; displayName: string; connected: boolean }> }>(
+    ask<{ players?: Array<{ id: string; name: string; connected: boolean }> }>(
       "admin:listPlayers",
       { keyword: keyword.trim(), limit: 8 }
     ).then((result) => {
-      setHits((result.players || []).map((p) => ({ id: p.id, name: p.name, displayName: p.displayName, connected: p.connected })));
+      setHits((result.players || []).map((p) => ({ id: p.id, name: p.name, connected: p.connected })));
     }).catch(() => {
       // 搜索联想失败不打断输入，静默忽略。
     });

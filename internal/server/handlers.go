@@ -920,8 +920,9 @@ func (s *Server) onNameWarRenameTarget(client *Client, env wsEnvelope) {
 		}
 		return
 	}
-	if actor.Stats.RankedPoints < 500 {
-		client.reply(env.ID, nil, "需要 500 分以上才能修改失格者名字")
+	renameMinPoints := s.nameWarRenameMinPoints()
+	if actor.Stats.RankedPoints < renameMinPoints {
+		client.reply(env.ID, nil, fmt.Sprintf("需要 %d 分以上才能修改失格者名字", renameMinPoints))
 		return
 	}
 	if !s.isNameWarRenameTarget(s.publicPlayer(target)) {

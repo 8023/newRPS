@@ -215,9 +215,6 @@ func (s *Server) applyDisplayTitle(player *PlayerState, p *types.PublicPlayer) {
 		p.Stats.TitleSource = "admin"
 		return
 	}
-	if ptrBool(p.NameWarPunished) {
-		return
-	}
 	if title := s.bestPetTitle(player.ID); title != "" {
 		p.Stats.Title = title
 		p.Stats.TitleSource = "master"

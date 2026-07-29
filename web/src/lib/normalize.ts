@@ -108,6 +108,8 @@ export function normalizePublicStats(stats: PublicPlayer["stats"] | null | undef
     sortLowestScore: statNum(s.sortLowestScore, statNum(s.lowestScore)),
     title: title || "暂无称号",
     totalOnlineMs: statNum(s.totalOnlineMs),
+    titleSource: s.titleSource || "system",
+    titleColors: s.titleColors,
     ...(s.titleSegmentId ? { titleSegmentId: s.titleSegmentId } : {}),
     ...(s.titleCustom ? { titleCustom: true } : {})
   };
@@ -440,6 +442,9 @@ export const DEFAULT_RANKED_SCORE: AppConfig["rankedScore"] = {
 /** 与 config/name-war.json 的 penaltyThreshold 默认一致。 */
 export const DEFAULT_NAME_WAR_PENALTY_THRESHOLD = -4999;
 
+/** 与 config/name-war.json 的 renameMinPoints 默认一致。 */
+export const DEFAULT_NAME_WAR_RENAME_MIN_POINTS = 500;
+
 /** 与 config/access-control.json 默认值一致（后台编辑时也用同一份兜底）。 */
 export const DEFAULT_ACCESS_CONTROL: AppConfig["accessControl"] = {
   maxOnlinePerIp: 3,
@@ -542,7 +547,8 @@ export function normalizeConfig(config: AppConfig): AppConfig {
     accessControl: withAccessControlDefaults(config.accessControl),
     nameWar: {
       ...config.nameWar,
-      penaltyThreshold: config.nameWar?.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD
+      penaltyThreshold: config.nameWar?.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD,
+      renameMinPoints: config.nameWar?.renameMinPoints ?? DEFAULT_NAME_WAR_RENAME_MIN_POINTS
     },
     giveaway: withGiveawayDefaults(config.giveaway),
     petBond: withPetBondDefaults(config.petBond),

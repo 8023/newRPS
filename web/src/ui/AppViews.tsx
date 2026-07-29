@@ -4,7 +4,7 @@ import type {
   AppConfig, ChatMessage, GenderColors, GenderFaction, LobbySnapshot, Move, PetBondState, PublicPlayer,
   PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant
 } from "../shared/types";
-import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, withPetBondDefaults, withRankedScoreDefaults } from "../lib/normalize";
+import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, DEFAULT_NAME_WAR_RENAME_MIN_POINTS, withPetBondDefaults, withRankedScoreDefaults } from "../lib/normalize";
 import { socket } from "../ws";
 import {
   defaultGomokuRoomName, defaultJungleRoomName, defaultLiarsDiceRoomName, defaultOthelloRoomName, defaultRoomName, defaultTicTacToeRoomName,
@@ -1273,8 +1273,8 @@ export function RoomVersusLine({ room }: { room: LobbySnapshot["rooms"][number] 
   }
   const left = room.versus.A;
   const right = room.versus.B;
-  const leftName = left?.player?.displayName || "等待玩家";
-  const rightName = right?.player?.displayName || "等待玩家";
+  const leftName = left?.player?.name || "等待玩家";
+  const rightName = right?.player?.name || "等待玩家";
   return (
     <div className="room-versus-line" title={`${leftName} VS ${rightName}`}>
       <RoomVersusSeat occupant={left} />
@@ -1357,7 +1357,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
   );
   async function forceGiveaway() {
     if (!opponentPlayer) return;
-    if (!window.confirm(`确定强制 ${opponentPlayer.displayName || opponentPlayer.name} 白给吗？`)) return;
+    if (!window.confirm(`确定强制 ${opponentPlayer.name} 白给吗？`)) return;
     await act("petbond:forceGiveaway", { targetId: opponentPlayer.id });
   }
   const roomPlayers = roomPlayerList(room);
@@ -2834,10 +2834,11 @@ export function ChatAvatar({ player, onMention }: { player?: PublicPlayer; onMen
 
 export function ChatName({ player }: { player: PublicPlayer }) {
   const punished = Boolean(player.nameWarPunished && player.nameWarPenaltyName);
+  const stats = safePlayerStats(player);
   return (
     <span className="chat-name">
       <span className="chat-gender" style={genderStyle(player)}>{player.genderLabel}</span>
-      <span className="chat-title">{safePlayerStats(player).title}</span>
+      <span className="chat-title" style={titleStyle(stats.titleColors)}>{stats.title}</span>
       <b className={punished ? "name-war-pill" : ""}>{displayPlayerName(player)}</b>
       <ModeChip player={player} />
       <GiveawayChip player={player} />
@@ -3567,7 +3568,8 @@ export function UniversalRenamePanel({ config, targets, me, onError }: { config:
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [now, setNow] = useState(Date.now());
   const nameWarQuota = nameWarRenameQuotaLeft(me, now);
-  const canNameWarRename = me.stats.rankedPoints >= 500 && nameWarQuota > 0;
+  const nameWarMinPoints = Math.max(1, Math.round(config.nameWar?.renameMinPoints || DEFAULT_NAME_WAR_RENAME_MIN_POINTS));
+  const canNameWarRename = me.stats.rankedPoints >= nameWarMinPoints && nameWarQuota > 0;
   const extremeMinPoints = Math.max(1, Math.round(config.extremeMode.forceRenameMinPoints || 1));
   const canExtremeRename = Boolean(me.extremeModeEnabled && me.stats.rankedPoints >= extremeMinPoints);
   const { collapsed, toggle: toggleCollapsed } = useMobileCollapse("nameWarLoser");
@@ -3597,7 +3599,7 @@ export function UniversalRenamePanel({ config, targets, me, onError }: { config:
         <CollapseToggle collapsed={collapsed} onToggle={toggleCollapsed} label={config.nameWar.renamePanelTitle || config.nameWar.loserPanelTitle || "通用改名处"} />
       </div>
       <div className={`mobile-collapsible-body ${collapsed ? "collapsed" : ""}`}>
-        <p className="hint">名争改名需要 500 分以上，你剩余 {nameWarQuota} / 3 次；极限强关改名需要开启极限模式且至少 {extremeMinPoints} 分。</p>
+        <p className="hint">名争改名需要 {nameWarMinPoints} 分以上，你剩余 {nameWarQuota} / 3 次；极限强关改名需要开启极限模式且至少 {extremeMinPoints} 分。</p>
         <div className="name-war-loser-list">
           {targets.map((player) => {
             const nameWarTarget = isNameWarLoser(player);
@@ -4108,7 +4110,7 @@ export function PetBondPanel({
         <div className="modal-backdrop" onClick={() => setTitlePetId(null)}>
           <section className="logout-confirm-card" onClick={(e) => e.stopPropagation()}>
             <h3>设置宠物称号</h3>
-            <p className="hint">将替换对方按积分百分比显示的称号标签（最多 {petBondCfg.maxTitleLength} 字）。清空则恢复积分称号。</p>
+            <p className="hint">设置对方称号标签，最多 {petBondCfg.maxTitleLength} 字。清空则恢复默认称号。</p>
             <input
               value={titleDraft}
               maxLength={petBondCfg.maxTitleLength}
@@ -4462,7 +4464,7 @@ export function ProfilePanel({ config, me, theme, onThemeChange, onClose, onUpda
             <Toggle label="开启名字争夺战" value={nameWarEnabled} disabled={nameWarCooldownMs > 0} onChange={setNameWarEnabled} />
             <Toggle label="允许其他玩家改名" value={nameWarAllowRename} disabled={!nameWarEnabled || nameWarCooldownMs > 0} onChange={setNameWarAllowRename} />
             <p className="hint">开启后排位分展示下限变为 {withRankedScoreDefaults(config.rankedScore).nameWarMin}；积分跌到 {config.nameWar?.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD} 及以下后，只显示系统惩罚名，不显示性别和称号。</p>
-            <p className="hint">允许其他玩家改名后，真实分跌到 {config.nameWar?.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD} 及以下会出现在大厅失格者名单，500 分以上玩家可以抢先给你改名。</p>
+            <p className="hint">允许其他玩家改名后，真实分跌到 {config.nameWar?.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD} 及以下会出现在大厅失格者名单，{config.nameWar?.renameMinPoints ?? DEFAULT_NAME_WAR_RENAME_MIN_POINTS} 分以上玩家可以抢先给你改名。</p>
             <p className="hint">被其他玩家改名后，保护期内即使真实分回到失格线以上也不会提前恢复；保护期结束且真实分高于失格线才恢复。</p>
             {me.nameWarRenameProtectedUntil && me.nameWarRenameProtectedUntil > now && <p className="hint">改名保护中：约 {Math.ceil((me.nameWarRenameProtectedUntil - now) / 3_600_000)} 小时。</p>}
             {me.nameWarPunished && me.nameWarPenaltyName && <p className="hint">当前惩罚名：{me.nameWarPenaltyName}。</p>}

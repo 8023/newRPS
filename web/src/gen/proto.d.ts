@@ -10885,6 +10885,9 @@ export namespace game {
         /** NameWarConfig penaltyThreshold. */
         penaltyThreshold: number;
 
+        /** NameWarConfig renameMinPoints. */
+        renameMinPoints: number;
+
         /**
          * Creates a new NameWarConfig instance using the specified properties.
          * @param [properties] Properties to set
@@ -10989,6 +10992,9 @@ export namespace game {
 
             /** NameWarConfig penaltyThreshold */
             penaltyThreshold?: (number|null);
+
+            /** NameWarConfig renameMinPoints */
+            renameMinPoints?: (number|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

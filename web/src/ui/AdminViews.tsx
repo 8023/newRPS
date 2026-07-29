@@ -1,7 +1,7 @@
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { Download, RefreshCcw, Save, Settings, Shield, Upload } from "lucide-react";
 import type { AppConfig, GenderFaction, LobbySnapshot, PublicPlayer, PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool } from "../shared/types";
-import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, withAccessControlDefaults, withRankedScoreDefaults } from "../lib/normalize";
+import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, DEFAULT_NAME_WAR_RENAME_MIN_POINTS, withAccessControlDefaults, withRankedScoreDefaults } from "../lib/normalize";
 import { ask } from "../lib/rpc";
 import { compressAdminImageForUpload } from "../lib/proofImage";
 import { formatBytes, formatDuration } from "../lib/format";
@@ -753,8 +753,12 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
               <span>失格分阈值（真实分）</span>
               <input type="number" max={-1} value={draft.nameWar.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD} onChange={(event) => patch({ nameWar: { ...draft.nameWar, penaltyThreshold: Number(event.target.value) } })} placeholder={String(DEFAULT_NAME_WAR_PENALTY_THRESHOLD)} />
             </label>
+            <label className="field-label">
+              <span>改名最低分（真实分）</span>
+              <input type="number" min={1} value={draft.nameWar.renameMinPoints ?? DEFAULT_NAME_WAR_RENAME_MIN_POINTS} onChange={(event) => patch({ nameWar: { ...draft.nameWar, renameMinPoints: Number(event.target.value) } })} placeholder={String(DEFAULT_NAME_WAR_RENAME_MIN_POINTS)} />
+            </label>
           </div>
-          <p className="hint">随机码固定为 4 位大写字母/数字；已有惩罚名不会因为你改前缀立刻变化，新触发的玩家会使用新前缀。失格线按数据库真实排位分判定，与展示封顶无关。</p>
+          <p className="hint">随机码固定为 4 位大写字母/数字；已有惩罚名不会因为你改前缀立刻变化，新触发的玩家会使用新前缀。失格线、改名最低分均按数据库真实排位分判定，与展示封顶无关。</p>
         </div>
       );
     }

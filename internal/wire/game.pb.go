@@ -6659,8 +6659,10 @@ type NameWarConfig struct {
 	ExtremeForceClosedLabel string                 `protobuf:"bytes,6,opt,name=extreme_force_closed_label,json=extremeForceClosedLabel,proto3" json:"extreme_force_closed_label,omitempty"`
 	// 真实排位分 ≤ 此值时进入名争失格（默认 -4999）。
 	PenaltyThreshold int32 `protobuf:"varint,7,opt,name=penalty_threshold,json=penaltyThreshold,proto3" json:"penalty_threshold,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 真实排位分 ≥ 此值才能给失格者改名（默认 500）。
+	RenameMinPoints int32 `protobuf:"varint,8,opt,name=rename_min_points,json=renameMinPoints,proto3" json:"rename_min_points,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *NameWarConfig) Reset() {
@@ -6738,6 +6740,13 @@ func (x *NameWarConfig) GetExtremeForceClosedLabel() string {
 func (x *NameWarConfig) GetPenaltyThreshold() int32 {
 	if x != nil {
 		return x.PenaltyThreshold
+	}
+	return 0
+}
+
+func (x *NameWarConfig) GetRenameMinPoints() int32 {
+	if x != nil {
+		return x.RenameMinPoints
 	}
 	return 0
 }
@@ -8756,7 +8765,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x1amax_active_rooms_per_owner\x18\b \x01(\x05R\x16maxActiveRoomsPerOwner\x12>\n" +
 	"\x1cmax_proof_uploads_per_player\x18\t \x01(\x05R\x18maxProofUploadsPerPlayer\x123\n" +
 	"\x15registration_disabled\x18\n" +
-	" \x01(\bR\x14registrationDisabled\"\xce\x02\n" +
+	" \x01(\bR\x14registrationDisabled\"\xfa\x02\n" +
 	"\rNameWarConfig\x12%\n" +
 	"\x0epenalty_prefix\x18\x01 \x01(\tR\rpenaltyPrefix\x12*\n" +
 	"\x11loser_panel_title\x18\x02 \x01(\tR\x0floserPanelTitle\x12!\n" +
@@ -8764,7 +8773,8 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x12rename_panel_title\x18\x04 \x01(\tR\x10renamePanelTitle\x12/\n" +
 	"\x14name_war_loser_label\x18\x05 \x01(\tR\x11nameWarLoserLabel\x12;\n" +
 	"\x1aextreme_force_closed_label\x18\x06 \x01(\tR\x17extremeForceClosedLabel\x12+\n" +
-	"\x11penalty_threshold\x18\a \x01(\x05R\x10penaltyThreshold\"\xd2\x03\n" +
+	"\x11penalty_threshold\x18\a \x01(\x05R\x10penaltyThreshold\x12*\n" +
+	"\x11rename_min_points\x18\b \x01(\x05R\x0frenameMinPoints\"\xd2\x03\n" +
 	"\x0eGiveawayConfig\x12\x1f\n" +
 	"\vpanel_title\x18\x01 \x01(\tR\n" +
 	"panelTitle\x12+\n" +
