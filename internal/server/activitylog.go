@@ -1,27 +1,25 @@
 package server
 
 import (
-	"encoding/csv"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/doumiao/newRPS/internal/config"
 )
 
-// 活动日志：CSV 分表，按 ISO 周目录存放，便于备份与清理。
-// 路径：work/logs/{YY}{WW}/xxx.csv  例如 2026 年第 29 周 → work/logs/2629/chat.csv
+// 活动日志：纯文本分表，按 ISO 周目录存放，便于备份与清理，用文本编辑器直接查阅。
+// 路径：work/logs/{YY}{WW}/xxx.log  例如 2026 年第 29 周 → work/logs/2629/error.log
+//
+// 曾经这里是 CSV（xxx.csv），但 CSV 里的字段（如 userAgent、错误信息）完全来自客户端可控
+// 输入，一旦被人用 Excel/WPS 之类的电子表格软件打开，以 "="/"+"/"-"/"@" 开头的字段会被当成
+// 公式执行（CSV 公式注入）。现在改成每行一条 logfmt 风格的纯文本（key=value，含特殊字符的
+// value 加双引号转义），不再是"表格"，不会被电子表格误解析成公式；也不需要 CSV 的转义规则。
 
-var (
-	activityLogMu     sync.Mutex
-	activityLogInited map[string]bool // path → header written
-)
-
-func init() {
-	activityLogInited = map[string]bool{}
-}
+var activityLogMu sync.Mutex
 
 // activityLogWeekDir 返回年份后两位 + ISO 周数，如 2629。
 func activityLogWeekDir(t time.Time) string {
@@ -108,14 +106,14 @@ func (s *Server) activityLog(table string, header []string, fields []string) {
 	writeActivityLog(table, header, fields)
 }
 
-// writeActivityLog 实际把一行写入对应 CSV（后台协程 / 无队列时的同步兜底路径）。
+// writeActivityLog 实际把一行追加进对应 .log 文件（后台协程 / 无队列时的同步兜底路径）。
 func writeActivityLog(table string, header []string, fields []string) {
 	if table == "" || len(fields) == 0 {
 		return
 	}
 	now := time.Now()
 	dir := filepath.Join(activityLogBaseDir(), activityLogWeekDir(now))
-	path := filepath.Join(dir, table+".csv")
+	path := filepath.Join(dir, table+".log")
 
 	activityLogMu.Lock()
 	defer activityLogMu.Unlock()
@@ -124,36 +122,51 @@ func writeActivityLog(table string, header []string, fields []string) {
 		return
 	}
 
-	needHeader := !activityLogInited[path]
-	if needHeader {
-		if st, err := os.Stat(path); err == nil && st.Size() > 0 {
-			needHeader = false
-			activityLogInited[path] = true
-		}
-	}
-
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return
 	}
 	defer f.Close()
 
-	w := csv.NewWriter(f)
-	if needHeader && len(header) > 0 {
-		_ = w.Write(header)
-		activityLogInited[path] = true
+	_, _ = f.WriteString(formatLogfmtLine(now, header, fields) + "\n")
+	_ = os.Chmod(path, 0o644)
+}
+
+// formatLogfmtLine 把 header/fields 对齐后的一行渲染成 logfmt 风格纯文本：
+// `2026-07-31T10:23:45+08:00 event=rate_limit ip=1.2.3.4 wsEvent="room:create"`。
+// 跳过空字段（CSV 时代靠固定列位置对齐，这里每个字段自带 key，不需要占位）。
+func formatLogfmtLine(t time.Time, header []string, fields []string) string {
+	var b strings.Builder
+	b.WriteString(t.Format(time.RFC3339))
+	for i, key := range header {
+		if i >= len(fields) || fields[i] == "" {
+			continue
+		}
+		b.WriteByte(' ')
+		b.WriteString(key)
+		b.WriteByte('=')
+		b.WriteString(logfmtQuote(fields[i]))
 	}
-	// 对齐列数
-	row := make([]string, len(header))
-	for i := range row {
-		if i < len(fields) {
-			row[i] = fields[i]
+	return b.String()
+}
+
+// logfmtQuote 视内容决定是否加引号；换行/回车/反斜杠/双引号一律转义——这几个字段
+// （userAgent、错误信息等）完全来自客户端可控输入，换行不转义的话，攻击者能在里面
+// 塞入伪造的日志行，让一条记录在文本编辑器里看起来像多条。
+func logfmtQuote(v string) string {
+	needsQuote := false
+	for _, r := range v {
+		if r <= ' ' || r == '"' || r == '=' {
+			needsQuote = true
+			break
 		}
 	}
-	if len(header) == 0 {
-		row = fields
+	v = strings.ReplaceAll(v, "\\", "\\\\")
+	v = strings.ReplaceAll(v, "\"", "\\\"")
+	v = strings.ReplaceAll(v, "\n", "\\n")
+	v = strings.ReplaceAll(v, "\r", "\\r")
+	if !needsQuote {
+		return v
 	}
-	_ = w.Write(row)
-	w.Flush()
-	_ = os.Chmod(path, 0o644)
+	return "\"" + v + "\""
 }

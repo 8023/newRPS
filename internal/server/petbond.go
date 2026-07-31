@@ -855,16 +855,15 @@ func (s *Server) clearOfflinePetBondRequests(playerID string) bool {
 	return changed
 }
 
-// notifyAllOnlinePetBondStates 向所有在线玩家推送宠物乐园状态。
-// 当有人开关认主/认宠/公开展示，或关系变更时调用，保证他人列表实时刷新。
+// notifyAllOnlinePetBondStates 向已订阅 petbond 频道的连接推送个性化状态。
+// 订阅由 petbond:subscribe 维护（前端 PetBondPanel / 房间强制白给逻辑挂载时），
+// 避免上线/关系变更时对全体在线玩家做 O(O·P) 的 buildPetBondState。
 func (s *Server) notifyAllOnlinePetBondStates() {
-	for _, p := range s.players {
-		if p == nil || !p.Connected || p.SocketID == "" {
+	for id := range s.roomClients[petbondChannel] {
+		c := s.clients[id]
+		if c == nil || c.playerID == "" {
 			continue
 		}
-		if s.clients[p.SocketID] == nil {
-			continue
-		}
-		s.emitToClient(p.SocketID, "petbond:update", s.buildPetBondState(p.ID))
+		s.emitToClient(c.id, "petbond:update", s.buildPetBondState(c.playerID))
 	}
 }

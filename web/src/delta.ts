@@ -54,8 +54,13 @@ function splitPointer(path: string): string[] {
   return p.split("/").map(unescapeKey);
 }
 
-export function applyOps(base: unknown, ops: PatchOp[]): unknown {
-  let doc: any = base === undefined ? null : structuredClone(base);
+/**
+ * 将 ops 应用到文档。
+ * @param mutate true 时原地修改 base（调用方在哈希失败时须丢弃文档并 resync）；
+ *               false 时 structuredClone 后再改（默认，兼容旧调用）。
+ */
+export function applyOps(base: unknown, ops: PatchOp[], mutate = false): unknown {
+  let doc: any = base === undefined ? null : mutate ? base : structuredClone(base);
   for (const op of ops) {
     if (!op.path) {
       doc = op.remove ? null : op.value;

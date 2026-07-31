@@ -7,10 +7,11 @@ import (
 )
 
 func TestRecordGameOutcomeSyncsTotals(t *testing.T) {
+	s := &Server{}
 	p := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "p1", Name: "A"}}
-	recordGameOutcome(p, types.GameRPS, "win")
-	recordGameOutcome(p, types.GameOthello, "loss")
-	recordGameOutcome(p, types.GameGomoku, "draw")
+	s.recordGameOutcome(p, types.GameRPS, "win")
+	s.recordGameOutcome(p, types.GameOthello, "loss")
+	s.recordGameOutcome(p, types.GameGomoku, "draw")
 	if p.GameStats.RPS.Wins != 1 || p.GameStats.Othello.Losses != 1 || p.GameStats.Gomoku.Draws != 1 {
 		t.Fatalf("game stats wrong: %+v", p.GameStats)
 	}

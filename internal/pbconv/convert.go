@@ -242,12 +242,143 @@ func LobbyToProto(snap types.LobbySnapshot) (*wire.LobbySnapshot, error) {
 	return out, nil
 }
 
+// lobbyPlayerToProto 手写字段映射，避免热路径 JSON marshal/unmarshal（大厅广播 × 玩家数）。
+// 指针域语义与旧 JSONCamelToProto 对齐：nil → proto 零值（omit）；非 nil 取 *p。
 func lobbyPlayerToProto(p types.LobbyPlayer) (*wire.LobbyPlayer, error) {
-	m := &wire.LobbyPlayer{}
-	if err := JSONCamelToProto(p, m); err != nil {
-		return nil, err
+	m := &wire.LobbyPlayer{
+		Id:                           p.ID,
+		Name:                         p.Name,
+		GenderId:                     p.GenderID,
+		GenderLabel:                  p.GenderLabel,
+		FactionId:                    p.FactionID,
+		FactionLabel:                 p.FactionLabel,
+		FactionColors:                genderColorsToProto(p.FactionColors),
+		DisplayName:                  p.DisplayName,
+		Connected:                    p.Connected,
+		DisconnectedAt:               int64Val(p.DisconnectedAt),
+		DisconnectExpiresAt:          int64Val(p.DisconnectExpiresAt),
+		NameWarEnabled:               boolVal(p.NameWarEnabled),
+		NameWarPenaltyName:           p.NameWarPenaltyName,
+		NameWarPunished:              boolVal(p.NameWarPunished),
+		NameWarAllowRename:           boolVal(p.NameWarAllowRename),
+		NameWarRenameProtectedUntil:  int64Val(p.NameWarRenameProtectedUntil),
+		NameWarRenamedByName:         p.NameWarRenamedByName,
+		GiveawayEnabled:              boolVal(p.GiveawayEnabled),
+		GiveawayValue:                float64Val(p.GiveawayValue),
+		GiveawayBoardText:            p.GiveawayBoardText,
+		GiveawayBoardExpiresAt:       int64Val(p.GiveawayBoardExpiresAt),
+		GiveawayBoardLikes:           int32Val(p.GiveawayBoardLikes),
+		GiveawayBoardDislikes:        int32Val(p.GiveawayBoardDislikes),
+		GiveawayVoteWindowStartedAt:  int64Val(p.GiveawayVoteWindowStartedAt),
+		GiveawayVoteLikesThisHour:    int32Val(p.GiveawayVoteLikesThisHour),
+		GiveawayVoteDislikesThisHour: int32Val(p.GiveawayVoteDislikesThisHour),
+		RankMultiplierUnlocked:       boolVal(p.RankMultiplierUnlocked),
+		ExtremeModeEnabled:           boolVal(p.ExtremeModeEnabled),
+		ExtremeWinStreak:             int32Val(p.ExtremeWinStreak),
+		ExtremeForceClosed:           boolVal(p.ExtremeForceClosed),
+		ExtremeForceClosedAt:         int64Val(p.ExtremeForceClosedAt),
+		ExtremeRenameProtectedUntil:  int64Val(p.ExtremeRenameProtectedUntil),
+		ExtremeRenamedByName:         p.ExtremeRenamedByName,
+		RoomId:                       p.RoomID,
+		AvatarUrl:                    p.AvatarURL,
+		BondMasterEnabled:            boolVal(p.BondMasterEnabled),
+		BondPetEnabled:               boolVal(p.BondPetEnabled),
+		BondPublicDisplay:            boolVal(p.BondPublicDisplay),
+		Stats:                        lobbyStatsToProto(p.Stats),
+		GameStats:                    gameStatsToProto(p.GameStats),
 	}
 	return m, nil
+}
+
+func genderColorsToProto(c types.GenderColors) *wire.GenderColors {
+	if c.TextColor == "" && c.BackgroundColor == "" && c.BorderColor == "" {
+		return nil
+	}
+	return &wire.GenderColors{
+		TextColor:       c.TextColor,
+		BackgroundColor: c.BackgroundColor,
+		BorderColor:     c.BorderColor,
+	}
+}
+
+func lobbyStatsToProto(s types.LobbyStats) *wire.LobbyStats {
+	return &wire.LobbyStats{
+		Wins:             int32(s.Wins),
+		Losses:           int32(s.Losses),
+		Draws:            int32(s.Draws),
+		Punishments:      int32(s.Punishments),
+		RankedPoints:     int32(s.RankedPoints),
+		Title:            s.Title,
+		HighestScore:     int32(s.HighestScore),
+		LowestScore:      int32(s.LowestScore),
+		SortRankedPoints: int32(s.SortRankedPoints),
+		SortHighestScore: int32(s.SortHighestScore),
+		SortLowestScore:  int32(s.SortLowestScore),
+		TitleCustom:      s.TitleCustom,
+		TotalOnlineMs:    s.TotalOnlineMs,
+		SelfTitle:        s.SelfTitle,
+		TitleSource:      s.TitleSource,
+		// TitleColors 必须恒为非 nil：旧 JSONCamelToProto 路径因 GenderColors 是值类型
+		// （json 无 omitempty）总会产出空 message；前端 materializePublicStats 也恒带
+		// titleColors 键。若这里走 genderColorsToProto 在全空时返回 nil，Go 哈希树会缺键、
+		// 前端树为 null/{}，CRC 永久分叉 → 无限 sync:full（/admin 清空配色即可引爆）。
+		TitleColors: &wire.GenderColors{
+			TextColor:       s.TitleColors.TextColor,
+			BackgroundColor: s.TitleColors.BackgroundColor,
+			BorderColor:     s.TitleColors.BorderColor,
+		},
+	}
+}
+
+func gameWLDToProto(w types.GameWLD) *wire.GameWLD {
+	if w.Wins == 0 && w.Losses == 0 && w.Draws == 0 {
+		return nil
+	}
+	return &wire.GameWLD{Wins: int32(w.Wins), Losses: int32(w.Losses), Draws: int32(w.Draws)}
+}
+
+func gameStatsToProto(g types.GameStats) *wire.GameStats {
+	rps := gameWLDToProto(g.RPS)
+	othello := gameWLDToProto(g.Othello)
+	ttt := gameWLDToProto(g.TicTacToe)
+	gomoku := gameWLDToProto(g.Gomoku)
+	liars := gameWLDToProto(g.LiarsDice)
+	jungle := gameWLDToProto(g.Jungle)
+	if rps == nil && othello == nil && ttt == nil && gomoku == nil && liars == nil && jungle == nil {
+		return nil
+	}
+	return &wire.GameStats{
+		Rps: rps, Othello: othello, Tictactoe: ttt,
+		Gomoku: gomoku, Liarsdice: liars, Jungle: jungle,
+	}
+}
+
+func boolVal(p *bool) bool {
+	if p == nil {
+		return false
+	}
+	return *p
+}
+
+func int64Val(p *int64) int64 {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
+func int32Val(p *int) int32 {
+	if p == nil {
+		return 0
+	}
+	return int32(*p)
+}
+
+func float64Val(p *float64) float64 {
+	if p == nil {
+		return 0
+	}
+	return *p
 }
 
 func anyPlayerToProto(v any) (*wire.PublicPlayer, error) {

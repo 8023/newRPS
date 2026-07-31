@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import type { PublicPlayer, RoomSnapshot, RoomSettings, SeatKey } from "../shared/types";
 import { gomokuBoardThemes } from "../lib/constants";
 import { ask } from "../lib/rpc";
-import { GameClockBar, occupantDisplay } from "./AppViews";
+import { GameClockBar, occupantDisplay, useNow } from "./AppViews";
 
 // 仅靠 `(hover: none) and (pointer: coarse)` 媒体查询判断触屏在 Android 上并不可靠：
 // 大量国产 Android 浏览器/内嵌 WebView（如微信 X5 内核、UC、QQ 浏览器、部分厂商 ROM 自带浏览器）
@@ -52,7 +52,7 @@ export function GomokuScore({ room }: { room: RoomSnapshot }) {
   );
 }
 
-export function GomokuPanel({ room, me, now, onError }: { room: RoomSnapshot; me: PublicPlayer; now: number; onError: (message: string) => void }) {
+export function GomokuPanel({ room, me, onError }: { room: RoomSnapshot; me: PublicPlayer; onError: (message: string) => void }) {
   const state = room.gomoku;
   const boardTheme = gomokuThemeStyle(room.settings.gomokuBoardTheme);
   const [busy, setBusy] = useState(false);
@@ -116,6 +116,7 @@ export function GomokuPanel({ room, me, now, onError }: { room: RoomSnapshot; me
   const undoToMe = Boolean(mySeat && undoRequest?.toSeat === mySeat);
   const undoFromMe = Boolean(mySeat && undoRequest?.fromSeat === mySeat);
   const undoFromName = undoRequest ? occupantDisplay(room.seats[undoRequest.fromSeat]) : "";
+  const now = useNow(1000, Boolean(undoRequest));
   const undoSecondsLeft = undoRequest ? Math.max(0, Math.ceil((undoRequest.expiresAt - now) / 1000)) : 0;
 
   const resignRequest = state?.resignRequest;
@@ -224,7 +225,7 @@ export function GomokuPanel({ room, me, now, onError }: { room: RoomSnapshot; me
           )}
         </div>
       )}
-      <GameClockBar room={room} state={state} moveSeconds={room.settings.gomokuMoveSeconds} gameMinutes={room.settings.gomokuGameMinutes} now={now} />
+      <GameClockBar room={room} state={state} moveSeconds={room.settings.gomokuMoveSeconds} gameMinutes={room.settings.gomokuGameMinutes} />
       <div className="gomoku-board" role="grid" aria-label="五子棋棋盘" style={boardTheme}>
         {(state?.board || Array.from({ length: 15 }, () => Array.from({ length: 15 }, () => null))).map((row, rowIndex) => row.map((cell, colIndex) => {
           const key = `${rowIndex}-${colIndex}`;

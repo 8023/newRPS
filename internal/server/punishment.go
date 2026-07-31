@@ -39,6 +39,9 @@ func (s *Server) punishmentPlayersForResult(room *RoomState, result types.RoundR
 func (s *Server) addRoundHistory(room *RoomState, item types.RoundHistoryItem) {
 	item = sanitizeRoundHistoryItem(item)
 	room.RoundHistory = append([]types.RoundHistoryItem{item}, room.RoundHistory...)
+	if len(room.RoundHistory) > roomHistoryMaxKeep {
+		room.RoundHistory = room.RoundHistory[:roomHistoryMaxKeep]
+	}
 	s.emitToRoom(room.ID, "room:historyAppend", map[string]any{
 		"roomId": room.ID,
 		"item":   item,
@@ -391,6 +394,8 @@ func (s *Server) setupPunishmentForPlayers(room *RoomState, humanIDs []string) {
 		room.LockedSeatIDs[playerID] = struct{}{}
 		if player := s.players[playerID]; player != nil {
 			player.Stats.Punishments++
+			s.markPlayerDirty(player)
+			s.requestPersist("lazy")
 		}
 		if seat, ok := s.seatOf(room, playerID); ok {
 			ss := room.SeatStats[seat]

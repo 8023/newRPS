@@ -254,7 +254,7 @@ func (s *Server) forceEndRpsRound(room *RoomState, result types.RoundResult) (bo
 			winner := s.humanPlayerFromSeat(room, types.SeatKey(result))
 			loser := s.humanPlayerFromSeat(room, loserSeat)
 			wD, lD := s.applyRankedStake(winner, loser, rankedStake)
-			resetExtremeWinStreak(loser)
+			s.resetExtremeWinStreak(loser)
 			streakText = s.applyExtremeWinStreakRisk(room, winner)
 			rankedText = fmt.Sprintf("（%s %s，%s %d）",
 				occupantName(room.Seats[types.SeatKey(result)]), formatSigned(wD),
@@ -351,8 +351,8 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 
 	if result == types.ResultDoubleLoss {
 		s.applySeatOutcome(room, result)
-		resetExtremeWinStreak(playerA)
-		resetExtremeWinStreak(playerB)
+		s.resetExtremeWinStreak(playerA)
+		s.resetExtremeWinStreak(playerB)
 		if room.Settings.EnableRanked {
 			dA, dB := s.applyRankedDrawPenaltyStake(playerA, playerB, rankedStake)
 			room.ResultText = fmt.Sprintf("双方白给，双输：A %d 分，B %d 分", dA, dB)
@@ -361,8 +361,8 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 		}
 	} else if result == types.ResultDraw {
 		s.applySeatOutcome(room, result)
-		resetExtremeWinStreak(playerA)
-		resetExtremeWinStreak(playerB)
+		s.resetExtremeWinStreak(playerA)
+		s.resetExtremeWinStreak(playerB)
 		if len(giveawayResultSeats) >= 2 {
 			room.ResultText = "双方白给，平局"
 			if room.Settings.EnableRanked && room.Settings.TieDoublePunish {
@@ -392,7 +392,7 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 		rankedText := ""
 		if room.Settings.EnableRanked {
 			wD, lD := s.applyRankedStake(winner, loser, rankedStake)
-			resetExtremeWinStreak(loser)
+			s.resetExtremeWinStreak(loser)
 			streakText = s.applyExtremeWinStreakRisk(room, winner)
 			rankedText = fmt.Sprintf("（%s %s，%s %d）",
 				occupantName(room.Seats[winnerSeat]), formatSigned(wD),
@@ -473,10 +473,10 @@ func (s *Server) applyDisconnectForfeit(room *RoomState, player *PlayerState) bo
 	winner := s.players[forfeit.WinnerID]
 	loser := s.players[forfeit.LoserID]
 	wD, lD := s.applyRankedStake(winner, loser, forfeit.Stake)
-	recordGameOutcome(winner, types.GameRPS, "win")
-	recordGameOutcome(loser, types.GameRPS, "loss")
+	s.recordGameOutcome(winner, types.GameRPS, "win")
+	s.recordGameOutcome(loser, types.GameRPS, "loss")
 	s.applyGiveawayWinPenalty(winner)
-	resetExtremeWinStreak(loser)
+	s.resetExtremeWinStreak(loser)
 	streakText := s.applyExtremeWinStreakRisk(room, winner)
 	room.Score[forfeit.WinnerSeat]++
 	room.SeatedScore[forfeit.WinnerSeat]++

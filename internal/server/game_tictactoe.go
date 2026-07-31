@@ -179,7 +179,7 @@ func (s *Server) finishTicTacToeGame(room *RoomState, result types.RoundResult, 
 			wD, lD := s.applyRankedStake(winner, loser, effectiveRankedStake(room.Settings))
 			rankedDelta[types.SeatKey(result)] += wD
 			rankedDelta[loserSeat] += lD
-			resetExtremeWinStreak(loser)
+			s.resetExtremeWinStreak(loser)
 			streakText = s.applyExtremeWinStreakRisk(room, winner)
 			rankedText = fmt.Sprintf("（%s %s，%s %d）",
 				occupantName(room.Seats[types.SeatKey(result)]), formatSigned(wD),
@@ -413,12 +413,12 @@ func (s *Server) applyTicTacToeDisconnectForfeit(room *RoomState, forfeit Discon
 		wD, lD := s.applyRankedStake(winner, loser, forfeit.Stake)
 		rankedDelta[forfeit.WinnerSeat] += wD
 		rankedDelta[forfeit.LoserSeat] += lD
-		resetExtremeWinStreak(loser)
+		s.resetExtremeWinStreak(loser)
 		streakText = s.applyExtremeWinStreakRisk(room, winner)
 		rankedText = fmt.Sprintf("，排位 %d 分已结算（%s %s，%s %d）", forfeit.Stake, forfeit.WinnerName, formatSigned(wD), forfeit.LoserName, lD)
 	}
-	recordGameOutcome(winner, types.GameTicTacToe, "win")
-	recordGameOutcome(loser, types.GameTicTacToe, "loss")
+	s.recordGameOutcome(winner, types.GameTicTacToe, "win")
+	s.recordGameOutcome(loser, types.GameTicTacToe, "loss")
 	s.applyGiveawayWinPenalty(winner)
 	room.Score[forfeit.WinnerSeat]++
 	room.SeatedScore[forfeit.WinnerSeat]++

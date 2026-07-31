@@ -11,9 +11,19 @@ export type PushSubscriptionStatus =
   | { state: "unsupported"; message: string }
   | { state: "error"; message: string };
 
+export type PushTestResult = {
+  subscriptionCount: number;
+  acceptedCount: number;
+  failedCount: number;
+  expiredCount: number;
+};
+
+const requiredPushProtocolVersion = 3;
 const pushStoppedKey = "rps-push-stopped";
 let prefs: PushPreferences = { mentionEnabled: false, turnEnabled: false, seatEnabled: false };
-let ensureInFlight: Promise<PushSubscriptionStatus> | null = null;
+// 串行化 ensure：后到的调用（尤其 force:true）必须带上自己的 options 再跑，
+// 不能复用进行中的非 force Promise，否则「已停止」标记清不掉。
+let ensureTail: Promise<unknown> = Promise.resolve();
 
 export function setPushPreferencesCache(next: PushPreferences) {
   prefs = next;
@@ -101,13 +111,16 @@ async function performEnsurePushSubscription(options: { force?: boolean } = {}):
   if (options.force && typeof localStorage !== "undefined") localStorage.removeItem(pushStoppedKey);
 
   try {
-    const registration = await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
+    const registration = await navigator.serviceWorker.register("/push-sw-v3.js", { updateViaCache: "none" });
     await navigator.serviceWorker.ready;
 
     const res = await fetch("/api/push/vapid-key", { cache: "no-store" });
     if (!res.ok) throw new Error(`VAPID 公钥请求失败（HTTP ${res.status}）`);
-    const data = await res.json() as { publicKey?: string };
+    const data = await res.json() as { publicKey?: string; protocolVersion?: number };
     if (!data.publicKey) throw new Error("服务器未提供 VAPID 公钥");
+    if (!data.protocolVersion || data.protocolVersion < requiredPushProtocolVersion) {
+      throw new Error("当前运行的后端版本过旧，请重新构建并重启服务端");
+    }
     const applicationServerKey = urlBase64ToUint8Array(data.publicKey);
 
     let subscription = await registration.pushManager.getSubscription();
@@ -140,16 +153,26 @@ async function performEnsurePushSubscription(options: { force?: boolean } = {}):
 }
 
 export function ensurePushSubscription(options: { force?: boolean } = {}): Promise<PushSubscriptionStatus> {
-  if (ensureInFlight) return ensureInFlight;
-  ensureInFlight = performEnsurePushSubscription(options).finally(() => {
-    ensureInFlight = null;
-  });
-  return ensureInFlight;
+  const result = ensureTail.then(() => performEnsurePushSubscription(options));
+  // 无论成败都接上下一环，避免一条失败把整条链永久 reject。
+  ensureTail = result.then(() => undefined, () => undefined);
+  return result;
 }
 
-export async function disablePushSubscription(): Promise<PushSubscriptionStatus> {
-  if (typeof localStorage !== "undefined") localStorage.setItem(pushStoppedKey, "1");
-  if (!pushSupported()) return { state: "unsupported", message: "当前浏览器不支持 Web Push" };
+export type DisablePushOptions = {
+  /** 为 true（默认）时写入本机「已停止」标记；登出清订阅时应为 false，以免影响下次登录自动重订。 */
+  markStopped?: boolean;
+};
+
+// 解除本机浏览器订阅与服务端登记。设置页「停止」与登出共用。
+export async function disablePushSubscription(options: DisablePushOptions = {}): Promise<PushSubscriptionStatus> {
+  const markStopped = options.markStopped !== false;
+  if (markStopped && typeof localStorage !== "undefined") localStorage.setItem(pushStoppedKey, "1");
+  if (!pushSupported()) {
+    return markStopped
+      ? { state: "stopped", message: "这台设备已停止推送" }
+      : { state: "unsupported", message: "当前浏览器不支持 Web Push" };
+  }
   try {
     const registration = await navigator.serviceWorker.getRegistration("/");
     const subscription = await registration?.pushManager.getSubscription();
@@ -165,7 +188,8 @@ export async function disablePushSubscription(): Promise<PushSubscriptionStatus>
         console.warn("push server unsubscribe failed; local subscription removed", removeError);
       }
     }
-    return { state: "stopped", message: "这台设备已停止推送" };
+    if (markStopped) return { state: "stopped", message: "这台设备已停止推送" };
+    return { state: "permission-required", message: "本设备推送订阅已清除" };
   } catch (error) {
     const message = errorMessage(error);
     console.error("push unsubscribe failed", error);
@@ -173,6 +197,13 @@ export async function disablePushSubscription(): Promise<PushSubscriptionStatus>
   }
 }
 
-export async function sendTestPush(): Promise<void> {
-  await ask("push:test", {});
+export async function sendTestPush(): Promise<PushTestResult> {
+  try {
+    return await ask<PushTestResult>("push:test", {});
+  } catch (error) {
+    if (error instanceof Error && error.message === "unknown event") {
+      throw new Error("当前运行的后端版本过旧，请重新构建并重启服务端");
+    }
+    throw error;
+  }
 }

@@ -1,9 +1,66 @@
 # 更新记录
 
-### 未发布
+### v2.3.4（2026-07-31）
 
-- **修复图片上传偶发「Importing a module script failed」**：证明图/头像压缩流水线里 HEIC 解码与 WebP WASM 编码器都是按需 `import()` 加载的分包 chunk；构建用 `emptyOutDir` 每次发布整体清空重建 `dist/`，旧哈希文件名会被删除。若用户页面停留跨越了一次发布（iOS Safari 尤其容易长时间不回收后台标签页），发布后首次触发这类按需加载时浏览器还在请求旧哈希文件名，服务端已 404，报出这句原始英文异常。现在 `imagePipeline.ts` 捕获到这类动态 import 失败会自动整页刷新一次以换取最新构建产物（`StaleChunkReloadError`，短时间内重复命中不再刷新，避免死循环），证明图/头像上传流程都不再靠缩小尺寸重试这类无意义的重试。
-- **Web Push 全链路修复**：权限、浏览器订阅与服务器登记改为独立状态并自动校验/修复，订阅失败不再静默；新增测试通知、PWA Manifest 与 iOS 主屏引导。服务端不再因 WebSocket 仍标记在线而跳过推送，前台去重统一交给 Service Worker；同时修复移动端 `new Notification()` 不可用、VAPID 密钥落盘失败未上报及 `sw.js` 被缓存一年等问题。
+#### 安全加固
+
+- **Token/指纹从 URL 迁入 WebSocket 握手头**：之前 token 直接拼在 `/ws?token=` 查询串里，会被反向代理访问日志以明文记录（24 小时有效，拿到即可冒充该玩家上传证明图/头像）。现在通过 `Sec-WebSocket-Protocol` 头（`auth.<token>`、`fp.<base64url 指纹>`）传递——这是浏览器 WebSocket API 唯一能在握手阶段附带自定义值、又不出现在 URL 里的字段。指纹内容不受控，编码为 base64url 后再拼前缀，避免其中出现 HTTP token 语法不允许的字符导致握手失败。`wsprobe` 调试工具同步适配。
+- **Web Push 端点白名单校验**：浏览器上报的 PushSubscription.endpoint 完全不可信——若不校验，任何登录用户都能把 endpoint 设为内网/回环地址，把服务器变成一个 SSRF 探测器。现在只接受已知浏览器厂商推送网关域名（googleapis.com / mozilla.com / windows.com / apple.com / samsungosp.com），非白名单直接拒绝并记审计日志。
+- **管理员登录失败锁定**：按 IP 8 次（单桶）/ 全局 40 次（兜底）的 10 分钟滑动窗口，触发后冷却 10 分钟。只统计失败次数，正确口令不消耗配额。锁定与失败均记安全日志。
+- **房间密码爆破防护**：按房间 + IP 维度 5 次/分钟的限流桶，触发后冷却 5 分钟。密码比对只在失败时扣配额（用恒定时间比较拆开的写法），正确密码不消耗。
+- **推送订阅删除增加玩家归属校验**（`removeSubscriptionForPlayer`）：仅当 endpoint 确实属于该玩家时才删除，防止已登录用户通过换 endpoint 删除他人订阅。
+- **房间聊天的 @ 提醒限定同房参与者**：此前任何人都能把陌生玩家 ID 塞进 mentions 字段触发推送，现在房间内只接受实际在该房间的玩家 ID，大厅聊天不受影响。
+- **@ 推送通知加节流**：同一发送者对同一被 @ 玩家，每 10 分钟最多触发一次 Web Push（消息本身仍正常送达）。
+- **白给投票防重放**：Add `GiveawayVotedTargets` 按投票时目标的板子版本（GiveawayBoardSubmittedAt）去重，同一条自救内容无法被重放反复计分，目标重新上板后可以再投。
+- **Origin 校验全面收紧**：空 Origin 不再直接放行；ALLOWED_ORIGINS 里显式带 scheme 的条目必须与 Origin scheme 一致；localhost 旁路要求 Origin 与请求 Host 同时为本机地址（防止声称 `Origin=http://localhost` 绕过生产环境校验）。
+- **活动日志从 CSV 改为纯文本 logfmt 格式**（`.csv` → `.log`）：CSV 里的字段（userAgent、错误信息等）完全来自客户端可控输入，被 Excel/WPS 打开时会执行公式注入；logfmt 是 `key=value` 纯文本，不会被电子表格误解析。含换行/特殊字符的 value 做双引号转义。
+- **Service Worker 缓存策略加固**：从 `no-cache` 改为 `no-store, no-cache, must-revalidate, max-age=0` + CDN 专用头 + `Expires: 0` + `Service-Worker-Allowed: /`，确保任何缓存层都不会缓存旧版 SW。
+
+#### 性能优化
+
+- **大厅实时快照大幅裁剪**：全站历史玩家不再塞进 lobby FULL/DELTA——实时通道仅包含在线 + 断线 30 分钟窗口内 + 白给上板未过期者（`lobbyPlayerInLiveSnapshot` + `ToLiveLobbyPlayer` 去掉 GameStats）。全站档案改为 `players:roster` 鉴权+分页+限流按需拉取。这是流量与 CPU 最大的单一优化。
+- **roomClients 反向索引**：房间/频道广播从 O（全服连接）降到 O（订阅者），`emitWireToRoom` 不再每次遍历全服所有连接做 `inRoom` 过滤。频道成员关系由 `clientJoinRoom`/`clientLeaveRoom` 双向维护。
+- **lobbyPlayerToProto 手写字段映射**：替代 JSON marshal/unmarshal 的反射路径，大厅广播热路径（玩家数 × 广播频率）零反射开销。TitleColors 恒为非 nil 以对齐前端规范化树，防止 CRC 分叉。
+- **Delta diff 算法优化**：`equalJSON` 不再每节点调用 `normalize` + `reflect.DeepEqual`，改为递归浅层类型分派；数组 diff 不再预检所有元素是否全等才下钻，直接逐元素 diff，未变叶子自然无 op，避免接近 O(N²) 的行为。
+- **在线时长展示量化为整分钟**：毫秒级实时递增会让每次广播文档哈希都变，触发无意义 DELTA；现量化到 1 分钟步长后只在分钟边界才脏。
+- **增量写盘**：新增 `markPlayerDirty` + `dirtyPlayerIDs` 集合——`writeSnapshot` 优先只 UPSERT 脏玩家，集合为空才退回全量（漏 mark 的兜底保证）。补上大量遗漏的 persist 调用点（战绩结算、白给值变动、在线时长 checkpoint、衰减游标、头像上传等）。
+- **宠物乐园改为订阅制**：原 `notifyAllOnlinePetBondStates` 每次上线/关系变更时对全体在线玩家 O(O·P) 广播；现通过 `petbond:subscribe`/`unsubscribe` 只推给打开面板或需要强制白给的连接。
+- **前端 player:batch 合并优化**：从每 patch 各一次 O(P log P) 双榜重排 + O(R) versus 扫描，改为单遍 O(P+R+k+P log P) 批量合并。
+- **废弃 "players" 同步频道**：`sync:full` 旁路曾经能一次性无鉴权 dump 全站含 GameStats 的完整档案（O(P) 流量放大），现直接移除该路径——`sendFullChannel` 不再响应 `channel=="players"`，全站档案必须走 `players:roster`。
+- **前端 useNow 钩子**：局部时钟替代 Room 组件全局 1Hz `setInterval`——棋盘/棋钟/倒计时只在各自需要时轮询，未启用时完全静默。
+- **Delta CRC 校验优化**：连续 seq 的 delta 信任服务端 hash 跳过 CRC 重算；每 32 条抽检一次防归一化分叉潜伏；乱序/缺口时仍做全量 CRC。
+
+#### Web Push 完善
+
+- **Service Worker 全面升级为 push-sw-v3.js**：旧 `sw.js` 删除，新 SW 文件名带版本，配合 `no-store` 缓存策略确保及时更新。
+- **前端协议版本校验**：订阅前检查 `/api/push/vapid-key` 返回的 `protocolVersion`，低于 3 时拒绝订阅并提示重建后端。`VAPID_SUBSCRIBER` 环境变量控制 VAPID 联系 URI。
+- **测试推送精确反馈**：`push:test` 不再只显示盲目的"已发送"——返回订阅数、接受数、失败数、过期数。投递失败时按错误类型给出用户可理解的提示（过期需重订 / TLS 证书 / 网关拒绝等）。
+- **推送投递共享 HTTP 客户端**：10 秒超时，防止某个卡住的网关把 goroutine 挂到 TCP 默认超时。
+- **登出时自动解绑本机推送**：不写入"用户主动停止"标记（`markStopped: false`），下次登录仍可自动重订。开启推送偏好前先请求通知权限，避免卡在 permission-required。
+
+#### 数据完整性
+
+- **recordGameOutcome 改为 Server 方法**：替代旧的裸函数，统一调用 `markPlayerDirty` + `requestPersist("lazy")`，避免战绩更新后只靠 60 秒 checkpoint 兜底。
+- **惩罚证明状态门控**：proof 只处于 pending 时才能被审核——此前已 rejected 的证明可被反复调用 reject 导致 RejectCount 无限递增扣分失控。
+- **房间对局历史内存上限 100 条**，快照仍只下发最近 pageSize 条。
+- **极限模式衰减游标落盘**：即便本小时扣分为 0 也落盘，避免重启后重复扫全表。排位分日衰减同理。
+- **白给值变动立即 persist**：此前 `addGiveawayValue` 不掉盘，进程被强杀期间的白给值变动会丢失。
+
+#### 前端优化
+
+- **全局排行榜改为按需拉取全站档案**：`players:roster` 分页（500×10=5000 上限），含离线 + 分游戏战绩，不再依赖大厅实时快照。加载失败时降级为大厅在线名单。
+- **Delta 连续 seq 优化**：连续 seq 的补丁原地打在文档上（跳过 structuredClone），信任服务端 hash；每 32 条做一次 CRC 抽检。
+- **聊天加载上翻硬顶 800 条**：超过自动丢弃最旧条目，防止无限上翻撑爆内存。
+- **图片上传 - 修复跨版本 chunk 404**：按需 import 的动态 chunk 在 `emptyOutDir` 重建后旧哈希丢失，页面停留跨越发布时首次触发会报 «Importing a module script failed»——现捕获后自动整页刷新换取最新产物，短时间重复命中不再刷新。
+
+#### 其它
+
+- **引入 `x509roots/fallback`**：修复 Docker 容器（基于 debian:trixie-slim）缺少系统 CA 根证书时 Web Push TLS 握手失败的问题。
+- **sync:full 与 player:get 纳入事件处理器表**：此前作为 switch 分支提前 return 绕过 `checkRateLimit` 限流保护，现与其它事件统一受 rate limit + IP backstop 双重约束。
+- **构建顺序改为先 server 后 web**：后端编译失败时不会留下"新前端 + 旧后端"的不一致状态。
+- **README 升级指引补全**：Docker 升级加上 `--force-recreate`、`curl vapid-key` 版本校验步骤；`VAPID_SUBSCRIBER` 环境变量文档化。
+- **新增 11 个测试文件**：覆盖管理员登录锁定、WebSocket 认证协议、Origin 校验、安全日志格式、聊天 @ 校验、白给投票限流、惩罚审核状态门控、sync:full 限流、大厅快照裁剪、排行榜分页拉取、称号配色 CRC 一致性等。
+- **配置模块增加 `SetRootDirForTest`**：仅测试用，允许临时更换 rootDir。
 
 ### v2.3.2（2026-07-28）
 

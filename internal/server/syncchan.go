@@ -303,5 +303,4 @@ func (s *Server) buildRawEnvelope(event string, id int64, data any, errMsg strin
 
 func channelLobby() string         { return "lobby" }
 func channelRoom(id string) string { return "room:" + id }
-func channelPlayers() string       { return "players" }
 func channelConfig() string        { return "config" }

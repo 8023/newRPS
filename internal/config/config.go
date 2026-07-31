@@ -105,6 +105,11 @@ func GetRootDir() string {
 	return rootDir
 }
 
+// SetRootDirForTest 仅测试用：临时改 root，调用方须在 Cleanup 里还原。
+func SetRootDirForTest(dir string) {
+	rootDir = dir
+}
+
 func configDir() string {
 	return filepath.Join(rootDir, "config")
 }

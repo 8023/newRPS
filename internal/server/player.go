@@ -27,13 +27,55 @@ func (s *Server) publicConfig() types.AppConfig {
 	return sanitizePublicConfig(cfg)
 }
 
-func (s *Server) adminPasswordMatches(password string) bool {
+// adminLoginFailure* 常量：管理员口令校验失败的锁定阈值。只统计失败次数（正确口令的
+// 重复调用——如管理员在同一会话里反复保存配置——不计入配额，不会误伤正常使用）。
+// 按 IP 单独锁定，另加一个不分 IP 的全局桶防止分布式撞库；两者共用同一套时间窗/冷却时长。
+const (
+	adminLoginFailurePerIPLimit  = 8
+	adminLoginFailureGlobalLimit = 40
+	adminLoginFailureWindowMs    = 10 * 60_000
+	adminLoginFailureCooldownMs  = 10 * 60_000
+)
+
+// adminLoginLockedOut 只读检查（不消耗配额），调用方须持有 s.mu。
+func (s *Server) adminLoginLockedOut(ip string) bool {
+	now := nowMs()
+	if b := s.rateBuckets["admin_login_fail:"+ip]; b != nil && b.CooldownUntil > now {
+		return true
+	}
+	if b := s.rateBuckets["admin_login_fail:*"]; b != nil && b.CooldownUntil > now {
+		return true
+	}
+	return false
+}
+
+// recordAdminLoginFailure 只在口令比对失败时调用一次，同时喂给按 IP 和全局两个桶。
+func (s *Server) recordAdminLoginFailure(ip string) {
+	s.checkRateLimit("admin_login_fail:"+ip, RateLimitOptions{
+		Limit: adminLoginFailurePerIPLimit, WindowMs: adminLoginFailureWindowMs, CooldownMs: adminLoginFailureCooldownMs,
+	})
+	s.checkRateLimit("admin_login_fail:*", RateLimitOptions{
+		Limit: adminLoginFailureGlobalLimit, WindowMs: adminLoginFailureWindowMs, CooldownMs: adminLoginFailureCooldownMs,
+	})
+}
+
+// adminPasswordMatches 校验管理员口令；ip 用于失败锁定与审计日志（调用方须持有 s.mu）。
+func (s *Server) adminPasswordMatches(password, ip string) bool {
 	expected := s.cfg.Site.AdminPassword
 	if expected == "" {
 		return false
 	}
+	if s.adminLoginLockedOut(ip) {
+		s.securityLog("admin_login_locked", map[string]any{"ip": ip})
+		return false
+	}
 	// 恒定时间比较，避免按字符早退泄露口令长度/前缀。
-	return subtle.ConstantTimeCompare([]byte(password), []byte(expected)) == 1
+	if subtle.ConstantTimeCompare([]byte(password), []byte(expected)) == 1 {
+		return true
+	}
+	s.recordAdminLoginFailure(ip)
+	s.securityLog("admin_login_failed", map[string]any{"ip": ip})
+	return false
 }
 
 // rankedScorePercent 把真实排位分映射到相对展示上下限的百分比（可超出 ±100）。
@@ -254,6 +296,8 @@ func (s *Server) addGiveawayValue(player *PlayerState, delta float64) {
 	if clamped <= 0 && ptrBool(player.GiveawayEnabled) {
 		player.GiveawayEnabled = boolPtr(false)
 	}
+	s.markPlayerDirty(player)
+	s.requestPersist("lazy")
 	s.refreshPlayerSnapshots(player)
 	s.broadcastPlayerUpdate(player)
 }
@@ -334,7 +378,9 @@ func (s *Server) publicPlayer(player *PlayerState) types.PublicPlayer {
 	p.Stats.HighestScore = s.displayClampScore(player, player.Stats.HighestScore)
 	p.Stats.LowestScore = s.displayClampScore(player, player.Stats.LowestScore)
 	// 累计在线：存储值 + 当前会话（不写回存储，避免与断线累加重叠）。
-	p.Stats.TotalOnlineMs = s.effectiveOnlineMs(player)
+	// 量化到整分钟：毫秒级实时递增会让每次大厅/玩家广播的树哈希都变，
+	// 触发无意义的 DELTA/FULL 流量（见性能分析 #2）。
+	p.Stats.TotalOnlineMs = quantizeOnlineMs(s.effectiveOnlineMs(player))
 	// 展示称号优先级见 applyDisplayTitle：管理员自定义 > 宠物称号 > 玩家自设称号 > 积分档称号。
 	s.applyDisplayTitle(player, &p)
 	return p
@@ -350,6 +396,17 @@ func clientOnlineCreditedFrom(client *Client) int64 {
 		return client.onlineCreditedAt
 	}
 	return client.connectedAt
+}
+
+// onlineMsQuantizeStep 展示用在线时长量化粒度（1 分钟）。
+const onlineMsQuantizeStep int64 = 60_000
+
+// quantizeOnlineMs 把在线毫秒向下取整到 quantize 步长，避免广播文档每秒变脏。
+func quantizeOnlineMs(ms int64) int64 {
+	if ms <= 0 {
+		return 0
+	}
+	return (ms / onlineMsQuantizeStep) * onlineMsQuantizeStep
 }
 
 // effectiveOnlineMs 返回用于展示/排行的累计在线毫秒：已落库（含 checkpoint）+ 尚未记账的本段。
@@ -395,6 +452,7 @@ func (s *Server) accumulateClientOnlineMs(client *Client, disconnectedAt int64) 
 	}
 	player.Stats.TotalOnlineMs += dur
 	client.onlineCreditedAt = disconnectedAt
+	s.markPlayerDirty(player)
 	s.requestPersist("lazy")
 }
 
@@ -422,6 +480,7 @@ func (s *Server) checkpointOnlineMs() bool {
 		}
 		player.Stats.TotalOnlineMs += dur
 		c.onlineCreditedAt = now
+		s.markPlayerDirty(player)
 		touched = true
 	}
 	return touched
@@ -544,28 +603,28 @@ func (s *Server) createPlayer(name, genderID, token string, identityPlayerID, id
 	now := nowMs()
 	player := &PlayerState{
 		PublicPlayer: types.PublicPlayer{
-			ID:                  id,
-			Name:                name,
-			GenderID:            gender.GenderID,
-			GenderLabel:         gender.GenderLabel,
-			FactionID:           gender.FactionID,
-			FactionLabel:        gender.FactionLabel,
-			FactionColors:       gender.FactionColors,
-			DisplayName:         gender.GenderLabel + " - " + title + " - " + name,
-			Connected:           true,
-			NameWarOriginalName: name,
-			GiveawayEnabled:     boolPtr(false),
-			GiveawayValue:       floatPtr(0),
-			GiveawayClicks:      intPtr(0),
-			GiveawayBoardLikes:  intPtr(0),
-			GiveawayBoardDislikes: intPtr(0),
+			ID:                           id,
+			Name:                         name,
+			GenderID:                     gender.GenderID,
+			GenderLabel:                  gender.GenderLabel,
+			FactionID:                    gender.FactionID,
+			FactionLabel:                 gender.FactionLabel,
+			FactionColors:                gender.FactionColors,
+			DisplayName:                  gender.GenderLabel + " - " + title + " - " + name,
+			Connected:                    true,
+			NameWarOriginalName:          name,
+			GiveawayEnabled:              boolPtr(false),
+			GiveawayValue:                floatPtr(0),
+			GiveawayClicks:               intPtr(0),
+			GiveawayBoardLikes:           intPtr(0),
+			GiveawayBoardDislikes:        intPtr(0),
 			GiveawayVoteLikesThisHour:    intPtr(0),
 			GiveawayVoteDislikesThisHour: intPtr(0),
-			RankMultiplierUnlocked: boolPtr(false),
-			ExtremeModeEnabled:     boolPtr(false),
-			ExtremeWinStreak:       intPtr(0),
-			ExtremeLastDecayHour:   int64Ptr(currentExtremeDecayHour(now)),
-			ExtremeForceClosed:     boolPtr(false),
+			RankMultiplierUnlocked:       boolPtr(false),
+			ExtremeModeEnabled:           boolPtr(false),
+			ExtremeWinStreak:             intPtr(0),
+			ExtremeLastDecayHour:         int64Ptr(currentExtremeDecayHour(now)),
+			ExtremeForceClosed:           boolPtr(false),
 			Stats: types.PublicStats{
 				RankedPoints:   0,
 				Title:          title,
@@ -598,6 +657,7 @@ func (s *Server) createPlayer(name, genderID, token string, identityPlayerID, id
 		s.sidToPlayerID[session.SID] = player.ID
 	}
 	if persistent {
+		s.markPlayerDirty(player)
 		s.requestPersist("lazy")
 	}
 	return player
@@ -651,6 +711,7 @@ func (s *Server) updateRankedPoints(player *PlayerState, delta int) {
 	s.refreshPlayerSnapshots(player)
 	s.broadcastPlayerUpdate(player)
 	if player.Persistent {
+		s.markPlayerDirty(player)
 		s.requestPersist("important")
 	}
 }
@@ -660,6 +721,7 @@ func (s *Server) setRankedPointsByAdmin(player *PlayerState, points int) {
 	recordRankedExtremes(player)
 	s.refreshNameWarState(player, nowMs())
 	if player.Persistent {
+		s.markPlayerDirty(player)
 		s.requestPersist("important")
 	}
 }
@@ -794,6 +856,9 @@ func (s *Server) applyExtremeHourlyDecay() {
 			continue
 		}
 		player.ExtremeLastDecayHour = int64Ptr(hour)
+		// 即便本小时扣分为 0，也要落盘衰减游标，避免重启后重复扫全表。
+		s.markPlayerDirty(player)
+		s.requestPersist("lazy")
 		amount := s.extremeHourlyDecayAmount(player)
 		if amount <= 0 {
 			continue
@@ -863,6 +928,9 @@ func (s *Server) applyRankedDailyDecay() {
 			continue
 		}
 		player.RankedLastDecayDay = int64Ptr(day)
+		// 0 分玩家也要落盘日游标，避免次日重启重复扫。
+		s.markPlayerDirty(player)
+		s.requestPersist("lazy")
 		if player.Stats.RankedPoints == 0 {
 			continue
 		}
@@ -889,9 +957,11 @@ func (s *Server) scheduleRankedDailyDecay() {
 	s.scheduleBoundaryAlignedDecay(86_400_000, currentRankedDecayDay, 24*time.Hour, s.applyRankedDailyDecay)
 }
 
-func resetExtremeWinStreak(player *PlayerState) {
+func (s *Server) resetExtremeWinStreak(player *PlayerState) {
 	if player != nil && ptrBool(player.ExtremeModeEnabled) {
 		player.ExtremeWinStreak = intPtr(0)
+		s.markPlayerDirty(player)
+		s.requestPersist("lazy")
 	}
 }
 
@@ -901,6 +971,8 @@ func (s *Server) applyExtremeWinStreakRisk(room *RoomState, winner *PlayerState)
 	}
 	streak := ptrInt(winner.ExtremeWinStreak) + 1
 	winner.ExtremeWinStreak = intPtr(streak)
+	s.markPlayerDirty(winner)
+	s.requestPersist("lazy")
 	threshold := s.cfg.ExtremeMode.WinStreakThreshold
 	if streak < threshold {
 		return ""

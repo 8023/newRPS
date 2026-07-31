@@ -151,11 +151,15 @@ export function normalizePublicPlayer(player: PublicPlayer): PublicPlayer {
   const gameStats = normalizeGameStats(player.gameStats);
   const totals = totalFromGameStats(gameStats);
   const stats = normalizePublicStats(player.stats);
-  // 展示用总榜优先用分项相加，避免旧数据/广播缺字段时与分项不一致
+  // 大厅实时通道会省略 GameStats（ToLiveLobbyPlayer）；此时保留服务端 Stats 合计，
+  // 避免用全零分项把 wins/losses/draws 抹成 0。有分项数据时仍以分项之和为准。
+  const hasGameData = totals.wins + totals.losses + totals.draws > 0;
   return {
     ...player,
     gameStats,
-    stats: { ...stats, wins: totals.wins, losses: totals.losses, draws: totals.draws }
+    stats: hasGameData
+      ? { ...stats, wins: totals.wins, losses: totals.losses, draws: totals.draws }
+      : stats
   };
 }
 
@@ -165,63 +169,118 @@ export function playerWinRate(player: PublicPlayer) {
   return decisive === 0 ? 0 : stats.wins / decisive;
 }
 
+/** 在线积分榜：调用方应已 normalize 过玩家；此处不再对每人做一遍 normalizePublicPlayer。 */
 export function rankedPlayers(players: PublicPlayer[]) {
   return players
     .filter((player) => player.connected)
-    .map(normalizePublicPlayer)
-    .sort((a, b) => b.stats.rankedPoints - a.stats.rankedPoints || b.stats.wins - a.stats.wins);
+    .slice()
+    .sort((a, b) => {
+      const ar = a.stats?.rankedPoints || 0;
+      const br = b.stats?.rankedPoints || 0;
+      if (br !== ar) return br - ar;
+      return (b.stats?.wins || 0) - (a.stats?.wins || 0);
+    });
 }
 
+/** 普通胜率榜 Top10：同样假定 players 已规范化。 */
 export function normalWinRatePlayers(players: PublicPlayer[]) {
   return players
-    .map(normalizePublicPlayer)
-    .filter((player) => player.stats.wins + player.stats.losses + player.stats.draws >= 5)
-    .sort((a, b) => playerWinRate(b) - playerWinRate(a) || b.stats.wins - a.stats.wins)
+    .filter((player) => {
+      const s = player.stats;
+      return (s?.wins || 0) + (s?.losses || 0) + (s?.draws || 0) >= 5;
+    })
+    .slice()
+    .sort((a, b) => playerWinRate(b) - playerWinRate(a) || (b.stats?.wins || 0) - (a.stats?.wins || 0))
     .slice(0, 10);
 }
 
 export function replacePlayerInRoom(room: RoomSnapshot, player: PublicPlayer) {
+  return replacePlayersInRoom(room, [player]);
+}
+
+/** 批量把补丁合进房间座位/观战列表；单次遍历 seats + spectators。 */
+export function replacePlayersInRoom(room: RoomSnapshot, patches: PublicPlayer[]): RoomSnapshot {
+  if (!patches?.length) return room;
+  const byId = new Map(patches.map((p) => [p.id, p]));
   let changed = false;
   const seats = { ...(room.seats || { A: null, B: null }) };
   for (const seat of ["A", "B"] as SeatKey[]) {
     const occupant = seats[seat];
-    if (occupant?.id === player.id) {
-      seats[seat] = player;
+    if (occupant?.id && byId.has(occupant.id)) {
+      seats[seat] = byId.get(occupant.id)!;
       changed = true;
     }
   }
   const spectators = (room.spectators || []).map((spectator) => {
-    if (spectator.id !== player.id) return spectator;
+    const next = byId.get(spectator.id);
+    if (!next) return spectator;
     changed = true;
-    return player;
+    return next;
   });
   return changed ? { ...room, seats, spectators } : room;
 }
 
-export function replaceLobbyVersusPlayer(versus: LobbySnapshot["rooms"][number]["versus"], player: PublicPlayer) {
-  return {
-    A: versus.A && versus.A.player.id === player.id ? { player } : versus.A,
-    B: versus.B && versus.B.player.id === player.id ? { player } : versus.B
-  };
-}
+/**
+ * 批量合并 player:batch 到大厅。
+ * 旧路径对每个 patch 各做一次 O(P log P) 双榜重排 + O(R) versus 扫描；
+ * 这里合并一次列表、扫一遍房间、重排一次双榜：O(P + R + k + P log P)。
+ * patches 应由调用方 normalize（App 的 applyPlayerPatches 已做）。
+ */
+export function replacePlayersInLobby(lobby: LobbySnapshot, patches: PublicPlayer[]): LobbySnapshot {
+  if (!patches?.length) return lobby;
+  const byId = new Map<string, PublicPlayer>();
+  for (const raw of patches) {
+    if (!raw?.id) continue;
+    byId.set(raw.id, raw);
+  }
+  if (!byId.size) return lobby;
 
-export function replacePlayerInLobby(lobby: LobbySnapshot, player: PublicPlayer) {
   const prev = lobby.players || [];
-  const exists = prev.some((item) => item.id === player.id);
-  // player:batch 可能带来新上线玩家；旧实现只 map 不 insert，导致在线列表/人数不涨。
-  const players = exists
-    ? prev.map((item) => (item.id === player.id ? player : item))
-    : [...prev, player];
+  const seen = new Set<string>();
+  const players: PublicPlayer[] = new Array(prev.length);
+  let write = 0;
+  for (const item of prev) {
+    const next = byId.get(item.id);
+    if (next) {
+      players[write++] = next;
+      seen.add(item.id);
+    } else {
+      players[write++] = item;
+    }
+  }
+  players.length = write;
+  for (const [id, p] of byId) {
+    if (!seen.has(id)) players.push(p);
+  }
+
+  let onlineCount = 0;
+  for (const p of players) {
+    if (p.connected) onlineCount++;
+  }
+
+  const rooms = (lobby.rooms || []).map((roomInfo) => {
+    const versus = roomInfo.versus || { A: null, B: null };
+    const aId = versus.A?.player?.id;
+    const bId = versus.B?.player?.id;
+    const aNext = aId ? byId.get(aId) : undefined;
+    const bNext = bId ? byId.get(bId) : undefined;
+    if (!aNext && !bNext) return roomInfo;
+    return {
+      ...roomInfo,
+      versus: {
+        A: aNext ? { player: aNext } : versus.A,
+        B: bNext ? { player: bNext } : versus.B
+      }
+    };
+  });
+
   return {
     ...lobby,
     players,
-    onlineCount: players.filter((p) => p.connected).length,
+    rooms,
+    onlineCount,
     normalLeaderboard: normalWinRatePlayers(players),
-    rankedLeaderboard: rankedPlayers(players),
-    rooms: (lobby.rooms || []).map((roomInfo) => ({
-      ...roomInfo,
-      versus: replaceLobbyVersusPlayer(roomInfo.versus || { A: null, B: null }, player)
-    }))
+    rankedLeaderboard: rankedPlayers(players)
   };
 }
 

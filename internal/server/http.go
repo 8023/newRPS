@@ -98,19 +98,37 @@ func hostOnly(hostport string) string {
 	return h
 }
 
+// schemeOf 提取 URL 的 scheme（"https"/"http"），没有 "://" 时视为未指定（配置里填了裸域名）。
+func schemeOf(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if i := strings.Index(raw, "://"); i >= 0 {
+		return strings.ToLower(raw[:i])
+	}
+	return ""
+}
+
 func (s *Server) isAllowedOrigin(origin, requestHost string) bool {
+	// 浏览器对 fetch/WS 这类非安全方法请求始终会带 Origin；requireTrustedOrigin 已经对
+	// GET/HEAD/OPTIONS 跳过了这层检查。空 Origin 不再直接放行，避免非浏览器脚本绕过。
 	if origin == "" {
-		return true
+		return false
 	}
 	origin = strings.TrimSpace(origin)
+	originScheme := schemeOf(origin)
 	for _, item := range strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",") {
 		item = strings.TrimSpace(item)
 		if item == "" {
 			continue
 		}
-		// 完整 Origin 或仅域名都算匹配
-		if item == origin || hostOnly(item) == hostOnly(origin) {
+		if item == origin {
 			return true
+		}
+		// 仅域名（未带 scheme）时不限制协议；显式带了 scheme 就必须和 Origin 一致，
+		// 避免管理员配置的 https://example.com 被 http://example.com 复用。
+		if hostOnly(item) == hostOnly(origin) {
+			if itemScheme := schemeOf(item); itemScheme == "" || itemScheme == originScheme {
+				return true
+			}
 		}
 	}
 	return s.sameHostOrLocalDev(origin, requestHost)
@@ -118,12 +136,14 @@ func (s *Server) isAllowedOrigin(origin, requestHost string) bool {
 
 func (s *Server) sameHostOrLocalDev(origin, requestHost string) bool {
 	originHost := hostOnly(origin)
+	reqHost := hostOnly(requestHost)
 	localHosts := map[string]bool{"localhost": true, "127.0.0.1": true, "::1": true}
-	if localHosts[originHost] {
+	// 本地开发：Origin 与请求 Host 必须都是本机地址才放行——否则任何请求只要声称
+	// Origin=http://localhost 就能绕过生产环境（Host 是公网域名）的校验。
+	if localHosts[originHost] && localHosts[reqHost] {
 		return true
 	}
 	// 忽略端口差异：Origin=https://rps.rbq.io 与 Host=rps.rbq.io:443 应放行
-	reqHost := hostOnly(requestHost)
 	if reqHost != "" && originHost == reqHost {
 		return true
 	}
@@ -346,6 +366,9 @@ func (s *Server) handleAvatarImage(w http.ResponseWriter, r *http.Request) {
 		s.refreshPlayerSnapshots(player)
 		s.broadcastPlayerUpdate(player)
 		shouldPersist := player.Persistent
+		if shouldPersist {
+			s.markPlayerDirty(player)
+		}
 		pub := s.publicPlayer(player)
 		s.mu.Unlock()
 		if shouldPersist {
@@ -394,6 +417,9 @@ func (s *Server) handleAvatarImage(w http.ResponseWriter, r *http.Request) {
 	s.refreshPlayerSnapshots(player)
 	s.broadcastPlayerUpdate(player)
 	shouldPersist := player.Persistent
+	if shouldPersist {
+		s.markPlayerDirty(player)
+	}
 	pub := s.publicPlayer(player)
 	s.mu.Unlock()
 	if shouldPersist {
@@ -415,7 +441,7 @@ func (s *Server) handleAdminImage(w http.ResponseWriter, r *http.Request) {
 	}
 	password := r.FormValue("password")
 	s.mu.Lock()
-	ok := s.adminPasswordMatches(password)
+	ok := s.adminPasswordMatches(password, clientIP(r))
 	s.mu.Unlock()
 	if !ok {
 		writeJSON(w, http.StatusForbidden, map[string]string{"message": "管理员口令不正确或尚未设置"})
@@ -460,7 +486,7 @@ func (s *Server) handleConfigExport(w http.ResponseWriter, r *http.Request) {
 		password = r.URL.Query().Get("password")
 	}
 	s.mu.Lock()
-	ok := s.adminPasswordMatches(password)
+	ok := s.adminPasswordMatches(password, clientIP(r))
 	s.mu.Unlock()
 	if !ok {
 		writeJSON(w, http.StatusForbidden, map[string]string{"message": "Admin password is required"})
@@ -540,8 +566,15 @@ func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 	// hashed assets get long cache
 	base := filepath.Base(full)
 	// Service Worker 与 Manifest 必须及时更新，不能落入下面对普通静态文件的一年 immutable。
-	if base == "sw.js" || base == "manifest.webmanifest" {
-		w.Header().Set("Cache-Control", "no-cache")
+	isServiceWorker := base == "push-sw-v3.js"
+	if isServiceWorker || base == "manifest.webmanifest" {
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+		w.Header().Set("CDN-Cache-Control", "no-store")
+		w.Header().Set("Cloudflare-CDN-Cache-Control", "no-store")
+		w.Header().Set("Expires", "0")
+		if isServiceWorker {
+			w.Header().Set("Service-Worker-Allowed", "/")
+		}
 		http.ServeFile(w, r, full)
 		return
 	}
@@ -569,7 +602,10 @@ func (s *Server) handlePushVapidKey(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "push unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"publicKey": s.vapid.PublicKey})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"publicKey":       s.vapid.PublicKey,
+		"protocolVersion": pushProtocolVersion,
+	})
 }
 
 func (s *Server) routes() http.Handler {

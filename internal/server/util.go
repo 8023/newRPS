@@ -136,6 +136,13 @@ func ptrFloat(p *float64) float64 {
 	return *p
 }
 
+func ptrInt64(p *int64) int64 {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
 func randomFrom[T any](values []T) T {
 	if len(values) == 0 {
 		var zero T
@@ -178,7 +185,8 @@ func freshGameStats() types.GameStats {
 }
 
 // recordGameOutcome 记一局某游戏的胜/负/平，并同步合计到 Stats.Wins/Losses/Draws。
-func recordGameOutcome(player *PlayerState, gameID types.GameID, outcome string) {
+// 须在 s.mu 内调用；会 markPlayerDirty，避免只靠 60s checkpoint 兜底写盘。
+func (s *Server) recordGameOutcome(player *PlayerState, gameID types.GameID, outcome string) {
 	if player == nil {
 		return
 	}
@@ -200,6 +208,8 @@ func recordGameOutcome(player *PlayerState, gameID types.GameID, outcome string)
 		return
 	}
 	player.SyncTotalsFromGameStats()
+	s.markPlayerDirty(player)
+	s.requestPersist("lazy")
 }
 
 func formatSigned(n int) string {

@@ -13,6 +13,18 @@ import {
   type Envelope
 } from "./wire";
 
+// toBase64Url：浏览器指纹内容不受服务端控制，编码成 base64url 后再作为 Sec-WebSocket-Protocol
+// 的一段值传输，保证只含 HTTP token 语法允许的字符（A-Z a-z 0-9 - _），避免握手失败。
+// btoa 要求输入落在 Latin1 范围内，指纹理论上应该都是；万一不是就退回空指纹而不是让整次
+// 连接尝试直接抛异常失败。
+function toBase64Url(input: string): string {
+  try {
+    return btoa(input).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  } catch {
+    return "";
+  }
+}
+
 type Handler = (data: any) => void;
 type AckCallback = (response: any) => void;
 
@@ -90,10 +102,21 @@ class GameSocket {
     for (const handler of [...set]) handler(data);
   }
 
-  private wsURL(token: string, fingerprint: string) {
+  private wsURL() {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    const fp = fingerprint ? `&fp=${encodeURIComponent(fingerprint)}` : "";
-    return `${proto}//${location.host}/ws?token=${encodeURIComponent(token)}${fp}`;
+    return `${proto}//${location.host}/ws`;
+  }
+
+  // authProtocols 把 token/指纹塞进 Sec-WebSocket-Protocol 握手头，而不是 URL 查询串——
+  // 反向代理的访问日志默认会记录完整请求行/URL，token 一旦出现在其中，日志系统本身就
+  // 变成了一个 24 小时有效的身份凭据泄露面。Sec-WebSocket-Protocol 是浏览器 WebSocket
+  // 构造函数唯一能在握手阶段附带自定义值、又不出现在 URL 里的字段。
+  // token 本身只含 base64url 字符和 "."，天然是合法的 HTTP token；指纹内容不受控，
+  // 编码成 base64url 后再拼前缀，避免其中出现 HTTP token 语法不允许的字符导致握手失败。
+  private authProtocols(token: string, fingerprint: string): string[] {
+    const protocols = [`auth.${token}`];
+    if (fingerprint) protocols.push(`fp.${toBase64Url(fingerprint)}`);
+    return protocols;
   }
 
   async connect() {
@@ -108,7 +131,7 @@ class GameSocket {
     this.emitLocal("reconnect_attempt");
     this.connectPromise = new Promise<void>((resolve, reject) => {
       try {
-        const ws = new WebSocket(this.wsURL(this.authToken, fingerprint));
+        const ws = new WebSocket(this.wsURL(), this.authProtocols(this.authToken, fingerprint));
         ws.binaryType = "arraybuffer";
         this.ws = ws;
         let opened = false;
@@ -269,20 +292,35 @@ class GameSocket {
       remove: Boolean(op.remove),
       value: op.remove ? undefined : op.value !== undefined ? op.value : protoValueToPlain(op.value)
     }));
+    // 连续 seq：信任服务端 hash，跳过 O(树) 的 clone+normalize+CRC；
+    // 乱序/缺口：原地打补丁后做全量 CRC，失败则 resync。
+    // 每 32 个连续 delta 强制抽一次 CRC，防止归一化分叉长期潜伏（如 titleColors 缺键）。
+    const envSeq = env.seq || 0;
+    const sequential = envSeq > 0 && cur.seq > 0 && envSeq === cur.seq + 1;
+    const sampleCrc = sequential && envSeq > 0 && envSeq % 32 === 0;
     let next: any;
     try {
-      next = applyOps(cur.doc, ops);
+      // 原地打补丁（避免 structuredClone 全树拷贝）；失败路径须丢弃文档并 resync。
+      next = applyOps(cur.doc, ops, true);
       next = normalizeStateTree(next);
     } catch {
+      // 与 delta.ts 不变量一致：mutate 失败后文档半残，显式丢弃再 requestFull。
+      this.channels.delete(channel);
       this.requestFull(channel);
       return;
     }
-    const hash = crc32Hex(next);
-    if (env.hash && hash !== env.hash) {
-      this.requestFull(channel);
-      return;
+    let localHash = "";
+    if (env.hash && (!sequential || sampleCrc)) {
+      localHash = crc32Hex(next);
+      if (localHash !== env.hash) {
+        this.channels.delete(channel);
+        this.requestFull(channel);
+        return;
+      }
     }
-    this.channels.set(channel, { doc: next, hash: env.hash || hash, seq: env.seq || 0 });
+    // 服务端未带 hash 时用本地算值，避免把旧 hash 记到新文档上。
+    const nextHash = env.hash || localHash || (sequential ? cur.hash : crc32Hex(next));
+    this.channels.set(channel, { doc: next, hash: nextHash, seq: envSeq });
     if (env.event) this.emitLocal(env.event, next);
   }
 

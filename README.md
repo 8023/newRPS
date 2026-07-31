@@ -138,7 +138,10 @@ tar -xzf newRPS-2.1.24-linux-amd64.tar.gz -C "$tmpdir"
 cp -a "$tmpdir/bin" "$tmpdir/dist" "$tmpdir/docker-compose.yml" .
 rm -rf "$tmpdir"
 
-docker compose up -d
+# bin/server 是 bind mount；程序与前端同时升级时强制重建容器，避免继续持有旧二进制。
+docker compose up -d --force-recreate
+# 应返回 publicKey 和 protocolVersion；缺少 protocolVersion 说明仍在运行旧后端。
+curl -fsS http://127.0.0.1:${HOST_PORT:-9988}/api/push/vapid-key
 ```
 
 > 说明：Release 中的 `bin/server` 为 **Linux amd64**。ARM 服务器需在对应架构上重新 `npm run build:server`。
@@ -206,6 +209,7 @@ docker compose up -d
 | `ADMIN_PASSWORD` | （空） | 后台口令 |
 | `SESSION_SECRET` | `work/session.secret` | 会话 HMAC；未设置则落盘复用 |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | `work/vapid.json` | Web Push 密钥对；环境变量必须成对设置，多实例必须共享同一对 |
+| `VAPID_SUBSCRIBER` | `mailto:admin@rps.rbq.io` | VAPID 联系 URI；建议改成管理员实际可联系的 `mailto:` 或 HTTPS 地址 |
 | `SESSION_TTL_MS` | 24h | 会话有效期 |
 | `ALLOWED_ORIGINS` | 本机 | 额外 Origin |
 | `TRUSTED_PROXY_COUNT` | `0` | 可信反向代理层数，决定 `X-Forwarded-For`/`X-Forwarded-Host` 信任方式；默认 `0`=直连。部署在反向代理之后（Nginx/Caddy/云 LB 等）必须显式设为实际代理层数，否则会退化为按代理自身 IP 计算（限流过严但不会被伪造） |
@@ -222,7 +226,7 @@ docker compose up -d
 - 配置项（字段名兼容旧版）：
   - `accessControl.maxOnlinePerIp` → **同指纹同时在线人数上限**
   - `accessControl.maxCreatesPer10Min` → **同指纹 10 分钟内新建玩家上限**
-- 上报路径：`POST /api/session`（Header/Body）、`/ws?fp=`、`player:join.fingerprint`
+- 上报路径：`POST /api/session`（Header/Body）、WebSocket 握手的 `Sec-WebSocket-Protocol` 头（`fp.<base64url 指纹>`，与 `auth.<token>` 一起传递，不再拼进 `/ws` 查询串——反向代理访问日志会记录完整请求 URL，会话 token 出现在其中就等于把凭据写进了日志）、`player:join.fingerprint`
 
 **纯 IP 兜底（防批量脚本攻击）**：`fingerprint` 是客户端上报的字符串，服务端不校验真实性——攻击脚本只要每次请求都随机换一个指纹，就能让上面按 `deviceKey` 计算的限制失效；`sid` 同理，每调一次 `/api/session` 就能免费换发一个新的，导致所有按 `event:ip:sid` 维度的 WS 事件限流也能被"换 sid"重置。因此在按指纹/按会话限流之外，又加了一层完全不看指纹、只看出口 IP 的兜底限制（同样可在 `/admin` → 防多开页面调整）：
 
@@ -299,7 +303,7 @@ docker compose up -d
 npm run build:web      # 仅前端
 npm run build:server   # 仅 Go（并 chmod +x bin/server）
 npm run fix-perms      # config/*.json 收紧为仅属主可读写（0600）+ bin/server 可执行
-npm run build          # web + server + fix-perms
+npm run build          # 先 server、后 web，再 fix-perms；后端失败时不会留下“新前端 + 旧后端”
 go test ./...
 npm run test           # go test + 前端 build
 ```

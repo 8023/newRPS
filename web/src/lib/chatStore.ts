@@ -24,6 +24,8 @@ export type ChatState = {
 const EMPTY: ChatState = { messages: [], hasMore: false, loading: false, loadedOnce: false, authors: {} };
 // 内存最多保留的条数：防止长会话无限增长（更早的历史仍可从 DB 翻回）。
 const MAX_LIVE = 400;
+// 上翻历史后的硬顶（含实时消息）；超出时丢弃最旧条目，仍可再 loadOlder 从 DB 取。
+const MAX_LOADED = 800;
 
 const states = new Map<ChatScope, ChatState>();
 const listeners = new Map<ChatScope, Set<() => void>>();
@@ -128,7 +130,12 @@ export async function loadOlderChat(scope: ChatScope): Promise<number> {
     const older = res.messages || [];
     const cur = getState(scope);
     const existing = new Set(cur.messages.map((m) => m.id));
-    const merged = [...older.filter((m) => !existing.has(m.id)), ...cur.messages];
+    const freshOlder = older.filter((m) => !existing.has(m.id));
+    let merged = [...freshOlder, ...cur.messages];
+    // 硬顶：保留较新的尾部，避免无限上翻撑爆内存。
+    if (merged.length > MAX_LOADED) {
+      merged = merged.slice(merged.length - MAX_LOADED);
+    }
     setState(scope, {
       messages: merged,
       hasMore: !!res.hasMore,
@@ -136,7 +143,7 @@ export async function loadOlderChat(scope: ChatScope): Promise<number> {
       loadedOnce: true,
       authors: mergeAuthors(cur.authors, res.authors)
     });
-    return older.filter((m) => !existing.has(m.id)).length;
+    return freshOlder.length;
   } catch {
     setState(scope, { ...getState(scope), loading: false });
     return 0;

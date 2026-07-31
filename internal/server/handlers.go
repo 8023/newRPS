@@ -43,6 +43,14 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{8, 60_000, 60_000}, s.onPlayerJoin
 	case "admin:login":
 		return RateLimitOptions{5, 60_000, 60_000}, s.onAdminLogin
+	case "sync:full":
+		return RateLimitOptions{20, 60_000, 15_000}, s.onSyncFull
+	case "player:get":
+		return RateLimitOptions{30, 60_000, 15_000}, s.onPlayerGet
+	case "players:roster":
+		// 全站档案榜单按需拉取（不进大厅实时通道）。
+		// 前端 pageSize=rosterMaxLimit(500)、最多约 10 页；配额需覆盖完整拉榜 + 偶发重试。
+		return RateLimitOptions{30, 60_000, 15_000}, s.onPlayersRoster
 	case "lobby:subscribe":
 		return RateLimitOptions{20, 60_000, 10_000}, s.onLobbySubscribe
 	case "lobby:unsubscribe":
@@ -55,6 +63,10 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{10, 60_000, 30_000}, s.onPlayerUpdateProfile
 	case "petbond:getState":
 		return RateLimitOptions{20, 60_000, 10_000}, s.onPetBondGetState
+	case "petbond:subscribe":
+		return RateLimitOptions{20, 60_000, 10_000}, s.onPetBondSubscribe
+	case "petbond:unsubscribe":
+		return RateLimitOptions{20, 60_000, 10_000}, s.onPetBondUnsubscribe
 	case "petbond:seekMaster":
 		return RateLimitOptions{10, 60_000, 30_000}, s.onPetBondSeekMaster
 	case "petbond:seekPet":
@@ -310,9 +322,9 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 					"message": "你的账号已在其他设备登录，此会话已结束。请刷新页面重新登录。",
 				})
 			}
-			prev.leaveRoom(player.ID)
+			s.clientLeaveRoom(prev, player.ID)
 			if previousRoomID != "" {
-				prev.leaveRoom(previousRoomID)
+				s.clientLeaveRoom(prev, previousRoomID)
 			}
 		}
 	}
@@ -365,13 +377,13 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 			player.RoomID = ""
 		}
 	}
-	client.joinRoom(player.ID)
+	s.clientJoinRoom(client, player.ID)
 	if player.RoomID != "" {
-		client.leaveRoom(lobbyChannel)
-		client.joinRoom(player.RoomID)
+		s.clientLeaveRoom(client, lobbyChannel)
+		s.clientJoinRoom(client, player.RoomID)
 	} else {
-		client.joinRoom(lobbyChannel)
-		client.joinRoom(lobbySuggestionChannel)
+		s.clientJoinRoom(client, lobbyChannel)
+		s.clientJoinRoom(client, lobbySuggestionChannel)
 	}
 	var roomSnap any
 	if player.RoomID != "" {
@@ -390,15 +402,14 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 	}
 	client.reply(env.ID, joinReply, "")
 	if player.Persistent {
+		s.markPlayerDirty(player)
 		s.requestPersist("lazy")
 	}
-	// 新上线/重连：玩家列表 + 在线人数都要立刻推给大厅（防抖增量容易被其它客户端漏掉 +1）
+	// 新上线/重连：player:batch 先推本人变更；大厅走防抖 DELTA（connected/players 增删
+	// 可由路径补丁表达）。forceBroadcastLobby（清空基线 → 全员 FULL）仅保留给
+	// 房间删除等结构变化（见 room.go / admin close），避免重连风暴放大流量。
 	s.broadcastPlayerUpdate(player)
-	if wasDisconnected || previousSocketID == "" {
-		s.forceBroadcastLobby()
-	} else {
-		s.broadcastLobby()
-	}
+	s.broadcastLobby()
 	// 宠物乐园候选列表依赖在线状态，上线后推送给全体。
 	s.notifyAllOnlinePetBondStates()
 	if player.RoomID != "" {
@@ -427,7 +438,7 @@ func (s *Server) onAdminLogin(client *Client, env wsEnvelope) {
 	}
 	_ = decodeD(env, &p)
 	player := s.getPlayerByClient(client)
-	if !s.adminPasswordMatches(p.Password) {
+	if !s.adminPasswordMatches(p.Password, client.ipAddress) {
 		client.reply(env.ID, nil, "管理员口令不正确或尚未设置")
 		return
 	}
@@ -444,27 +455,42 @@ func (s *Server) onAdminLogin(client *Client, env wsEnvelope) {
 }
 
 func (s *Server) onLobbySubscribe(client *Client, env wsEnvelope) {
-	client.joinRoom(lobbyChannel)
-	client.joinRoom(lobbySuggestionChannel)
+	s.clientJoinRoom(client, lobbyChannel)
+	s.clientJoinRoom(client, lobbySuggestionChannel)
 	s.sendFullChannel(client, channelLobby())
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
 func (s *Server) onLobbyUnsubscribe(client *Client, env wsEnvelope) {
-	client.leaveRoom(lobbyChannel)
-	client.leaveRoom(lobbySuggestionChannel)
+	s.clientLeaveRoom(client, lobbyChannel)
+	s.clientLeaveRoom(client, lobbySuggestionChannel)
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
 // onLobbySuggestionsSubscribe：仅加入大厅聊天实时频道（房间内的「大厅」tab 用），
 // 历史消息由前端另外调 chat:load 拉取。
 func (s *Server) onLobbySuggestionsSubscribe(client *Client, env wsEnvelope) {
-	client.joinRoom(lobbySuggestionChannel)
+	s.clientJoinRoom(client, lobbySuggestionChannel)
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
 func (s *Server) onLobbySuggestionsUnsubscribe(client *Client, env wsEnvelope) {
-	client.leaveRoom(lobbySuggestionChannel)
+	s.clientLeaveRoom(client, lobbySuggestionChannel)
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+}
+
+func (s *Server) onPetBondSubscribe(client *Client, env wsEnvelope) {
+	player, ok := s.requirePlayer(client, env)
+	if !ok {
+		return
+	}
+	s.clientJoinRoom(client, petbondChannel)
+	// 订阅后立刻推一包个性化状态，省去客户端再调 getState。
+	client.reply(env.ID, s.buildPetBondState(player.ID), "")
+}
+
+func (s *Server) onPetBondUnsubscribe(client *Client, env wsEnvelope) {
+	s.clientLeaveRoom(client, petbondChannel)
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
@@ -647,6 +673,7 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 		s.notifyAllOnlinePetBondStates()
 	}
 	if player.Persistent {
+		s.markPlayerDirty(player)
 		s.requestPersist("lazy")
 	}
 	client.reply(env.ID, map[string]any{"player": s.publicPlayer(player)}, "")
@@ -746,6 +773,11 @@ func (s *Server) onGiveawayVote(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "投票类型不正确")
 		return
 	}
+	boardVersion := ptrInt64(target.GiveawayBoardSubmittedAt)
+	if actor.GiveawayVotedTargets != nil && actor.GiveawayVotedTargets[target.ID] == boardVersion {
+		client.reply(env.ID, nil, "你已经对这条自救内容投过票了")
+		return
+	}
 	now := nowMs()
 	if actor.GiveawayVoteWindowStartedAt == nil || now-*actor.GiveawayVoteWindowStartedAt >= 3_600_000 {
 		actor.GiveawayVoteWindowStartedAt = int64Ptr(now)
@@ -776,6 +808,10 @@ func (s *Server) onGiveawayVote(client *Client, env wsEnvelope) {
 		s.addGiveawayValue(target, s.cfg.Giveaway.DislikeVoteValue)
 	}
 	actor.GiveawayVoteCount = intPtr(ptrInt(actor.GiveawayVoteCount) + 1)
+	if actor.GiveawayVotedTargets == nil {
+		actor.GiveawayVotedTargets = map[string]int64{}
+	}
+	actor.GiveawayVotedTargets[target.ID] = boardVersion
 	s.broadcastPlayerUpdate(actor)
 	s.refreshPlayerSnapshots(target)
 	s.broadcastPlayerUpdate(target)
@@ -963,7 +999,7 @@ func (s *Server) onConfigGet(client *Client, env wsEnvelope) {
 		Password string `json:"password"`
 	}
 	_ = decodeD(env, &p)
-	if !s.adminPasswordMatches(p.Password) {
+	if !s.adminPasswordMatches(p.Password, client.ipAddress) {
 		client.reply(env.ID, nil, "管理员口令不正确或尚未设置")
 		return
 	}
@@ -976,7 +1012,7 @@ func (s *Server) onConfigSave(client *Client, env wsEnvelope) {
 		NextConfig json.RawMessage `json:"nextConfig"`
 	}
 	_ = decodeD(env, &p)
-	if !s.adminPasswordMatches(p.Password) {
+	if !s.adminPasswordMatches(p.Password, client.ipAddress) {
 		client.reply(env.ID, nil, "管理员口令不正确或尚未设置")
 		return
 	}
@@ -1005,7 +1041,7 @@ func (s *Server) onConfigReset(client *Client, env wsEnvelope) {
 		Password string `json:"password"`
 	}
 	_ = decodeD(env, &p)
-	if !s.adminPasswordMatches(p.Password) {
+	if !s.adminPasswordMatches(p.Password, client.ipAddress) {
 		client.reply(env.ID, nil, "管理员口令不正确或尚未设置")
 		return
 	}

@@ -18,12 +18,6 @@ self.addEventListener("push", (event) => {
 
   event.waitUntil(
     (async () => {
-      // 如果用户已经有一个可见的标签页在看这个站点，就不重复弹系统通知——
-      // 服务端始终投递，由这里统一抑制用户正在前台查看时的重复通知。
-      const clientsList = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-      const hasVisibleClient = clientsList.some((c) => c.visibilityState === "visible" && c.focused);
-      if (hasVisibleClient) return;
-
       await self.registration.showNotification(payload.title, {
         body: payload.body,
         tag: payload.tag,

@@ -3,8 +3,11 @@ package server
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/doumiao/newRPS/internal/config"
 )
 
 func TestActivityLogWeekDir(t *testing.T) {
@@ -17,21 +20,26 @@ func TestActivityLogWeekDir(t *testing.T) {
 	}
 }
 
-func TestActivityLogWriteCSV(t *testing.T) {
+func TestWriteActivityLogWritesLogFile(t *testing.T) {
 	tmp := t.TempDir()
-	// 临时替换 root：通过 chdir 到含 config 的布局太重；直接测写路径逻辑
-	dir := filepath.Join(tmp, activityLogWeekDir(time.Now()))
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(dir, "chat.csv")
-	f, err := os.Create(path)
+	// activityLogBaseDir 读 config.GetRootDir()/work/logs；临时劫持 root。
+	prev := config.GetRootDir()
+	config.SetRootDirForTest(tmp)
+	t.Cleanup(func() { config.SetRootDirForTest(prev) })
+
+	writeActivityLog("chat", []string{"scope", "text"}, []string{"lobby", "hello"})
+
+	dir := filepath.Join(tmp, "work", "logs", activityLogWeekDir(time.Now()))
+	path := filepath.Join(dir, "chat.log")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("expected chat.log written: %v", err)
 	}
-	_, _ = f.WriteString("time,scope,roomId,playerId,playerName,text\n")
-	_ = f.Close()
-	if st, err := os.Stat(path); err != nil || st.Size() == 0 {
-		t.Fatal("csv not written")
+	body := string(data)
+	if !strings.Contains(body, "scope=lobby") || !strings.Contains(body, "text=hello") {
+		t.Fatalf("log body missing fields: %q", body)
+	}
+	if strings.HasSuffix(path, ".csv") {
+		t.Fatal("should write .log not .csv")
 	}
 }

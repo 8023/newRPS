@@ -5,9 +5,9 @@ import (
 	"sync"
 )
 
-// activityStore 承接原先写 work/logs/*.csv 的 players / connections 两张活动日志，改为
+// activityStore 承接原先写 work/logs/*.log 的 players / connections 两张活动日志，改为
 // SQLite 持久化，便于后台按玩家查询改名/模式开关历史、按玩家或连接排查登录记录。
-// system / error 两张表触发频率或波动性不适合塞进这个共享连接，仍走 activitylog.go 的 CSV 路径。
+// system / error 两张表触发频率或波动性不适合塞进这个共享连接，仍走 activitylog.go 的纯文本路径。
 //
 // player_activity_events：低频、user-initiated 事件（改名/头像/性别阵营/大话骰名战/送礼/
 // 极限模式开关等），调用点都在 s.mu 持锁期间，写入量级和 eventStore 的房间/惩罚事件相当，

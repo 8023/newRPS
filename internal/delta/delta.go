@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -170,14 +169,94 @@ func normalize(v any) any {
 	}
 }
 
+// equalJSON 比较两棵 JSON 树是否语义相等。
+// 不调用 normalize：map 键序不影响相等性，递归浅层类型分派即可；
+// 旧实现每节点 normalize+DeepEqual 会使 Diff 接近 O(N²)。
 func equalJSON(a, b any) bool {
-	return reflect.DeepEqual(normalize(a), normalize(b))
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	switch av := a.(type) {
+	case map[string]any:
+		bv, ok := b.(map[string]any)
+		if !ok || len(av) != len(bv) {
+			return false
+		}
+		for k, v := range av {
+			ov, ok := bv[k]
+			if !ok || !equalJSON(v, ov) {
+				return false
+			}
+		}
+		return true
+	case []any:
+		bv, ok := b.([]any)
+		if !ok || len(av) != len(bv) {
+			return false
+		}
+		for i := range av {
+			if !equalJSON(av[i], bv[i]) {
+				return false
+			}
+		}
+		return true
+	case string:
+		bv, ok := b.(string)
+		return ok && av == bv
+	case bool:
+		bv, ok := b.(bool)
+		return ok && av == bv
+	case float64:
+		bv, ok := b.(float64)
+		return ok && av == bv
+	case json.Number:
+		switch bv := b.(type) {
+		case json.Number:
+			return av == bv
+		case float64:
+			af, err := av.Float64()
+			return err == nil && af == bv
+		case int64:
+			ai, err := av.Int64()
+			return err == nil && ai == bv
+		default:
+			return false
+		}
+	case int:
+		return scalarNumberEqual(float64(av), b)
+	case int64:
+		return scalarNumberEqual(float64(av), b)
+	case int32:
+		return scalarNumberEqual(float64(av), b)
+	case uint64:
+		return scalarNumberEqual(float64(av), b)
+	default:
+		// JSON 树几乎不会落到这里；不相等则 Diff 整段替换，语义仍正确。
+		return false
+	}
+}
+
+func scalarNumberEqual(af float64, b any) bool {
+	switch bv := b.(type) {
+	case float64:
+		return af == bv
+	case int:
+		return af == float64(bv)
+	case int64:
+		return af == float64(bv)
+	case int32:
+		return af == float64(bv)
+	case uint64:
+		return af == float64(bv)
+	case json.Number:
+		bf, err := bv.Float64()
+		return err == nil && af == bf
+	default:
+		return false
+	}
 }
 
 func diffValue(path string, from, to any, ops *[]Op) {
-	if equalJSON(from, to) {
-		return
-	}
 	// 类型不同或一方为标量：整体替换
 	fromMap, fromIsMap := from.(map[string]any)
 	toMap, toIsMap := to.(map[string]any)
@@ -188,7 +267,7 @@ func diffValue(path string, from, to any, ops *[]Op) {
 				*ops = append(*ops, Op{Path: joinPath(path, k), Remove: true})
 			}
 		}
-		// 新增/修改
+		// 新增/修改（容器不再做整树 equalJSON 预检，直接按 key 下钻，未变叶子自然无 op）
 		for k, tv := range toMap {
 			fv, ok := fromMap[k]
 			if !ok {
@@ -205,25 +284,17 @@ func diffValue(path string, from, to any, ops *[]Op) {
 	if fromIsArr && toIsArr {
 		// 数组：等长则按 index 局部 patch；变长则整段替换（更稳）
 		if len(fromArr) == len(toArr) {
-			same := true
-			for i := range fromArr {
-				if !equalJSON(fromArr[i], toArr[i]) {
-					same = false
-					break
-				}
-			}
-			if same {
-				return
-			}
 			for i := range toArr {
-				if !equalJSON(fromArr[i], toArr[i]) {
-					diffValue(joinPath(path, strconv.Itoa(i)), fromArr[i], toArr[i], ops)
-				}
+				diffValue(joinPath(path, strconv.Itoa(i)), fromArr[i], toArr[i], ops)
 			}
 			return
 		}
 		raw, _ := marshalNoHTMLEscape(to)
 		*ops = append(*ops, Op{Path: path, Value: raw})
+		return
+	}
+	// 叶子 / 类型变化：相等则无 op
+	if equalJSON(from, to) {
 		return
 	}
 	raw, _ := marshalNoHTMLEscape(to)

@@ -4,7 +4,7 @@ import type {
   AppConfig, ChatMessage, GenderColors, GenderFaction, LobbySnapshot, Move, PetBondState, PublicPlayer,
   PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant
 } from "../shared/types";
-import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, DEFAULT_NAME_WAR_RENAME_MIN_POINTS, withPetBondDefaults, withRankedScoreDefaults } from "../lib/normalize";
+import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, DEFAULT_NAME_WAR_RENAME_MIN_POINTS, normalizePublicPlayer, withPetBondDefaults, withRankedScoreDefaults } from "../lib/normalize";
 import { socket } from "../ws";
 import {
   defaultGomokuRoomName, defaultJungleRoomName, defaultLiarsDiceRoomName, defaultOthelloRoomName, defaultRoomName, defaultTicTacToeRoomName,
@@ -28,6 +28,18 @@ import { GomokuPanel, GomokuScore } from "./GomokuPanel";
 import { JunglePanel, JungleScore, jungleSideLabel } from "./JunglePanel";
 
 import { formatDuration, formatOnlineDuration } from "../lib/format";
+
+/** 局部时钟：仅在 enabled 时按 interval 刷新，避免 Room 等父组件 1Hz 整树重绘棋盘。 */
+export function useNow(intervalMs = 1000, enabled = true): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!enabled) return;
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs, enabled]);
+  return now;
+}
 
 // 仅手机端生效的模块折叠开关（三角图标）；桌面端由 CSS 隐藏按钮并强制展开，不受折叠状态影响。
 // collapsed/onToggle 由调用方通过 useMobileCollapse(sectionKey) 持有，与被折叠的内容共享同一份状态。
@@ -1315,7 +1327,6 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
   const [localChoice, setLocalChoice] = useState<Move | null>(null);
   const [redoInputs, setRedoInputs] = useState<Record<string, string>>({});
   const [taskInputs, setTaskInputs] = useState<Record<string, string>>({});
-  const [now, setNow] = useState(Date.now());
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [extraHistory, setExtraHistory] = useState<RoomSnapshot["roundHistory"]>([]);
   const [historyStick, setHistoryStick] = useState(true);
@@ -1344,11 +1355,13 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
       if (!alive || !payload || typeof payload !== "object") return;
       setMyPetIds(new Set((payload.pets || []).map((p) => p.playerId)));
     };
-    ask<PetBondState>("petbond:getState", {}).then(applyPets).catch(() => { });
+    // 订阅 petbond 频道：只给打开强制白给相关 UI 的连接推送，避免全员广播。
+    ask<PetBondState>("petbond:subscribe", {}).then(applyPets).catch(() => { });
     socket.on("petbond:update", applyPets);
     return () => {
       alive = false;
       socket.off("petbond:update", applyPets);
+      ask("petbond:unsubscribe", {}).catch(() => undefined);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me.id, forceGiveawayEligibleGame]);
@@ -1392,11 +1405,6 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
   useEffect(() => {
     if (!mySeat || room.phase === "choosing" && !choices[mySeat]) setLocalChoice(null);
   }, [mySeat, room.phase, choices]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     if (room.settings.allowProofImage === false) setProofImage("");
@@ -1658,27 +1666,27 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
       </div>
       {room.settings.gameId !== "liarsdice" && (
         <div className="battle-panel">
-          <SeatView seat="A" room={room} me={me} now={now} onSit={() => act("room:sit", { seat: "A" })} />
+          <SeatView seat="A" room={room} me={me} onSit={() => act("room:sit", { seat: "A" })} />
           <div className="versus">
             <span className="versus-label">⚔️ 对战比分</span>
             <strong className="score-number">{room.score.A} : {room.score.B}</strong>
             {room.settings.gameId === "othello" ? <OthelloScore room={room} /> : room.settings.gameId === "tictactoe" ? <TicTacToeScore room={room} /> : room.settings.gameId === "gomoku" ? <GomokuScore room={room} /> : room.settings.gameId === "jungle" ? <JungleScore room={room} /> : <Settlement room={room} />}
           </div>
-          <SeatView seat="B" room={room} me={me} now={now} onSit={() => act("room:sit", { seat: "B" })} />
+          <SeatView seat="B" room={room} me={me} onSit={() => act("room:sit", { seat: "B" })} />
         </div>
       )}
       <div className="room-content-grid">
         <div className="actions-panel panel">
           {room.settings.gameId === "othello" ? (
-            <OthelloPanel room={room} me={me} now={now} onMove={playOthello} onSettle={settleOthelloMove} onRestart={restartOthello} onReady={readyOthello} onRequestSurrender={requestOthelloSurrender} onRespondSurrender={respondOthelloSurrender} onEscape={escapeOthello} />
+            <OthelloPanel room={room} me={me} onMove={playOthello} onSettle={settleOthelloMove} onRestart={restartOthello} onReady={readyOthello} onRequestSurrender={requestOthelloSurrender} onRespondSurrender={respondOthelloSurrender} onEscape={escapeOthello} />
           ) : room.settings.gameId === "tictactoe" ? (
-            <TicTacToePanel room={room} me={me} now={now} onMove={playTicTacToe} onReady={readyTicTacToe} onRestart={restartTicTacToe} onGiveawayChoice={chooseTicTacToeGiveaway} />
+            <TicTacToePanel room={room} me={me} onMove={playTicTacToe} onReady={readyTicTacToe} onRestart={restartTicTacToe} onGiveawayChoice={chooseTicTacToeGiveaway} />
           ) : room.settings.gameId === "liarsdice" ? (
             <LiarsDicePanel room={room} me={me} onError={onError} />
           ) : room.settings.gameId === "gomoku" ? (
-            <GomokuPanel room={room} me={me} now={now} onError={onError} />
+            <GomokuPanel room={room} me={me} onError={onError} />
           ) : room.settings.gameId === "jungle" ? (
-            <JunglePanel room={room} me={me} now={now} onError={onError} />
+            <JunglePanel room={room} me={me} onError={onError} />
           ) : mySeat && (
             <div className="move-panel">
               <div>
@@ -1838,7 +1846,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
               </span>
             </h3>
             <div className={`room-player-list mobile-collapsible-body ${roomPlayersCollapsed ? "collapsed" : ""}`}>
-              {roomPlayers.map((item) => <RoomPlayerRow key={`${item.role}-${item.player.id}`} player={item.player} role={item.role} now={now} />)}
+              {roomPlayers.map((item) => <RoomPlayerRow key={`${item.role}-${item.player.id}`} player={item.player} role={item.role} />)}
               {roomPlayers.length === 0 && <p className="empty">暂无真人玩家</p>}
             </div>
           </div>
@@ -1947,7 +1955,7 @@ export function TicTacToeScore({ room }: { room: RoomSnapshot }) {
   );
 }
 
-export function TicTacToePanel({ room, me, now, onMove, onReady, onRestart, onGiveawayChoice }: { room: RoomSnapshot; me: PublicPlayer; now: number; onMove: (row: number, col: number) => void; onReady: () => void; onRestart: () => void; onGiveawayChoice: (mode: "normal" | "giveaway") => void }) {
+export function TicTacToePanel({ room, me, onMove, onReady, onRestart, onGiveawayChoice }: { room: RoomSnapshot; me: PublicPlayer; onMove: (row: number, col: number) => void; onReady: () => void; onRestart: () => void; onGiveawayChoice: (mode: "normal" | "giveaway") => void }) {
   const state = room.tictactoe;
   const mySeat = room.seats.A?.id === me.id ? "A" : room.seats.B?.id === me.id ? "B" : null;
   const giveawayPrompt = state?.giveawayPrompt;
@@ -1959,6 +1967,7 @@ export function TicTacToePanel({ room, me, now, onMove, onReady, onRestart, onGi
   const myReady = mySeat ? room.ready[mySeat] : false;
   const turnName = state?.turn === "A" ? occupantDisplay(room.seats.A) : occupantDisplay(room.seats.B);
   const giveawayPromptName = giveawayPrompt?.seat === "A" ? occupantDisplay(room.seats.A) : occupantDisplay(room.seats.B);
+  const now = useNow(1000, Boolean(giveawayPrompt));
   const giveawaySecondsLeft = giveawayPrompt ? Math.max(0, Math.ceil((giveawayPrompt.expiresAt - now) / 1000)) : 0;
   const tictactoeGiveawayGain = formatGiveawayValue(0.3);
   const xSeat = state?.xSeat;
@@ -2091,15 +2100,16 @@ type TimedGameState = {
 };
 
 /** 黑白棋/五子棋/斗兽棋共用：棋盘上方的每子/每局倒计时条，未启用对应计时器时不显示。 */
-export function GameClockBar({ room, state, moveSeconds, gameMinutes, now, labels }: {
+export function GameClockBar({ room, state, moveSeconds, gameMinutes, labels }: {
   room: RoomSnapshot;
   state?: TimedGameState;
   moveSeconds?: number;
   gameMinutes?: number;
-  now: number;
   /** 双方总时长标签；默认 ⚫/⚪（黑白棋、五子棋） */
   labels?: { primary: string; secondary: string };
 }) {
+  const ticking = Boolean(state && !state.ended && room.phase === "choosing" && (moveSeconds || gameMinutes));
+  const now = useNow(1000, ticking);
   if (!state || state.ended || room.phase !== "choosing" || (!moveSeconds && !gameMinutes)) return null;
   const whiteSeat: SeatKey = state.blackSeat === "A" ? "B" : "A";
   const primary = labels?.primary ?? "⚫";
@@ -2123,7 +2133,7 @@ export function GameClockBar({ room, state, moveSeconds, gameMinutes, now, label
   );
 }
 
-export function OthelloPanel({ room, me, now, onMove, onSettle, onRestart, onReady, onRequestSurrender, onRespondSurrender, onEscape }: { room: RoomSnapshot; me: PublicPlayer; now: number; onMove: (row: number, col: number) => void; onSettle: (mode: "normal" | "giveaway" | "tribute") => void; onRestart: () => void; onReady: () => void; onRequestSurrender: () => void; onRespondSurrender: (accept: boolean) => void; onEscape: () => void }) {
+export function OthelloPanel({ room, me, onMove, onSettle, onRestart, onReady, onRequestSurrender, onRespondSurrender, onEscape }: { room: RoomSnapshot; me: PublicPlayer; onMove: (row: number, col: number) => void; onSettle: (mode: "normal" | "giveaway" | "tribute") => void; onRestart: () => void; onReady: () => void; onRequestSurrender: () => void; onRespondSurrender: (accept: boolean) => void; onEscape: () => void }) {
   const state = room.othello;
   const boardTheme = othelloThemeStyle(room.settings.othelloBoardTheme);
   const mySeat = room.seats.A?.id === me.id ? "A" : room.seats.B?.id === me.id ? "B" : null;
@@ -2211,11 +2221,10 @@ export function OthelloPanel({ room, me, now, onMove, onSettle, onRestart, onRea
           room={room}
           me={me}
           pending={pending}
-          now={now}
           onSettle={onSettle}
         />
       )}
-      <GameClockBar room={room} state={state} moveSeconds={room.settings.othelloMoveSeconds} gameMinutes={room.settings.othelloGameMinutes} now={now} />
+      <GameClockBar room={room} state={state} moveSeconds={room.settings.othelloMoveSeconds} gameMinutes={room.settings.othelloGameMinutes} />
       <div className="othello-board" role="grid" aria-label="黑白棋棋盘" style={boardTheme}>
         {(state?.board || Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => null))).map((row, rowIndex) => row.map((cell, colIndex) => {
           const legal = legalKeys.has(`${rowIndex}-${colIndex}`);
@@ -2280,10 +2289,11 @@ export function othelloDeltaText(state: NonNullable<RoomSnapshot["othello"]>, co
   return `${delta >= 0 ? "+" : ""}${delta}`;
 }
 
-export function OthelloSettlementCard({ room, me, pending, now, onSettle }: { room: RoomSnapshot; me: PublicPlayer; pending: NonNullable<NonNullable<RoomSnapshot["othello"]>["pendingSettlement"]>; now: number; onSettle: (mode: "normal" | "giveaway" | "tribute") => void }) {
+export function OthelloSettlementCard({ room, me, pending, onSettle }: { room: RoomSnapshot; me: PublicPlayer; pending: NonNullable<NonNullable<RoomSnapshot["othello"]>["pendingSettlement"]>; onSettle: (mode: "normal" | "giveaway" | "tribute") => void }) {
   const isMine = room.seats[pending.seat]?.id === me.id;
   const actorName = occupantDisplay(room.seats[pending.seat]);
   const opponentName = occupantDisplay(room.seats[pending.opponentSeat]);
+  const now = useNow(1000, true);
   const secondsLeft = Math.max(0, Math.ceil((pending.expiresAt - now) / 1000));
   const forcedText = pending.forced === "tribute" ? "强制上贡" : pending.forced === "giveaway" ? "强制白给" : "";
   const giveawayGain = formatGiveawayValue(pending.flips * 0.1);
@@ -2475,7 +2485,7 @@ export function canAssignPunishmentTask(room: RoomSnapshot, currentPlayerId: str
   return Boolean(opponent && opponent.id === currentPlayerId);
 }
 
-export function RoomPlayerRow({ player, role, now }: { player: PublicPlayer; role: string; now: number }) {
+export function RoomPlayerRow({ player, role }: { player: PublicPlayer; role: string }) {
   const stats = safePlayerStats(player);
   return (
     <div className="room-player-row">
@@ -2486,7 +2496,7 @@ export function RoomPlayerRow({ player, role, now }: { player: PublicPlayer; rol
         </div>
         <div className="room-player-tags">
           <em>{role}</em>
-          <OfflineBadge player={player} now={now} />
+          <OfflineBadge player={player} />
         </div>
       </div>
       <small className="room-player-stats">
@@ -2496,7 +2506,9 @@ export function RoomPlayerRow({ player, role, now }: { player: PublicPlayer; rol
   );
 }
 
-export function OfflineBadge({ player, now }: { player: PublicPlayer; now: number }) {
+export function OfflineBadge({ player }: { player: PublicPlayer }) {
+  const ticking = !player.connected && Boolean(player.disconnectExpiresAt);
+  const now = useNow(1000, ticking);
   if (player.connected) return null;
   const seconds = player.disconnectExpiresAt ? Math.max(0, Math.ceil((player.disconnectExpiresAt - now) / 1000)) : 0;
   return <em className="offline-badge">离线 {seconds}s</em>;
@@ -2869,7 +2881,7 @@ export function roomPlayerList(room: RoomSnapshot) {
   return result;
 }
 
-export function SeatView({ seat, room, me, now, onSit }: { seat: SeatKey; room: RoomSnapshot; me: PublicPlayer; now: number; onSit: () => void }) {
+export function SeatView({ seat, room, me, onSit }: { seat: SeatKey; room: RoomSnapshot; me: PublicPlayer; onSit: () => void }) {
   const occupant = room.seats[seat];
   const choice = room.revealedChoices?.[seat] || (occupant?.id === me.id ? room.choices[seat] : room.choices[seat] ? "hidden" : undefined);
   const stats = room.seatStats[seat];
@@ -2899,7 +2911,7 @@ export function SeatView({ seat, room, me, now, onSit }: { seat: SeatKey; room: 
           </strong>
         ) : <button disabled={battleSeatBlocked} title={battleSeatBlocked ? "当前排位类型不匹配，只能观战" : "坐到战斗席"} onClick={onSit}>{battleSeatBlocked ? "👀 只能观战" : "🪑 坐下"}</button>}
       </div>
-      {occupant && <OfflineBadge player={occupant} now={now} />}
+      {occupant && <OfflineBadge player={occupant} />}
       <p className="choice-badge">
         {room.settings.gameId === "othello"
           ? othelloTurn ? `${othelloColorLabel}落子中` : othelloColorLabel
@@ -3308,18 +3320,63 @@ export function SecurityDisclaimer({ onConfirm }: { onConfirm: () => void }) {
 export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPlayer[]; onClose: () => void }) {
   const [tab, setTab] = useState<GlobalLeaderboardTab>("positive");
   const [now, setNow] = useState(Date.now());
+  // 全站档案（含长期离线 + 分游戏战绩）按需分页拉取，不依赖大厅实时快照。
+  const [roster, setRoster] = useState<PublicPlayer[] | null>(null);
+  const [rosterLoading, setRosterLoading] = useState(true);
+  const [rosterError, setRosterError] = useState("");
 
   useEffect(() => {
-    const hasTimer = players.some((player) =>
+    let alive = true;
+    setRosterLoading(true);
+    setRosterError("");
+    // 与服务端 rosterMaxLimit 对齐，减少往返次数（500×10=5000 上限）
+    const pageSize = 500;
+    const maxPages = 10; // 最多 5000 人，防止异常库无限拉
+    (async () => {
+      try {
+        const acc: PublicPlayer[] = [];
+        let offset = 0;
+        for (let page = 0; page < maxPages; page++) {
+          const res = await ask<{
+            players?: PublicPlayer[];
+            hasMore?: boolean;
+            total?: number;
+            offset?: number;
+            limit?: number;
+          }>("players:roster", { offset, limit: pageSize });
+          if (!alive) return;
+          const chunk = (res?.players || []).map(normalizePublicPlayer);
+          acc.push(...chunk);
+          if (!res?.hasMore || chunk.length === 0) break;
+          offset += chunk.length;
+        }
+        if (alive) setRoster(acc);
+      } catch (error) {
+        if (!alive) return;
+        setRosterError(error instanceof Error ? error.message : "加载排行榜失败");
+        setRoster(null);
+      } finally {
+        if (alive) setRosterLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const source = roster && roster.length ? roster : players;
+
+  useEffect(() => {
+    const hasTimer = source.some((player) =>
       (player.nameWarRenameProtectedUntil && player.nameWarRenameProtectedUntil > Date.now()) ||
       (player.giveawayBoardExpiresAt && player.giveawayBoardExpiresAt > Date.now())
     );
     if (!hasTimer) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [players]);
+  }, [source]);
 
-  const ranked = leaderboardPlayers(players, tab).slice(0, 50);
+  const ranked = leaderboardPlayers(source, tab).slice(0, 50);
   const gameTabMeta = GAME_LEADERBOARD_TABS.find((item) => item.id === tab);
   const title = tab === "positive"
     ? "当前正分榜"
@@ -3348,7 +3405,7 @@ export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPl
         <div className="modal-title">
           <div>
             <h2><Crown size={20} /> 排行榜</h2>
-            <p className="hint">排行榜每 10 分钟刷新一次，每类最多显示 50 名。总榜胜负平为五游戏合计。</p>
+            <p className="hint">打开时从服务端拉取全站档案（含离线），每类最多显示 50 名。总榜胜负平为各游戏合计。</p>
           </div>
           <button type="button" className="icon-button" onClick={onClose}>×</button>
         </div>
@@ -3369,6 +3426,8 @@ export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPl
         </div>
         <div className="global-leaderboard-list">
           <h3>{title}</h3>
+          {rosterLoading && <p className="hint">正在加载全站档案…</p>}
+          {rosterError && <p className="hint">{rosterError}（已降级为大厅实时名单）</p>}
           {ranked.map((player, index) => {
             const stats = safePlayerStats(player);
             const game = isGameLeaderboardTab(tab) ? gameWLDOf(player, tab) : null;
@@ -3831,6 +3890,7 @@ export function PetBondPanel({
 
   async function reload() {
     try {
+      // 已订阅时 getState 仍可用（手动刷新）；首次挂载走 subscribe。
       const next = await ask<PetBondState>("petbond:getState", {});
       setState({ ...emptyPetBondState(), ...next, config: withPetBondDefaults(next?.config || petBondCfg) });
     } catch (error) {
@@ -3839,14 +3899,26 @@ export function PetBondPanel({
   }
 
   useEffect(() => {
-    void reload();
+    let alive = true;
     const onUpdate = (payload: PetBondState) => {
-      if (payload && typeof payload === "object") {
-        setState({ ...emptyPetBondState(), ...payload, config: withPetBondDefaults(payload.config || petBondCfg) });
-      }
+      if (!alive || !payload || typeof payload !== "object") return;
+      setState({ ...emptyPetBondState(), ...payload, config: withPetBondDefaults(payload.config || petBondCfg) });
     };
+    ask<PetBondState>("petbond:subscribe", {})
+      .then((next) => {
+        if (alive && next && typeof next === "object") {
+          setState({ ...emptyPetBondState(), ...next, config: withPetBondDefaults(next.config || petBondCfg) });
+        }
+      })
+      .catch((error) => {
+        if (alive) onError(error instanceof Error ? error.message : "加载宠物乐园失败");
+      });
     socket.on("petbond:update", onUpdate);
-    return () => socket.off("petbond:update", onUpdate);
+    return () => {
+      alive = false;
+      socket.off("petbond:update", onUpdate);
+      ask("petbond:unsubscribe", {}).catch(() => undefined);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me.id]);
 
@@ -4217,12 +4289,23 @@ export function ProfilePanel({ config, me, theme, onThemeChange, onClose, onUpda
   async function togglePushPref(key: keyof PushPreferences, value: boolean) {
     if (value && pushStatus.state !== "active") {
       setPushBusy(true);
-      const status = await ensurePushSubscription({ force: true });
-      setPushStatus(status);
-      setPushBusy(false);
-      if (status.state !== "active") {
-        onError(status.message);
-        return;
+      try {
+        // 开偏好时一并走权限请求，避免只 ensure 却卡在 permission-required。
+        const permission = await requestNotificationPermission();
+        setNotificationPermission(permission);
+        if (permission !== "granted") {
+          setPushStatus(currentPushSubscriptionStatus());
+          onError("需要允许通知权限才能开启推送");
+          return;
+        }
+        const status = await ensurePushSubscription({ force: true });
+        setPushStatus(status);
+        if (status.state !== "active") {
+          onError(status.message);
+          return;
+        }
+      } finally {
+        setPushBusy(false);
       }
     }
     const next = { ...pushPrefs, [key]: value };
@@ -4248,9 +4331,13 @@ export function ProfilePanel({ config, me, theme, onThemeChange, onClose, onUpda
 
   async function testNotifications() {
     setPushBusy(true);
+    onError("测试通知将在 3 秒后发出；请立即切到后台或锁屏");
     try {
-      await sendTestPush();
-      onError("测试通知将在 3 秒后发出；请立即切到后台或锁屏");
+      const result = await sendTestPush();
+      onError(
+        `推送网关已接受 ${result.acceptedCount}/${result.subscriptionCount} 个设备订阅`
+        + (result.failedCount ? `，失败 ${result.failedCount} 个` : "")
+      );
     } catch (error) {
       onError(error instanceof Error ? error.message : "发送测试通知失败");
     } finally {

@@ -111,6 +111,7 @@ func New() (*Server, error) {
 		rooms:                   map[string]*RoomState{},
 		clients:                 map[string]*Client{},
 		socketToClient:          map[string]*Client{},
+		roomClients:             map[string]map[string]struct{}{},
 		othelloSettlementTimers: map[string]*time.Timer{},
 		ticTacToeGiveawayTimers: map[string]*time.Timer{},
 		liarsDiceStartTimers:    map[string]*time.Timer{},
@@ -302,6 +303,7 @@ func (s *Server) closeLiveStateOnShutdown() {
 					p.Stats.TotalOnlineMs += d
 					c.onlineCreditedAt = now
 					onlineMsTouched = true
+					s.markPlayerDirty(p)
 				}
 			}
 		}

@@ -151,7 +151,7 @@ export function JungleScore({ room }: { room: RoomSnapshot }) {
   );
 }
 
-export function JunglePanel({ room, me, now, onError }: { room: RoomSnapshot; me: PublicPlayer; now: number; onError: (message: string) => void }) {
+export function JunglePanel({ room, me, onError }: { room: RoomSnapshot; me: PublicPlayer; onError: (message: string) => void }) {
   const state = room.jungle;
   const boardTheme = jungleThemeStyle(room.settings.jungleBoardTheme);
   const [busy, setBusy] = useState(false);
@@ -291,7 +291,6 @@ export function JunglePanel({ room, me, now, onError }: { room: RoomSnapshot; me
         state={state ? { turn: state.turn, blackSeat: "A", ended: state.ended, moveDeadlineAt: state.moveDeadlineAt, clockDeadlineAt: state.clockDeadlineAt, clockRemaining: state.clockRemaining } : undefined}
         moveSeconds={room.settings.jungleMoveSeconds}
         gameMinutes={room.settings.jungleGameMinutes}
-        now={now}
         labels={{ primary: "下方⬇ 白", secondary: "上方⬆ 黑" }}
       />
       <div className="jungle-board" role="grid" aria-label="斗兽棋棋盘" style={boardTheme}>

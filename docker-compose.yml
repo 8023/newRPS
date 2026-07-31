@@ -6,7 +6,7 @@
 #
 # 源码开发本机构建：
 #   npm install --prefix web && npm run build
-#   docker compose up -d
+#   docker compose up -d --force-recreate
 #
 # 基础镜像用 trixie（Debian 13）而非 bookworm（Debian 12）：bin/server 现在依赖
 # mattn/go-sqlite3（CGO，动态链接构建机 glibc）。构建机常见的较新发行版
@@ -30,6 +30,7 @@ services:
       SESSION_SECRET: "${SESSION_SECRET:-}"
       VAPID_PUBLIC_KEY: "${VAPID_PUBLIC_KEY:-}"
       VAPID_PRIVATE_KEY: "${VAPID_PRIVATE_KEY:-}"
+      VAPID_SUBSCRIBER: "${VAPID_SUBSCRIBER:-mailto:admin@rps.rbq.io}"
       SESSION_TTL_MS: "${SESSION_TTL_MS:-}"
       ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-}"
       TRUSTED_PROXY_COUNT: "${TRUSTED_PROXY_COUNT:-}"

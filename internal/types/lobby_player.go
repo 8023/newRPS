@@ -80,7 +80,7 @@ type LobbyStats struct {
 	SelfTitle string `json:"selfTitle,omitempty"`
 }
 
-// ToLobbyPlayer 从完整公开资料裁剪。
+// ToLobbyPlayer 从完整公开资料裁剪（含分游戏战绩，供 player:batch / roster 用）。
 func ToLobbyPlayer(p PublicPlayer) LobbyPlayer {
 	return LobbyPlayer{
 		ID:                           p.ID,
@@ -121,16 +121,29 @@ func ToLobbyPlayer(p PublicPlayer) LobbyPlayer {
 		BondPetEnabled:               p.BondPetEnabled,
 		BondPublicDisplay:            p.BondPublicDisplay,
 		RoomID:                       p.RoomID,
-		Stats: LobbyStats{
-			Wins: p.Stats.Wins, Losses: p.Stats.Losses, Draws: p.Stats.Draws,
-			Punishments: p.Stats.Punishments, RankedPoints: p.Stats.RankedPoints, Title: p.Stats.Title,
-			HighestScore: p.Stats.HighestScore, LowestScore: p.Stats.LowestScore,
-			SortRankedPoints: p.Stats.SortRankedPoints, SortHighestScore: p.Stats.SortHighestScore,
-			SortLowestScore: p.Stats.SortLowestScore, TitleCustom: p.Stats.TitleCustom,
-			TotalOnlineMs: p.Stats.TotalOnlineMs, SelfTitle: p.Stats.SelfTitle,
-			TitleSource: p.Stats.TitleSource, TitleColors: p.Stats.TitleColors,
-		},
-		GameStats: p.GameStats,
+		Stats:                        lobbyStatsFromPublic(p.Stats),
+		GameStats:                    p.GameStats,
+	}
+}
+
+// ToLiveLobbyPlayer 大厅实时通道用的更轻视图：去掉分游戏 GameStats。
+// 大厅侧榜只用 Stats 合计；分项战绩由 players:roster 按需拉取。
+// 前端 normalizePublicPlayer 在 gameStats 全零时保留 Stats.wins/losses/draws。
+func ToLiveLobbyPlayer(p PublicPlayer) LobbyPlayer {
+	lp := ToLobbyPlayer(p)
+	lp.GameStats = GameStats{}
+	return lp
+}
+
+func lobbyStatsFromPublic(s PublicStats) LobbyStats {
+	return LobbyStats{
+		Wins: s.Wins, Losses: s.Losses, Draws: s.Draws,
+		Punishments: s.Punishments, RankedPoints: s.RankedPoints, Title: s.Title,
+		HighestScore: s.HighestScore, LowestScore: s.LowestScore,
+		SortRankedPoints: s.SortRankedPoints, SortHighestScore: s.SortHighestScore,
+		SortLowestScore: s.SortLowestScore, TitleCustom: s.TitleCustom,
+		TotalOnlineMs: s.TotalOnlineMs, SelfTitle: s.SelfTitle,
+		TitleSource: s.TitleSource, TitleColors: s.TitleColors,
 	}
 }
 

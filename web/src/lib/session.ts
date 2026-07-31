@@ -223,6 +223,13 @@ export async function claimIdentity(code: string): Promise<{ playerId: string; p
 
 /** 登出：撤销当前设备在服务端的凭据，再清空本地身份/会话缓存。调用方负责后续跳转登录页。 */
 export async function logout() {
+  // 先解绑本机 Web Push，避免登出后仍收到旧账号通知（不写入「用户主动停止」标记）。
+  try {
+    const { disablePushSubscription } = await import("./pushNotify");
+    await disablePushSubscription({ markStopped: false });
+  } catch {
+    // 推送清理失败不阻断登出。
+  }
   const playerSecret = localStorage.getItem(playerSecretKey);
   try {
     if (playerSecret) await ask("identity:logout", { playerSecret });

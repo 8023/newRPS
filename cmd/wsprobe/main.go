@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"time"
 
@@ -17,18 +16,32 @@ import (
 )
 
 func main() {
-	resp, err := http.Post("http://127.0.0.1:9988/api/session", "application/json", nil)
+	// 服务端要求非安全方法（含 WS 升级请求）必须带 Origin，且落在允许列表/同 Host 内，
+	// 直连调试工具没有浏览器帮忙自动附加，需要手动设置。
+	sessReq, err := http.NewRequest(http.MethodPost, "http://127.0.0.1:9988/api/session", nil)
+	must(err)
+	sessReq.Header.Set("Content-Type", "application/json")
+	sessReq.Header.Set("Origin", "http://127.0.0.1:9988")
+	resp, err := http.DefaultClient.Do(sessReq)
 	must(err)
 	var sess struct {
 		Token string `json:"token"`
 	}
 	must(json.NewDecoder(resp.Body).Decode(&sess))
 	resp.Body.Close()
+	if sess.Token == "" {
+		panic("empty session token (check server Origin allow-list)")
+	}
 
-	u, _ := url.Parse("ws://127.0.0.1:9988/ws?token=" + url.QueryEscape(sess.Token))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn, _, err := websocket.Dial(ctx, u.String(), nil)
+	// token 通过 Sec-WebSocket-Protocol 传递，不再拼进 URL（见 internal/server/ws.go 的
+	// parseWSAuthProtocols）：反向代理访问日志会记录完整请求 URL，token 出现在其中等于
+	// 把 24 小时有效的身份凭据写进日志系统。
+	conn, _, err := websocket.Dial(ctx, "ws://127.0.0.1:9988/ws", &websocket.DialOptions{
+		HTTPHeader:   http.Header{"Origin": []string{"http://127.0.0.1:9988"}},
+		Subprotocols: []string{"auth." + sess.Token},
+	})
 	must(err)
 	defer conn.Close(websocket.StatusNormalClosure, "")
 

@@ -17,7 +17,7 @@ import (
 // seq 为自增主键，作为稳定排序与分页游标（比毫秒时间戳更可靠，不会因同毫秒并列而漏读）。
 //
 // ⚠️ mattn/go-sqlite3 需要 CGO：CGO_ENABLED=0 编译出的二进制仍能启动，但驱动是一个
-// stub——openDatabase 会失败（已记录到 error.csv 的 database_open_failed），聊天/
+// stub——openDatabase 会失败（已记录到 error.log 的 database_open_failed），聊天/
 // 房间/惩罚事件从此完全不落盘且没有任何显式报错，非常隐蔽。发布构建（npm run build:server）已固定
 // 加 CGO_ENABLED=1，本地/CI 交叉编译或换构建机时也必须保证该环境装有可用的 C 工具链
 // （gcc + libc 头文件），否则请改回 modernc.org/sqlite（纯 Go，无此限制）。

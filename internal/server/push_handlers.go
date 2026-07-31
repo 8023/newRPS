@@ -24,6 +24,11 @@ func (s *Server) onPushSubscribe(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "订阅信息不完整")
 		return
 	}
+	if !isAllowedPushEndpoint(p.Endpoint) {
+		s.securityLog("push_endpoint_rejected", map[string]any{"sid": client.sid, "ip": client.ipAddress, "userAgent": client.userAgent})
+		client.reply(env.ID, nil, "不支持的推送服务地址")
+		return
+	}
 	if s.pushDB == nil {
 		client.reply(env.ID, nil, "推送功能当前不可用")
 		return
@@ -41,11 +46,12 @@ func (s *Server) onPushUnsubscribe(client *Client, env wsEnvelope) {
 		Endpoint string `json:"endpoint"`
 	}
 	_ = decodeD(env, &p)
-	if _, ok := s.requirePlayer(client, env); !ok {
+	player, ok := s.requirePlayer(client, env)
+	if !ok {
 		return
 	}
 	if s.pushDB != nil && p.Endpoint != "" {
-		if err := s.pushDB.removeSubscription(p.Endpoint); err != nil {
+		if err := s.pushDB.removeSubscriptionForPlayer(player.ID, p.Endpoint); err != nil {
 			s.errorLog("push_subscription_remove_failed", err.Error())
 			client.reply(env.ID, nil, "删除订阅失败")
 			return
@@ -87,6 +93,7 @@ func (s *Server) onPushUpdatePreferences(client *Client, env wsEnvelope) {
 		player.PushSeatEnabled = boolPtr(*p.SeatEnabled)
 	}
 	if player.Persistent {
+		s.markPlayerDirty(player)
 		s.requestPersist("lazy")
 	}
 	client.reply(env.ID, map[string]any{"ok": true}, "")
@@ -99,8 +106,35 @@ func (s *Server) onPushTest(client *Client, env wsEnvelope) {
 	if !ok {
 		return
 	}
-	timeAfterFunc(3*time.Second, func() {
-		s.sendPush(player, "推送测试成功", "这台设备已经可以接收抖喵游戏屋通知。", "push-test")
-	})
-	client.reply(env.ID, map[string]any{"ok": true}, "")
+	if s.pushDB == nil {
+		client.reply(env.ID, nil, "推送数据库当前不可用")
+		return
+	}
+	playerID := player.ID
+	go func() {
+		subs, err := s.pushDB.subscriptionsForPlayer(playerID)
+		if err != nil {
+			s.errorLog("push_test_subscription_query_failed", err.Error())
+			client.reply(env.ID, nil, "检查推送订阅失败")
+			return
+		}
+		if len(subs) == 0 {
+			client.reply(env.ID, nil, "服务端没有本账号的推送订阅，请先重新订阅这台设备")
+			return
+		}
+		timeAfterFunc(3*time.Second, func() {
+			result := s.deliverPush(playerID, subs, "推送测试成功", "这台设备已经可以接收抖喵游戏屋通知。", "push-test")
+			if errMessage := pushDeliveryClientError(result); errMessage != "" {
+				client.reply(env.ID, nil, errMessage)
+				return
+			}
+			client.reply(env.ID, map[string]any{
+				"ok":                true,
+				"subscriptionCount": len(subs),
+				"acceptedCount":     result.Accepted,
+				"failedCount":       result.Failed,
+				"expiredCount":      result.Expired,
+			}, "")
+		})
+	}()
 }

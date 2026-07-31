@@ -4,13 +4,50 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 	"github.com/doumiao/newRPS/internal/types"
 )
+
+// allowedPushGatewayHostSuffixes 是各浏览器厂商官方 Web Push 网关的域名（后缀匹配）。
+// 客户端上报的 endpoint 完全不可信——deliverPush 会拿着它发起真实的服务端出网 HTTPS 请求，
+// 如果不做校验，任何登录用户都能把 endpoint 设成内网/回环地址，把本服务器变成一个
+// SSRF 探测器（push:test 还会把 HTTP 状态码原样回显给调用方，等于探测结果 oracle）。
+// 这里选择白名单而非黑名单：黑名单式的私网地址过滤存在 DNS rebinding、IPv6 变形写法等
+// 绕过手法，只信任已知网关域名更稳妥。
+var allowedPushGatewayHostSuffixes = []string{
+	"googleapis.com",            // Chrome / Edge 等（FCM）；部分 Samsung Internet 也走 FCM
+	"push.services.mozilla.com", // Firefox
+	"notify.windows.com",        // 旧版 Edge / Windows
+	"push.apple.com",            // Safari（macOS/iOS 16.4+）
+	"push.samsungosp.com",       // Galaxy 上 Samsung Internet 自家网关
+}
+
+// pushHTTPClient 带超时，避免某个卡住的推送网关把 deliverPush goroutine 挂到 TCP 默认超时。
+var pushHTTPClient = &http.Client{Timeout: 10 * time.Second}
+
+// isAllowedPushEndpoint 校验浏览器上报的 PushSubscription.endpoint：必须是合法的 https
+// URL，且主机名落在已知推送网关域名白名单内。
+func isAllowedPushEndpoint(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	for _, suffix := range allowedPushGatewayHostSuffixes {
+		if host == suffix || strings.HasSuffix(host, "."+suffix) {
+			return true
+		}
+	}
+	return false
+}
 
 // Web Push（Level 2 推送）：不依赖任何外部付费服务，VAPID 密钥对本地生成/落盘，
 // 推送网关是浏览器厂商自己的公共端点（Chrome→Google、Firefox→Mozilla…），
@@ -18,7 +55,9 @@ import (
 //
 // 只要偏好开启就发送 Web Push，不再用 WebSocket Connected 状态做互斥。手机切后台后
 // JavaScript 可能被冻结但连接仍被服务端视为在线；旧互斥会让前后端两条路径同时不发送。
-// 是否存在前台可见页面由 Service Worker 最终判断并抑制通知，避免重复弹出。
+// 前端不再自行创建系统通知，由 Service Worker 统一展示，前台与后台行为保持一致。
+
+const pushProtocolVersion = 3
 
 const pushSubscriptionSchema = `
 CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -56,6 +95,7 @@ func (p *pushStore) upsertSubscription(playerID, endpoint, p256dh, auth string, 
 	return err
 }
 
+// removeSubscription 按 endpoint 删除（用于推送网关返回 404/410 时的失效清理，无玩家上下文）。
 func (p *pushStore) removeSubscription(endpoint string) error {
 	if p == nil || p.db == nil || endpoint == "" {
 		return nil
@@ -63,6 +103,18 @@ func (p *pushStore) removeSubscription(endpoint string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	_, err := p.db.Exec(`DELETE FROM push_subscriptions WHERE endpoint = ?`, endpoint)
+	return err
+}
+
+// removeSubscriptionForPlayer 仅当 endpoint 属于该玩家时才删除，防止已登录用户删除他人订阅。
+// 删除 0 行视为成功（幂等：本就不存在或不属于自己时不报错）。
+func (p *pushStore) removeSubscriptionForPlayer(playerID, endpoint string) error {
+	if p == nil || p.db == nil || playerID == "" || endpoint == "" {
+		return nil
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	_, err := p.db.Exec(`DELETE FROM push_subscriptions WHERE endpoint = ? AND player_id = ?`, endpoint, playerID)
 	return err
 }
 
@@ -190,38 +242,91 @@ func (s *Server) sendPush(player *PlayerState, title, body, tag string) {
 	playerID := player.ID
 	go func() {
 		subs, err := s.pushDB.subscriptionsForPlayer(playerID)
-		if err != nil || len(subs) == 0 {
-			return
-		}
-		payload, err := json.Marshal(pushPayload{Title: title, Body: body, Tag: tag})
 		if err != nil {
+			s.errorLog("push_subscription_query_failed", err.Error())
 			return
 		}
-		opts := &webpush.Options{
-			Subscriber:      "mailto:support@example.com",
-			VAPIDPublicKey:  s.vapid.PublicKey,
-			VAPIDPrivateKey: s.vapid.PrivateKey,
-			TTL:             300,
+		if len(subs) == 0 {
+			return
 		}
-		for _, sub := range subs {
-			go func(sub storedSubscription) {
-				resp, err := webpush.SendNotification(payload, &webpush.Subscription{
-					Endpoint: sub.Endpoint,
-					Keys:     webpush.Keys{P256dh: sub.P256dh, Auth: sub.Auth},
-				}, opts)
-				if err != nil {
-					s.errorLog("push_send_failed", err.Error())
-					return
-				}
-				defer resp.Body.Close()
-				if resp.StatusCode == 404 || resp.StatusCode == 410 {
-					_ = s.pushDB.removeSubscription(sub.Endpoint)
-				} else if resp.StatusCode >= 300 {
-					s.errorLog("push_send_rejected", fmt.Sprintf(
-						"player=%s status=%d tag=%s", playerID, resp.StatusCode, tag,
-					))
-				}
-			}(sub)
-		}
+		s.deliverPush(playerID, subs, title, body, tag)
 	}()
+}
+
+type pushDeliveryResult struct {
+	Accepted  int
+	Failed    int
+	Expired   int
+	LastError string
+}
+
+// deliverPush 同步等待各浏览器厂商网关的 HTTP 回应。普通业务通知从 sendPush 的 goroutine
+// 调用；测试通知直接使用返回值，把“网关是否接受”反馈给设置页，不再只显示盲目的已发送。
+func (s *Server) deliverPush(playerID string, subs []storedSubscription, title, body, tag string) pushDeliveryResult {
+	result := pushDeliveryResult{}
+	payload, err := json.Marshal(pushPayload{Title: title, Body: body, Tag: tag})
+	if err != nil {
+		result.Failed = len(subs)
+		result.LastError = err.Error()
+		s.errorLog("push_payload_encode_failed", err.Error())
+		return result
+	}
+	subscriber := os.Getenv("VAPID_SUBSCRIBER")
+	if subscriber == "" {
+		subscriber = "mailto:admin@rps.rbq.io"
+	}
+	opts := &webpush.Options{
+		Subscriber:      subscriber,
+		VAPIDPublicKey:  s.vapid.PublicKey,
+		VAPIDPrivateKey: s.vapid.PrivateKey,
+		TTL:             300,
+		HTTPClient:      pushHTTPClient,
+	}
+	for _, sub := range subs {
+		resp, err := webpush.SendNotification(payload, &webpush.Subscription{
+			Endpoint: sub.Endpoint,
+			Keys:     webpush.Keys{P256dh: sub.P256dh, Auth: sub.Auth},
+		}, opts)
+		if err != nil {
+			result.Failed++
+			result.LastError = err.Error()
+			s.errorLog("push_send_failed", err.Error())
+			continue
+		}
+		status := resp.StatusCode
+		_ = resp.Body.Close()
+		switch {
+		case status >= 200 && status < 300:
+			result.Accepted++
+		case status == 404 || status == 410:
+			result.Failed++
+			result.Expired++
+			result.LastError = fmt.Sprintf("HTTP %d", status)
+			_ = s.pushDB.removeSubscription(sub.Endpoint)
+		default:
+			result.Failed++
+			result.LastError = fmt.Sprintf("HTTP %d", status)
+			s.errorLog("push_send_rejected", fmt.Sprintf(
+				"player=%s status=%d tag=%s", playerID, status, tag,
+			))
+		}
+	}
+	return result
+}
+
+func pushDeliveryClientError(result pushDeliveryResult) string {
+	if result.Accepted > 0 {
+		return ""
+	}
+	if result.Expired > 0 {
+		return "浏览器推送订阅已经失效，请重新订阅这台设备"
+	}
+	lower := strings.ToLower(result.LastError)
+	if strings.Contains(lower, "x509") || strings.Contains(lower, "certificate") {
+		return "服务器无法验证推送网关的 TLS 证书（缺少 CA 根证书）"
+	}
+	if strings.HasPrefix(result.LastError, "HTTP ") {
+		return "浏览器推送网关拒绝了通知（" + result.LastError + "）"
+	}
+	return "服务器连接浏览器推送网关失败，请检查出站 HTTPS 和服务端错误日志"
 }

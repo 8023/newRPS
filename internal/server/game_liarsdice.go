@@ -416,21 +416,21 @@ func (s *Server) resolveLiarsDiceChallenge(room *RoomState, challengerID string)
 
 	rankedText := ""
 	streakText := ""
-	recordGameOutcome(winner, types.GameLiarsDice, "win")
-	recordGameOutcome(loser, types.GameLiarsDice, "loss")
+	s.recordGameOutcome(winner, types.GameLiarsDice, "win")
+	s.recordGameOutcome(loser, types.GameLiarsDice, "loss")
 	// 其余参战玩家本局记平（不计排位分、不受罚）。
 	for _, id := range room.LiarsDice.ParticipantIDs {
 		if id == winnerID || id == loserID {
 			continue
 		}
 		if p := s.players[id]; p != nil {
-			recordGameOutcome(p, types.GameLiarsDice, "draw")
+			s.recordGameOutcome(p, types.GameLiarsDice, "draw")
 		}
 	}
 	s.applyGiveawayWinPenalty(winner)
 	if room.Settings.EnableRanked {
 		wD, lD := s.applyRankedStake(winner, loser, effectiveRankedStake(room.Settings))
-		resetExtremeWinStreak(loser)
+		s.resetExtremeWinStreak(loser)
 		streakText = s.applyExtremeWinStreakRisk(room, winner)
 		rankedText = fmt.Sprintf("（%s %s，%s %d）", names[winnerID], formatSigned(wD), names[loserID], lD)
 	}
@@ -661,8 +661,8 @@ func (s *Server) applyLiarsDiceDisconnectForfeit(room *RoomState, player *Player
 	loser := s.players[forfeit.LoserID]
 	rankedText := ""
 	streakText := ""
-	recordGameOutcome(winner, types.GameLiarsDice, "win")
-	recordGameOutcome(loser, types.GameLiarsDice, "loss")
+	s.recordGameOutcome(winner, types.GameLiarsDice, "win")
+	s.recordGameOutcome(loser, types.GameLiarsDice, "loss")
 	// 其余参战玩家本局记平（与正常开牌结算一致）。
 	if room.LiarsDice != nil {
 		for _, id := range room.LiarsDice.ParticipantIDs {
@@ -670,14 +670,14 @@ func (s *Server) applyLiarsDiceDisconnectForfeit(room *RoomState, player *Player
 				continue
 			}
 			if p := s.players[id]; p != nil {
-				recordGameOutcome(p, types.GameLiarsDice, "draw")
+				s.recordGameOutcome(p, types.GameLiarsDice, "draw")
 			}
 		}
 	}
 	s.applyGiveawayWinPenalty(winner)
 	if room.Settings.EnableRanked {
 		wD, lD := s.applyRankedStake(winner, loser, forfeit.Stake)
-		resetExtremeWinStreak(loser)
+		s.resetExtremeWinStreak(loser)
 		streakText = s.applyExtremeWinStreakRisk(room, winner)
 		rankedText = fmt.Sprintf("（%s %s，%s %d）", forfeit.WinnerName, formatSigned(wD), forfeit.LoserName, lD)
 	}

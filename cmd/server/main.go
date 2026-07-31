@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/doumiao/newRPS/internal/server"
+	_ "golang.org/x/crypto/x509roots/fallback"
 )
 
 func main() {

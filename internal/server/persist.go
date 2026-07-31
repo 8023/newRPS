@@ -52,37 +52,68 @@ type persistedPlayer struct {
 	LastSeenAt                   int64             `json:"lastSeenAt,omitempty"`
 }
 
+func (s *Server) serializePlayer(p *PlayerState) (persistedPlayer, bool) {
+	if p == nil || !p.Persistent || p.PlayerID == "" {
+		return persistedPlayer{}, false
+	}
+	p.SyncTotalsFromGameStats()
+	return persistedPlayer{
+		ID: p.ID, PlayerID: p.PlayerID,
+		PlayerSecrets: p.PlayerSecrets, ClaimKey: p.ClaimKey,
+		Name: p.Name, GenderID: p.GenderID, FactionID: p.FactionID, AvatarURL: p.AvatarURL,
+		NameWarEnabled: p.NameWarEnabled, NameWarAllowRename: p.NameWarAllowRename,
+		NameWarToggledAt: p.NameWarToggledAt, NameWarOriginalName: p.NameWarOriginalName,
+		NameWarPenaltyName: p.NameWarPenaltyName, NameWarPunished: p.NameWarPunished,
+		NameWarRenameProtectedUntil: p.NameWarRenameProtectedUntil,
+		NameWarRenamedBy:            p.NameWarRenamedBy, NameWarRenamedByName: p.NameWarRenamedByName,
+		NameWarRenameWindowStartedAt: p.NameWarRenameWindowStartedAt,
+		NameWarRenameCount:           p.NameWarRenameCount,
+		GiveawayEnabled:              p.GiveawayEnabled, GiveawayValue: p.GiveawayValue, GiveawayClicks: p.GiveawayClicks,
+		RankMultiplierUnlocked: p.RankMultiplierUnlocked,
+		ExtremeModeEnabled:     p.ExtremeModeEnabled, ExtremeModeToggledAt: p.ExtremeModeToggledAt,
+		ExtremeModeCooldownUntil: p.ExtremeModeCooldownUntil, ExtremeWinStreak: p.ExtremeWinStreak,
+		ExtremeLastDecayHour: p.ExtremeLastDecayHour,
+		RankedLastDecayDay:   p.RankedLastDecayDay,
+		PushMentionEnabled:   p.PushMentionEnabled, PushTurnEnabled: p.PushTurnEnabled, PushSeatEnabled: p.PushSeatEnabled,
+		BondMasterEnabled: p.BondMasterEnabled, BondPetEnabled: p.BondPetEnabled, BondPublicDisplay: p.BondPublicDisplay,
+		Stats: p.Stats, GameStats: p.GameStats,
+		CreatedAt: p.CreatedAt, LastSeenAt: p.LastSeenAt,
+	}, true
+}
+
 func (s *Server) serializePlayers() []persistedPlayer {
 	var out []persistedPlayer
 	for _, p := range s.players {
-		if !p.Persistent || p.PlayerID == "" {
-			continue
+		if item, ok := s.serializePlayer(p); ok {
+			out = append(out, item)
 		}
-		p.SyncTotalsFromGameStats()
-		out = append(out, persistedPlayer{
-			ID: p.ID, PlayerID: p.PlayerID,
-			PlayerSecrets: p.PlayerSecrets, ClaimKey: p.ClaimKey,
-			Name: p.Name, GenderID: p.GenderID, FactionID: p.FactionID, AvatarURL: p.AvatarURL,
-			NameWarEnabled: p.NameWarEnabled, NameWarAllowRename: p.NameWarAllowRename,
-			NameWarToggledAt: p.NameWarToggledAt, NameWarOriginalName: p.NameWarOriginalName,
-			NameWarPenaltyName: p.NameWarPenaltyName, NameWarPunished: p.NameWarPunished,
-			NameWarRenameProtectedUntil: p.NameWarRenameProtectedUntil,
-			NameWarRenamedBy:            p.NameWarRenamedBy, NameWarRenamedByName: p.NameWarRenamedByName,
-			NameWarRenameWindowStartedAt: p.NameWarRenameWindowStartedAt,
-			NameWarRenameCount:           p.NameWarRenameCount,
-			GiveawayEnabled:              p.GiveawayEnabled, GiveawayValue: p.GiveawayValue, GiveawayClicks: p.GiveawayClicks,
-			RankMultiplierUnlocked: p.RankMultiplierUnlocked,
-			ExtremeModeEnabled:     p.ExtremeModeEnabled, ExtremeModeToggledAt: p.ExtremeModeToggledAt,
-			ExtremeModeCooldownUntil: p.ExtremeModeCooldownUntil, ExtremeWinStreak: p.ExtremeWinStreak,
-			ExtremeLastDecayHour: p.ExtremeLastDecayHour,
-			RankedLastDecayDay:   p.RankedLastDecayDay,
-			PushMentionEnabled:   p.PushMentionEnabled, PushTurnEnabled: p.PushTurnEnabled, PushSeatEnabled: p.PushSeatEnabled,
-			BondMasterEnabled: p.BondMasterEnabled, BondPetEnabled: p.BondPetEnabled, BondPublicDisplay: p.BondPublicDisplay,
-			Stats: p.Stats, GameStats: p.GameStats,
-			CreatedAt: p.CreatedAt, LastSeenAt: p.LastSeenAt,
-		})
 	}
 	return out
+}
+
+// serializeDirtyPlayers 只序列化 dirty 集合中的玩家；须在 s.mu 内调用。
+func (s *Server) serializeDirtyPlayers(ids map[string]struct{}) []persistedPlayer {
+	if len(ids) == 0 {
+		return nil
+	}
+	out := make([]persistedPlayer, 0, len(ids))
+	for id := range ids {
+		if item, ok := s.serializePlayer(s.players[id]); ok {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+// markPlayerDirty 标记玩家档案待写盘（须在 s.mu 内或与之等效的单线程测试路径调用）。
+func (s *Server) markPlayerDirty(p *PlayerState) {
+	if p == nil || !p.Persistent || p.ID == "" {
+		return
+	}
+	if s.dirtyPlayerIDs == nil {
+		s.dirtyPlayerIDs = map[string]struct{}{}
+	}
+	s.dirtyPlayerIDs[p.ID] = struct{}{}
 }
 
 // loadPlayersFromDisk 从 SQLite 加载全部玩家档案进内存。
@@ -239,19 +270,37 @@ func (s *Server) markPersistDirty() {
 func (s *Server) writeSnapshot() {
 	// 仅在序列化期间持 s.mu；磁盘 I/O 放到锁外，避免拖慢全服。
 	s.mu.Lock()
-	snapshot := s.serializePlayers()
+	// 有脏集合 → 只写脏项；无脏集合（漏 mark 或关停全量）→ 全量，保证不丢档。
+	var snapshot []persistedPlayer
+	if len(s.dirtyPlayerIDs) > 0 {
+		snapshot = s.serializeDirtyPlayers(s.dirtyPlayerIDs)
+		s.dirtyPlayerIDs = map[string]struct{}{}
+	} else {
+		snapshot = s.serializePlayers()
+	}
 	s.mu.Unlock()
+
+	if len(snapshot) == 0 {
+		return
+	}
 
 	if s.playerDB == nil {
 		// 库不可用时降级：仍写 JSON，避免测试环境/库损坏时彻底丢档。
-		s.writePlayersJSONFallback(snapshot)
+		// JSON 降级路径历来是整文件覆盖，故在无库时强制全量再写一次更安全。
+		s.mu.Lock()
+		full := s.serializePlayers()
+		s.mu.Unlock()
+		s.writePlayersJSONFallback(full)
 		return
 	}
 	if err := s.playerDB.upsertMany(snapshot); err != nil {
 		s.errorLog("players_sqlite_persist_failed", err.Error())
 		s.markPersistDirty()
-		// 二次降级写 JSON，尽量保住数据
-		s.writePlayersJSONFallback(snapshot)
+		// 二次降级写 JSON，尽量保住数据（整文件）
+		s.mu.Lock()
+		full := s.serializePlayers()
+		s.mu.Unlock()
+		s.writePlayersJSONFallback(full)
 	}
 }
 

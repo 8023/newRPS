@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/subtle"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -196,8 +197,8 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	}
 	s.rooms[roomID] = room
 	player.RoomID = roomID
-	client.leaveRoom(lobbyChannel)
-	client.joinRoom(roomID)
+	s.clientLeaveRoom(client, lobbyChannel)
+	s.clientJoinRoom(client, roomID)
 	if s.eventDB != nil {
 		if err := s.eventDB.insertRoomEvent(roomEventInput{
 			At: nowMs(), RoomID: roomID, RoomName: settings.Name, GameID: string(settings.GameID),
@@ -228,13 +229,22 @@ func (s *Server) onRoomJoin(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "房间不存在")
 		return
 	}
-	if room.Settings.Password != "" && room.Settings.Password != p.Password {
-		msg := "密码错误"
-		if s.cfg.Messages != nil && s.cfg.Messages["passwordWrong"] != "" {
-			msg = s.cfg.Messages["passwordWrong"]
+	if room.Settings.Password != "" {
+		// 只在比对失败时扣配额（与 admin 登录失败限流一致）：猜对不该消耗爆破计数，
+		// 否则 NAT 后多人共享同一 IP 桶时，正常进房也会被 5 次/分钟卡住。
+		if subtle.ConstantTimeCompare([]byte(room.Settings.Password), []byte(p.Password)) != 1 {
+			if !s.checkRateLimit("room_password:"+room.ID+":"+client.ipAddress, RateLimitOptions{Limit: 5, WindowMs: 60_000, CooldownMs: 300_000}) {
+				s.securityLog("room_password_bruteforce", map[string]any{"sid": client.sid, "ip": client.ipAddress, "roomId": room.ID})
+				client.reply(env.ID, nil, "密码错误次数过多，请稍后再试")
+				return
+			}
+			msg := "密码错误"
+			if s.cfg.Messages != nil && s.cfg.Messages["passwordWrong"] != "" {
+				msg = s.cfg.Messages["passwordWrong"]
+			}
+			client.reply(env.ID, nil, msg)
+			return
 		}
-		client.reply(env.ID, nil, msg)
-		return
 	}
 	leaveResult := s.leaveRoom(player, LeaveSwitchRoom)
 	if !leaveResult.OK {
@@ -256,8 +266,8 @@ func (s *Server) onRoomJoin(client *Client, env wsEnvelope) {
 	} else {
 		room.SpectatorIDs = append(room.SpectatorIDs, player.ID)
 	}
-	client.leaveRoom(lobbyChannel)
-	client.joinRoom(room.ID)
+	s.clientLeaveRoom(client, lobbyChannel)
+	s.clientJoinRoom(client, room.ID)
 	if s.eventDB != nil {
 		if err := s.eventDB.insertRoomEvent(roomEventInput{
 			At: nowMs(), RoomID: room.ID, RoomName: room.Settings.Name, GameID: string(room.Settings.GameID),
@@ -282,8 +292,8 @@ func (s *Server) onRoomLeave(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, leaveResult.Error)
 		return
 	}
-	client.joinRoom(lobbyChannel)
-	client.joinRoom(lobbySuggestionChannel)
+	s.clientJoinRoom(client, lobbyChannel)
+	s.clientJoinRoom(client, lobbySuggestionChannel)
 	// 离房后补一次大厅全量，避免在房期间退订 lobby 后本地列表过期。
 	s.sendFullChannel(client, channelLobby())
 	client.reply(env.ID, map[string]any{"ok": true}, "")
@@ -1471,6 +1481,13 @@ func (s *Server) onPunishmentReview(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "对方还没有提交证明")
 		return
 	}
+	// proof 只有处于 pending（待审核）时才能被审核一次；已经 rejected/approved 的证明
+	// 必须等玩家重新提交（onPunishmentSubmit 会生成一条全新的 pending proof）才能再次审核。
+	// 否则同一条已驳回的证明可以被反复调用 reject 无限次，RejectCount 无限递增导致扣分失控。
+	if proof.Status != "pending" {
+		client.reply(env.ID, nil, "这条证明已经审核过了")
+		return
+	}
 	reviewedAt := nowMs()
 	if p.Action == "reject" {
 		cleanTask := cleanText(p.RedoTaskText, 300)
@@ -1570,6 +1587,10 @@ func (s *Server) onPunishmentConfirm(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "对方还没有提交证明")
 		return
 	}
+	if proof.Status != "pending" {
+		client.reply(env.ID, nil, "这条证明已经审核过了")
+		return
+	}
 	reviewedAt := nowMs()
 	proof.Status = "approved"
 	proof.ConfirmedBy = player.ID
@@ -1616,17 +1637,32 @@ func (s *Server) onChatSend(client *Client, env wsEnvelope) {
 	}
 	s.refreshNameWarState(player, nowMs())
 	s.refreshPlayerSnapshots(player)
-	message := types.ChatMessage{
-		ID: randomID(), RoomID: p.RoomID, PlayerID: player.ID,
-		Author: player.DisplayName, Text: cleanMessageText, At: nowMs(),
-		Mentions: normalizeMentions(p.Mentions),
-	}
+	var room *RoomState
 	if p.RoomID != "" {
-		room := s.rooms[p.RoomID]
+		room = s.rooms[p.RoomID]
 		if room == nil || player.RoomID != p.RoomID {
 			client.reply(env.ID, nil, "你不在这个房间里")
 			return
 		}
+	}
+	mentions := normalizeMentions(p.Mentions)
+	if room != nil {
+		// 房间聊天的 @ 只对同房间内的人有意义；否则任何人都能把陌生玩家 ID 塞进 mentions
+		// 触发一条与该房间毫无关系的推送通知——大厅聊天没有"房间"概念，不受此限制。
+		filtered := mentions[:0]
+		for _, id := range mentions {
+			if s.roomHasPlayer(room, id) {
+				filtered = append(filtered, id)
+			}
+		}
+		mentions = filtered
+	}
+	message := types.ChatMessage{
+		ID: randomID(), RoomID: p.RoomID, PlayerID: player.ID,
+		Author: player.DisplayName, Text: cleanMessageText, At: nowMs(),
+		Mentions: mentions,
+	}
+	if room != nil {
 		message.AuthorRole = s.roomRole(room, player.ID)
 	}
 	// 持久化 + 实时推送（房间/大厅由 RoomID 区分）。
@@ -1634,9 +1670,15 @@ func (s *Server) onChatSend(client *Client, env wsEnvelope) {
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 	for _, mentionedID := range message.Mentions {
 		mentioned := s.players[mentionedID]
-		if mentioned != nil && shouldPush(mentioned, mentioned.PushMentionEnabled) {
-			s.sendPush(mentioned, "有人 @ 了你", fmt.Sprintf("%s：%s", player.DisplayName, cleanMessageText), "mention")
+		if mentioned == nil || !shouldPush(mentioned, mentioned.PushMentionEnabled) {
+			continue
 		}
+		// 同一发送者对同一被 @ 玩家的推送节流：避免靠反复群发消息对固定目标刷屏骚扰
+		// （聊天消息本身仍正常送达，这里只限制会触达设备通知栏的 Web Push）。
+		if !s.checkRateLimit("mention_push:"+player.ID+":"+mentionedID, RateLimitOptions{Limit: 1, WindowMs: 600_000, CooldownMs: 600_000}) {
+			continue
+		}
+		s.sendPush(mentioned, "有人 @ 了你", fmt.Sprintf("%s：%s", player.DisplayName, cleanMessageText), "mention")
 	}
 }
 
@@ -1813,7 +1855,7 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 				}
 			}
 			for _, c := range s.clients {
-				c.leaveRoom(p.RoomID)
+				s.clientLeaveRoom(c, p.RoomID)
 			}
 			s.clearOthelloSettlementTimer(p.RoomID)
 			s.clearTicTacToeGiveawayTimer(p.RoomID)
@@ -1918,6 +1960,7 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 			return
 		}
 		pl.ClaimKey = randomClaimKey()
+		s.markPlayerDirty(pl)
 		s.requestPersist("lazy")
 		client.reply(env.ID, map[string]any{"claimKey": pl.ClaimKey, "playerId": pl.PlayerID}, "")
 		return
@@ -1943,6 +1986,7 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 				pl.DisconnectExpiresAt = nil
 				pl.LastSeenAt = now
 				s.refreshPlayerSnapshots(pl)
+				s.markPlayerDirty(pl)
 				s.requestPersist("lazy")
 			} else {
 				delete(s.players, pl.ID)

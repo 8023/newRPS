@@ -1,6 +1,9 @@
 package server
 
-import "strings"
+import (
+	"crypto/subtle"
+	"strings"
+)
 
 // 多端身份认领：认领密钥（ClaimKey）与长期设备凭据（PlayerSecrets）是两个不同的东西。
 //   - PlayerSecrets：每台已登录设备一条，明文，永久有效（除非登出时撤销），
@@ -50,6 +53,7 @@ func (s *Server) onIdentityShowClaimKey(client *Client, env wsEnvelope) {
 	}
 	if player.ClaimKey == "" {
 		player.ClaimKey = randomClaimKey()
+		s.markPlayerDirty(player)
 		s.requestPersist("lazy")
 	}
 	client.reply(env.ID, map[string]any{"claimKey": player.ClaimKey, "playerId": player.PlayerID}, "")
@@ -67,6 +71,7 @@ func (s *Server) onIdentityRefreshClaimKey(client *Client, env wsEnvelope) {
 		return
 	}
 	player.ClaimKey = randomClaimKey()
+	s.markPlayerDirty(player)
 	s.requestPersist("lazy")
 	client.reply(env.ID, map[string]any{"claimKey": player.ClaimKey, "playerId": player.PlayerID}, "")
 }
@@ -86,7 +91,8 @@ func (s *Server) onIdentityClaim(client *Client, env wsEnvelope) {
 	}
 	id := s.playerIdToID[p.PlayerID]
 	player := s.players[id]
-	if player == nil || !player.Persistent || player.ClaimKey == "" || player.ClaimKey != p.ClaimKey {
+	if player == nil || !player.Persistent || player.ClaimKey == "" ||
+		subtle.ConstantTimeCompare([]byte(player.ClaimKey), []byte(p.ClaimKey)) != 1 {
 		s.securityLog("identity_claim_invalid", map[string]any{
 			"ip": client.ipAddress, "device": client.deviceKey, "userAgent": client.userAgent,
 		})
@@ -97,6 +103,7 @@ func (s *Server) onIdentityClaim(client *Client, env wsEnvelope) {
 	evicted := player.addPlayerSecret(newSecret)
 	// 用过即作废：认领成功后立即轮换，旧密钥不能再用第二次。
 	player.ClaimKey = randomClaimKey()
+	s.markPlayerDirty(player)
 	s.requestPersist("lazy")
 	if evicted != "" {
 		s.notifyDeviceEvicted(player, evicted)
@@ -127,6 +134,7 @@ func (s *Server) onIdentityLogout(client *Client, env wsEnvelope) {
 		if player.ActiveSecret == p.PlayerSecret {
 			player.ActiveSecret = ""
 		}
+		s.markPlayerDirty(player)
 		s.requestPersist("lazy")
 	}
 	client.reply(env.ID, map[string]any{"ok": true}, "")

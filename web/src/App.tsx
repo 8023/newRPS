@@ -10,7 +10,8 @@ import {
 import { ask, isAdminRoute, todayKey } from "./lib/rpc";
 import {
   lobbyOnlineCount, mergeRoundHistory, normalizeConfig, normalizeLobbySnapshot,
-  normalizeRoomSnapshot, normalizeRoundHistoryItem, playerSyncKey, replacePlayerInLobby, replacePlayerInRoom
+  normalizePublicPlayer, normalizeRoomSnapshot, normalizeRoundHistoryItem, playerSyncKey,
+  replacePlayersInLobby, replacePlayersInRoom, replacePlayerInRoom
 } from "./lib/normalize";
 import { refreshActiveChats } from "./lib/chatStore";
 import { ensurePushSubscription, fetchPushPreferences } from "./lib/pushNotify";
@@ -195,36 +196,48 @@ export function App() {
       } : old);
     });
     // 聚合玩家更新（player:batch 为 LobbyPlayer[]；兼容单条 player:update）
-    function applyPlayerPatches(players: PublicPlayer[]) {
-      if (!players?.length) return;
+    function applyPlayerPatches(rawList: PublicPlayer[]) {
+      if (!rawList?.length) return;
+      const players = rawList.map(normalizePublicPlayer);
       const byId = new Map(players.map((p) => [p.id, p]));
-      latestLobbyPlayersRef.current = latestLobbyPlayersRef.current.map((item) => byId.get(item.id) || item);
-      for (const p of players) {
-        if (!latestLobbyPlayersRef.current.some((x) => x.id === p.id)) latestLobbyPlayersRef.current.push(p);
+      // O(P+k) 合并本地排行榜快照源，避免每条 patch 都 some 扫描。
+      const prevSnap = latestLobbyPlayersRef.current;
+      const seen = new Set<string>();
+      const nextSnap: PublicPlayer[] = [];
+      for (const item of prevSnap) {
+        const patched = byId.get(item.id);
+        if (patched) {
+          nextSnap.push(patched);
+          seen.add(item.id);
+        } else {
+          nextSnap.push(item);
+        }
       }
-      setLobby((old) => {
-        if (!old) return old;
-        let next = old;
-        for (const p of players) next = replacePlayerInLobby(next, p);
-        return next;
-      });
-      setRoom((old) => {
-        if (!old) return old;
-        let next = old;
-        for (const p of players) next = replacePlayerInRoom(next, p);
-        return next;
-      });
+      for (const p of players) {
+        if (!seen.has(p.id)) nextSnap.push(p);
+      }
+      latestLobbyPlayersRef.current = nextSnap;
+
+      setLobby((old) => (old ? replacePlayersInLobby(old, players) : old));
+      setRoom((old) => (old ? replacePlayersInRoom(old, players) : old));
       setMe((old) => {
         if (!old) return old;
         const p = byId.get(old.player.id);
         if (!p) return old;
         // LobbyPlayer/typed PublicPlayer 会省略空串字段：avatarUrl 清空时会变成 undefined。
         // 合并时必须显式写回空值，否则旧头像会残留在 me 上。
+        // LobbyPlayer 热路径可能省略 gameStats；合并时保留本地分项，避免资料被抹空。
+        const incomingHasGames = Boolean(
+          p.gameStats &&
+          [p.gameStats.rps, p.gameStats.othello, p.gameStats.tictactoe, p.gameStats.gomoku, p.gameStats.liarsdice, p.gameStats.jungle]
+            .some((g) => g && ((g.wins || 0) + (g.losses || 0) + (g.draws || 0) > 0))
+        );
         const merged = {
           ...old.player,
           ...p,
           genderId: typeof p.genderId === "string" ? p.genderId : "",
-          avatarUrl: p.avatarUrl || undefined
+          avatarUrl: p.avatarUrl || undefined,
+          gameStats: incomingHasGames ? p.gameStats : old.player.gameStats
         };
         return { ...old, player: merged, room: old.room ? replacePlayerInRoom(old.room, merged) : old.room };
       });

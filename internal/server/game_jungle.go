@@ -449,7 +449,7 @@ func (s *Server) finishJungleGame(room *RoomState, result types.RoundResult, not
 			wD, lD := s.applyRankedStake(winner, loser, effectiveRankedStake(room.Settings))
 			rankedDelta[types.SeatKey(result)] += wD
 			rankedDelta[loserSeat] += lD
-			resetExtremeWinStreak(loser)
+			s.resetExtremeWinStreak(loser)
 			streakText = s.applyExtremeWinStreakRisk(room, winner)
 			rankedText = fmt.Sprintf("（%s %s，%s %d）",
 				occupantName(room.Seats[types.SeatKey(result)]), formatSigned(wD),
@@ -613,12 +613,12 @@ func (s *Server) applyJungleDisconnectForfeit(room *RoomState, forfeit Disconnec
 		wD, lD := s.applyRankedStake(winner, loser, forfeit.Stake)
 		rankedDelta[forfeit.WinnerSeat] += wD
 		rankedDelta[forfeit.LoserSeat] += lD
-		resetExtremeWinStreak(loser)
+		s.resetExtremeWinStreak(loser)
 		streakText = s.applyExtremeWinStreakRisk(room, winner)
 		rankedText = fmt.Sprintf("，排位 %d 分已结算（%s %s，%s %d）", forfeit.Stake, forfeit.WinnerName, formatSigned(wD), forfeit.LoserName, lD)
 	}
-	recordGameOutcome(winner, types.GameJungle, "win")
-	recordGameOutcome(loser, types.GameJungle, "loss")
+	s.recordGameOutcome(winner, types.GameJungle, "win")
+	s.recordGameOutcome(loser, types.GameJungle, "loss")
 	s.applyGiveawayWinPenalty(winner)
 	room.Score[forfeit.WinnerSeat]++
 	room.SeatedScore[forfeit.WinnerSeat]++

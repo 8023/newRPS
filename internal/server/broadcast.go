@@ -44,8 +44,34 @@ func (s *Server) recordBroadcast(typ string, bytes int) {
 	}
 }
 
+// lobbyLivePlayerWindowMs：离线玩家仍出现在大厅实时快照的最长窗口。
+// 与前端 isRenameTargetVisible / isNameWarLoserVisible（30 分钟）对齐。
+const lobbyLivePlayerWindowMs int64 = 30 * 60 * 1000
+
+// lobbyPlayerInLiveSnapshot 判断玩家是否应进入大厅实时通道：
+// 在线全收；离线仅保留「近期可被点名/改名/名争展示」或「白给上板未过期」的。
+// 全站历史档案不再塞进 lobby FULL/DELTA（流量与 CPU 根因 #1）。
+func lobbyPlayerInLiveSnapshot(player *PlayerState, now int64) bool {
+	if player == nil {
+		return false
+	}
+	if player.Connected {
+		return true
+	}
+	if player.DisconnectExpiresAt != nil && *player.DisconnectExpiresAt > now {
+		return true
+	}
+	if player.DisconnectedAt != nil && now-*player.DisconnectedAt <= lobbyLivePlayerWindowMs {
+		return true
+	}
+	if player.GiveawayBoardText != "" && player.GiveawayBoardExpiresAt != nil && *player.GiveawayBoardExpiresAt > now {
+		return true
+	}
+	return false
+}
+
 func (s *Server) lobbySnapshot(includeConfig, includeSuggestions bool) types.LobbySnapshot {
-	humanPlayers := make(map[string]types.LobbyPlayer, len(s.players))
+	humanPlayers := make(map[string]types.LobbyPlayer)
 	online := 0
 	now := nowMs()
 	for _, player := range s.players {
@@ -53,11 +79,15 @@ func (s *Server) lobbySnapshot(includeConfig, includeSuggestions bool) types.Lob
 		if s.refreshNameWarState(player, now) {
 			s.refreshPlayerSnapshots(player)
 		}
-		lp := types.ToLobbyPlayer(s.publicPlayer(player))
-		humanPlayers[lp.ID] = lp
 		if player.Connected {
 			online++
 		}
+		if !lobbyPlayerInLiveSnapshot(player, now) {
+			continue
+		}
+		// 实时通道用轻量视图（无分游戏 GameStats），降低 FULL/DELTA 体积。
+		lp := types.ToLiveLobbyPlayer(s.publicPlayer(player))
+		humanPlayers[lp.ID] = lp
 	}
 
 	rooms := make(map[string]types.LobbyRoomInfo, len(s.rooms))
@@ -95,7 +125,7 @@ func (s *Server) lobbySnapshot(includeConfig, includeSuggestions bool) types.Lob
 			LiarsDiceMinPlayers: room.Settings.LiarsDiceMinPlayers, LiarsDiceMaxPlayers: room.Settings.LiarsDiceMaxPlayers,
 			OthelloMoveSeconds: room.Settings.OthelloMoveSeconds, OthelloGameMinutes: room.Settings.OthelloGameMinutes,
 			GomokuMoveSeconds: room.Settings.GomokuMoveSeconds, GomokuGameMinutes: room.Settings.GomokuGameMinutes,
-			GomokuUndoLimit: room.Settings.GomokuUndoLimit,
+			GomokuUndoLimit:   room.Settings.GomokuUndoLimit,
 			JungleMoveSeconds: room.Settings.JungleMoveSeconds, JungleGameMinutes: room.Settings.JungleGameMinutes,
 		}
 		if room.Settings.EnableTags {
@@ -291,8 +321,9 @@ func (s *Server) emitWireToRoom(room string, env *wire.Envelope) {
 	if err != nil {
 		return
 	}
-	for _, c := range s.clients {
-		if c.inRoom(room) {
+	// 走 roomClients 反向索引：O(订阅者) 而非 O(全服连接)
+	for id := range s.roomClients[room] {
+		if c := s.clients[id]; c != nil {
 			_ = c.writeBinary(data)
 		}
 	}
@@ -379,14 +410,8 @@ func (s *Server) sendFullChannel(c *Client, channel string) {
 		if err == nil {
 			s.emitWireClient(c, env)
 		}
-	case channel == channelPlayers():
-		// players 不是状态通道文档；resync 时发 RAW 批量列表，禁止走 StateDocument FULL
-		list := make([]types.LobbyPlayer, 0, len(s.players))
-		for _, p := range s.players {
-			list = append(list, types.ToLobbyPlayer(s.publicPlayer(p)))
-		}
-		sort.Slice(list, func(i, j int) bool { return list[i].ID < list[j].ID })
-		s.emitToClient(c.id, "player:batch", list)
+	// channel "players" 已废弃：全站档案走鉴权+分页+限流的 players:roster，
+	// 禁止 sync:full 旁路一次 dump 全站（含 GameStats）成为免鉴权 O(P) 放大器。
 	case len(channel) > 5 && channel[:5] == "room:":
 		roomID := channel[5:]
 		room := s.rooms[roomID]

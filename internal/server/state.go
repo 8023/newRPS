@@ -14,11 +14,16 @@ const (
 	// lobbySuggestionChannel 现为「大厅聊天」实时频道：大厅视图与房间内的「大厅」tab
 	// 都加入此频道以收 chat:new 增量推送（历史与首屏走 chat:load RPC，读 SQLite）。
 	lobbySuggestionChannel = "lobby:suggestions"
-	chatPageSize           = 100
-	chatLoadMorePageSize   = 50
-	roomHistoryPageSize    = 10
-	giveawayBoardDuration  = 12 * time.Hour
-	broadcastMetricWindow  = 60 * time.Second
+	// petbondChannel：宠物乐园面板订阅频道。仅订阅者收到 petbond:update 个性化推送，
+	// 避免上线/关系变更时对全体在线玩家 O(O·P) 构建状态。
+	petbondChannel       = "petbond"
+	chatPageSize         = 100
+	chatLoadMorePageSize = 50
+	roomHistoryPageSize  = 10
+	// roomHistoryMaxKeep：内存中每房保留的对局历史条数上限（快照仍只下发最近 pageSize 条）。
+	roomHistoryMaxKeep    = 100
+	giveawayBoardDuration = 12 * time.Hour
+	broadcastMetricWindow = 60 * time.Second
 )
 
 type DisconnectForfeit struct {
@@ -108,10 +113,15 @@ type PlayerState struct {
 	PushMentionEnabled *bool // 聊天 @ 我
 	PushTurnEnabled    *bool // 轮到我出招/落子
 	PushSeatEnabled    *bool // 我的房间参战席被坐满
-	Persistent         bool
-	CurrentSID         string
-	CreatedAt          int64
-	LastSeenAt         int64
+	// GiveawayVotedTargets：本玩家已投过票的自救板，key 为目标玩家 ID，value 为投票时
+	// 目标那条 GiveawayBoardSubmittedAt（即"板子版本"）。防止同一条 giveaway:vote 请求
+	// 被抓包重放对同一条自救内容反复计分——目标重新上板（新版本）后可以再投一次。
+	// 纯内存态，不落库，与其它每小时计数器（GiveawayVoteLikesThisHour 等）同一约定。
+	GiveawayVotedTargets map[string]int64
+	Persistent           bool
+	CurrentSID           string
+	CreatedAt            int64
+	LastSeenAt           int64
 	// disconnect timers (invalidated via generation)
 	graceGen   int
 	timerGen   int
@@ -290,6 +300,9 @@ type Server struct {
 	rooms          map[string]*RoomState
 	clients        map[string]*Client // client.id -> client
 	socketToClient map[string]*Client // same as clients by id
+	// roomClients：逻辑频道/房间名 → 已 join 的 client.id 集合（与 Client.rooms 双向维护）。
+	// emitWireToRoom 直接扫此索引，避免对全服 C 个连接做 inRoom 过滤。
+	roomClients map[string]map[string]struct{}
 
 	othelloSettlementTimers map[string]*time.Timer
 	ticTacToeGiveawayTimers map[string]*time.Timer
@@ -318,7 +331,7 @@ type Server struct {
 	petBonds        map[string]*petBond        // bondKey(master,pet) -> bond
 	petBondRequests map[string]*petBondRequest // id -> pending request
 	// activityDB：玩家审计事件（改名/模式开关）+ 连接生命周期事件的 SQLite 持久化存储，
-	// system/error 两张活动日志表不在此列，仍走 work/logs/*.csv（见 activitylog.go）
+	// system/error 两张活动日志表不在此列，仍走 work/logs/*.log（见 activitylog.go）
 	activityDB     *activityStore
 	vapid          vapidKeys
 	adminClientIDs map[string]struct{}
@@ -341,6 +354,10 @@ type Server struct {
 	// 玩家更新 100ms 聚合
 	pendingPlayerUpdates map[string]*PlayerState
 	playerUpdateTimer    *time.Timer
+
+	// dirtyPlayerIDs：待写盘的持久化玩家（s.mu 保护）。writeSnapshot 只 UPSERT 这些 ID；
+	// 若集合为空则退回全量序列化，避免漏 mark 丢档。
+	dirtyPlayerIDs map[string]struct{}
 
 	serverStats types.ServerStats
 

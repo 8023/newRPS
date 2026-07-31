@@ -2,14 +2,17 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/coder/websocket"
 	"github.com/doumiao/newRPS/internal/pbconv"
+	"github.com/doumiao/newRPS/internal/types"
 	"github.com/doumiao/newRPS/internal/wire"
 	"google.golang.org/protobuf/proto"
 )
@@ -103,32 +106,94 @@ func (c *Client) reply(id int64, data any, errMsg string) {
 	_ = c.writeBinary(out)
 }
 
-func (c *Client) joinRoom(room string) {
-	if c.rooms == nil {
-		c.rooms = map[string]struct{}{}
-	}
-	c.rooms[room] = struct{}{}
-}
-
-func (c *Client) leaveRoom(room string) {
-	delete(c.rooms, room)
-}
-
 func (c *Client) inRoom(room string) bool {
 	_, ok := c.rooms[room]
 	return ok
 }
 
+// clientJoinRoom 将连接加入逻辑频道，并维护 roomClients 反向索引。
+func (s *Server) clientJoinRoom(c *Client, room string) {
+	if c == nil || room == "" {
+		return
+	}
+	if c.rooms == nil {
+		c.rooms = map[string]struct{}{}
+	}
+	if _, ok := c.rooms[room]; ok {
+		return
+	}
+	c.rooms[room] = struct{}{}
+	if s.roomClients == nil {
+		s.roomClients = map[string]map[string]struct{}{}
+	}
+	set := s.roomClients[room]
+	if set == nil {
+		set = map[string]struct{}{}
+		s.roomClients[room] = set
+	}
+	set[c.id] = struct{}{}
+}
+
+// clientLeaveRoom 离开逻辑频道并同步反向索引。
 func (s *Server) clientLeaveRoom(c *Client, room string) {
-	if c != nil {
-		c.leaveRoom(room)
+	if c == nil || room == "" {
+		return
+	}
+	if _, ok := c.rooms[room]; !ok {
+		return
+	}
+	delete(c.rooms, room)
+	if set := s.roomClients[room]; set != nil {
+		delete(set, c.id)
+		if len(set) == 0 {
+			delete(s.roomClients, room)
+		}
 	}
 }
 
+// clientLeaveAllRooms 断线/顶替时清掉该连接的全部频道成员关系。
+func (s *Server) clientLeaveAllRooms(c *Client) {
+	if c == nil || len(c.rooms) == 0 {
+		return
+	}
+	for room := range c.rooms {
+		if set := s.roomClients[room]; set != nil {
+			delete(set, c.id)
+			if len(set) == 0 {
+				delete(s.roomClients, room)
+			}
+		}
+	}
+	c.rooms = map[string]struct{}{}
+}
+
+// parseWSAuthProtocols 从 Sec-WebSocket-Protocol 请求头里取出会话 token 与浏览器指纹。
+// 之前 token 直接拼在 /ws?token= 查询串里，会连同完整 URL 一起被反向代理的访问日志记录下来
+// （token 24 小时内有效，拿到即可冒充该玩家上传证明图/头像）。Sec-WebSocket-Protocol 是浏览器
+// WebSocket API 里唯一能在握手阶段附带自定义值、又不出现在请求行/URL 里的字段，
+// 服务端读取后不需要也不回选任何子协议（AcceptOptions 不设置 Subprotocols）。
+// 值本身用 "auth."/"fp." 前缀区分；fp 部分做了 base64url 编码，避免指纹原始内容里出现
+// HTTP token 语法不允许的字符时握手直接报错。
+func parseWSAuthProtocols(header string) (token, fingerprint string) {
+	if header == "" {
+		return "", ""
+	}
+	for _, part := range strings.Split(header, ",") {
+		part = strings.TrimSpace(part)
+		switch {
+		case strings.HasPrefix(part, "auth."):
+			token = strings.TrimPrefix(part, "auth.")
+		case strings.HasPrefix(part, "fp."):
+			if decoded, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(part, "fp.")); err == nil {
+				fingerprint = string(decoded)
+			}
+		}
+	}
+	return token, fingerprint
+}
+
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
-	token := r.URL.Query().Get("token")
-	// 浏览器指纹：query 优先，其次请求头（兼容后续改造）
-	fingerprint := r.URL.Query().Get("fp")
+	token, fingerprint := parseWSAuthProtocols(r.Header.Get("Sec-WebSocket-Protocol"))
 	if fingerprint == "" {
 		fingerprint = r.Header.Get("X-Browser-Fingerprint")
 	}
@@ -180,6 +245,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 					delete(s.clientIDsByDevice, prevKey)
 				}
 			}
+			s.clientLeaveAllRooms(prev)
 			delete(s.clients, prev.id)
 			delete(s.clientIDToSID, prev.id)
 			delete(s.sidToClientID, session.SID)
@@ -245,7 +311,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	s.clientIDToSID[client.id] = session.SID
 	// Accept 期间旧连接 onClientDisconnect 可能删掉预创建的空 device map，这里必须再 ensure
 	s.ensureDeviceSocketSet(devKey)[client.id] = struct{}{}
-	client.joinRoom(lobbyChannel)
+	s.clientJoinRoom(client, lobbyChannel)
 	cfg := s.publicConfig()
 	lobby := s.lobbySnapshot(false, true)
 	// buildFullEnvelope 会读写共享的 syncChans，必须在锁内构建；发送在锁外做。
@@ -362,6 +428,104 @@ func (s *Server) wsPingLoop(ctx context.Context, conn *websocket.Conn) {
 	}
 }
 
+// onSyncFull / onPlayerGet 曾经在 handleWSEvent 里作为 switch 分支提前处理并 return，
+// 完全绕过了下面 eventHandler 表里其它事件都要过的 checkRateLimit/checkIPEventBackstop
+// 限流——只受一个粗粒度的 600 次/分钟/IP 桶约束。sync:full 尤其重：要在持有 s.mu 的情况下
+// 重建整个频道快照、编码 protobuf、算 CRC32，高频调用会放大全局锁竞争。现在它们和其它
+// 事件一样走 eventHandler 表登记，统一受同一套按 event:ip:sid + event:ip 的限流保护。
+func (s *Server) onSyncFull(client *Client, env wsEnvelope) {
+	var p struct {
+		Channel string `json:"channel"`
+	}
+	_ = decodeD(env, &p)
+	if p.Channel == "" {
+		client.reply(env.ID, nil, "channel required")
+		return
+	}
+	s.sendFullChannel(client, p.Channel)
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+}
+
+func (s *Server) onPlayerGet(client *Client, env wsEnvelope) {
+	var p struct {
+		PlayerID string `json:"playerId"`
+	}
+	_ = decodeD(env, &p)
+	pl := s.players[p.PlayerID]
+	if pl == nil {
+		client.reply(env.ID, nil, "玩家不存在")
+		return
+	}
+	client.reply(env.ID, map[string]any{"player": s.publicPlayer(pl)}, "")
+}
+
+// roster 分页：单页默认/上限（防止一次 RPC 拉爆内存与编码）。
+const (
+	rosterDefaultLimit = 200
+	rosterMaxLimit     = 500
+)
+
+// onPlayersRoster 返回全站玩家精简档案（含离线 + 分游戏战绩），供全局排行榜等按需消费。
+// 支持 offset/limit 分页；不走 lobby 实时通道。
+func (s *Server) onPlayersRoster(client *Client, env wsEnvelope) {
+	if _, ok := s.requirePlayer(client, env); !ok {
+		return
+	}
+	var p struct {
+		Offset int `json:"offset"`
+		Limit  int `json:"limit"`
+	}
+	_ = decodeD(env, &p)
+	limit := p.Limit
+	if limit <= 0 {
+		limit = rosterDefaultLimit
+	}
+	if limit > rosterMaxLimit {
+		limit = rosterMaxLimit
+	}
+	offset := p.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	now := nowMs()
+	// 先收集排序后的 id，再切片序列化，避免全量 ToLobbyPlayer 后再丢弃。
+	ids := make([]string, 0, len(s.players))
+	for id := range s.players {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	total := len(ids)
+	if offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	pageIDs := ids[offset:end]
+	list := make([]types.LobbyPlayer, 0, len(pageIDs))
+	for _, id := range pageIDs {
+		player := s.players[id]
+		if player == nil {
+			continue
+		}
+		s.refreshGiveawayBoard(player, now)
+		if s.refreshNameWarState(player, now) {
+			s.refreshPlayerSnapshots(player)
+		}
+		// roster 含 GameStats，供分游戏榜
+		list = append(list, types.ToLobbyPlayer(s.publicPlayer(player)))
+	}
+	client.reply(env.ID, map[string]any{
+		"players": list,
+		"total":   total,
+		"offset":  offset,
+		"limit":   limit,
+		"hasMore": end < total,
+	}, "")
+}
+
 func (s *Server) handleWSEvent(client *Client, env wsEnvelope) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -379,34 +543,6 @@ func (s *Server) handleWSEvent(client *Client, env wsEnvelope) {
 
 	if !s.consumeRateLimit(fmt.Sprintf("socket:%s:%s", client.ipAddress, env.E), 60_000, 600) {
 		client.reply(env.ID, nil, "操作过于频繁，请稍后再试")
-		return
-	}
-
-	// 同步与资料查询
-	switch env.E {
-	case "sync:full":
-		var p struct {
-			Channel string `json:"channel"`
-		}
-		_ = decodeD(env, &p)
-		if p.Channel == "" {
-			client.reply(env.ID, nil, "channel required")
-			return
-		}
-		s.sendFullChannel(client, p.Channel)
-		client.reply(env.ID, map[string]any{"ok": true}, "")
-		return
-	case "player:get":
-		var p struct {
-			PlayerID string `json:"playerId"`
-		}
-		_ = decodeD(env, &p)
-		pl := s.players[p.PlayerID]
-		if pl == nil {
-			client.reply(env.ID, nil, "玩家不存在")
-			return
-		}
-		client.reply(env.ID, map[string]any{"player": s.publicPlayer(pl)}, "")
 		return
 	}
 
@@ -474,6 +610,7 @@ func (s *Server) onClientDisconnect(client *Client) {
 		}
 	}
 	delete(s.adminClientIDs, client.id)
+	s.clientLeaveAllRooms(client)
 	delete(s.clients, client.id)
 
 	player := s.getPlayerByClient(client)
@@ -561,6 +698,7 @@ func (s *Server) onClientDisconnect(client *Client) {
 			}
 			if expired.Persistent {
 				expired.LastSeenAt = nowMs()
+				s.markPlayerDirty(expired)
 				s.requestPersist("lazy")
 			} else {
 				delete(s.players, expired.ID)

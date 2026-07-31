@@ -73,8 +73,8 @@ func (s *Server) applySeatOutcome(room *RoomState, result types.RoundResult) (pl
 		gameID = types.GameRPS
 	}
 	if result == types.ResultDraw {
-		recordGameOutcome(playerA, gameID, "draw")
-		recordGameOutcome(playerB, gameID, "draw")
+		s.recordGameOutcome(playerA, gameID, "draw")
+		s.recordGameOutcome(playerB, gameID, "draw")
 		ssA := room.SeatStats[types.SeatA]
 		ssA.Draws++
 		room.SeatStats[types.SeatA] = ssA
@@ -84,8 +84,8 @@ func (s *Server) applySeatOutcome(room *RoomState, result types.RoundResult) (pl
 		return
 	}
 	if result == types.ResultDoubleLoss {
-		recordGameOutcome(playerA, gameID, "loss")
-		recordGameOutcome(playerB, gameID, "loss")
+		s.recordGameOutcome(playerA, gameID, "loss")
+		s.recordGameOutcome(playerB, gameID, "loss")
 		ssA := room.SeatStats[types.SeatA]
 		ssA.Losses++
 		room.SeatStats[types.SeatA] = ssA
@@ -100,8 +100,8 @@ func (s *Server) applySeatOutcome(room *RoomState, result types.RoundResult) (pl
 	loserSeat := oppositeSeat(types.SeatKey(result))
 	winner := s.humanPlayerFromSeat(room, types.SeatKey(result))
 	loser := s.humanPlayerFromSeat(room, loserSeat)
-	recordGameOutcome(winner, gameID, "win")
-	recordGameOutcome(loser, gameID, "loss")
+	s.recordGameOutcome(winner, gameID, "win")
+	s.recordGameOutcome(loser, gameID, "loss")
 	s.applyGiveawayWinPenalty(winner)
 	room.Score[types.SeatKey(result)]++
 	room.SeatedScore[types.SeatKey(result)]++

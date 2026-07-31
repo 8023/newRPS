@@ -919,8 +919,8 @@ func (s *Server) applyOthelloDisconnectForfeit(room *RoomState, forfeit Disconne
 	if room.Othello != nil {
 		blackCount, whiteCount = othelloCounts(room.Othello.Board)
 	}
-	recordGameOutcome(winner, types.GameOthello, "win")
-	recordGameOutcome(loser, types.GameOthello, "loss")
+	s.recordGameOutcome(winner, types.GameOthello, "win")
+	s.recordGameOutcome(loser, types.GameOthello, "loss")
 	s.applyGiveawayWinPenalty(winner)
 	rankedFloorText := s.applyOthelloForfeitRankedFloor(room, forfeit.WinnerSeat, forfeit.LoserSeat)
 	fullForfeitText := s.applyOthelloEscapeRankedPenalty(room, forfeit.WinnerSeat, forfeit.LoserSeat, 1, "断线全输")
@@ -935,7 +935,7 @@ func (s *Server) applyOthelloDisconnectForfeit(room *RoomState, forfeit Disconne
 	}
 	punishment := s.currentPunishment(room)
 	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, types.RoundResult(forfeit.WinnerSeat), punishment)
-	resetExtremeWinStreak(loser)
+	s.resetExtremeWinStreak(loser)
 	streakText := ""
 	if room.Settings.EnableRanked {
 		streakText = s.applyExtremeWinStreakRisk(room, winner)
