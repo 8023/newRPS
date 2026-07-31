@@ -1,5 +1,22 @@
 # 更新记录
 
+### v2.3.5（2026-07-31）
+
+紧接 v2.3.4 的两处线上回归修复，以及一个前端字段规范化补漏。
+
+#### Bugfix
+
+- **Chrome/Edge WebSocket 握手失败**：v2.3.4 把 token/指纹从 `?token=` 查询串迁进 `Sec-WebSocket-Protocol` 握手头后，服务端 `AcceptOptions` 没有回选任何子协议。Safari/WebKit 不校验这条能连上，但 Chrome/Edge 严格按 RFC6455 校验——请求带了 `Sec-WebSocket-Protocol`，响应必须回选其中之一，否则握手直接失败。现在服务端固定回选 `auth.<token>`，Chrome/Edge 恢复正常。
+- **Safari/iOS Web Push 全部收 403 BadJwtToken**：`VAPID_SUBSCRIBER` 默认值原为 `mailto:admin@rps.rbq.io`，但 `webpush-go` 内部只要 subscriber 不以 `https:` 开头就无条件再拼一个 `mailto:` 前缀，不检查是否已经带了——结果 JWT 里的 sub claim 被拼成 `mailto:mailto:xxx`。Apple 的 `web.push.apple.com` 严格校验 sub 的 URI 语法，直接 403 BadJwtToken 拒收；FCM/Samsung 网关不严格校验才让这个问题一直没被发现。现在环境变量约定直接填邮箱（不带 `mailto:` 前缀），服务端在传给库前统一 `normalizeVAPIDSubscriberForLibrary` 去掉 `mailto:`/`MAILTO:` 前缀，由库自己补一次。`.env.example`、`docker-compose.yml`、README 环境变量表全部同步更新，并加了单元测试防回归。
+
+#### 可观测性
+
+- **推送投递失败附带网关 body 片段**：之前非 2xx 响应只记状态码，出问题时只能靠猜（VAPID 签名错？密钥不匹配？认证头格式？）。现在限量读取 2KB body 片段一起塞进 `push_send_rejected` 审计日志——正是靠这一条才快速定位到上面 Apple 的 `BadJwtToken` 具体原因。
+
+#### 前端
+
+- **`normalizePublicStats` 补上 `selfTitle` 字段**：v2.3.2 引入的"玩家自定义称号"在归一化时被丢弃，前端某些视图因此看不到自设称号。补齐字符串类型透传。
+
 ### v2.3.4（2026-07-31）
 
 #### 安全加固

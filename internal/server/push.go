@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -144,6 +145,20 @@ func (p *pushStore) subscriptionsForPlayer(playerID string) ([]storedSubscriptio
 	return out, rows.Err()
 }
 
+// normalizeVAPIDSubscriberForLibrary 去掉调用方可能带上的 "mailto:"/"MAILTO:" 前缀。
+//
+// VAPID_SUBSCRIBER 约定直接填邮箱地址（不带 mailto:），或者一个 HTTPS 地址。webpush-go 的
+// getVAPIDAuthorizationHeader 只要 subscriber 不以 "https:" 开头就无条件拼一个 "mailto:" 前缀，
+// 不检查是否已经带了；如果这里传入的值已经手误带了 "mailto:"，会被拼成 "mailto:mailto:xxx"，
+// 这个畸形的 sub claim 会被 Safari/iOS 走的 Apple 网关（web.push.apple.com）以 403 BadJwtToken
+// 拒绝——FCM/Samsung 的网关不严格校验 sub 的 URI 语法所以能收到，掩盖了这个问题。
+// 这里统一去掉前缀交给库自己补上一次，无论环境变量填没填 mailto: 都能得到正确结果。
+func normalizeVAPIDSubscriberForLibrary(subscriber string) string {
+	trimmed := strings.TrimPrefix(subscriber, "mailto:")
+	trimmed = strings.TrimPrefix(trimmed, "MAILTO:")
+	return trimmed
+}
+
 // vapidKeys 是本地生成/落盘的 VAPID 密钥对（work/vapid.json），也可用环境变量覆盖
 // （多实例部署时需要共享同一对密钥，否则旧订阅会在切到另一台实例后失效）。
 type vapidKeys struct {
@@ -273,10 +288,10 @@ func (s *Server) deliverPush(playerID string, subs []storedSubscription, title, 
 	}
 	subscriber := os.Getenv("VAPID_SUBSCRIBER")
 	if subscriber == "" {
-		subscriber = "mailto:admin@rps.rbq.io"
+		subscriber = "admin@rps.rbq.io"
 	}
 	opts := &webpush.Options{
-		Subscriber:      subscriber,
+		Subscriber:      normalizeVAPIDSubscriberForLibrary(subscriber),
 		VAPIDPublicKey:  s.vapid.PublicKey,
 		VAPIDPrivateKey: s.vapid.PrivateKey,
 		TTL:             300,
@@ -294,6 +309,13 @@ func (s *Server) deliverPush(playerID string, subs []storedSubscription, title, 
 			continue
 		}
 		status := resp.StatusCode
+		// 网关的非 2xx 响应体通常带着具体拒绝原因（VAPID 签名/密钥不匹配、认证头格式错误等），
+		// 之前直接丢弃只留状态码，出问题时只能靠猜；限量读取，避免网关返回异常大的 body。
+		bodySnippet := ""
+		if status < 200 || status >= 300 {
+			raw, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+			bodySnippet = strings.TrimSpace(string(raw))
+		}
 		_ = resp.Body.Close()
 		switch {
 		case status >= 200 && status < 300:
@@ -307,7 +329,7 @@ func (s *Server) deliverPush(playerID string, subs []storedSubscription, title, 
 			result.Failed++
 			result.LastError = fmt.Sprintf("HTTP %d", status)
 			s.errorLog("push_send_rejected", fmt.Sprintf(
-				"player=%s status=%d tag=%s", playerID, status, tag,
+				"player=%s status=%d tag=%s body=%q", playerID, status, tag, bodySnippet,
 			))
 		}
 	}

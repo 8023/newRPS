@@ -11,6 +11,23 @@ import (
 	"github.com/doumiao/newRPS/internal/types"
 )
 
+// TestNormalizeVAPIDSubscriberForLibrary 防止 webpush-go 把已经带 "mailto:" 前缀的 subscriber
+// 再拼一次导致 "mailto:mailto:xxx"——Apple 的 web.push.apple.com 会用 403 BadJwtToken 拒绝这种
+// 畸形 sub claim（FCM/Samsung 网关不严格校验，之前才没被发现）。
+func TestNormalizeVAPIDSubscriberForLibrary(t *testing.T) {
+	cases := map[string]string{
+		"mailto:admin@rps.rbq.io": "admin@rps.rbq.io",
+		"MAILTO:admin@rps.rbq.io": "admin@rps.rbq.io",
+		"https://rps.rbq.io":      "https://rps.rbq.io",
+		"admin@rps.rbq.io":        "admin@rps.rbq.io",
+	}
+	for input, want := range cases {
+		if got := normalizeVAPIDSubscriberForLibrary(input); got != want {
+			t.Fatalf("normalizeVAPIDSubscriberForLibrary(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
 func TestShouldPush(t *testing.T) {
 	on := boolPtr(true)
 	off := boolPtr(false)

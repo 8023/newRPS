@@ -209,7 +209,7 @@ curl -fsS http://127.0.0.1:${HOST_PORT:-9988}/api/push/vapid-key
 | `ADMIN_PASSWORD` | （空） | 后台口令 |
 | `SESSION_SECRET` | `work/session.secret` | 会话 HMAC；未设置则落盘复用 |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | `work/vapid.json` | Web Push 密钥对；环境变量必须成对设置，多实例必须共享同一对 |
-| `VAPID_SUBSCRIBER` | `mailto:admin@rps.rbq.io` | VAPID 联系 URI；建议改成管理员实际可联系的 `mailto:` 或 HTTPS 地址 |
+| `VAPID_SUBSCRIBER` | `admin@rps.rbq.io` | VAPID 联系邮箱，直接填邮箱地址、不要带 `mailto:` 前缀（服务端会自动补上，重复带前缀在 Safari/iOS 走的 Apple 推送网关上会被 403 拒绝）；也可以填 `https://` 开头的地址 |
 | `SESSION_TTL_MS` | 24h | 会话有效期 |
 | `ALLOWED_ORIGINS` | 本机 | 额外 Origin |
 | `TRUSTED_PROXY_COUNT` | `0` | 可信反向代理层数，决定 `X-Forwarded-For`/`X-Forwarded-Host` 信任方式；默认 `0`=直连。部署在反向代理之后（Nginx/Caddy/云 LB 等）必须显式设为实际代理层数，否则会退化为按代理自身 IP 计算（限流过严但不会被伪造） |

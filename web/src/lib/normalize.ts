@@ -107,6 +107,7 @@ export function normalizePublicStats(stats: PublicPlayer["stats"] | null | undef
     sortHighestScore: statNum(s.sortHighestScore, statNum(s.highestScore)),
     sortLowestScore: statNum(s.sortLowestScore, statNum(s.lowestScore)),
     title: title || "暂无称号",
+    selfTitle: typeof s.selfTitle === "string" ? s.selfTitle : "",
     totalOnlineMs: statNum(s.totalOnlineMs),
     titleSource: s.titleSource || "system",
     titleColors: s.titleColors,

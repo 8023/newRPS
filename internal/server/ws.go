@@ -171,9 +171,12 @@ func (s *Server) clientLeaveAllRooms(c *Client) {
 // 之前 token 直接拼在 /ws?token= 查询串里，会连同完整 URL 一起被反向代理的访问日志记录下来
 // （token 24 小时内有效，拿到即可冒充该玩家上传证明图/头像）。Sec-WebSocket-Protocol 是浏览器
 // WebSocket API 里唯一能在握手阶段附带自定义值、又不出现在请求行/URL 里的字段，
-// 服务端读取后不需要也不回选任何子协议（AcceptOptions 不设置 Subprotocols）。
 // 值本身用 "auth."/"fp." 前缀区分；fp 部分做了 base64url 编码，避免指纹原始内容里出现
 // HTTP token 语法不允许的字符时握手直接报错。
+//
+// ⚠️ 服务端必须在 AcceptOptions.Subprotocols 里回选客户端提供的其中一个值：Chrome/Edge
+// 对 RFC6455 的实现比 Safari 严格——只要请求带了 Sec-WebSocket-Protocol，响应就必须回选
+// 其中之一，否则 Chrome 直接判定握手失败（Safari/WebKit 不校验这条，能正常连上）。
 func parseWSAuthProtocols(header string) (token, fingerprint string) {
 	if header == "" {
 		return "", ""
@@ -283,6 +286,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		CompressionMode: compMode,
 		OriginPatterns:  []string{"*"},
+		Subprotocols:    []string{"auth." + token},
 	})
 	if err != nil {
 		s.securityLog("socket_accept_failed", map[string]any{
