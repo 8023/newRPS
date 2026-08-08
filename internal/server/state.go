@@ -3,9 +3,11 @@ package server
 import (
 	"database/sql"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/doumiao/newRPS/internal/geoip"
 	"github.com/doumiao/newRPS/internal/types"
 )
 
@@ -113,6 +115,7 @@ type PlayerState struct {
 	PushMentionEnabled *bool // 聊天 @ 我
 	PushTurnEnabled    *bool // 轮到我出招/落子
 	PushSeatEnabled    *bool // 我的房间参战席被坐满
+	PushBondEnabled    *bool // 我的主/宠上线
 	// GiveawayVotedTargets：本玩家已投过票的自救板，key 为目标玩家 ID，value 为投票时
 	// 目标那条 GiveawayBoardSubmittedAt（即"板子版本"）。防止同一条 giveaway:vote 请求
 	// 被抓包重放对同一条自救内容反复计分——目标重新上板（新版本）后可以再投一次。
@@ -285,6 +288,13 @@ type Client struct {
 	// connectionLogged：优雅关停路径已写过 connection_events 时置 true，
 	// 避免随后 onClientDisconnect 再插一条重复记录。
 	connectionLogged bool
+	// ana*：分析用的派生维度，握手时算一次并缓存，之后 analytics:collect 每批只做字段取值，
+	// 不在持 s.mu 时做任何字符串解析或 IP 查表。
+	anaVisitor string
+	anaBrowser string
+	anaOS      string
+	anaDevice  string
+	anaGeo     geoip.Region
 }
 
 // Server holds all game state.
@@ -332,8 +342,21 @@ type Server struct {
 	petBondRequests map[string]*petBondRequest // id -> pending request
 	// activityDB：玩家审计事件（改名/模式开关）+ 连接生命周期事件的 SQLite 持久化存储，
 	// system/error 两张活动日志表不在此列，仍走 work/logs/*.log（见 activitylog.go）
-	activityDB     *activityStore
-	vapid          vapidKeys
+	activityDB *activityStore
+	// analyticsDB：分析写路径（走 s.db）；analyticsRO 为只读聚合连接；
+	// analyticsSnap 无锁发布预算结果；analyticsKick 容量 1，手动催一次重算。
+	analyticsDB   *analyticsStore
+	analyticsRO   *sql.DB
+	analyticsSnap atomic.Pointer[analyticsSnapshot]
+	analyticsKick chan struct{}
+	// analyticsEnabled / analyticsGeoEnabled / analyticsTZOffsetMin / analyticsRawRetentionDays：
+	// 启动时从环境变量解析，运行期只读。
+	analyticsEnabled         bool
+	analyticsGeoEnabled      bool
+	analyticsTZOffsetMin     int
+	analyticsRawRetentionDays int
+	analyticsSalt            []byte
+	vapid                    vapidKeys
 	adminClientIDs map[string]struct{}
 	sidToClientID  map[string]string
 	clientIDToSID  map[string]string

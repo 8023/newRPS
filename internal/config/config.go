@@ -1,7 +1,7 @@
-// Package config 从 config/ 下按功能拆分的 JSON 文件原地读写配置。
+// Package config 从 config/json/ 下按功能拆分的 JSON 文件原地读写配置。
 // 不在代码中维护第二套默认文案；文件缺失或校验失败直接返回 error。
 //
-// 文件一览（相对 config/）：
+// 文件一览（相对 config/json/）：
 //
 //	site.json, announcement-board.json, security-disclaimer.json, genders.json, gender-factions.json,
 //	titles.json, punishments.json, player-punishment-room-name-pool.json, room-tags.json,
@@ -87,7 +87,7 @@ func findRootDir() string {
 }
 
 func isConfigRoot(abs string) bool {
-	cfg := filepath.Join(abs, "config")
+	cfg := filepath.Join(abs, "config", "json")
 	if _, err := os.Stat(filepath.Join(cfg, "site.json")); err == nil {
 		return true
 	}
@@ -111,7 +111,7 @@ func SetRootDirForTest(dir string) {
 }
 
 func configDir() string {
-	return filepath.Join(rootDir, "config")
+	return filepath.Join(rootDir, "config", "json")
 }
 
 func configPath(name string) string {
@@ -963,7 +963,7 @@ func ensureSplitConfig() error {
 		mono = configPath("default.json")
 	}
 	if _, err := os.Stat(mono); err != nil {
-		return fmt.Errorf("缺少配置目录文件（需要 config/site.json 等，或旧版 default.json/active.json）: %w", err)
+		return fmt.Errorf("缺少配置目录文件（需要 config/json/site.json 等，或旧版 default.json/active.json）: %w", err)
 	}
 	var cfg types.AppConfig
 	if err := readJSONFile(mono, &cfg); err != nil {
@@ -1117,7 +1117,7 @@ func ExportConfigText() (string, error) {
 	return string(data) + "\n", nil
 }
 
-// EnsureConfigPermissions 将 config/*.json 设为仅属主可读写（0600）、bin/server 设为可执行（部署后可选调用）。
+// EnsureConfigPermissions 将 config/json/*.json 设为仅属主可读写（0600）、bin/server 设为可执行（部署后可选调用）。
 func EnsureConfigPermissions() {
 	dir := configDir()
 	entries, err := os.ReadDir(dir)

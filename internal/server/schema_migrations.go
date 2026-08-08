@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/doumiao/newRPS/internal/geoip"
 )
 
 // currentSchemaVersion 是代码期望的数据库结构版本号。每次改动某张表的列（加/删/改名/
@@ -17,7 +19,7 @@ import (
 //
 // 是 var 不是 const，只是为了让测试能临时替换掉去验证迁移机制本身；正常代码路径里
 // 把它当常量对待，不要在业务逻辑里修改它。
-var currentSchemaVersion = 16
+var currentSchemaVersion = 21
 
 // schemaVersionSchema：只有一行的版本表，openDatabase 每次启动都会先确保它存在。
 const schemaVersionSchema = `
@@ -177,6 +179,205 @@ var migrations = []schemaMigration{
 		_, err := db.Exec(`DROP TABLE IF EXISTS pet_bond_request_approvals`)
 		return err
 	}},
+	// v17：接入用户分析（analytics_* 四张新表由 allSchemas 建好，此处不重复）。
+	// 本迁移只补既有审计表缺失的「时间维度」索引——这些表此前只有 (player_id, at) /
+	// (room_id, at) 这类以实体为前导列的索引，任何「按时间段扫全站」的聚合都只能全表扫。
+	// 分析聚合器每分钟都要按天分桶跑这些查询，没有这几个索引会在单连接 SQLite 上直接堵住写入。
+	// CREATE INDEX IF NOT EXISTS 天然幂等，全新库与存量库都能重复执行。
+	// 同时给 connection_events 补 province/isp 列，供归属地分析回填。
+	{version: 17, migrate: func(db sqlExecer) error {
+		if err := addColumnIfMissing(db, "connection_events", "province", "TEXT"); err != nil {
+			return err
+		}
+		if err := addColumnIfMissing(db, "connection_events", "isp", "TEXT"); err != nil {
+			return err
+		}
+		for _, stmt := range []string{
+			`CREATE INDEX IF NOT EXISTS idx_connection_events_at    ON connection_events(connected_at)`,
+			`CREATE INDEX IF NOT EXISTS idx_player_activity_at      ON player_activity_events(at, action)`,
+			`CREATE INDEX IF NOT EXISTS idx_room_events_at          ON room_events(at, action)`,
+			`CREATE INDEX IF NOT EXISTS idx_punishment_events_at    ON punishment_events(task_at)`,
+			`CREATE INDEX IF NOT EXISTS idx_punishment_events_proof ON punishment_events(proof_at)`,
+			`CREATE INDEX IF NOT EXISTS idx_lobby_messages_at       ON lobby_messages(at)`,
+			`CREATE INDEX IF NOT EXISTS idx_room_messages_at        ON room_messages(at)`,
+			`CREATE INDEX IF NOT EXISTS idx_pet_bonds_created       ON pet_bonds(created_at)`,
+			`CREATE INDEX IF NOT EXISTS idx_players_created_at      ON players(created_at)`,
+			`CREATE INDEX IF NOT EXISTS idx_players_last_seen_at    ON players(last_seen_at)`,
+		} {
+			if _, err := db.Exec(stmt); err != nil {
+				return fmt.Errorf("v17 index: %w", err)
+			}
+		}
+		return nil
+	}},
+	// v18：一次性回填 v17 新增的 connection_events.province/isp——用该表本就存在的 ip 列
+	// 挨行跑 geoip 解析。只在这次库升级时执行一次（受 schema_version 门控，不会每次启动
+	// 重跑）；geoip 未启用（ANALYTICS_GEO_ENABLED=0 或 xdb 未加载）时整段跳过，不产生空写入。
+	// 要求调用方在 openDatabase（从而触发这条迁移）之前已经完成 geoip.Init/InitV6，见
+	// server.go New() 里的顺序注释。
+	{version: 18, migrate: func(db sqlExecer) error {
+		return backfillConnectionEventsGeo(db)
+	}},
+	// v19：修正 v18 写入的错误数据。geoip.parseRegion 当时把字段顺序当成旧版 ip2region
+	// 文档里的「国家|区域|省份|城市|ISP」，实际 ip2region_v4/v6.xdb 用的是「国家|省份|
+	// 城市|ISP|iso-alpha2-code」——v18 因此把「城市」错当成「省份」写进 province（非中国
+	// 地区的城市字段常年是占位符 "0"，所以这些行的 province 全是空字符串)，把两字母国家码
+	// 错当成「ISP」写进 isp。geoip 包字段索引已经修好，这里无条件对所有 ip 非空的历史行
+	// 重新解析并覆盖 province/isp——不能像 v18 那样只挑空值行，因为 v18 已经把它们"填满"
+	// 成了错误值，不会再被空值判断选中。同样只在这次库升级时跑一次。
+	{version: 19, migrate: func(db sqlExecer) error {
+		return refixConnectionEventsGeo(db)
+	}},
+	// v20：同一个 parseRegion 字段错位 bug 也污染了 analytics_sessions.province/city/isp
+	// 与 analytics_visitors.first_province（analytics_collect.go 里两边都是拿
+	// client.anaGeo 直接落盘，和 connection_events 用的是同一次 geoip.Lookup 结果）。
+	// 这两张表按设计不存原始 IP（隐私：分析表不存 IP/指纹/原始 UA，见 README），没法像
+	// connection_events 那样重新解析出正确值，只能清空——后台"省份/ISP"图表把这些行当
+	// "无归属地数据"处理，好过继续显示错误的城市名/国家码。country 字段用的是 parts[0]，
+	// 新旧代码取法一致，没被这个 bug 污染，不清。
+	// 同时删掉 analytics_daily 里已经按错误数据聚合出的 province/city/isp 行，避免历史
+	// 错误汇总数字（比如 ISP 图表里一堆 "CN"）继续挂在面板上——这几个 metric 的历史日
+	// 汇总不会被自动重算（聚合器每分钟只重算今天/昨天，backfillFromLegacyTables 只回填
+	// analytics_daily 里完全没有该 day 记录的日子），删掉后这些历史日就会正确地显示"无
+	// 数据"而不是错误数据；今天/昨天会在下一次聚合时用已修好的 geoip 重新算出正确值。
+	// 迁移只在这次库升级时执行一次，不依赖 geoip 是否启用（纯粹是清除已知错误数据，
+	// 不需要重新查表）。
+	{version: 20, migrate: func(db sqlExecer) error {
+		return clearWrongAnalyticsGeo(db)
+	}},
+	// v21：第四个推送来源——「我的主/宠上线」。新增 players.push_bond_enabled，与
+	// push_mention_enabled/push_turn_enabled/push_seat_enabled 同一约定（NULL 视为未开启）。
+	{version: 21, migrate: func(db sqlExecer) error {
+		return addColumnIfMissing(db, "players", "push_bond_enabled", "INTEGER")
+	}},
+}
+
+// backfillConnectionEventsGeo 用 connection_events.ip 批量解析归属地，回填同一行的
+// province/isp（v17 新增，默认空）。只处理 ip 非空、province/isp 仍为空的行，天然幂等。
+// 内网/回环 IP 解析结果没有省份/ISP（geoip.Lookup 只给 Country="本地"），不写入。
+func backfillConnectionEventsGeo(db sqlExecer) error {
+	if !geoip.Enabled() {
+		return nil
+	}
+	ok, err := tableExists(db, "connection_events")
+	if err != nil || !ok {
+		return err
+	}
+	rows, err := db.Query(`
+		SELECT seq, ip FROM connection_events
+		WHERE ip IS NOT NULL AND ip <> ''
+		  AND (province IS NULL OR province = '')
+		  AND (isp IS NULL OR isp = '')
+	`)
+	if err != nil {
+		return fmt.Errorf("query connection_events for geo backfill: %w", err)
+	}
+	type pendingRow struct {
+		seq int64
+		ip  string
+	}
+	var pending []pendingRow
+	for rows.Next() {
+		var r pendingRow
+		if err := rows.Scan(&r.seq, &r.ip); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan connection_events for geo backfill: %w", err)
+		}
+		pending = append(pending, r)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close() // 必须在下面继续用同一个 *sql.Tx 执行 UPDATE 前关闭，否则连接仍被结果集占用。
+
+	for _, r := range pending {
+		region := geoip.Lookup(r.ip)
+		if region.Province == "" && region.ISP == "" {
+			continue
+		}
+		if _, err := db.Exec(`UPDATE connection_events SET province = ?, isp = ? WHERE seq = ?`,
+			region.Province, region.ISP, r.seq); err != nil {
+			return fmt.Errorf("backfill connection_events geo seq=%d: %w", r.seq, err)
+		}
+	}
+	return nil
+}
+
+// refixConnectionEventsGeo 无条件对所有 ip 非空的历史行重新解析并覆盖 province/isp，
+// 用于修正 v18 因字段索引错位写入的错误数据（见 v19 迁移注释）。与
+// backfillConnectionEventsGeo 的区别：不按"province/isp 是否已为空"过滤——旧错误值
+// 本身就非空，用空值判断会漏掉。geoip 未启用时跳过，不产生空写入（此时也不清空已有
+// 的错误数据，等下次 geoip 就绪、库版本仍是 19 但内容有旧数据时不会重跑——这是可接受的
+// 权衡，geoip 长期禁用的部署本就不关心 province/isp）。
+func refixConnectionEventsGeo(db sqlExecer) error {
+	if !geoip.Enabled() {
+		return nil
+	}
+	ok, err := tableExists(db, "connection_events")
+	if err != nil || !ok {
+		return err
+	}
+	rows, err := db.Query(`SELECT seq, ip FROM connection_events WHERE ip IS NOT NULL AND ip <> ''`)
+	if err != nil {
+		return fmt.Errorf("query connection_events for geo refix: %w", err)
+	}
+	type pendingRow struct {
+		seq int64
+		ip  string
+	}
+	var pending []pendingRow
+	for rows.Next() {
+		var r pendingRow
+		if err := rows.Scan(&r.seq, &r.ip); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan connection_events for geo refix: %w", err)
+		}
+		pending = append(pending, r)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close() // 必须在下面继续用同一个 *sql.Tx 执行 UPDATE 前关闭，否则连接仍被结果集占用。
+
+	for _, r := range pending {
+		region := geoip.Lookup(r.ip)
+		if _, err := db.Exec(`UPDATE connection_events SET province = ?, isp = ? WHERE seq = ?`,
+			region.Province, region.ISP, r.seq); err != nil {
+			return fmt.Errorf("refix connection_events geo seq=%d: %w", r.seq, err)
+		}
+	}
+	return nil
+}
+
+// clearWrongAnalyticsGeo 清空 analytics_sessions.province/city/isp、
+// analytics_visitors.first_province 里被 parseRegion 字段错位污染的数据，并删掉
+// analytics_daily 里按这些错误数据聚合出的 province/city/isp 历史行。这两张表不存
+// 原始 IP，没法像 connection_events 那样重新解析，只能清空（见 v20 迁移注释）。
+func clearWrongAnalyticsGeo(db sqlExecer) error {
+	if ok, err := tableExists(db, "analytics_sessions"); err != nil {
+		return err
+	} else if ok {
+		if _, err := db.Exec(`UPDATE analytics_sessions SET province = '', city = '', isp = ''`); err != nil {
+			return fmt.Errorf("clear analytics_sessions geo: %w", err)
+		}
+	}
+	if ok, err := tableExists(db, "analytics_visitors"); err != nil {
+		return err
+	} else if ok {
+		if _, err := db.Exec(`UPDATE analytics_visitors SET first_province = ''`); err != nil {
+			return fmt.Errorf("clear analytics_visitors geo: %w", err)
+		}
+	}
+	if ok, err := tableExists(db, "analytics_daily"); err != nil {
+		return err
+	} else if ok {
+		if _, err := db.Exec(`DELETE FROM analytics_daily WHERE metric IN ('province', 'city', 'isp')`); err != nil {
+			return fmt.Errorf("clear analytics_daily geo aggregates: %w", err)
+		}
+	}
+	return nil
 }
 
 // migrateCustomGenderPlayers 把存量"自定义性别"玩家（gender_id 为空、custom_gender_label

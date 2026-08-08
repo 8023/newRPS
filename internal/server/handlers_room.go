@@ -1996,9 +1996,9 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 				}
 			}
 			// 认主/认宠申请要求双方在线，管理员踢人视同离线，作废其相关申请。
-			if s.clearOfflinePetBondRequests(pl.ID) {
-				s.notifyAllOnlinePetBondStates()
-			}
+			s.clearOfflinePetBondRequests(pl.ID)
+			// 宠物乐园候选/关系图依赖在线状态，即便没有待处理申请，该玩家的公开关系链也要摘除。
+			s.notifyAllOnlinePetBondStates()
 		}
 	}
 	if p.Action == "editPlayer" && p.PlayerID != "" {

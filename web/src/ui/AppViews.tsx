@@ -1,7 +1,7 @@
 import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type ReactNode, type UIEvent as ReactUIEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Coffee, Crown, DoorOpen, ExternalLink, Eye, HeartHandshake, Info, Moon, Pencil, Save, Send, Shield, Sun, Swords, Upload, UserRound, Users, BookOpen } from "lucide-react";
 import type {
-  AppConfig, ChatMessage, GenderColors, GenderFaction, LobbySnapshot, Move, PetBondState, PublicPlayer,
+  AppConfig, ChatMessage, GenderColors, GenderFaction, LobbySnapshot, Move, PetBondBadgeFields, PetBondState, PublicPlayer,
   PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant
 } from "../shared/types";
 import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, DEFAULT_NAME_WAR_RENAME_MIN_POINTS, normalizePublicPlayer, withPetBondDefaults, withRankedScoreDefaults } from "../lib/normalize";
@@ -1356,11 +1356,18 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
       setMyPetIds(new Set((payload.pets || []).map((p) => p.playerId)));
     };
     // 订阅 petbond 频道：只给打开强制白给相关 UI 的连接推送，避免全员广播。
-    ask<PetBondState>("petbond:subscribe", {}).then(applyPets).catch(() => { });
+    const subscribe = () => {
+      ask<PetBondState>("petbond:subscribe", {}).then(applyPets).catch(() => { });
+    };
+    subscribe();
     socket.on("petbond:update", applyPets);
+    // WS 断线重连会换一个全新连接，服务端的频道订阅关系不会跨连接保留，必须重新 subscribe，
+    // 否则重连后收不到任何 petbond:update，本地数据永久停在断线前那一刻。
+    socket.on("connect", subscribe);
     return () => {
       alive = false;
       socket.off("petbond:update", applyPets);
+      socket.off("connect", subscribe);
       ask("petbond:unsubscribe", {}).catch(() => undefined);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2704,8 +2711,13 @@ export function ChatPanel({
   // 房间内的「大厅」tab：加入大厅聊天频道以收实时增量，卸载时退出。
   useEffect(() => {
     if (!subscribeLobbyChannel) return;
-    ask("lobby:suggestions:subscribe", {}).catch(() => undefined);
+    const subscribe = () => { ask("lobby:suggestions:subscribe", {}).catch(() => undefined); };
+    subscribe();
+    // WS 断线重连是全新连接，服务端不会记得这个订阅制频道，必须重新 subscribe，
+    // 否则重连后收不到大厅聊天的实时增量，要等切一次 tab 或整页刷新才会恢复。
+    socket.on("connect", subscribe);
     return () => {
+      socket.off("connect", subscribe);
       ask("lobby:suggestions:unsubscribe", {}).catch(() => undefined);
     };
   }, [subscribeLobbyChannel, scope]);
@@ -3862,12 +3874,45 @@ function resolveLobbyPlayer(players: PublicPlayer[], id: string, fallback?: Part
   };
 }
 
-/** 宠物乐园用户信息：头像 → 性别 → 称号 → 用户名 → 玩法（名争/白给等）。 */
-function PetBondPlayerInfo({ player, size = 28 }: { player: PublicPlayer; size?: number }) {
+/** 认主/认宠成员/候选兜底信息转换为 resolveLobbyPlayer 的 fallback：即便对方当前离线，
+ * 性别/称号/⚡极限-⚔️名争模式/白给徽标也要用后端随成员一起下发的快照值，不能只留名字/头像。 */
+function petBondBadgeFallback(m: { name: string; displayName: string; avatarUrl?: string; connected: boolean } & PetBondBadgeFields): Partial<PublicPlayer> {
+  return {
+    name: m.name,
+    displayName: m.displayName,
+    avatarUrl: m.avatarUrl,
+    connected: m.connected,
+    genderId: m.genderId,
+    genderLabel: m.genderLabel,
+    factionLabel: m.factionLabel,
+    factionColors: m.factionColors,
+    extremeModeEnabled: m.extremeModeEnabled,
+    nameWarEnabled: m.nameWarEnabled,
+    nameWarPunished: m.nameWarPunished,
+    nameWarPenaltyName: m.nameWarPenaltyName,
+    giveawayEnabled: m.giveawayEnabled,
+    giveawayValue: m.giveawayValue,
+    stats: {
+      wins: 0, losses: 0, draws: 0, punishments: 0,
+      rankedPoints: 0, highestScore: 0, lowestScore: 0,
+      sortRankedPoints: 0, sortHighestScore: 0, sortLowestScore: 0,
+      title: m.title || "暂无称号",
+      titleColors: m.titleColors
+    }
+  };
+}
+
+/**
+ * 宠物乐园用户信息：头像 → 性别 → 称号 → 用户名 → 玩法（名争/白给等）。
+ * 关系展示链、认主/认宠候选人默认只会出现在线用户，无需标注；只有「已认的主/宠」列表
+ * 里的对象可能已下线，才需要 showStatus=true 来给离线者加浅红色「离线」标签。
+ */
+function PetBondPlayerInfo({ player, size = 28, showStatus = false }: { player: PublicPlayer; size?: number; showStatus?: boolean }) {
   return (
     <span className="pet-bond-player-info">
       <PlayerAvatar player={player} size={size} />
       <PlayerBadge player={player} compact />
+      {showStatus && !player.connected && <span className="online-dot offline">离线</span>}
     </span>
   );
 }
@@ -3904,19 +3949,26 @@ export function PetBondPanel({
       if (!alive || !payload || typeof payload !== "object") return;
       setState({ ...emptyPetBondState(), ...payload, config: withPetBondDefaults(payload.config || petBondCfg) });
     };
-    ask<PetBondState>("petbond:subscribe", {})
-      .then((next) => {
-        if (alive && next && typeof next === "object") {
-          setState({ ...emptyPetBondState(), ...next, config: withPetBondDefaults(next.config || petBondCfg) });
-        }
-      })
-      .catch((error) => {
-        if (alive) onError(error instanceof Error ? error.message : "加载宠物乐园失败");
-      });
+    const subscribe = () => {
+      ask<PetBondState>("petbond:subscribe", {})
+        .then((next) => {
+          if (alive && next && typeof next === "object") {
+            setState({ ...emptyPetBondState(), ...next, config: withPetBondDefaults(next.config || petBondCfg) });
+          }
+        })
+        .catch((error) => {
+          if (alive) onError(error instanceof Error ? error.message : "加载宠物乐园失败");
+        });
+    };
+    subscribe();
     socket.on("petbond:update", onUpdate);
+    // WS 断线重连会换一个全新连接，服务端的频道订阅关系不会跨连接保留，必须重新 subscribe，
+    // 否则重连后收不到任何 petbond:update，关系展示会停在断线前那一刻，需要整页刷新才恢复。
+    socket.on("connect", subscribe);
     return () => {
       alive = false;
       socket.off("petbond:update", onUpdate);
+      socket.off("connect", subscribe);
       ask("petbond:unsubscribe", {}).catch(() => undefined);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -4011,15 +4063,10 @@ export function PetBondPanel({
           </div>
           <div className="pet-bond-member-list">
             {state.masters.map((m) => {
-              const player = resolveLobbyPlayer(lobby.players, m.playerId, {
-                name: m.name,
-                displayName: m.displayName,
-                avatarUrl: m.avatarUrl,
-                connected: m.connected
-              });
+              const player = resolveLobbyPlayer(lobby.players, m.playerId, petBondBadgeFallback(m));
               return (
                 <div className="pet-bond-member-row" key={m.playerId}>
-                  <PetBondPlayerInfo player={player} />
+                  <PetBondPlayerInfo player={player} showStatus />
                   <span className="pet-bond-row-actions">
                     {m.releaseIncoming && m.releaseRequestId && (
                       <button type="button" className="small primary" disabled={busy} onClick={() => run("petbond:approve", { requestId: m.releaseRequestId }, "已解除关系")}>
@@ -4046,12 +4093,7 @@ export function PetBondPanel({
             <div className="pet-bond-candidate-list">
               <p className="hint">开启认宠的在线玩家：</p>
               {masterCandidates.map((c) => {
-                const player = resolveLobbyPlayer(lobby.players, c.playerId, {
-                  name: c.name,
-                  displayName: c.displayName,
-                  avatarUrl: c.avatarUrl,
-                  connected: c.connected
-                });
+                const player = resolveLobbyPlayer(lobby.players, c.playerId, petBondBadgeFallback(c));
                 return (
                   <div className={`pet-bond-member-row ${c.incoming ? "pet-bond-pin" : ""}`} key={c.playerId}>
                     <PetBondPlayerInfo player={player} />
@@ -4087,21 +4129,10 @@ export function PetBondPanel({
           </div>
           <div className="pet-bond-member-list">
             {state.pets.map((p) => {
-              const player = resolveLobbyPlayer(lobby.players, p.playerId, {
-                name: p.name,
-                displayName: p.displayName,
-                avatarUrl: p.avatarUrl,
-                connected: p.connected,
-                stats: p.petTitle ? {
-                  wins: 0, losses: 0, draws: 0, punishments: 0,
-                  rankedPoints: 0, highestScore: 0, lowestScore: 0,
-                  sortRankedPoints: 0, sortHighestScore: 0, sortLowestScore: 0,
-                  title: p.petTitle
-                } : undefined
-              });
+              const player = resolveLobbyPlayer(lobby.players, p.playerId, petBondBadgeFallback(p));
               return (
                 <div className={`pet-bond-member-row ${p.newMasterPendingId || p.releaseIncoming ? "pet-bond-pin" : ""}`} key={p.playerId}>
-                  <PetBondPlayerInfo player={player} />
+                  <PetBondPlayerInfo player={player} showStatus />
                   <span className="pet-bond-row-actions">
                     {p.newMasterPendingId && (
                       <button type="button" className="small primary" disabled={busy} onClick={() => run("petbond:approve", { requestId: p.newMasterPendingId }, "已同意宠物认新主")}>
@@ -4144,12 +4175,7 @@ export function PetBondPanel({
             <div className="pet-bond-candidate-list">
               <p className="hint">开启认主的在线玩家：</p>
               {petCandidates.map((c) => {
-                const player = resolveLobbyPlayer(lobby.players, c.playerId, {
-                  name: c.name,
-                  displayName: c.displayName,
-                  avatarUrl: c.avatarUrl,
-                  connected: c.connected
-                });
+                const player = resolveLobbyPlayer(lobby.players, c.playerId, petBondBadgeFallback(c));
                 return (
                   <div className={`pet-bond-member-row ${c.incoming ? "pet-bond-pin" : ""}`} key={c.playerId}>
                     <PetBondPlayerInfo player={player} />
@@ -4246,7 +4272,7 @@ export function ProfilePanel({ config, me, theme, onThemeChange, onClose, onUpda
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [logoutClaimCode, setLogoutClaimCode] = useState<string | null>(null);
   const [logoutBusy, setLogoutBusy] = useState(false);
-  const [pushPrefs, setPushPrefs] = useState<PushPreferences>({ mentionEnabled: false, turnEnabled: false, seatEnabled: false });
+  const [pushPrefs, setPushPrefs] = useState<PushPreferences>({ mentionEnabled: false, turnEnabled: false, seatEnabled: false, bondEnabled: false });
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
     () => (typeof Notification === "undefined" ? "denied" : Notification.permission)
   );
@@ -4671,10 +4697,11 @@ export function ProfilePanel({ config, me, theme, onThemeChange, onClose, onUpda
                 <Toggle label="有人 @ 我" value={pushPrefs.mentionEnabled} onChange={(v) => togglePushPref("mentionEnabled", v)} />
                 <Toggle label="轮到我出招/落子" value={pushPrefs.turnEnabled} onChange={(v) => togglePushPref("turnEnabled", v)} />
                 <Toggle label="我的房间参战席被坐满" value={pushPrefs.seatEnabled} onChange={(v) => togglePushPref("seatEnabled", v)} />
+                <Toggle label="我的主人/宠物上线" value={pushPrefs.bondEnabled} onChange={(v) => togglePushPref("bondEnabled", v)} />
                 {pushStatus.state === "active" && (
                   <div className="profile-action-row">
                     <button type="button" disabled={pushBusy} onClick={testNotifications}>发送测试通知</button>
-                    <button type="button" className="link-button" disabled={pushBusy} onClick={stopNotificationsOnDevice}>停止这台设备的推送</button>
+                    <button type="button" className="danger-button" disabled={pushBusy} onClick={stopNotificationsOnDevice}>停止这台设备的推送</button>
                   </div>
                 )}
               </>

@@ -16,7 +16,7 @@ import (
 func TestGiveawayConfigNumericFieldsRoundTrip(t *testing.T) {
 	root, _ := os.Getwd()
 	for i := 0; i < 6; i++ {
-		if _, err := os.Stat(filepath.Join(root, "config", "site.json")); err == nil {
+		if _, err := os.Stat(filepath.Join(root, "config", "json", "site.json")); err == nil {
 			break
 		}
 		root = filepath.Dir(root)

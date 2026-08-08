@@ -4,8 +4,8 @@ import "time"
 
 // push:subscribe / push:unsubscribe：管理这台设备的 Web Push 订阅（浏览器 PushManager
 // 标准返回的 endpoint + keys，原样转发给服务端登记）。
-// push:updatePreferences / push:getPreferences：三个推送来源（@ 我 / 轮到我 / 参战席变化）
-// 的开关，私有偏好，只回给发起请求的这条 socket，不进 PublicPlayer。
+// push:updatePreferences / push:getPreferences：四个推送来源（@ 我 / 轮到我 / 参战席变化 /
+// 我的主人或宠物上线）的开关，私有偏好，只回给发起请求的这条 socket，不进 PublicPlayer。
 
 func (s *Server) onPushSubscribe(client *Client, env wsEnvelope) {
 	var p struct {
@@ -69,6 +69,7 @@ func (s *Server) onPushGetPreferences(client *Client, env wsEnvelope) {
 		"mentionEnabled": ptrBool(player.PushMentionEnabled),
 		"turnEnabled":    ptrBool(player.PushTurnEnabled),
 		"seatEnabled":    ptrBool(player.PushSeatEnabled),
+		"bondEnabled":    ptrBool(player.PushBondEnabled),
 	}, "")
 }
 
@@ -77,6 +78,7 @@ func (s *Server) onPushUpdatePreferences(client *Client, env wsEnvelope) {
 		MentionEnabled *bool `json:"mentionEnabled"`
 		TurnEnabled    *bool `json:"turnEnabled"`
 		SeatEnabled    *bool `json:"seatEnabled"`
+		BondEnabled    *bool `json:"bondEnabled"`
 	}
 	_ = decodeD(env, &p)
 	player, ok := s.requirePlayer(client, env)
@@ -91,6 +93,9 @@ func (s *Server) onPushUpdatePreferences(client *Client, env wsEnvelope) {
 	}
 	if p.SeatEnabled != nil {
 		player.PushSeatEnabled = boolPtr(*p.SeatEnabled)
+	}
+	if p.BondEnabled != nil {
+		player.PushBondEnabled = boolPtr(*p.BondEnabled)
 	}
 	if player.Persistent {
 		s.markPlayerDirty(player)

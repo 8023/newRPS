@@ -12,10 +12,11 @@ dist-server/
 
 # runtime data
 work/
-data/
 outputs/
-config/*.bak
-config/*.json.bak
+config/json/*.bak
+config/json/*.json.bak
+# IP 归属地库（约 11MB，不入 git；本地用 npm run fetch-geoip 拉取）
+config/xdb/*.xdb
 
 # tooling / OS
 .omo/

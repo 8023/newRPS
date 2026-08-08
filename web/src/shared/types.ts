@@ -128,7 +128,6 @@ export type RoomNamePool = {
   subjects: string[];
   roomWords: string[];
 };
-
 export type RoomInfoTagStyle = GenderColors & {
   label: string;
 };
@@ -256,7 +255,24 @@ export type PetBondEdge = {
   petTitle?: string;
 };
 
-export type PetBondMember = {
+/** 渲染 PlayerBadge 徽章（性别/称号/⚡极限-⚔️名争模式/白给）所需字段，服务端即便对方离线也
+ * 会随成员/候选一起下发完整值，前端据此兜底，不能只依赖大厅在线名单查找。 */
+export type PetBondBadgeFields = {
+  genderId?: string;
+  genderLabel?: string;
+  factionLabel?: string;
+  factionColors?: GenderColors;
+  title?: string;
+  titleColors?: GenderColors;
+  extremeModeEnabled?: boolean;
+  nameWarEnabled?: boolean;
+  nameWarPunished?: boolean;
+  nameWarPenaltyName?: string;
+  giveawayEnabled?: boolean;
+  giveawayValue?: number;
+};
+
+export type PetBondMember = PetBondBadgeFields & {
   playerId: string;
   name: string;
   displayName: string;
@@ -271,7 +287,7 @@ export type PetBondMember = {
   newMasterPendingName?: string;
 };
 
-export type PetBondCandidate = {
+export type PetBondCandidate = PetBondBadgeFields & {
   playerId: string;
   name: string;
   displayName: string;
@@ -686,3 +702,86 @@ export type AppConfig = {
 };
 
 export type ClientError = { message: string };
+
+/** 后台「数据分析」面板快照（与 Go analyticsRangeView 镜像）。 */
+export type AnalyticsBucket = { key: string; value: number };
+
+export type AnalyticsNamedSeries = { key: string; values: number[] };
+
+export type AnalyticsSessionBrief = {
+  visitor: string;
+  playerName?: string;
+  startedAt: number;
+  durationMs: number;
+  device: string;
+  province: string;
+  browser: string;
+  pageviews: number;
+};
+
+export type AnalyticsRetention = {
+  offsets: number[];
+  cohorts: string[];
+  matrix: number[][];
+};
+
+export type AnalyticsRangeView = {
+  days: number;
+  builtAt: number;
+  liveOnline?: number;
+  liveRooms?: number;
+  liveBonds?: number;
+  kpi: {
+    dauValue: number;
+    sessions: number;
+    pageviews: number;
+    newVisitors: number;
+    avgSessionMs: number;
+    peakOnline: number;
+    deltaDau: number;
+    deltaSessions: number;
+    deltaPageviews: number;
+    deltaNewVisitors: number;
+    deltaAvgSessionMs: number;
+    deltaPeakOnline: number;
+    sparkDau: number[];
+    sparkSessions: number[];
+    sparkPageviews: number[];
+    sparkNewVisitors: number[];
+    sparkAvgSessionMs: number[];
+    sparkPeakOnline: number[];
+  };
+  series: {
+    days: string[];
+    dau: number[];
+    sessions: number[];
+    loggedDau: number[];
+    pageviews: number[];
+    newVisitors: number[];
+    returning: number[];
+  };
+  devices: AnalyticsBucket[];
+  browsers: AnalyticsBucket[];
+  os: AnalyticsBucket[];
+  referrers: AnalyticsBucket[];
+  provinces: AnalyticsBucket[];
+  isps: AnalyticsBucket[];
+  sessionBuckets: AnalyticsBucket[];
+  viewPv: AnalyticsBucket[];
+  gameRounds: AnalyticsNamedSeries[];
+  gameResults: AnalyticsBucket[];
+  roomCreates: AnalyticsNamedSeries[];
+  punishment: {
+    publish: number[];
+    done: number[];
+    reject: number[];
+    doneRate: number;
+    proofMs: AnalyticsBucket[];
+  };
+  activity: AnalyticsNamedSeries[];
+  petBond: { total: number[]; new: number[] };
+  chat: { lobby: number[]; room: number[]; speakers: number[] };
+  funnel: AnalyticsBucket[];
+  retention: AnalyticsRetention;
+  newVsReturning: { new: number[]; returning: number[] };
+};

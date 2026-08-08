@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS pet_bonds (
 	PRIMARY KEY (master_id, pet_id)
 );
 CREATE INDEX IF NOT EXISTS idx_pet_bonds_pet ON pet_bonds(pet_id);
+CREATE INDEX IF NOT EXISTS idx_pet_bonds_created ON pet_bonds(created_at);
 CREATE TABLE IF NOT EXISTS pet_bond_requests (
 	id TEXT PRIMARY KEY,
 	kind TEXT NOT NULL,

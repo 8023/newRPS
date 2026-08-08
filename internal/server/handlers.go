@@ -197,6 +197,17 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{20, 60_000, 15_000}, s.onAdminPetBondAdd
 	case "admin:petBondRemove":
 		return RateLimitOptions{20, 60_000, 15_000}, s.onAdminPetBondRemove
+	case "admin:analytics":
+		// 前端进入分区后 60s 轮询 + 手动刷新 + 切时间范围重拉；30/min 绰绰有余。
+		return RateLimitOptions{30, 60_000, 15_000}, s.onAdminAnalytics
+	case "admin:analyticsDetail":
+		return RateLimitOptions{30, 60_000, 15_000}, s.onAdminAnalyticsDetail
+	case "analytics:collect":
+		// 前端 5s 一次 flush = 12/min，留 2.5 倍余量应对可见性切换的补发；触顶冷却 30s。
+		if !s.analyticsEnabled {
+			return RateLimitOptions{}, nil
+		}
+		return RateLimitOptions{30, 60_000, 30_000}, s.onAnalyticsCollect
 	case "identity:showClaimKey":
 		return RateLimitOptions{10, 60_000, 15_000}, s.onIdentityShowClaimKey
 	case "identity:refreshClaimKey":
@@ -257,6 +268,10 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 			}
 		}
 		s.ensureDeviceSocketSet(client.deviceKey)[client.id] = struct{}{}
+	}
+	// 指纹补报会改 deviceKey：同步刷新分析 visitor id（不在此处做 IP 查表）。
+	if prevDevice != client.deviceKey {
+		client.anaVisitor = analyticsVisitorID(client.deviceKey, s.analyticsSalt)
 	}
 	device := client.deviceKey
 	var player *PlayerState
@@ -412,6 +427,10 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 	s.broadcastLobby()
 	// 宠物乐园候选列表依赖在线状态，上线后推送给全体。
 	s.notifyAllOnlinePetBondStates()
+	// 离线→在线的真实转换（而非同一会话的刷新/重连保活）才提醒 Ta 的主人/宠物。
+	if wasDisconnected {
+		s.notifyBondOnline(player)
+	}
 	if player.RoomID != "" {
 		if room := s.rooms[player.RoomID]; room != nil {
 			if room.Phase == types.PhasePunishment && hadDisconnectHold {

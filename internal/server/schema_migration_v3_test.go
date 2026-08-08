@@ -26,7 +26,9 @@ func TestSchemaMigrationV3AddsRankedScoreColumnsAndBackfills(t *testing.T) {
 		CREATE TABLE players (
 			id TEXT PRIMARY KEY,
 			player_id TEXT NOT NULL UNIQUE,
-			ranked_points INTEGER NOT NULL DEFAULT 0
+			ranked_points INTEGER NOT NULL DEFAULT 0,
+			created_at INTEGER NOT NULL DEFAULT 0,
+			last_seen_at INTEGER NOT NULL DEFAULT 0
 		);
 		CREATE TABLE schema_version (version INTEGER NOT NULL);
 		INSERT INTO schema_version (version) VALUES (2);

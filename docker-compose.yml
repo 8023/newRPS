@@ -37,11 +37,16 @@ services:
       LOBBY_BROADCAST_DELAY_MS: "${LOBBY_BROADCAST_DELAY_MS:-}"
       ROOM_BROADCAST_DELAY_MS: "${ROOM_BROADCAST_DELAY_MS:-}"
       MAX_SOCKETS_PER_IP: "${MAX_SOCKETS_PER_IP:-}"
+      ANALYTICS_ENABLED: "${ANALYTICS_ENABLED:-}"
+      ANALYTICS_GEO_ENABLED: "${ANALYTICS_GEO_ENABLED:-}"
+      GEOIP_DB_PATH: "${GEOIP_DB_PATH:-}"
+      GEOIP_DB_PATH_V6: "${GEOIP_DB_PATH_V6:-}"
+      ANALYTICS_TZ_OFFSET_MIN: "${ANALYTICS_TZ_OFFSET_MIN:-}"
+      ANALYTICS_RAW_RETENTION_DAYS: "${ANALYTICS_RAW_RETENTION_DAYS:-}"
     volumes:
       - ./bin/server:/app/server:ro
       - ./dist:/app/dist:ro
       - ./config:/app/config
-      - ./data:/app/data
       - ./work:/app/work
     command: ["/app/server"]
     logging:

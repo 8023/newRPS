@@ -72,6 +72,24 @@ func (s *Server) applySeatOutcome(room *RoomState, result types.RoundResult) (pl
 	if gameID == "" {
 		gameID = types.GameRPS
 	}
+	// 分析：服务端侧对局事件（前端看不见结果）。
+	detail := string(gameID)
+	switch result {
+	case types.ResultDraw:
+		detail = string(gameID) + ":draw"
+	case types.ResultDoubleLoss:
+		detail = string(gameID) + ":doubleloss"
+	case types.ResultA, types.ResultB:
+		detail = string(gameID) + ":win"
+	}
+	pid := ""
+	if playerA != nil {
+		pid = playerA.ID
+	} else if playerB != nil {
+		pid = playerB.ID
+	}
+	s.logAnalyticsServerEvent("game_round", detail, 1, pid)
+
 	if result == types.ResultDraw {
 		s.recordGameOutcome(playerA, gameID, "draw")
 		s.recordGameOutcome(playerB, gameID, "draw")

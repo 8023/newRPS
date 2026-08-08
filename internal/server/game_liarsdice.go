@@ -372,6 +372,12 @@ func (s *Server) onLiarsDiceChallenge(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "只有参战玩家可以开牌")
 		return
 	}
+	// 不能开自己刚叫的点：否则赢家=输家=自己，既无法给自己发布/审核惩罚任务，也会卡死退出房间的流程
+	// （canLeaveRoom 里"受罚未完成不能离房"与 canReviewPlayer 里"不能审核自己"两条规则都会连带触发）。
+	if room.LiarsDice.CurrentBid.PlayerID == player.ID {
+		client.reply(env.ID, nil, "不能开自己叫的点，请等待其他玩家开牌")
+		return
+	}
 	s.resolveLiarsDiceChallenge(room, player.ID)
 	s.broadcastRoom(room.ID, true)
 	client.reply(env.ID, map[string]any{"ok": true}, "")
@@ -427,6 +433,7 @@ func (s *Server) resolveLiarsDiceChallenge(room *RoomState, challengerID string)
 			s.recordGameOutcome(p, types.GameLiarsDice, "draw")
 		}
 	}
+	s.logAnalyticsServerEvent("game_round", string(types.GameLiarsDice)+":win", 1, winnerID)
 	s.applyGiveawayWinPenalty(winner)
 	if room.Settings.EnableRanked {
 		wD, lD := s.applyRankedStake(winner, loser, effectiveRankedStake(room.Settings))

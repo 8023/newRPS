@@ -21,6 +21,7 @@ import {
   connectionStateText, phaseText
 } from "./ui/AppViews";
 import { HelpPanel } from "./ui/HelpPanel";
+import { startAnalytics, trackLoginSuccess, trackPageview, trackThemeToggle } from "./lib/analytics";
 
 // 后台管理面板（含可能新增的图表等重型组件）单独打包，普通玩家不会触发这次 import。
 const AdminPanel = lazy(() => import("./ui/AdminViews").then((module) => ({ default: module.AdminPanel })));
@@ -56,12 +57,32 @@ export function App() {
   const leaderboardSnapshotAtRef = useRef(0);
 
   useEffect(() => {
+    startAnalytics();
     connectSocketWithSession().catch(() => {
       setConnectionState("disconnected");
       setRestoringSession(false);
       setNotice("连接失败，请检查网络后刷新重试。");
     });
   }, []);
+
+  // 主视图 pageview
+  useEffect(() => {
+    trackPageview(view);
+  }, [view]);
+
+  // 弹窗 pageview
+  useEffect(() => {
+    if (profileOpen) trackPageview("profile");
+  }, [profileOpen]);
+  useEffect(() => {
+    if (leaderboardOpen) trackPageview("leaderboard");
+  }, [leaderboardOpen]);
+  useEffect(() => {
+    if (aboutOpen) trackPageview("about");
+  }, [aboutOpen]);
+  useEffect(() => {
+    if (helpOpen) trackPageview("help");
+  }, [helpOpen]);
 
   async function restoreSession(options: { showRecoveredNotice?: boolean } = {}) {
     if (restoreInFlightRef.current) return;
@@ -89,6 +110,7 @@ export function App() {
       // 以服务端确认后的资料为准回写缓存，避免清洗后的资料与本地不一致。
       if (next.player) cacheJoinProfile(next.player);
       setMe(next);
+      trackLoginSuccess("restore");
       initPushForPlayer(next.player.id);
       if (next.room) setRoom(normalizeRoomSnapshot(next.room));
       else setRoom(null);
@@ -280,9 +302,10 @@ export function App() {
       const isReconnect = hadConnectedRef.current;
       hadConnectedRef.current = true;
       // 首次连接不弹「已恢复」；断线重连后才提示。
-      void restoreSession({ showRecoveredNotice: isReconnect });
-      // 重连后补拉已激活聊天频道的最近消息（chatStore 不自注册 connect，见其注释）。
-      refreshActiveChats();
+      // 重连后补拉已激活聊天频道的最近消息（chatStore 不自注册 connect，见其注释）；
+      // 必须等 restoreSession 里的 player:join 落地后再发，否则新连接还没绑定玩家/房间，
+      // 房间聊天的 chat:load 会被 onChatLoad 以"你不在这个房间里"拒绝，断线期间的消息就永久错过了。
+      void restoreSession({ showRecoveredNotice: isReconnect }).then(() => refreshActiveChats());
     });
     socket.on("disconnect", () => {
       setConnectionState("disconnected");
@@ -501,6 +524,7 @@ export function App() {
       {view === "login" && !restoringSession && !restoreKickPending && <Login config={config} onDone={(next) => {
         if (next.token) localStorage.setItem(tokenKey, next.token);
         setMe(next);
+        trackLoginSuccess("manual");
         initPushForPlayer(next.player.id);
         setRestoringSession(false);
         if (next.room) setRoom(normalizeRoomSnapshot(next.room));
@@ -522,7 +546,10 @@ export function App() {
           config={config}
           me={me.player}
           theme={theme}
-          onThemeChange={setTheme}
+          onThemeChange={(next) => {
+            setTheme(next);
+            trackThemeToggle(next);
+          }}
           onClose={() => setProfileOpen(false)}
           onUpdated={(player) => {
             setMe({ ...me, player });

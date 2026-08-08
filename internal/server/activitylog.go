@@ -39,6 +39,8 @@ type activityLogEntry struct {
 	// connEvent 非空时代表这是一条 connections 事件，走 SQLite（activityDB）而不是 CSV，
 	// table/header/fields 此时不使用。见 logConnectionEvent。
 	connEvent *connectionEventPayload
+	// analytics 非空时代表一批用户分析事件，走 analyticsStore。
+	analytics *analyticsBatchPayload
 }
 
 // connectionEventPayload 描述一条已经结束的连接（正常断连 / 优雅关停批量收尾时才会构造），
@@ -48,6 +50,7 @@ type connectionEventPayload struct {
 	socketID                                                                           string
 	connectedAt, disconnectedAt                                                        int64
 	sessionSID, ip, device, fingerprint, userAgent, compression, playerID, closeReason string
+	province, isp                                                                      string
 }
 
 // logConnectionEvent 非阻塞地把一条已结束的连接事件塞进 logCh，由后台消费者协程串行落盘到
@@ -71,6 +74,7 @@ func (s *Server) writeConnectionEvent(p *connectionEventPayload) {
 	err := s.activityDB.insertConnectionEvent(
 		p.socketID, p.connectedAt, p.disconnectedAt, p.sessionSID, p.ip, p.device,
 		p.fingerprint, p.userAgent, p.compression, p.playerID, p.closeReason,
+		p.province, p.isp,
 	)
 	if err != nil {
 		s.errorLog("connection_event_persist_failed", err.Error())
@@ -82,6 +86,10 @@ func (s *Server) runActivityLogConsumer() {
 	for e := range s.logCh {
 		if e.connEvent != nil {
 			s.writeConnectionEvent(e.connEvent)
+			continue
+		}
+		if e.analytics != nil {
+			s.writeAnalyticsBatch(e.analytics)
 			continue
 		}
 		writeActivityLog(e.table, e.header, e.fields)

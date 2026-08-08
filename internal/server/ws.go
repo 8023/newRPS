@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/doumiao/newRPS/internal/geoip"
 	"github.com/doumiao/newRPS/internal/pbconv"
 	"github.com/doumiao/newRPS/internal/types"
 	"github.com/doumiao/newRPS/internal/wire"
@@ -297,6 +298,11 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	conn.SetReadLimit(1_000_000)
 
+	// 分析派生维度：在 s.mu 之外算一次并缓存（UA 解析 + IP 查表）。
+	browser, osName, deviceType := parseUserAgent(userAgent)
+	anaGeo := geoip.LookupIfEnabled(s.analyticsGeoEnabled, ipAddress)
+	anaVisitor := analyticsVisitorID(devKey, s.analyticsSalt)
+
 	client := &Client{
 		id: randomID(), conn: conn, sid: session.SID, token: token, sessionExp: session.Exp,
 		ipAddress: ipAddress, fingerprint: fingerprint, deviceKey: devKey,
@@ -306,6 +312,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		// connection_events 一行（见 activitylog.go），connect 时不落盘。
 		// onlineCreditedAt 与 connectedAt 同步起算，供在线时长 checkpoint / 断线累加。
 		connectedAt: nowMs(), onlineCreditedAt: nowMs(), compression: compressionModeName(compMode),
+		anaVisitor: anaVisitor, anaBrowser: browser, anaOS: osName, anaDevice: deviceType, anaGeo: anaGeo,
 	}
 	go client.writeLoop()
 
@@ -640,6 +647,7 @@ func (s *Server) onClientDisconnect(client *Client) {
 			sessionSID: client.sid, ip: client.ipAddress, device: client.deviceKey,
 			fingerprint: client.fingerprint, userAgent: client.userAgent, compression: client.compression,
 			playerID: playerID, closeReason: "disconnect",
+			province: client.anaGeo.Province, isp: client.anaGeo.ISP,
 		})
 		s.accumulateClientOnlineMs(client, now)
 	}

@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS player_activity_events (
 	text        TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_player_activity_player ON player_activity_events(player_id, at);
+CREATE INDEX IF NOT EXISTS idx_player_activity_at ON player_activity_events(at, action);
 
 CREATE TABLE IF NOT EXISTS connection_events (
 	seq             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,9 +52,12 @@ CREATE TABLE IF NOT EXISTS connection_events (
 	compression     TEXT,
 	player_id       TEXT,
 	disconnected_at INTEGER NOT NULL,
-	close_reason    TEXT NOT NULL
+	close_reason    TEXT NOT NULL,
+	province        TEXT,
+	isp             TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_connection_events_player ON connection_events(player_id, connected_at);
+CREATE INDEX IF NOT EXISTS idx_connection_events_at ON connection_events(connected_at);
 `
 
 type activityStore struct {
@@ -85,16 +89,16 @@ func (a *activityStore) insertPlayerActivityEvent(at int64, action, playerID, ne
 // insertConnectionEvent 在连接结束（正常断连 / 进程优雅关停批量收尾）时一次性写入完整一行；
 // connectedAt 来自内存里的 Client.connectedAt 快照，playerID 传空字符串代表这条连接自始至终
 // 没有关联到任何玩家（比如连上就断的游客）；closeReason 如 "disconnect"/"server_shutdown"。
-func (a *activityStore) insertConnectionEvent(socketID string, connectedAt, disconnectedAt int64, sessionSID, ip, device, fingerprint, userAgent, compression, playerID, closeReason string) error {
+func (a *activityStore) insertConnectionEvent(socketID string, connectedAt, disconnectedAt int64, sessionSID, ip, device, fingerprint, userAgent, compression, playerID, closeReason, province, isp string) error {
 	if a == nil || a.db == nil {
 		return nil
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	_, err := a.db.Exec(
-		`INSERT INTO connection_events (socket_id, connected_at, session_sid, ip, device, fingerprint, user_agent, compression, player_id, disconnected_at, close_reason)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		socketID, connectedAt, sessionSID, ip, device, fingerprint, userAgent, compression, playerID, disconnectedAt, closeReason,
+		`INSERT INTO connection_events (socket_id, connected_at, session_sid, ip, device, fingerprint, user_agent, compression, player_id, disconnected_at, close_reason, province, isp)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		socketID, connectedAt, sessionSID, ip, device, fingerprint, userAgent, compression, playerID, disconnectedAt, closeReason, province, isp,
 	)
 	return err
 }

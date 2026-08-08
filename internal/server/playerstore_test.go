@@ -29,6 +29,10 @@ func TestPlayerStoreUpsertAndLoadRoundTrip(t *testing.T) {
 			Othello: types.GameWLD{Wins: 1},
 		},
 		NameWarEnabled:     boolPtr(true),
+		PushMentionEnabled: boolPtr(true),
+		PushTurnEnabled:    boolPtr(false),
+		PushSeatEnabled:    boolPtr(true),
+		PushBondEnabled:    boolPtr(true),
 		GiveawayValue:      floatPtr(1.5),
 		RankedLastDecayDay: int64Ptr(42),
 		CreatedAt:          100, LastSeenAt: 200,
@@ -62,6 +66,10 @@ func TestPlayerStoreUpsertAndLoadRoundTrip(t *testing.T) {
 	}
 	if got.RankedLastDecayDay == nil || *got.RankedLastDecayDay != 42 {
 		t.Fatalf("ranked last decay day round trip: %v", got.RankedLastDecayDay)
+	}
+	if !ptrBool(got.PushMentionEnabled) || ptrBool(got.PushTurnEnabled) || !ptrBool(got.PushSeatEnabled) || !ptrBool(got.PushBondEnabled) {
+		t.Fatalf("push preferences round trip: mention=%v turn=%v seat=%v bond=%v",
+			got.PushMentionEnabled, got.PushTurnEnabled, got.PushSeatEnabled, got.PushBondEnabled)
 	}
 	// 更新密钥列表
 	item.PlayerSecrets = []string{"sec-b", "sec-c"}

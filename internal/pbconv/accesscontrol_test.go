@@ -9,10 +9,10 @@ import (
 )
 
 func TestAccessControlFrontFieldName(t *testing.T) {
-	// LoadConfig 需要从仓库根找到 config/site.json
+	// LoadConfig 需要从仓库根找到 config/json/site.json
 	root, _ := os.Getwd()
 	for i := 0; i < 6; i++ {
-		if _, err := os.Stat(filepath.Join(root, "config", "site.json")); err == nil {
+		if _, err := os.Stat(filepath.Join(root, "config", "json", "site.json")); err == nil {
 			break
 		}
 		root = filepath.Dir(root)

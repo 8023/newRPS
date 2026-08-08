@@ -245,6 +245,28 @@ func (s *Server) notifySeatFilled(room *RoomState, filledSeat types.SeatKey) {
 	}
 }
 
+// notifyBondOnline：player 刚从离线变为在线（重连/首次登录），通知 Ta 的每一位主人/宠物——
+// 一条认宠链可以有多个主人（MaxMastersPerPet）或多只宠物（MaxPetsPerMaster），逐个发送。
+// 只看有没有直接认领关系，不管对方当前是否在线（离线才是 Web Push 要覆盖的场景）。
+func (s *Server) notifyBondOnline(player *PlayerState) {
+	if player == nil {
+		return
+	}
+	name := playerShortName(player)
+	for _, b := range s.mastersOf(player.ID) {
+		master := s.players[b.MasterID]
+		if master != nil && shouldPush(master, master.PushBondEnabled) {
+			s.sendPush(master, "你的宠物上线了", name+" 刚刚上线，快去看看吧。", "bond-online-"+player.ID)
+		}
+	}
+	for _, b := range s.petsOf(player.ID) {
+		pet := s.players[b.PetID]
+		if pet != nil && shouldPush(pet, pet.PushBondEnabled) {
+			s.sendPush(pet, "你的主人上线了", name+" 刚刚上线，快去看看吧。", "bond-online-"+player.ID)
+		}
+	}
+}
+
 // sendPush 给这个玩家名下所有登记过的设备发一条 push；410/404（订阅已失效，用户卸载/清缓存）
 // 会顺手把这条订阅删掉，避免越攒越多打没人收的空气。
 // sendPush 的调用方通常持有 s.mu；subscriptionsForPlayer 是同步 SQLite 查询，

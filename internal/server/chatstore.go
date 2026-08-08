@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS lobby_messages (
 	at            INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_lobby_seq ON lobby_messages(seq);
+CREATE INDEX IF NOT EXISTS idx_lobby_messages_at ON lobby_messages(at);
 CREATE TABLE IF NOT EXISTS room_messages (
 	seq           INTEGER PRIMARY KEY AUTOINCREMENT,
 	room_id       TEXT NOT NULL,
@@ -59,6 +60,7 @@ CREATE TABLE IF NOT EXISTS room_messages (
 	at            INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_room_seq ON room_messages(room_id, seq);
+CREATE INDEX IF NOT EXISTS idx_room_messages_at ON room_messages(at);
 `
 
 func newChatStore(db *sql.DB) *chatStore {

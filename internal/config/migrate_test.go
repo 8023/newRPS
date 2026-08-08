@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// copyConfigDirForTest 把当前真实 config/ 目录复制一份到临时目录，供迁移测试改动，
+// copyConfigDirForTest 把当前真实 config/json/ 目录复制一份到临时目录，供迁移测试改动，
 // 不触碰仓库里的真实文件。
 func copyConfigDirForTest(t *testing.T) string {
 	t.Helper()
@@ -16,10 +16,10 @@ func copyConfigDirForTest(t *testing.T) string {
 		t.Fatal(err)
 	}
 	dst := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dst, "config"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dst, "config", "json"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	dstConfig := filepath.Join(dst, "config")
+	dstConfig := filepath.Join(dst, "config", "json")
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -50,7 +50,7 @@ func withRootDir(t *testing.T, dir string) {
 // 自愈启动，而不是直接报错退出。
 func TestLoadConfigMigratesLegacyDeployDir(t *testing.T) {
 	dir := copyConfigDirForTest(t)
-	cfgDir := filepath.Join(dir, "config")
+	cfgDir := filepath.Join(dir, "config", "json")
 
 	legacy := `{
 		"enabled": true,
@@ -103,7 +103,7 @@ func TestLoadConfigMigratesLegacyDeployDir(t *testing.T) {
 // 目录状态下自愈：拆出扁平的 genders.json，并把 gender-factions.json 改写成新格式。
 func TestLoadConfigMigratesLegacyGenderFactionsFile(t *testing.T) {
 	dir := copyConfigDirForTest(t)
-	cfgDir := filepath.Join(dir, "config")
+	cfgDir := filepath.Join(dir, "config", "json")
 
 	legacy := `[
 		{

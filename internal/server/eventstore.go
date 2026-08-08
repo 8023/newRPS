@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS room_events (
 );
 CREATE INDEX IF NOT EXISTS idx_room_events_room ON room_events(room_id, at);
 CREATE INDEX IF NOT EXISTS idx_room_events_user ON room_events(user_id, at);
+CREATE INDEX IF NOT EXISTS idx_room_events_at ON room_events(at, action);
 `
 
 // hashRoomPassword 用无盐 SHA256 对房间密码取哈希；空密码返回空字符串（不哈希空串）。
@@ -80,6 +81,8 @@ CREATE TABLE IF NOT EXISTS punishment_events (
 );
 CREATE INDEX IF NOT EXISTS idx_punishment_events_room   ON punishment_events(room_id, task_at);
 CREATE INDEX IF NOT EXISTS idx_punishment_events_target ON punishment_events(target_id, task_at);
+CREATE INDEX IF NOT EXISTS idx_punishment_events_at    ON punishment_events(task_at);
+CREATE INDEX IF NOT EXISTS idx_punishment_events_proof ON punishment_events(proof_at);
 `
 
 func newEventStore(db *sql.DB) *eventStore {

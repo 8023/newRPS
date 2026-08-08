@@ -927,6 +927,7 @@ main {
 .pet-bond-player-info {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
   width: 100%;
@@ -1943,6 +1944,11 @@ main {
   font-weight: 800;
 }
 
+.online-dot {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .online-dot.online {
   border-color: color-mix(in srgb, #5fbf8f 62%, var(--border));
   color: #26724e;
@@ -1951,8 +1957,9 @@ main {
 }
 
 .online-dot.offline {
-  border-color: color-mix(in srgb, var(--pink-border) 62%, var(--border));
-  color: var(--muted);
+  border-color: color-mix(in srgb, #e2647d 62%, var(--border));
+  color: #a23752;
+  background: color-mix(in srgb, #e2647d 14%, var(--panel-solid));
   margin-right: 1em;
 }
 
@@ -6631,4 +6638,355 @@ main {
 .liarsdice-next-round-btn {
   display: block;
   margin-top: 14px;
+}
+
+/* ── 数据分析面板 ── */
+:root {
+  --chart-surface: var(--panel-solid);
+  --chart-grid: var(--border);
+  --chart-axis: var(--border-strong);
+  --chart-ink: var(--page-text);
+  --chart-ink-muted: var(--muted);
+  /* 分类色：固定槽位顺序，永不循环、永不按排名分配 */
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  --chart-5: #e87ba4;
+  --chart-6: #008300;
+  /* 顺序色阶（单色相蓝，浅→深），用于有序桶/热力图 */
+  --chart-seq-1: #86b6ef;
+  --chart-seq-2: #5598e7;
+  --chart-seq-3: #3987e5;
+  --chart-seq-4: #2a78d6;
+  --chart-seq-5: #256abf;
+  --chart-seq-6: #1c5cab;
+  --chart-seq-7: #184f95;
+  /* 状态色：只表示好/坏，绝不当第 7 个系列色用 */
+  --chart-good: #0ca30c;
+  --chart-critical: #d03b3b;
+}
+:root[data-theme="dark"] {
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
+  --chart-6: #008300;
+}
+
+.analytics-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.analytics-loading {
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.analytics-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.analytics-filters button {
+  border: 1px solid var(--border);
+  background: var(--button-bg);
+  color: var(--page-text);
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.analytics-filters button.active,
+.analytics-filters button:hover {
+  background: var(--button-hover);
+  border-color: var(--border-strong);
+}
+
+.analytics-filters button.active {
+  outline: 2px solid color-mix(in srgb, var(--chart-1) 45%, transparent);
+}
+
+.analytics-updated {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.analytics-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: opacity 0.2s ease;
+}
+
+.analytics-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.analytics-stat {
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 110px;
+}
+
+.analytics-stat-label {
+  color: var(--chart-ink-muted);
+  font-size: 12px;
+}
+
+.analytics-stat-value {
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: var(--chart-ink);
+  font-variant-numeric: proportional-nums;
+  line-height: 1.15;
+}
+
+.analytics-stat-delta {
+  font-size: 12px;
+  color: var(--chart-ink-muted);
+}
+
+.analytics-stat-delta.good {
+  color: var(--chart-good);
+}
+
+.analytics-stat-delta.bad {
+  color: var(--chart-critical);
+}
+
+.analytics-spark {
+  height: 36px;
+  margin-top: auto;
+}
+
+.analytics-row-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.analytics-row-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 960px) {
+  .analytics-row-2,
+  .analytics-row-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.analytics-card {
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px 16px;
+  min-width: 0;
+}
+
+.analytics-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.analytics-card-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--chart-ink);
+}
+
+.analytics-table-toggle,
+.analytics-tabs button {
+  border: 1px solid var(--border);
+  background: var(--button-bg);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.analytics-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.analytics-tabs button.active {
+  color: var(--chart-ink);
+  border-color: var(--border-strong);
+  background: var(--button-hover);
+}
+
+.analytics-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-data-table th,
+.analytics-data-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--chart-ink);
+}
+
+.analytics-data-table th {
+  color: var(--chart-ink-muted);
+  font-weight: 600;
+}
+
+.analytics-table-scroll {
+  overflow: auto;
+  max-height: 280px;
+}
+
+.analytics-tooltip {
+  background: var(--panel-solid);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 8px 10px;
+  box-shadow: 0 6px 20px var(--shadow);
+  color: var(--chart-ink);
+  font-size: 12px;
+  min-width: 120px;
+}
+
+.analytics-tooltip-label {
+  color: var(--chart-ink-muted);
+  margin-bottom: 4px;
+}
+
+.analytics-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.analytics-tooltip-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.analytics-tooltip-row strong {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-donut-wrap {
+  position: relative;
+}
+
+.analytics-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  color: var(--chart-ink);
+}
+
+.analytics-donut-center strong {
+  font-size: 1.25rem;
+  font-variant-numeric: proportional-nums;
+}
+
+.analytics-donut-center span {
+  font-size: 11px;
+  color: var(--chart-ink-muted);
+}
+
+.analytics-inline-kpi {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--chart-ink-muted);
+}
+
+.analytics-inline-kpi strong {
+  color: var(--chart-ink);
+  font-variant-numeric: proportional-nums;
+}
+
+.analytics-heatmap-wrap {
+  overflow: auto;
+}
+
+.analytics-heatmap {
+  display: grid;
+  gap: 2px;
+  min-width: 360px;
+  font-size: 10px;
+}
+
+.analytics-heatmap-corner,
+.analytics-heatmap-colhead,
+.analytics-heatmap-rowhead {
+  color: var(--chart-ink-muted);
+  text-align: center;
+  padding: 2px;
+}
+
+.analytics-heatmap-rowhead {
+  text-align: right;
+  padding-right: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-heatmap-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--chart-seq-1) 18%, transparent);
+  color: var(--chart-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-heatmap-cell.seq-0 { background: transparent; }
+.analytics-heatmap-cell.seq-1 { background: var(--chart-seq-1); color: #0b1f38; }
+.analytics-heatmap-cell.seq-2 { background: var(--chart-seq-2); color: #0b1f38; }
+.analytics-heatmap-cell.seq-3 { background: var(--chart-seq-3); color: #fff; }
+.analytics-heatmap-cell.seq-4 { background: var(--chart-seq-4); color: #fff; }
+.analytics-heatmap-cell.seq-5 { background: var(--chart-seq-5); color: #fff; }
+.analytics-heatmap-cell.seq-6 { background: var(--chart-seq-6); color: #fff; }
+
+/* 主宠力导向图：与数据分析面板共享 chart 配色语言 */
+.petbond-graph-edge {
+  stroke: color-mix(in srgb, var(--chart-1) 55%, var(--border));
+}
+.petbond-graph-edge-label rect {
+  fill: var(--chart-surface);
+}
+.petbond-graph-edge-label:hover rect {
+  fill: color-mix(in srgb, var(--chart-5) 35%, var(--panel-solid));
+  stroke: var(--chart-5);
 }

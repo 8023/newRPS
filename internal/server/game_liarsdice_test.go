@@ -278,6 +278,45 @@ func TestResolveLiarsDiceChallenge_BidderWins(t *testing.T) {
 	}
 }
 
+// TestOnLiarsDiceChallenge_RejectsSelfChallenge：叫点者不能自己开自己的牌——否则
+// resolveLiarsDiceChallenge 里 winnerID == loserID == 自己，既无法给自己发布/审核惩罚任务
+// （canReviewPlayer 明确拒绝 reviewerID == targetID），又会因为受罚未完成而卡死在房间里出不去
+// （canLeaveRoom：PunishedPlayerIDs 命中自己且惩罚流程永远走不完）。
+func TestOnLiarsDiceChallenge_RejectsSelfChallenge(t *testing.T) {
+	s := newLiarsDiceTestServer(t)
+	s.roomBroadcastTimers = map[string]*roomBroadcastPending{}
+	room := newLiarsDiceTestRoom("r1", 2, 3)
+	a, b := newLiarsDiceTestPlayer("a", "Alice"), newLiarsDiceTestPlayer("b", "Bob")
+	a.SocketID, b.SocketID = "sock-a", "sock-b"
+	a.RoomID, b.RoomID = room.ID, room.ID
+	s.players[a.ID], s.players[b.ID] = a, b
+	room.LiarsDice.ParticipantIDs = []string{"a", "b"}
+	room.LiarsDiceHands = map[string][]int{"a": {1, 2, 3, 4, 5}, "b": {1, 2, 3, 4, 5}}
+	room.Phase = types.PhaseChoosing
+	bid := types.LiarsDiceBid{PlayerID: "a", Count: 3, Face: 2, At: 1}
+	room.LiarsDice.CurrentBid = &bid
+	room.LiarsDice.CurrentTurn = "b"
+	s.rooms[room.ID] = room
+
+	clientA := &Client{id: "sock-a", playerID: "a"}
+	s.onLiarsDiceChallenge(clientA, wsEnvelope{ID: 0})
+	if room.LiarsDice.Ended {
+		t.Fatalf("bidder should not be able to challenge their own bid")
+	}
+	if room.Phase != types.PhaseChoosing {
+		t.Fatalf("phase = %v, want still choosing after rejected self-challenge", room.Phase)
+	}
+
+	clientB := &Client{id: "sock-b", playerID: "b"}
+	s.onLiarsDiceChallenge(clientB, wsEnvelope{ID: 0})
+	if !room.LiarsDice.Ended {
+		t.Fatalf("challenge from a different participant should resolve the round")
+	}
+	if room.LiarsDice.WinnerID == room.LiarsDice.LoserID {
+		t.Fatalf("winner and loser must not be the same player")
+	}
+}
+
 // TestResolveLiarsDiceChallenge_OnesWildDisabled：一旦本局喊过面值 1，1 就不再算万能点。
 func TestResolveLiarsDiceChallenge_OnesWildDisabled(t *testing.T) {
 	s := newLiarsDiceTestServer(t)

@@ -177,7 +177,7 @@ export function LiarsDicePanel({ room, me, onError }: { room: RoomSnapshot; me: 
                 </select>
               </label>
               <button className="primary" disabled={busy} onClick={submitBid}>叫点</button>
-              {isParticipant && ld.currentBid && (
+              {isParticipant && ld.currentBid && ld.currentBid.playerId !== me.id && (
                 <button className="liarsdice-challenge-btn" disabled={busy} onClick={() => act("liarsdice:challenge")}>
                   开牌
                 </button>
@@ -186,7 +186,8 @@ export function LiarsDicePanel({ room, me, onError }: { room: RoomSnapshot; me: 
           ) : (
             <p className="hint">等待 {playerName(room, ld.currentTurn || "")} 叫点...</p>
           )}
-          {!isMyTurn && isParticipant && ld.currentBid && (
+          {/* 不能开自己叫的点：叫点者本人在此不再露出开牌按钮，避免赢家=输家=自己导致后续惩罚流程卡死 */}
+          {!isMyTurn && isParticipant && ld.currentBid && ld.currentBid.playerId !== me.id && (
             <button className="liarsdice-challenge-btn" disabled={busy} onClick={() => act("liarsdice:challenge")}>
               开牌
             </button>

@@ -9,15 +9,16 @@ import (
 )
 
 // 申请类型：
-//   seek_master — 宠物申请认某人为主人（from=宠物 to=新主人）
-//   seek_pet    — 主人申请认某人为宠物（from=主人 to=宠物）
-//   release     — 任一方申请解除已有关系（from=发起人，master_id/pet_id 标明边）
+//
+//	seek_master — 宠物申请认某人为主人（from=宠物 to=新主人）
+//	seek_pet    — 主人申请认某人为宠物（from=主人 to=宠物）
+//	release     — 任一方申请解除已有关系（from=发起人，master_id/pet_id 标明边）
 const (
-	petBondKindSeekMaster = "seek_master"
-	petBondKindSeekPet    = "seek_pet"
-	petBondKindRelease    = "release"
-	petBondStatusPending  = "pending"
-	petBondStatusDone     = "done"
+	petBondKindSeekMaster  = "seek_master"
+	petBondKindSeekPet     = "seek_pet"
+	petBondKindRelease     = "release"
+	petBondStatusPending   = "pending"
+	petBondStatusDone      = "done"
 	petBondStatusCancelled = "cancelled"
 )
 
@@ -133,7 +134,7 @@ func (s *Server) isDirectMaster(masterID, petID string) bool {
 	return s.getBond(masterID, petID) != nil
 }
 
-func (s *Server) maxPets() int { return s.petBondCfg().MaxPetsPerMaster }
+func (s *Server) maxPets() int    { return s.petBondCfg().MaxPetsPerMaster }
 func (s *Server) maxMasters() int { return s.petBondCfg().MaxMastersPerPet }
 
 func (s *Server) persistBond(b *petBond) {
@@ -498,12 +499,47 @@ func (s *Server) approvePetBondRequest(r *petBondRequest, playerID string) error
 
 // ── 出站视图 ──────────────────────────────────────────
 
+// petBondBadgeFields 承载前端 PlayerBadge 渲染徽章（性别/称号/⚡极限-⚔️名争模式/白给）所需的
+// 全部字段，直接从 s.publicPlayer 取值——即便对方当前离线也要完整，不能依赖前端大厅在线名单
+// 查找兜底（离线一段时间后大厅列表会把人摘掉）。petBondMemberView（认主/认宠成员）与
+// petBondCandidateView（候选列表）共用同一份，通过 s.petBondBadgeFieldsFor 填充。
+type petBondBadgeFields struct {
+	GenderID           string             `json:"genderId,omitempty"`
+	GenderLabel        string             `json:"genderLabel,omitempty"`
+	FactionLabel       string             `json:"factionLabel,omitempty"`
+	FactionColors      types.GenderColors `json:"factionColors"`
+	Title              string             `json:"title,omitempty"`
+	TitleColors        types.GenderColors `json:"titleColors"`
+	ExtremeModeEnabled bool               `json:"extremeModeEnabled,omitempty"`
+	NameWarEnabled     bool               `json:"nameWarEnabled,omitempty"`
+	NameWarPunished    bool               `json:"nameWarPunished,omitempty"`
+	NameWarPenaltyName string             `json:"nameWarPenaltyName,omitempty"`
+	GiveawayEnabled    bool               `json:"giveawayEnabled,omitempty"`
+	GiveawayValue      float64            `json:"giveawayValue,omitempty"`
+}
+
+func (s *Server) petBondBadgeFieldsFor(p *PlayerState) petBondBadgeFields {
+	pub := s.publicPlayer(p)
+	return petBondBadgeFields{
+		GenderID: pub.GenderID, GenderLabel: pub.GenderLabel,
+		FactionLabel: pub.FactionLabel, FactionColors: pub.FactionColors,
+		Title: pub.Stats.Title, TitleColors: pub.Stats.TitleColors,
+		ExtremeModeEnabled: ptrBool(pub.ExtremeModeEnabled),
+		NameWarEnabled:     ptrBool(pub.NameWarEnabled),
+		NameWarPunished:    ptrBool(pub.NameWarPunished),
+		NameWarPenaltyName: pub.NameWarPenaltyName,
+		GiveawayEnabled:    ptrBool(pub.GiveawayEnabled),
+		GiveawayValue:      ptrFloat(pub.GiveawayValue),
+	}
+}
+
 type petBondMemberView struct {
-	PlayerID         string `json:"playerId"`
-	Name             string `json:"name"`
-	DisplayName      string `json:"displayName"`
-	AvatarURL        string `json:"avatarUrl,omitempty"`
-	Connected        bool   `json:"connected"`
+	PlayerID    string `json:"playerId"`
+	Name        string `json:"name"`
+	DisplayName string `json:"displayName"`
+	AvatarURL   string `json:"avatarUrl,omitempty"`
+	Connected   bool   `json:"connected"`
+	petBondBadgeFields
 	PetTitle         string `json:"petTitle,omitempty"`
 	ReleasePending   bool   `json:"releasePending,omitempty"`
 	ReleaseIncoming  bool   `json:"releaseIncoming,omitempty"` // 对方申请解除，我可同意
@@ -514,34 +550,35 @@ type petBondMemberView struct {
 }
 
 type petBondRequestView struct {
-	ID              string   `json:"id"`
-	Kind            string   `json:"kind"`
-	FromID          string   `json:"fromId"`
-	ToID            string   `json:"toId"`
-	MasterID        string   `json:"masterId,omitempty"`
-	PetID           string   `json:"petId,omitempty"`
-	FromName        string   `json:"fromName"`
-	ToName          string   `json:"toName"`
-	CreatedAt       int64    `json:"createdAt"`
-	RequiredIDs     []string `json:"requiredIds"`
-	ApprovedIDs     []string `json:"approvedIds"`
-	CanApprove      bool     `json:"canApprove"`
-	Label           string   `json:"label"` // 按钮文案
-	PinTop          bool     `json:"pinTop,omitempty"`
+	ID          string   `json:"id"`
+	Kind        string   `json:"kind"`
+	FromID      string   `json:"fromId"`
+	ToID        string   `json:"toId"`
+	MasterID    string   `json:"masterId,omitempty"`
+	PetID       string   `json:"petId,omitempty"`
+	FromName    string   `json:"fromName"`
+	ToName      string   `json:"toName"`
+	CreatedAt   int64    `json:"createdAt"`
+	RequiredIDs []string `json:"requiredIds"`
+	ApprovedIDs []string `json:"approvedIds"`
+	CanApprove  bool     `json:"canApprove"`
+	Label       string   `json:"label"` // 按钮文案
+	PinTop      bool     `json:"pinTop,omitempty"`
 }
 
 type petBondCandidateView struct {
-	PlayerID   string `json:"playerId"`
-	Name       string `json:"name"`
+	PlayerID    string `json:"playerId"`
+	Name        string `json:"name"`
 	DisplayName string `json:"displayName"`
-	AvatarURL  string `json:"avatarUrl,omitempty"`
-	Connected  bool   `json:"connected"`
+	AvatarURL   string `json:"avatarUrl,omitempty"`
+	Connected   bool   `json:"connected"`
+	petBondBadgeFields
 	// pending / none / already
 	Status    string `json:"status"`
 	RequestID string `json:"requestId,omitempty"`
 	// 对方发来、我可同意
-	Incoming    bool   `json:"incoming,omitempty"`
-	IncomingID  string `json:"incomingId,omitempty"`
+	Incoming      bool   `json:"incoming,omitempty"`
+	IncomingID    string `json:"incomingId,omitempty"`
 	IncomingLabel string `json:"incomingLabel,omitempty"`
 }
 
@@ -551,8 +588,8 @@ type petBondChainView struct {
 }
 
 type petBondStateView struct {
-	Masters     []petBondMemberView    `json:"masters"`
-	Pets        []petBondMemberView    `json:"pets"`
+	Masters []petBondMemberView `json:"masters"`
+	Pets    []petBondMemberView `json:"pets"`
 	// 认主侧可见的可申请列表（开启认宠的在线玩家）
 	MasterCandidates []petBondCandidateView `json:"masterCandidates"`
 	// 认宠侧可见的可申请列表（开启认主的在线玩家）
@@ -609,6 +646,7 @@ func (s *Server) buildPetBondState(viewerID string) petBondStateView {
 		}
 		if p != nil {
 			m.Name, m.DisplayName, m.AvatarURL, m.Connected = p.Name, p.DisplayName, p.AvatarURL, p.Connected
+			m.petBondBadgeFields = s.petBondBadgeFieldsFor(p)
 		} else {
 			m.Name, m.DisplayName = "已注销", "已注销"
 		}
@@ -629,6 +667,7 @@ func (s *Server) buildPetBondState(viewerID string) petBondStateView {
 		}
 		if p != nil {
 			m.Name, m.DisplayName, m.AvatarURL, m.Connected = p.Name, p.DisplayName, p.AvatarURL, p.Connected
+			m.petBondBadgeFields = s.petBondBadgeFieldsFor(p)
 		} else {
 			m.Name, m.DisplayName = "已注销", "已注销"
 		}
@@ -706,6 +745,7 @@ func (s *Server) buildPetBondState(viewerID string) petBondStateView {
 			c := petBondCandidateView{
 				PlayerID: p.ID, Name: p.Name, DisplayName: p.DisplayName,
 				AvatarURL: p.AvatarURL, Connected: p.Connected, Status: "none",
+				petBondBadgeFields: s.petBondBadgeFieldsFor(p),
 			}
 			if r := s.findPendingRequest(petBondKindSeekMaster, viewerID, p.ID, "", ""); r != nil {
 				c.Status = "pending"
@@ -753,6 +793,7 @@ func (s *Server) buildPetBondState(viewerID string) petBondStateView {
 			c := petBondCandidateView{
 				PlayerID: p.ID, Name: p.Name, DisplayName: p.DisplayName,
 				AvatarURL: p.AvatarURL, Connected: p.Connected, Status: "none",
+				petBondBadgeFields: s.petBondBadgeFieldsFor(p),
 			}
 			if r := s.findPendingRequest(petBondKindSeekPet, viewerID, p.ID, "", ""); r != nil {
 				c.Status = "pending"

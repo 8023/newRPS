@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS players (
 	push_mention_enabled INTEGER,
 	push_turn_enabled INTEGER,
 	push_seat_enabled INTEGER,
+	push_bond_enabled INTEGER,
 	wins INTEGER NOT NULL DEFAULT 0,
 	losses INTEGER NOT NULL DEFAULT 0,
 	draws INTEGER NOT NULL DEFAULT 0,
@@ -85,6 +86,8 @@ CREATE TABLE IF NOT EXISTS players (
 	last_seen_at INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_players_player_id ON players(player_id);
+CREATE INDEX IF NOT EXISTS idx_players_created_at ON players(created_at);
+CREATE INDEX IF NOT EXISTS idx_players_last_seen_at ON players(last_seen_at);
 CREATE TABLE IF NOT EXISTS player_secrets (
 	player_id TEXT NOT NULL,
 	secret TEXT NOT NULL,
@@ -127,7 +130,7 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 			rank_multiplier_unlocked,
 			extreme_mode_enabled, extreme_mode_toggled_at, extreme_mode_cooldown_until,
 			extreme_win_streak, extreme_last_decay_hour, ranked_last_decay_day,
-			push_mention_enabled, push_turn_enabled, push_seat_enabled,
+			push_mention_enabled, push_turn_enabled, push_seat_enabled, push_bond_enabled,
 			wins, losses, draws, punishments, ranked_points, highest_score, lowest_score, title, title_segment_id, title_custom, self_title,
 			rps_wins, rps_losses, rps_draws,
 			othello_wins, othello_losses, othello_draws,
@@ -151,7 +154,7 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 			nwToggled, nwProt, nwWinStart, nwRename sql.NullInt64
 			gaEnabled, rankUnlock, exEnabled        sql.NullInt64
 			exToggled, exCool, exStreak, exDecay    sql.NullInt64
-			pushM, pushT, pushS                     sql.NullInt64
+			pushM, pushT, pushS, pushB              sql.NullInt64
 			gaValue                                 sql.NullFloat64
 			gaClicks                                sql.NullInt64
 			rankedDecay                             sql.NullInt64
@@ -166,7 +169,7 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 			&rankUnlock,
 			&exEnabled, &exToggled, &exCool,
 			&exStreak, &exDecay, &rankedDecay,
-			&pushM, &pushT, &pushS,
+			&pushM, &pushT, &pushS, &pushB,
 			&item.Stats.Wins, &item.Stats.Losses, &item.Stats.Draws, &item.Stats.Punishments, &item.Stats.RankedPoints, &item.Stats.HighestScore, &item.Stats.LowestScore, &item.Stats.Title, &item.Stats.TitleSegmentID, &item.Stats.TitleCustom, &item.Stats.SelfTitle,
 			&item.GameStats.RPS.Wins, &item.GameStats.RPS.Losses, &item.GameStats.RPS.Draws,
 			&item.GameStats.Othello.Wins, &item.GameStats.Othello.Losses, &item.GameStats.Othello.Draws,
@@ -205,6 +208,7 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 		item.PushMentionEnabled = nullIntToBoolPtr(pushM)
 		item.PushTurnEnabled = nullIntToBoolPtr(pushT)
 		item.PushSeatEnabled = nullIntToBoolPtr(pushS)
+		item.PushBondEnabled = nullIntToBoolPtr(pushB)
 		item.BondMasterEnabled = nullIntToBoolPtr(bondMaster)
 		item.BondPetEnabled = nullIntToBoolPtr(bondPet)
 		item.BondPublicDisplay = nullIntToBoolPtr(bondPublic)
@@ -304,7 +308,7 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			rank_multiplier_unlocked,
 			extreme_mode_enabled, extreme_mode_toggled_at, extreme_mode_cooldown_until,
 			extreme_win_streak, extreme_last_decay_hour, ranked_last_decay_day,
-			push_mention_enabled, push_turn_enabled, push_seat_enabled,
+			push_mention_enabled, push_turn_enabled, push_seat_enabled, push_bond_enabled,
 			wins, losses, draws, punishments, ranked_points, highest_score, lowest_score, title, title_segment_id, title_custom, self_title,
 			rps_wins, rps_losses, rps_draws,
 			othello_wins, othello_losses, othello_draws,
@@ -321,7 +325,7 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			?,?,?,
 			?,
 			?,?,?,?,?,?,
-			?,?,?,
+			?,?,?,?,
 			?,?,?,?,?,?,?,?,?,?,?,
 			?,?,?,
 			?,?,?,
@@ -364,6 +368,7 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			push_mention_enabled=excluded.push_mention_enabled,
 			push_turn_enabled=excluded.push_turn_enabled,
 			push_seat_enabled=excluded.push_seat_enabled,
+			push_bond_enabled=excluded.push_bond_enabled,
 			wins=excluded.wins, losses=excluded.losses, draws=excluded.draws,
 			punishments=excluded.punishments, ranked_points=excluded.ranked_points,
 			highest_score=excluded.highest_score, lowest_score=excluded.lowest_score,
@@ -389,7 +394,7 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 		boolPtrToSQL(item.ExtremeModeEnabled), int64PtrToSQL(item.ExtremeModeToggledAt), int64PtrToSQL(item.ExtremeModeCooldownUntil),
 		intPtrToSQL(item.ExtremeWinStreak), int64PtrToSQL(item.ExtremeLastDecayHour),
 		int64PtrToSQL(item.RankedLastDecayDay),
-		boolPtrToSQL(item.PushMentionEnabled), boolPtrToSQL(item.PushTurnEnabled), boolPtrToSQL(item.PushSeatEnabled),
+		boolPtrToSQL(item.PushMentionEnabled), boolPtrToSQL(item.PushTurnEnabled), boolPtrToSQL(item.PushSeatEnabled), boolPtrToSQL(item.PushBondEnabled),
 		item.Stats.Wins, item.Stats.Losses, item.Stats.Draws, item.Stats.Punishments, item.Stats.RankedPoints, item.Stats.HighestScore, item.Stats.LowestScore, item.Stats.Title, item.Stats.TitleSegmentID, item.Stats.TitleCustom, item.Stats.SelfTitle,
 		gs.RPS.Wins, gs.RPS.Losses, gs.RPS.Draws,
 		gs.Othello.Wins, gs.Othello.Losses, gs.Othello.Draws,

@@ -9,12 +9,53 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/doumiao/newRPS/internal/config"
+	"github.com/doumiao/newRPS/internal/geoip"
 	"github.com/doumiao/newRPS/internal/types"
 )
+
+func envBoolDefault(key string, def bool) bool {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	switch strings.ToLower(v) {
+	case "0", "false", "no", "off":
+		return false
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return def
+	}
+}
+
+func envIntDefault(key string, def int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return n
+}
+
+func loadOrCreateAnalyticsSalt(root string) []byte {
+	path := filepath.Join(root, "work", "analytics.salt")
+	if data, err := os.ReadFile(path); err == nil && len(data) >= 16 {
+		return data
+	}
+	salt := make([]byte, 32)
+	_, _ = rand.Read(salt)
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	_ = os.WriteFile(path, salt, 0o600)
+	return salt
+}
 
 // New creates a Server with default configuration from disk.
 func New() (*Server, error) {
@@ -28,7 +69,7 @@ func New() (*Server, error) {
 	proofDir := filepath.Join(uploadsDir, "proofs")
 	adminDir := filepath.Join(uploadsDir, "admin")
 	avatarDir := filepath.Join(uploadsDir, "avatars")
-	dataDir := filepath.Join(root, "data")
+	dataDir := filepath.Join(root, "work", "db")
 	_ = os.MkdirAll(proofDir, 0o755)
 	_ = os.MkdirAll(adminDir, 0o755)
 	_ = os.MkdirAll(avatarDir, 0o755)
@@ -103,49 +144,88 @@ func New() (*Server, error) {
 	}
 
 	s := &Server{
-		cfg:                     cfg,
-		players:                 map[string]*PlayerState{},
-		tokenToPlayer:           map[string]string{},
-		playerIdToID:            map[string]string{},
-		sidToPlayerID:           map[string]string{},
-		rooms:                   map[string]*RoomState{},
-		clients:                 map[string]*Client{},
-		socketToClient:          map[string]*Client{},
-		roomClients:             map[string]map[string]struct{}{},
-		othelloSettlementTimers: map[string]*time.Timer{},
-		ticTacToeGiveawayTimers: map[string]*time.Timer{},
-		liarsDiceStartTimers:    map[string]*time.Timer{},
-		gomokuUndoTimers:        map[string]*time.Timer{},
-		othelloClockTimers:      map[string]*time.Timer{},
-		gomokuClockTimers:       map[string]*time.Timer{},
-		jungleClockTimers:       map[string]*time.Timer{},
-		deviceCreateAttempts:    map[string][]int64{},
-		ipCreateAttempts:        map[string][]int64{},
-		adminClientIDs:          map[string]struct{}{},
-		sidToClientID:           map[string]string{},
-		clientIDToSID:           map[string]string{},
-		clientIDsByDevice:       map[string]map[string]struct{}{},
-		rateBuckets:             map[string]*rateBucket{},
-		rateLimitBuckets:        map[string]*rateLimitBucket{},
-		roomBroadcastTimers:     map[string]*roomBroadcastPending{},
-		lobbyBroadcastDelay:     lobbyDelay,
-		roomBroadcastDelay:      roomDelay,
-		serverStats:             types.ServerStats{StartedAt: nowMs()},
-		isProduction:            os.Getenv("NODE_ENV") == "production" || os.Getenv("GO_ENV") == "production",
-		sessionSecret:           secret,
-		sessionTtlMs:            ttl,
-		maxSocketsPerDevice:     maxSockets,
-		host:                    host,
-		port:                    port,
-		uploadsDir:              uploadsDir,
-		proofUploadsDir:         proofDir,
-		adminUploadsDir:         adminDir,
-		avatarUploadsDir:        avatarDir,
-		dataDir:                 dataDir,
-		playersFile:             filepath.Join(dataDir, "players.json"),
-		distDir:                 distDir,
-		logCh:                   make(chan activityLogEntry, 1024),
-		startedAt:               nowMs(),
+		cfg:                       cfg,
+		players:                   map[string]*PlayerState{},
+		tokenToPlayer:             map[string]string{},
+		playerIdToID:              map[string]string{},
+		sidToPlayerID:             map[string]string{},
+		rooms:                     map[string]*RoomState{},
+		clients:                   map[string]*Client{},
+		socketToClient:            map[string]*Client{},
+		roomClients:               map[string]map[string]struct{}{},
+		othelloSettlementTimers:   map[string]*time.Timer{},
+		ticTacToeGiveawayTimers:   map[string]*time.Timer{},
+		liarsDiceStartTimers:      map[string]*time.Timer{},
+		gomokuUndoTimers:          map[string]*time.Timer{},
+		othelloClockTimers:        map[string]*time.Timer{},
+		gomokuClockTimers:         map[string]*time.Timer{},
+		jungleClockTimers:         map[string]*time.Timer{},
+		deviceCreateAttempts:      map[string][]int64{},
+		ipCreateAttempts:          map[string][]int64{},
+		adminClientIDs:            map[string]struct{}{},
+		sidToClientID:             map[string]string{},
+		clientIDToSID:             map[string]string{},
+		clientIDsByDevice:         map[string]map[string]struct{}{},
+		rateBuckets:               map[string]*rateBucket{},
+		rateLimitBuckets:          map[string]*rateLimitBucket{},
+		roomBroadcastTimers:       map[string]*roomBroadcastPending{},
+		lobbyBroadcastDelay:       lobbyDelay,
+		roomBroadcastDelay:        roomDelay,
+		serverStats:               types.ServerStats{StartedAt: nowMs()},
+		isProduction:              os.Getenv("NODE_ENV") == "production" || os.Getenv("GO_ENV") == "production",
+		sessionSecret:             secret,
+		sessionTtlMs:              ttl,
+		maxSocketsPerDevice:       maxSockets,
+		host:                      host,
+		port:                      port,
+		uploadsDir:                uploadsDir,
+		proofUploadsDir:           proofDir,
+		adminUploadsDir:           adminDir,
+		avatarUploadsDir:          avatarDir,
+		dataDir:                   dataDir,
+		playersFile:               filepath.Join(dataDir, "players.json"),
+		distDir:                   distDir,
+		logCh:                     make(chan activityLogEntry, 1024),
+		startedAt:                 nowMs(),
+		analyticsKick:             make(chan struct{}, 1),
+		analyticsEnabled:          envBoolDefault("ANALYTICS_ENABLED", true),
+		analyticsGeoEnabled:       envBoolDefault("ANALYTICS_GEO_ENABLED", true),
+		analyticsTZOffsetMin:      envIntDefault("ANALYTICS_TZ_OFFSET_MIN", 480),
+		analyticsRawRetentionDays: envIntDefault("ANALYTICS_RAW_RETENTION_DAYS", 90),
+	}
+	// 分析访客盐：work/analytics.salt，32 随机字节，首启生成，权限 0600。
+	s.analyticsSalt = loadOrCreateAnalyticsSalt(root)
+	// IP 归属地：默认 config/xdb/ip2region_v4.xdb；ANALYTICS_GEO_ENABLED=0 时不载入。
+	// 缺失且开启时直接报错退出（破坏性升级，见 README 升级说明）。
+	// 总分析开关关闭时不应再要求地域库存在；否则用户即使设置
+	// ANALYTICS_ENABLED=0 仍会因缺少可选 xdb 无法启动。
+	// 必须在 openDatabase 之前完成：schema_migrations.go 的 v18 迁移要用已加载的 geoip
+	// 搜索器给 connection_events 历史行回填 province/isp，迁移执行时 geoip 必须已就绪。
+	if s.analyticsEnabled && s.analyticsGeoEnabled {
+		geoPath := os.Getenv("GEOIP_DB_PATH")
+		if geoPath == "" {
+			geoPath = geoip.DefaultPath(root)
+		}
+		if err := geoip.Init(geoPath); err != nil {
+			return nil, fmt.Errorf(
+				"geoip: 未找到 IP 归属地数据库 %s。\n"+
+					"请从 https://github.com/lionsoul2014/ip2region/releases 下载 ip2region_v4.xdb 放到该路径，\n"+
+					"或设置环境变量 GEOIP_DB_PATH 指定位置，或设置 ANALYTICS_GEO_ENABLED=0 关闭归属地解析。\n"+
+					"底层错误: %w", geoPath, err,
+			)
+		}
+		// IPv6 xdb 是可选加成：默认 config/xdb/ip2region_v6.xdb，缺失/损坏只记日志，
+		// 不影响已加载的 v4 库——此时 IPv6 来源的访客归属地解析会退化为空。
+		geoPathV6 := os.Getenv("GEOIP_DB_PATH_V6")
+		if geoPathV6 == "" {
+			geoPathV6 = geoip.DefaultPathV6(root)
+		}
+		if err := geoip.InitV6(geoPathV6); err != nil {
+			s.errorLog("geoip_v6_init_failed", err.Error())
+		}
+	} else {
+		s.analyticsGeoEnabled = false
+		geoip.Disable()
 	}
 	// SQLite 持久化（聊天/房间事件/惩罚事件/玩家档案共用一个连接）：失败不阻断启动，仅记录
 	// （内存降级为不落盘，功能仍可用）。
@@ -159,6 +239,17 @@ func New() (*Server, error) {
 		s.playerDB = newPlayerStore(db)
 		s.activityDB = newActivityStore(db)
 		s.petBondDB = newPetBondStore(db)
+		s.analyticsDB = newAnalyticsStore(db)
+		// 只读聚合连接必须在 openDatabase（WAL 初始化）之后；失败只记日志，不阻断启动。
+		// ANALYTICS_ENABLED=0 时聚合协程根本不会启动（见 Run()），这个连接也就永远用不上，
+		// 不必额外占两个 SQLite 连接句柄。
+		if s.analyticsEnabled {
+			if ro, err := openAnalyticsReadOnlyDB(dataDir); err != nil {
+				s.errorLog("analytics_readonly_open_failed", err.Error())
+			} else {
+				s.analyticsRO = ro
+			}
+		}
 	}
 	s.petBonds = map[string]*petBond{}
 	s.petBondRequests = map[string]*petBondRequest{}
@@ -180,6 +271,9 @@ func (s *Server) Run() error {
 	s.scheduleExtremeHourlyDecay()
 	s.scheduleRankedDailyDecay()
 	go s.runActivityLogConsumer()
+	if s.analyticsEnabled && s.analyticsDB != nil {
+		go s.runAnalyticsAggregator()
+	}
 	go func() {
 		ticker := time.NewTicker(60 * time.Second)
 		for range ticker.C {
@@ -231,6 +325,9 @@ func (s *Server) Run() error {
 		s.closeLiveStateOnShutdown()
 		// closeLiveState 会把仍在线会话的时长累进 TotalOnlineMs，再刷一次盘。
 		s.flushPersist()
+		if s.analyticsRO != nil {
+			_ = s.analyticsRO.Close()
+		}
 		if s.db != nil {
 			_ = s.db.Close()
 		}
@@ -270,6 +367,8 @@ func (s *Server) closeLiveStateOnShutdown() {
 		userAgent   string
 		compression string
 		playerID    string
+		province    string
+		isp         string
 	}
 	type closedRoom struct {
 		id          string
@@ -311,6 +410,7 @@ func (s *Server) closeLiveStateOnShutdown() {
 			id: c.id, connectedAt: c.connectedAt, sid: c.sid, ipAddress: c.ipAddress,
 			deviceKey: c.deviceKey, fingerprint: c.fingerprint, userAgent: c.userAgent,
 			compression: c.compression, playerID: playerID,
+			province: c.anaGeo.Province, isp: c.anaGeo.ISP,
 		})
 	}
 	if onlineMsTouched {
@@ -332,7 +432,7 @@ func (s *Server) closeLiveStateOnShutdown() {
 			if err := s.activityDB.insertConnectionEvent(
 				c.id, c.connectedAt, now, c.sid, c.ipAddress,
 				c.deviceKey, c.fingerprint, c.userAgent, c.compression,
-				c.playerID, "server_shutdown",
+				c.playerID, "server_shutdown", c.province, c.isp,
 			); err != nil {
 				s.errorLog("connection_event_persist_failed", err.Error())
 			}

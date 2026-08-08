@@ -1,6 +1,6 @@
 import { ask } from "./rpc";
 
-export type PushPreferences = { mentionEnabled: boolean; turnEnabled: boolean; seatEnabled: boolean };
+export type PushPreferences = { mentionEnabled: boolean; turnEnabled: boolean; seatEnabled: boolean; bondEnabled: boolean };
 
 export type PushSubscriptionStatus =
   | { state: "checking"; message: string }
@@ -20,7 +20,7 @@ export type PushTestResult = {
 
 const requiredPushProtocolVersion = 3;
 const pushStoppedKey = "rps-push-stopped";
-let prefs: PushPreferences = { mentionEnabled: false, turnEnabled: false, seatEnabled: false };
+let prefs: PushPreferences = { mentionEnabled: false, turnEnabled: false, seatEnabled: false, bondEnabled: false };
 // 串行化 ensure：后到的调用（尤其 force:true）必须带上自己的 options 再跑，
 // 不能复用进行中的非 force Promise，否则「已停止」标记清不掉。
 let ensureTail: Promise<unknown> = Promise.resolve();
@@ -40,8 +40,13 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
 }
 
 export async function fetchPushPreferences(): Promise<PushPreferences> {
-  const result = await ask<{ mentionEnabled: boolean; turnEnabled: boolean; seatEnabled: boolean }>("push:getPreferences", {});
-  const next = { mentionEnabled: result.mentionEnabled, turnEnabled: result.turnEnabled, seatEnabled: result.seatEnabled };
+  const result = await ask<{ mentionEnabled: boolean; turnEnabled: boolean; seatEnabled: boolean; bondEnabled: boolean }>("push:getPreferences", {});
+  const next = {
+    mentionEnabled: result.mentionEnabled,
+    turnEnabled: result.turnEnabled,
+    seatEnabled: result.seatEnabled,
+    bondEnabled: result.bondEnabled
+  };
   setPushPreferencesCache(next);
   return next;
 }

@@ -54,5 +54,29 @@ func openDatabase(dataDir string) (*sql.DB, error) {
 // 顺序无关紧要——彼此互不引用。始终反映"当前代码期望的最新结构"；已有数据库从旧结构
 // 升到这个结构靠 schema_migrations.go 里的 migrations，不靠改这里的 DDL 文本本身。
 var allSchemas = []string{
-	chatSchema, roomEventLogSchema, punishmentEventSchema, pushSubscriptionSchema, playerSchema, activityEventSchema, petBondSchema,
+	chatSchema, roomEventLogSchema, punishmentEventSchema, pushSubscriptionSchema, playerSchema, activityEventSchema, petBondSchema, analyticsSchema,
+}
+
+// openAnalyticsReadOnlyDB 为分析聚合单独开一个只读连接池。
+// 主连接 SetMaxOpenConns(1) 是为了迎合 SQLite 单写者模型，代价是任何长查询都会把写入
+// 一起堵死。WAL 模式下读者与写者互不阻塞，所以聚合走一个独立的 mode=ro 句柄：
+// 即便某次全表扫描跑了几百毫秒，游戏主流程的写入也完全不受影响。
+//
+// 必须在 openDatabase 之后调用——只读连接无法创建 -wal/-shm 边车文件，
+// 库还没被以读写方式初始化过 WAL 时，用 mode=ro 打开会直接失败。
+func openAnalyticsReadOnlyDB(dataDir string) (*sql.DB, error) {
+	path := filepath.Join(dataDir, "database.db")
+	dsn := "file:" + path + "?mode=ro&_busy_timeout=5000&_journal_mode=WAL&_query_only=1"
+	db, err := sql.Open("sqlite3", dsn)
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(2)
+	db.SetMaxIdleConns(1)
+	// 探活一次，确保文件可读
+	if err := db.Ping(); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	return db, nil
 }

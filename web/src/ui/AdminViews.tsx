@@ -1,4 +1,4 @@
-import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { type CSSProperties, Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Download, RefreshCcw, Save, Settings, Shield, Upload } from "lucide-react";
 import type { AppConfig, GenderFaction, LobbySnapshot, PublicPlayer, PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool } from "../shared/types";
 import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, DEFAULT_NAME_WAR_RENAME_MIN_POINTS, withAccessControlDefaults, withRankedScoreDefaults } from "../lib/normalize";
@@ -13,7 +13,13 @@ import {
   roomInfoTagOrder, roomInfoTagStyle, roomStatusText, safePlayerStats, titleStyle, titleTagStyleOrder
 } from "./AppViews";
 
-export type AdminSection = "site" | "factions" | "titles" | "punishments" | "roomTags" | "roomInfoTags" | "nameWar" | "giveaway" | "petBond" | "extremeMode" | "rankedScore" | "accessControl" | "messages" | "users" | "rooms";
+// recharts 只在管理员点开「数据分析」时才下载：AdminPanel 本身已是 lazy chunk，
+// 这里再嵌一层让图表库单独成块，连管理员改配置时都不会加载。
+const AnalyticsPanel = lazy(() => import("./AnalyticsPanel").then((m) => ({ default: m.AnalyticsPanel })));
+
+export type AdminSection = "site" | "analytics" | "factions" | "titles" | "punishments" | "roomTags" | "roomInfoTags" | "nameWar" | "giveaway" | "petBond" | "extremeMode" | "rankedScore" | "accessControl" | "messages" | "users" | "rooms";
+
+const SECTIONS_WITHOUT_SAVE = new Set<AdminSection>(["users", "rooms", "analytics"]);
 export type AdminRoomTab = "rooms" | "announcement";
 
 /** 用户管理的筛选/排序开关（与后端 admin:listPlayers 字段对应）。 */
@@ -280,6 +286,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
 
   const navItems: Array<{ id: AdminSection; label: string; detail: string }> = [
     { id: "site", label: "网站信息", detail: draft.site.name },
+    { id: "analytics", label: "数据分析", detail: "访问 · 游戏 · 渠道" },
     { id: "factions", label: "性别与阵营", detail: `${draft.genders.length} 个性别 · ${draft.genderFactions.length} 个阵营` },
     { id: "titles", label: "称号池", detail: `${draft.titles.length} 个段位` },
     { id: "punishments", label: "惩罚池", detail: `${draft.punishments.length} 项` },
@@ -303,6 +310,13 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
   }
 
   function renderSection() {
+    if (activeSection === "analytics") {
+      return (
+        <Suspense fallback={<div className="analytics-loading">正在加载图表…</div>}>
+          <AnalyticsPanel onError={onError} />
+        </Suspense>
+      );
+    }
     if (activeSection === "site") {
       return (
         <div className="config-section admin-section-card">
@@ -1343,7 +1357,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
               </div>
             </div>
             {renderSection()}
-            {activeSection !== "users" && activeSection !== "rooms" && (
+            {!SECTIONS_WITHOUT_SAVE.has(activeSection) && (
               <div className="admin-sticky-actions">
                 <button className="primary" onClick={save}><Save size={16} /> 保存配置</button>
                 <button onClick={resetDefault} title="从磁盘重新读取 config/*.json"><RefreshCcw size={16} /> 重新加载</button>

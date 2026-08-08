@@ -43,6 +43,7 @@ type persistedPlayer struct {
 	PushMentionEnabled           *bool             `json:"pushMentionEnabled,omitempty"`
 	PushTurnEnabled              *bool             `json:"pushTurnEnabled,omitempty"`
 	PushSeatEnabled              *bool             `json:"pushSeatEnabled,omitempty"`
+	PushBondEnabled              *bool             `json:"pushBondEnabled,omitempty"`
 	BondMasterEnabled            *bool             `json:"bondMasterEnabled,omitempty"`
 	BondPetEnabled               *bool             `json:"bondPetEnabled,omitempty"`
 	BondPublicDisplay            *bool             `json:"bondPublicDisplay,omitempty"`
@@ -75,6 +76,7 @@ func (s *Server) serializePlayer(p *PlayerState) (persistedPlayer, bool) {
 		ExtremeLastDecayHour: p.ExtremeLastDecayHour,
 		RankedLastDecayDay:   p.RankedLastDecayDay,
 		PushMentionEnabled:   p.PushMentionEnabled, PushTurnEnabled: p.PushTurnEnabled, PushSeatEnabled: p.PushSeatEnabled,
+		PushBondEnabled: p.PushBondEnabled,
 		BondMasterEnabled: p.BondMasterEnabled, BondPetEnabled: p.BondPetEnabled, BondPublicDisplay: p.BondPublicDisplay,
 		Stats: p.Stats, GameStats: p.GameStats,
 		CreatedAt: p.CreatedAt, LastSeenAt: p.LastSeenAt,
@@ -224,6 +226,7 @@ func (s *Server) ingestPersistedPlayer(item persistedPlayer) bool {
 		PushMentionEnabled: item.PushMentionEnabled,
 		PushTurnEnabled:    item.PushTurnEnabled,
 		PushSeatEnabled:    item.PushSeatEnabled,
+		PushBondEnabled:    item.PushBondEnabled,
 		CreatedAt:          createdAt,
 		LastSeenAt:         lastSeenAt,
 	}

@@ -12,13 +12,15 @@
 │   ├── server/          # Go 服务入口
 │   └── wsprobe/         # WebSocket 探针（开发用）
 ├── internal/
-│   ├── config/          # 配置加载/校验（config/*.json）
+│   ├── config/          # 配置加载/校验（config/json/*.json）
 │   ├── delta/           # 通用 JSON 增量 Diff/Apply/Hash
 │   ├── server/          # 游戏逻辑、HTTP、WebSocket
 │   ├── types/           # 服务端领域类型
 │   └── wire/            # Protobuf 生成代码
 ├── api/proto/           # wire.proto 协议定义
-├── config/              # 按功能拆分的 JSON（原地读写，无 active/default 双轨）
+├── config/
+│   ├── json/            # 按功能拆分的配置 JSON（原地读写，无 active/default 双轨）
+│   └── xdb/             # IP 归属地库（gitignore；npm run fetch-geoip）
 ├── web/                 # 前端（Vite + React + TS）
 │   ├── src/
 │   │   ├── App.tsx      # 壳：会话恢复 / 视图路由 / 顶栏
@@ -31,8 +33,7 @@
 │   └── vite.config.ts   # 构建输出到仓库根 dist/
 ├── dist/                # 前端构建产物（gitignore；Go 静态托管）
 ├── bin/server           # Go 可执行文件（gitignore；Linux amd64）
-├── data/                # database.db（玩家/聊天/事件）等（gitignore）
-├── work/                # uploads、session.secret（gitignore）
+├── work/                # db/database.db、uploads、session.secret、analytics.salt（gitignore）
 ├── go.mod
 ├── package.json         # 根脚本（并发 dev / 一键 build）
 ├── docker-compose.yml   # debian:trixie-slim + 挂载产物
@@ -46,7 +47,7 @@
 
 | 附件 | 内容 |
 |------|------|
-| `newRPS-<version>-linux-amd64.tar.gz` | `bin/server`、`dist/`、`docker-compose.yml`、`.env.example`、`config/*.json`、空 `data/`/`work/`、简要 `README.md` |
+| `newRPS-<version>-linux-amd64.tar.gz` | `bin/server`、`dist/`、`docker-compose.yml`、`.env.example`、`config/json/*.json`、`config/xdb/ip2region_v4.xdb`（+ 可选 `ip2region_v6.xdb`）、空 `work/`、简要 `README.md` |
 
 解压后即可 `docker compose up -d`。源码仓库仅用于开发；`bin/`、`dist/` 已 gitignore。
 
@@ -104,7 +105,7 @@ docker compose logs -f gamehouse
 无 `gh` 时在 GitHub Release 网页下载附件即可。开发机也可 `npm run build` 后用仓库内 compose 启动。
 
 - 访问：`http://服务器IP:9988`（`HOST_PORT`，默认 9988）
-- 挂载：`bin/server`、`dist`（只读）+ `data` / `work` / `config`（持久化）
+- 挂载：`bin/server`、`dist`（只读）+ `work` / `config`（持久化）
 - 停止：`docker compose down`（数据目录保留）
 
 #### 升级服务器且不丢玩家数据
@@ -113,26 +114,42 @@ docker compose logs -f gamehouse
 
 | 路径 | 内容 | 说明 |
 |------|------|------|
-| `data/database.db`（及 `-wal`/`-shm`） | 玩家档案、聊天、房间/惩罚事件、Web Push | **核心存档**；`data/players.json` → SQLite 的一次性导入代码已删除（现网存量部署已全部迁移完成），仍停留在 pre-v2.1.28 `players.json` 且从未启动过带迁移代码版本的部署，需先在某个旧版本上启动一次完成迁移，再升级到当前版本 |
+| `work/db/database.db`（及 `-wal`/`-shm`） | 玩家档案、聊天、房间/惩罚事件、Web Push | **核心存档**；`work/db/players.json` → SQLite 的一次性导入代码已删除（现网存量部署已全部迁移完成），仍停留在 pre-v2.1.28 `players.json` 且从未启动过带迁移代码版本的部署，需先在某个旧版本上启动一次完成迁移，再升级到当前版本 |
 | `work/uploads/` | 证明图、后台上传图 | 丢了历史图片链会 404 |
 | `work/session.secret` | 会话 HMAC（未设 `SESSION_SECRET` 时） | 丢了则旧浏览器 token 全部失效 |
 | `work/vapid.json` | Web Push VAPID 密钥对（未设 `VAPID_*` 时） | **必须保留**；丢失或更换会使所有已有浏览器推送订阅失效 |
-| `config/*.json` | 后台改过的运行时配置（按功能拆分） | **整目录备份**；升级勿用空包覆盖已改配置 |
+| `config/json/*.json` | 后台改过的运行时配置（按功能拆分） | **整目录备份**；升级勿用空包覆盖已改配置 |
+| `config/xdb/ip2region_v4.xdb` | IPv4 归属地离线库（用户分析） | **本版本起必需**（除非 `ANALYTICS_GEO_ENABLED=0`）；见下方一次性升级步骤 |
+| `config/xdb/ip2region_v6.xdb` | IPv6 归属地离线库（用户分析） | 可选；缺失只是 IPv6 来源访客解析不到归属地，不影响启动 |
+| `work/analytics.salt` | 分析访客二次哈希盐 | 丢了则访客身份全部重置（DAU/留存断档），不影响登录 |
 | `.env` | `SESSION_SECRET`、`ADMIN_PASSWORD` 等 | **`SESSION_SECRET` 不要换**，否则等同全员掉登录 |
 
 可用新版本覆盖的：`bin/`、`dist/`、`docker-compose.yml`。配置仅在确认需要重置时再覆盖 `config/`。
 
-玩家档案存于 `data/database.db`（`internal/server/playerstore.go`），启动时经 `loadPlayersFromSQLite`/`ingestPersistedPlayer` 全量加载进内存。`data/players.json` → SQLite 的一次性导入代码（`migratePlayersJSONIfNeeded`）与 `PlayerSecretHash` 兼容分支已随现网存量部署完成迁移后一并删除。
+⚠️ **本版本（用户分析）破坏性升级**：默认启动会加载 `config/xdb/ip2region_v4.xdb`（约 11MB，必需）。旧的升级命令只 `cp -a bin dist`，**不会**带上该文件，升级后进程会直接退出。请在本版本升级时做一次手动步骤：
 
-⚠️ **`writePlayersJSONFallback`（`internal/server/persist.go`）是 SQLite 不可用/写失败时的保底路径**：库写不进去时兜底写回 `data/players.json`，避免彻底丢档；不提供反向的"启动时从这份 JSON 读回"能力（SQLite 是唯一的读路径）。SQLite 持久化（`playerDB.upsertMany`）稳定运行一段时间、确认生产环境没有再触发过这个降级路径后，可以评估是否精简/删除 `writeSnapshot`/`writePlayersJSONFallback` 里的这条兜底分支，改为只记 `errorLog` 不再写 JSON。
+```bash
+# 从 Release 包取出 xdb，或本地拉取：
+tmpdir=$(mktemp -d)
+tar -xzf newRPS-*-linux-amd64.tar.gz -C "$tmpdir"
+mkdir -p config/xdb
+cp -a "$tmpdir/config/xdb/ip2region_v4.xdb" config/xdb/   # 若包内已含
+cp -a "$tmpdir/config/xdb/ip2region_v6.xdb" config/xdb/ 2>/dev/null || true   # 可选，IPv6 归属地
+# 或：npm run fetch-geoip（同时拉 v4 + v6）
+# 不想要地域功能时：在 .env 写 ANALYTICS_GEO_ENABLED=0
+```
 
-⚠️ **改 SQLite 表结构必须同步 bump `internal/server/schema_migrations.go` 的 `currentSchemaVersion`，否则线上旧库不会迁移，读写会用错列**：`data/database.db` 里有张 `schema_version` 表记录当前结构版本，`openDatabase` 每次启动都会跟代码里的 `currentSchemaVersion` 比对——一致就跳过，不一致就依次执行 `migrations` 里对应版本号的显式迁移（`ALTER TABLE ADD/RENAME COLUMN`、建新表倒数据等）。改动流程：① 把 `internal/server/*.go` 里对应的 `xxxSchema` 常量改成目标结构；② 在 `migrations` 追加一条 `{version: currentSchemaVersion+1, migrate: ...}`，用真正的 SQL 把旧数据搬到新结构；③ 把 `currentSchemaVersion` 加一。只改①不做②③，等于新代码按新结构读写字段，但已经建过表的旧库还停在旧结构，轻则报错重则悄悄错位。`version==0`（全新库，或本机制引入之前就存在、结构在代码里已无法追溯的历史遗留库）时有一次性的"某条 `CREATE INDEX` 因为列不存在报错 → 把该表整体改名隔离为 `<表名>_legacy`"兜底，只用于应付"完全够不到历史"的场景（比如 `punishment_events` 曾经用过 `kind`/`source`/`player_id`/`at` 这套更早的列名），**不能**当成常规迁移手段来偷懒——它只能处理"缺列导致建索引失败"，处理不了删列/改列名（旧列会悄悄留在表里没人管）。`punishment_events` 隔离出的 `_legacy` 表不会就此撂着：v4 迁移（`convertLegacyPunishmentEvents`）按 `room_id`+被罚玩家+`task_text` 把旧版"发布"/"提交证明"两行拼回新版一行一任务的结构，尽量不丢历史，转换完即丢弃 `_legacy` 表。
+玩家档案存于 `work/db/database.db`（`internal/server/playerstore.go`），启动时经 `loadPlayersFromSQLite`/`ingestPersistedPlayer` 全量加载进内存。`work/db/players.json` → SQLite 的一次性导入代码（`migratePlayersJSONIfNeeded`）与 `PlayerSecretHash` 兼容分支已随现网存量部署完成迁移后一并删除。
+
+⚠️ **`writePlayersJSONFallback`（`internal/server/persist.go`）是 SQLite 不可用/写失败时的保底路径**：库写不进去时兜底写回 `work/db/players.json`，避免彻底丢档；不提供反向的"启动时从这份 JSON 读回"能力（SQLite 是唯一的读路径）。SQLite 持久化（`playerDB.upsertMany`）稳定运行一段时间、确认生产环境没有再触发过这个降级路径后，可以评估是否精简/删除 `writeSnapshot`/`writePlayersJSONFallback` 里的这条兜底分支，改为只记 `errorLog` 不再写 JSON。
+
+⚠️ **改 SQLite 表结构必须同步 bump `internal/server/schema_migrations.go` 的 `currentSchemaVersion`，否则线上旧库不会迁移，读写会用错列**：`work/db/database.db` 里有张 `schema_version` 表记录当前结构版本，`openDatabase` 每次启动都会跟代码里的 `currentSchemaVersion` 比对——一致就跳过，不一致就依次执行 `migrations` 里对应版本号的显式迁移（`ALTER TABLE ADD/RENAME COLUMN`、建新表倒数据等）。改动流程：① 把 `internal/server/*.go` 里对应的 `xxxSchema` 常量改成目标结构；② 在 `migrations` 追加一条 `{version: currentSchemaVersion+1, migrate: ...}`，用真正的 SQL 把旧数据搬到新结构；③ 把 `currentSchemaVersion` 加一。只改①不做②③，等于新代码按新结构读写字段，但已经建过表的旧库还停在旧结构，轻则报错重则悄悄错位。`version==0`（全新库，或本机制引入之前就存在、结构在代码里已无法追溯的历史遗留库）时有一次性的"某条 `CREATE INDEX` 因为列不存在报错 → 把该表整体改名隔离为 `<表名>_legacy`"兜底，只用于应付"完全够不到历史"的场景（比如 `punishment_events` 曾经用过 `kind`/`source`/`player_id`/`at` 这套更早的列名），**不能**当成常规迁移手段来偷懒——它只能处理"缺列导致建索引失败"，处理不了删列/改列名（旧列会悄悄留在表里没人管）。`punishment_events` 隔离出的 `_legacy` 表不会就此撂着：v4 迁移（`convertLegacyPunishmentEvents`）按 `room_id`+被罚玩家+`task_text` 把旧版"发布"/"提交证明"两行拼回新版一行一任务的结构，尽量不丢历史，转换完即丢弃 `_legacy` 表。
 
 ```bash
 # 备份数据（推荐）
-tar czf backup-$(date +%F).tgz data work config .env
+tar czf backup-$(date +%F).tgz work config .env
 
-# 解压新包到临时目录，覆盖程序（保留 data/work/config/.env）
+# 解压新包到临时目录，覆盖程序（保留 work/config/.env）
 tmpdir=$(mktemp -d)
 tar -xzf newRPS-2.1.24-linux-amd64.tar.gz -C "$tmpdir"
 cp -a "$tmpdir/bin" "$tmpdir/dist" "$tmpdir/docker-compose.yml" .
@@ -175,6 +192,8 @@ curl -fsS http://127.0.0.1:${HOST_PORT:-9988}/api/push/vapid-key
 | DELTA | 路径补丁（`PatchOp` + `google.protobuf.Value`）+ **合并后树 CRC-32**；不一致则 `sync:full` |
 | RAW | RPC 与即时推送（chat、player:batch 等，不走状态 diff） |
 | `sync:full` | 客户端校验失败或本地无基线时请求全量 |
+| `analytics:collect` | 前端埋点批量上报（无 ack；服务端成功时不 reply） |
+| `admin:analytics` / `admin:analyticsDetail` | 后台数据分析快照 / 明细（管理员） |
 
 状态校验：对「前端形态」规范化树做 **CRC-32（IEEE）**（8 位 hex，非密码学；两端对齐）。`player:batch` / 房间广播 debounce 等合并策略不变。
 | `player:get` | 拉取完整 `PublicPlayer`（大厅仅下发精简 `LobbyPlayer`） |
@@ -216,6 +235,12 @@ curl -fsS http://127.0.0.1:${HOST_PORT:-9988}/api/push/vapid-key
 | `MAX_SOCKETS_PER_IP` | 按防多开人数上限 ×4（至少 12） | 单设备（IP+指纹）WebSocket 套接字上限 |
 | `LOBBY_BROADCAST_DELAY_MS` | 300 | 大厅广播合并 |
 | `ROOM_BROADCAST_DELAY_MS` | 100 | 房间广播合并 |
+| `ANALYTICS_ENABLED` | `1` | `0` 关闭用户分析采集与聚合器 |
+| `ANALYTICS_GEO_ENABLED` | `1` | `0` 不载入 IP 库、不做归属地解析（也不做启动时文件检查） |
+| `GEOIP_DB_PATH` | `config/xdb/ip2region_v4.xdb` | IPv4 归属地 xdb 路径（必需，除非关闭 `ANALYTICS_GEO_ENABLED`） |
+| `GEOIP_DB_PATH_V6` | `config/xdb/ip2region_v6.xdb` | IPv6 归属地 xdb 路径（可选，缺失只是 IPv6 来源访客解析不到归属地） |
+| `ANALYTICS_TZ_OFFSET_MIN` | `480` | 分析日切时区偏移（分钟）；默认 UTC+8，否则「今天」会在北京时间早 8 点才切日 |
+| `ANALYTICS_RAW_RETENTION_DAYS` | `90` | `analytics_events` 原始事件保留天数（会话 180 天；日聚合永久） |
 
 ### 防多开（IP + 浏览器指纹）
 
@@ -243,9 +268,9 @@ curl -fsS http://127.0.0.1:${HOST_PORT:-9988}/api/push/vapid-key
 ## 后台与配置文件
 
 - 入口：`/admin` 或 `#admin`，或 `Ctrl/Cmd+Shift+A`
-- 配置在 `config/` 下**按功能拆分、原地读写**（无 active/default 双轨）。旧版单体 `default.json`/`active.json` 启动时会自动迁移并改名为 `*.bak`。
+- 配置在 `config/json/` 下**按功能拆分、原地读写**（无 active/default 双轨）。旧版单体 `default.json`/`active.json` 启动时会自动迁移并改名为 `*.bak`。
 
-| 文件 | 内容 |
+| 文件（相对 `config/json/`） | 内容 |
 |------|------|
 | `site.json` | 站点名、简介、管理员口令 |
 | `announcement-board.json` | 公告板（展示于顶栏「关于」面板，不再是弹窗） |
@@ -260,9 +285,34 @@ curl -fsS http://127.0.0.1:${HOST_PORT:-9988}/api/push/vapid-key
 | `access-control.json` | 防多开 |
 | `name-war.json` / `giveaway.json` / `extreme-mode.json` | 名争 / 白给 / 极限模式文案与参数 |
 | `ranked-score.json` | 排位分「展示」上下限（含名字争夺战下限）与每日衰减比例；存储分数本身不设上下限，仅展示时封顶，详见「排位积分」章节 |
+| `pet-bond.json` | 宠物乐园（认主/认宠）面板标题、主人/宠物数量上限与称号长度 |
 | `games.json` / `messages.json` | 游戏列表、提示文案 |
+| `../xdb/ip2region_v4.xdb` | IPv4 归属地离线数据，不在本目录（必需；不入 git；`npm run fetch-geoip` 或 Release 包内附带） |
+| `../xdb/ip2region_v6.xdb` | IPv6 归属地离线数据，不在本目录（可选，缺失不影响启动；不入 git） |
 
-后台「保存」会写回对应 JSON；服务启动时会把 `config/*.json` 权限收紧为 `0600`（仅运行用户可读写，防同机其他用户读取其中的管理员口令），`bin/server` 设为可执行。
+后台「保存」会写回对应 JSON；服务启动时会把 `config/json/*.json` 权限收紧为 `0600`（仅运行用户可读写，防同机其他用户读取其中的管理员口令），`bin/server` 设为可执行。
+
+## 用户分析
+
+后台「数据分析」分区展示访问/留存、设备渠道、游戏与站点玩法趋势。架构三层解耦，**RPC 路径上一句 SQL 都没有**：
+
+1. **独立只读连接**（`mode=ro`，WAL 下读不阻塞写）跑聚合查询；
+2. **后台协程 + `analytics_daily` 日聚合表**（已封板的日子永不重算，每分钟只重算今天/昨天）；
+3. **`atomic.Pointer` 内存快照**：`admin:analytics` 只做指针 Load + 切片。
+
+采集双路：前端埋点（页面/会话/来源，`web/src/lib/analytics.ts`）+ 既有审计表（`connection_events` / `room_events` / `punishment_events` / `player_activity_events`）与服务端 `game_round` 事件。历史审计表首次启动会全量回填进日聚合，面板上线即有趋势曲线。
+
+**IP 归属地**：使用 [ip2region](https://github.com/lionsoul2014/ip2region) 离线库，IPv4 库必需，放在 **`config/xdb/ip2region_v4.xdb`**；IPv6 库可选，放在 **`config/xdb/ip2region_v6.xdb`**（缺失时 IPv6 来源的访客只是解析不到归属地，不影响启动）；解析时按访客 IP 的地址族自动选库，两者都不嵌二进制、不入 git。本地开发：
+
+```bash
+npm run fetch-geoip   # 同时下载 config/xdb/ip2region_v4.xdb 与 ip2region_v6.xdb
+```
+
+更新 xdb：重新执行 `fetch-geoip` 或从上游 release 覆盖同路径后重启进程。
+
+**隐私**：分析表不存 IP/指纹/原始 UA；访客 id 为 `sha256(deviceKey ‖ salt)` 前 16 hex；地域/来源展示做 k-匿名（访客数 &lt; 3 折进「其他」）；面板只显示省份 + ISP。
+
+**总开关**：`ANALYTICS_ENABLED=0` 关闭采集与聚合；`ANALYTICS_GEO_ENABLED=0` 关闭归属地（不载入 11MB xdb）。
 
 ## 多端身份认领
 
@@ -287,28 +337,30 @@ curl -fsS http://127.0.0.1:${HOST_PORT:-9988}/api/push/vapid-key
 
 ## 排位积分
 
-`PlayerState.Stats.RankedPoints`（`internal/server/player.go`）在数据库/内存中**永远不设上下限**——胜负结算（`updateRankedPoints`）、管理员手动改分（`setRankedPointsByAdmin`）、以及下面的每日衰减，全部直接对存储值做加减，从不 clamp。`config/ranked-score.json`（`types.RankedScoreConfig`：`max`/`min`/`nameWarMin`/`dailyDecayRatio`，后台「排位分设置」可调）只在**下发展示**时生效：`internal/server/player.go` 的 `publicPlayer()` 是所有出站玩家快照（大厅、房间座位、`player:get`、观战列表等）唯一的组装入口，会把真实分数的一份副本按 `max`/`min`（开启「名字争夺战」的玩家用 `nameWarMin` 代替 `min`）夹紧后再下发，真实存储值不受影响。
+`PlayerState.Stats.RankedPoints`（`internal/server/player.go`）在数据库/内存中**永远不设上下限**——胜负结算（`updateRankedPoints`）、管理员手动改分（`setRankedPointsByAdmin`）、以及下面的每日衰减，全部直接对存储值做加减，从不 clamp。`config/json/ranked-score.json`（`types.RankedScoreConfig`：`max`/`min`/`nameWarMin`/`dailyDecayRatio`，后台「排位分设置」可调）只在**下发展示**时生效：`internal/server/player.go` 的 `publicPlayer()` 是所有出站玩家快照（大厅、房间座位、`player:get`、观战列表等）唯一的组装入口，会把真实分数的一份副本按 `max`/`min`（开启「名字争夺战」的玩家用 `nameWarMin` 代替 `min`）夹紧后再下发，真实存储值不受影响。
 
 - **后台调低上/下限**：已经"超范围"的老用户分数在数据库里原样保留，只在前端展示时被新的上/下限封顶；之后正常输赢分或每日衰减，仍然直接对真实（可能超范围的）存储值结算，不会被这次展示层的调整拖拽。
-- **称号分段**：`titleSegmentFor`（`internal/server/player.go`）在真实分数落在所有称号分段范围之外时，会夹到最近的边界分段（而不是固定回退到最低档），因此称号池（`config/titles.json`）不需要跟着 `ranked-score.json` 的范围同步扩大。
+- **称号分段**：`titleSegmentFor`（`internal/server/player.go`）在真实分数落在所有称号分段范围之外时，会夹到最近的边界分段（而不是固定回退到最低档），因此称号池（`config/json/titles.json`）不需要跟着 `ranked-score.json` 的范围同步扩大。
 - **每日衰减**：`scheduleRankedDailyDecay`/`applyRankedDailyDecay`（`internal/server/player.go`）每 24 小时（对齐到 UTC 天边界，`time.AfterFunc` 定位到下一个边界后切换为 `time.Ticker`，与「极限模式」整点衰减是完全独立的两套机制）把每个玩家的真实 `RankedPoints` 乘以 `dailyDecayRatio`（默认 `0.98`）并向 0 截断小数——正负分都会朝 0 方向收缩。每个玩家用 `RankedLastDecayDay` 记录已衰减到的"天桶"，防止服务重启后重复衰减。
 - **历史最高/最低分**：`recordRankedExtremes` 持续记录真实极值（存储永不回退）；下发展示时与当前分一样按 `max`/`min`/`nameWarMin` 封顶。排行榜排序使用 `sortRankedPoints`/`sortHighestScore`/`sortLowestScore` 真实分，避免一堆人显示 4999 时名次乱序。
-- **称号分段用百分比**：`config/titles.json` 的 `minPercent`/`maxPercent`（-100～100）相对 `ranked-score.json` 的展示上下限换算真实分所属段；改展示上下限无需改称号绝对分。极限模式的 pos/neg 系数表与同一百分比刻度对齐。
+- **称号分段用百分比**：`config/json/titles.json` 的 `minPercent`/`maxPercent`（-100～100）相对 `ranked-score.json` 的展示上下限换算真实分所属段；改展示上下限无需改称号绝对分。极限模式的 pos/neg 系数表与同一百分比刻度对齐。
 - **管理员自定义称号**：后台「玩家管理」可直接给某个玩家填一个不在 `titles.json` 池里的称号（`editPlayer` action，`internal/server/handlers_room.go`），此时会置位 `PublicStats.TitleCustom`；`syncTitleForRankSegment`（`internal/server/player.go`）一旦发现该标记就直接跳过重算，不再随排位分升降、跨档、改性别/阵营、后台调整 `ranked-score.json` 的 `max`/`min` 而被自动改写。把后台称号输入框清空并保存会清掉该标记、立即按当前排位分重算回自动称号。前端输入框此时会用黄色边框区分，`web/src/ui/AdminViews.tsx`。
-- 「名字争夺战」失格线：`config/name-war.json` 的 `penaltyThreshold`（默认 `-4999`，后台可调），按**真实存储分**判定，与展示封顶无关。改名所需最低分同样在该文件里，`renameMinPoints`（默认 `500`，后台可调），只有真实分达到此值的玩家才能给失格者改名。
+- 「名字争夺战」失格线：`config/json/name-war.json` 的 `penaltyThreshold`（默认 `-4999`，后台可调），按**真实存储分**判定，与展示封顶无关。改名所需最低分同样在该文件里，`renameMinPoints`（默认 `500`，后台可调），只有真实分达到此值的玩家才能给失格者改名。
 
 ## 构建与测试
 
 ```bash
 npm run build:web      # 仅前端
 npm run build:server   # 仅 Go（并 chmod +x bin/server）
-npm run fix-perms      # config/*.json 收紧为仅属主可读写（0600）+ bin/server 可执行
+npm run fix-perms      # config/json/*.json 收紧为仅属主可读写（0600）+ bin/server 可执行
 npm run build          # 先 server、后 web，再 fix-perms；后端失败时不会留下“新前端 + 旧后端”
 go test ./...
 npm run test           # go test + 前端 build
 ```
 
 ## 最近更新记录
+
+- **用户分析 + 后台图表面板**：前端埋点与审计表聚合、ip2region 归属地（`config/xdb/ip2region_v4.xdb` 必需 + 可选 `ip2region_v6.xdb`）、日聚合三层架构、`/admin`「数据分析」分区（recharts）。升级须一次性放置 xdb 或设 `ANALYTICS_GEO_ENABLED=0`。
 
 详见 [CHANGELOG.md](./CHANGELOG.md)。
 

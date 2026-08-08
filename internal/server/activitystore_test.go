@@ -16,7 +16,7 @@ func TestInsertConnectionEventOneShot(t *testing.T) {
 	store := newActivityStore(db)
 
 	// 一次性写完整一行：connected_at/disconnected_at/close_reason 都在同一次 INSERT 里。
-	if err := store.insertConnectionEvent("sock1", 1000, 2000, "sid1", "1.2.3.4", "dev1", "fp1", "ua1", "ctx", "p1", "disconnect"); err != nil {
+	if err := store.insertConnectionEvent("sock1", 1000, 2000, "sid1", "1.2.3.4", "dev1", "fp1", "ua1", "ctx", "p1", "disconnect", "广东省", "电信"); err != nil {
 		t.Fatalf("insertConnectionEvent: %v", err)
 	}
 	var count int

@@ -1,5 +1,40 @@
 # 更新记录
 
+### v2.4.1（2026-08-08）
+
+本版本核心是从零引入用户分析（类 Google Analytics）能力，同时顺带完成两处目录结构调整、认主认宠的信息展示与上线提醒、以及一个大话骰死锁修复。**包含破坏性升级步骤，见下方「目录结构调整」。**
+
+#### 新功能：用户分析 + 后台数据面板
+
+- **三层解耦架构，RPC 路径上一句 SQL 都没有**：① 独立只读 SQLite 连接（`mode=ro`，WAL 下读不阻塞写）跑聚合查询；② 后台协程每分钟重算未封板的今天/昨天写入 `analytics_daily` 日聚合表，已封板的历史日不再重算；③ `atomic.Pointer` 无锁发布快照，`admin:analytics` RPC 只做指针 Load + 切片，不碰数据库。
+- **双路采集**：前端埋点（页面浏览/会话/来源，`web/src/lib/analytics.ts` 经 `analytics:collect` 批量上报）+ 站内既有四张审计表（`connection_events`/`room_events`/`punishment_events`/`player_activity_events`）与服务端 `game_round` 事件（RPS/黑白棋/井字棋/五子棋/斗兽棋/大话骰对局结果，不依赖前端上报）。历史审计表首次启动会全量回填进日聚合，面板上线当天即有完整历史趋势曲线；只有页面浏览/来源/浏览器/归属地这几个新维度是从上线日起才有数据。
+- **IP 归属地**：引入 [ip2region](https://github.com/lionsoul2014/ip2region) 离线库解析省份/ISP，回环/内网显示「本地」。IPv4 库（`config/xdb/ip2region_v4.xdb`）默认必需，缺失且未关闭该功能会直接启动失败；IPv6 库（`ip2region_v6.xdb`）可选，缺失只是 IPv6 来源访客解析不到归属地，不影响启动。新增 `npm run fetch-geoip` 一键拉取两份 xdb。
+- **隐私设计**：分析表不落 IP/指纹/原始 UA；访客 id 为 `sha256(deviceKey ‖ salt)` 取前 16 位 hex（`work/analytics.salt` 首启随机生成，0600 权限）；地域/来源展示做 k-匿名（访客数 < 3 折进「其他」）；面板只显示省份 + ISP，不下钻到城市/具体 IP。
+- **后台「数据分析」分区**（recharts）：DAU/会话/页面浏览/新访客/平均时长/在线峰值等核心指标+环比，设备/浏览器/系统/来源/省份/ISP 分布，游戏对局与结果分布，房间创建趋势，惩罚发布/完成/驳回与完成率，站点玩法（认主认宠/名争/白给）活跃度，聊天量，转化漏斗，留存矩阵，新老访客对比。
+- **总开关**：`ANALYTICS_ENABLED=0` 关闭全部采集与聚合协程；`ANALYTICS_GEO_ENABLED=0` 关闭归属地解析（不加载 11MB xdb，也不做启动时的文件存在性检查）。另有 `ANALYTICS_TZ_OFFSET_MIN`（默认 480，即 UTC+8，决定「今天」何时切换）、`ANALYTICS_RAW_RETENTION_DAYS`（默认 90 天，原始事件保留期；会话保留 180 天；日聚合永久保留）。
+- **开发中发现并修正的字段错位**：`ip2region_v4/v6.xdb` 实际字段顺序是「国家|省份|城市|ISP」，早期实现按旧版文档「国家|区域|省份|城市|ISP」误读，导致省份/ISP 错位。已在同一开发周期内修好解析并通过迁移清理/重算受影响的历史行（`connection_events` 重新解析回正确值；`analytics_sessions`/`analytics_visitors` 因不存原始 IP 无法重新解析，只能清空对应字段，面板显示「无归属地数据」而非错误值），不影响本次发布后的行为。
+
+#### 目录结构调整（⚠️ 破坏性升级）
+
+- **`data/` → `work/db/`**：`database.db`（及 `-wal`/`-shm`）现在位于 `work/db/` 下，`data/` 目录不再使用。
+- **`config/` → `config/json/` + `config/xdb/`**：原按功能拆分的 JSON 配置整体挪进 `config/json/`；新增 `config/xdb/` 存放上面提到的 IP 归属地离线库（不入 git）。
+- 旧版 `cp -a "$tmpdir/bin" "$tmpdir/dist" ...` 升级命令不会带上 xdb，按新流程升级的用户请参照 README「Docker Compose」章节的一次性手动步骤（放置 xdb 或设置 `ANALYTICS_GEO_ENABLED=0`），否则新版本会因缺少必需的 `config/xdb/ip2region_v4.xdb` 直接启动失败。
+- Docker Compose 卷挂载相应从 `data:/app/data` 改为随 `work` 一起挂载；新增 6 个 `ANALYTICS_*`/`GEOIP_*` 环境变量透传。
+
+#### 认主认宠（宠物乐园）
+
+- **成员/候选列表补全性别/称号/阵营配色/⚡极限模式/⚔️名争/白给徽章**：此前这些字段只能靠前端在大厅在线名单里反查，对方离线一段时间后大厅列表会把人摘掉，徽章直接消失。现服务端在 `petbond:xxx` 视图里随成员/候选一起下发完整字段，离线也能正常显示。
+- **主人/宠物上线推送提醒**：新增「我的主人/宠物上线」推送偏好开关（默认关闭，「个人设置 → 推送通知」可开）。判定为离线→在线的真实转换（而非同一会话刷新/重连保活）才触发，逐条通知该玩家名下每一位主人/每一只宠物。`help.md` 同步补充说明。
+
+#### Bugfix
+
+- **大话骰：不能开自己刚叫的点**：此前任意在场玩家均可开牌的改动（v2.3.3）留了一个漏洞——开自己叫的点会导致赢家=输家=自己，既没法给自己发布/审核惩罚任务，又会连带触发「受罚未完成不能离房」卡死退出流程。现服务端拒绝该操作并提示改由其他玩家开牌。
+
+#### 其它
+
+- 新增 5 个 SQLite schema 迁移（v17–v21）：为审计表补时间维度索引供聚合查询使用；新增 `players.push_bond_enabled` 列承载上线推送开关。
+- `internal/geoip` 新包封装 ip2region 查询与启动期加载/降级逻辑；新增 `go.mod` 依赖 `github.com/lionsoul2014/ip2region`。
+
 ### v2.3.5（2026-07-31）
 
 紧接 v2.3.4 的两处线上回归修复，以及一个前端字段规范化补漏。
