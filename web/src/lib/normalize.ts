@@ -544,7 +544,15 @@ export const DEFAULT_GIVEAWAY: AppConfig["giveaway"] = {
   likeVoteLimitPerHour: 3,
   likeVoteValue: 1,
   dislikeVoteLimitPerHour: 10,
-  dislikeVoteValue: 0.1
+  dislikeVoteValue: 0.1,
+  petLikeVoteLimitPerHour: 5,
+  petLikeVoteValue: 1,
+  petDislikeVoteLimitPerHour: 15,
+  petDislikeVoteValue: 0.1,
+  masterLikeVoteLimitPerHour: 5,
+  masterLikeVoteValue: 1,
+  masterDislikeVoteLimitPerHour: 15,
+  masterDislikeVoteValue: 0.1
 };
 
 export function withGiveawayDefaults(g?: Partial<AppConfig["giveaway"]> | null): AppConfig["giveaway"] {
@@ -556,6 +564,14 @@ export function withGiveawayDefaults(g?: Partial<AppConfig["giveaway"]> | null):
   if (!(base.likeVoteValue > 0)) base.likeVoteValue = DEFAULT_GIVEAWAY.likeVoteValue;
   if (!(base.dislikeVoteLimitPerHour >= 1)) base.dislikeVoteLimitPerHour = DEFAULT_GIVEAWAY.dislikeVoteLimitPerHour;
   if (!(base.dislikeVoteValue > 0)) base.dislikeVoteValue = DEFAULT_GIVEAWAY.dislikeVoteValue;
+  if (!(base.petLikeVoteLimitPerHour >= 1)) base.petLikeVoteLimitPerHour = DEFAULT_GIVEAWAY.petLikeVoteLimitPerHour;
+  if (!(base.petLikeVoteValue > 0)) base.petLikeVoteValue = DEFAULT_GIVEAWAY.petLikeVoteValue;
+  if (!(base.petDislikeVoteLimitPerHour >= 1)) base.petDislikeVoteLimitPerHour = DEFAULT_GIVEAWAY.petDislikeVoteLimitPerHour;
+  if (!(base.petDislikeVoteValue > 0)) base.petDislikeVoteValue = DEFAULT_GIVEAWAY.petDislikeVoteValue;
+  if (!(base.masterLikeVoteLimitPerHour >= 1)) base.masterLikeVoteLimitPerHour = DEFAULT_GIVEAWAY.masterLikeVoteLimitPerHour;
+  if (!(base.masterLikeVoteValue > 0)) base.masterLikeVoteValue = DEFAULT_GIVEAWAY.masterLikeVoteValue;
+  if (!(base.masterDislikeVoteLimitPerHour >= 1)) base.masterDislikeVoteLimitPerHour = DEFAULT_GIVEAWAY.masterDislikeVoteLimitPerHour;
+  if (!(base.masterDislikeVoteValue > 0)) base.masterDislikeVoteValue = DEFAULT_GIVEAWAY.masterDislikeVoteValue;
   return base;
 }
 

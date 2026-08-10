@@ -1,5 +1,50 @@
 # 更新记录
 
+### v2.4.2（2026-08-10）
+
+本版本重做白给自救板投票系统（按 actor→target 独立计额 + 认主认宠三档），完善分析面板（活动拆分、新老用户维度、时长桶细化），并统一构建产物到 `bin/dist/`。
+
+#### 白给自救板投票系统重构
+
+- **额度从"全体共用一个窗口"改为"按 actor→target 独立计时/计次"**：`GiveawayVoteQuotas` map，每个目标窗口各自起算/过期，互不影响。移除旧的 `GiveawayVotedTargets`（同一条自救内容只能投一次），改为真正的按每小时次数上限限流——同一 target 在额度内可反复投票，额度耗尽后等窗口滚动刷新。
+- **新增认主认宠三档独立配置**：普通/直系宠物/直系主人各有一套独立的每小时点赞/倒赞次数上限和升降百分比（`giveaway.json` 新增 `petLikeVoteLimitPerHour` 等 8 个字段）。只认直系关系（不含宠物的宠物等二级以上关系），未命中走普通档。
+- **新增 `giveaway:voteQuotas` RPC**：按目标玩家 ID 批量查询自己对每个目标的剩余额度，供自救板列表初次渲染和关系变化时补齐每张卡片下方的额度展示。
+- **白给值精度从 1 位小数提升到 2 位小数**：`clampGiveawayValue` 的 `Round(x*10)/10` 改为 `Round(x*100)/100`。
+- **Protobuf 旧聚合字段标记 deprecated**：`PublicPlayer`/`LobbyPlayer` 里的 `giveawayVoteWindowStartedAt`/`giveawayVoteCount`/`giveawayVoteLikesThisHour`/`giveawayVoteDislikesThisHour` 保留原字段号但标记弃用——服务端不再用它们做新额度判断，只在成功投票后继续更新/广播以兼容旧客户端显示。
+- **新增 `fixGiveawayVoteLimits`**：老部署的 `giveaway.json` 没有新三档字段时（JSON unmarshal 留 0），自动回退到普通档对应字段值——`LoadConfig` 和 `SaveConfig` 两处都调用，防止升级后因 Validate 拒绝而启动失败，也保证管理员从旧版前端提交配置时不报错。
+
+#### 构建产物路径整理
+
+- **`dist/` 并入 `bin/dist/`**：`web/vite.config.ts` 的 `outDir` 从 `../dist` 改为 `../bin/dist`，`docker-compose.yml` 挂载路径从 `./dist:/app/dist:ro` 改为 `./bin/dist:/app/dist:ro`，服务端静态托管依次探测 `bin/dist` → `dist`（兼容 Docker 部署拍平路径）。Release 包现在只有一个 `bin/` 目录需要覆盖，不再有独立的顶层 `dist/`。README 各章节同步更新。
+
+#### 用户分析面板升级
+
+- **活动拆分为「用户信息变更」和「名争·白给」两个分组**：后端新增 `profileChanges`（性别/阵营变更、改名、更换头像、自定义称号）和 `nameWarGiveaway`（开启名争、开启白给、白给留言板、名争改名、开启极限模式），前端图表分别展示。
+- **新增「新老用户」维度**：按账号 `playerId` 维度拆分"当日新建账号数"和"老用户登录数"，与设备指纹维度的"新老设备"（`newVsReturning`）并列对照。
+- **会话时长桶颗粒度细化**：从 4 桶（0-10s/10-60s/1-5m/5-15m/15-60m/60m+）细化为 8 桶（10s/1min/2min/5min/10min/30min/60min/60m+）；惩罚证明时长桶同步细化（10s/30s/1min/5min/10min/20min/20m+）。
+- **修复 `avgMs` SQL null type 错误**：`rebuildDay` 里 `AVG(duration_ms)` 是 REAL 类型，错用 `sql.NullInt64` 接收——非整数平均值（如 1.5ms）会导致整行 Scan 失败，当天全部聚合维度（来源/省份/ISP）都出不来。改为 `sql.NullFloat64` 接收后 `int64` 转。追加测试用例防回归。
+- **新老访客从堆叠柱状图改为双折线图**，趋势更直观。
+- **堆叠柱状图分段顶端圆角动态判断**：不再固定最后一个 series 带圆角——当天该 series 值为 0 时，实际露在顶端的前一个 series 会缺角，改为按当前柱各 series 取值动态判断谁在顶端。
+
+#### 宠物乐园关系图
+
+- **宽度自适应容器**：`ResizeObserver` 监听实际渲染宽度，力导向图不再固定 720px。
+- **新增 BFS 筛选功能**：选一位玩家 + 跳数 depth，按无向图 BFS 只保留指定跳数内可达的主宠关系——depth=2 可直观展示"主人社交圈"。输入框自带玩家搜索。
+- **高度从 460px 扩大到 690px**，给筛选控件留出空间。
+- **修复头像首字拖拽分离 bug**：`<foreignObject>` 内子元素用 `transform: translateY()` 上移首字时，部分浏览器会把它当成独立合成层缓存，导致头像动而字不动。改为 `margin-top` 走正常文档流。
+
+#### 活动埋点优化
+
+- **开关类只记开启不记关闭**：`nameWar_enable`/`giveaway_enable`/`extreme_enable` 只在开启时记事件，关闭不再记录。
+- **清除头像并入 `avatar_change` 计数**：不再区分 `avatar_clear` 和 `avatar_change`，统一计为更换头像。
+- **名争改名新增 `nameWar_rename` 埋点**：每次改名记一条（含改名前后的昵称），供面板追踪名争活跃度。
+
+#### 其它
+
+- **前端 `formatGiveawayValue`**：展示从 `.toFixed(1)` 改为 `.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")`，适配精度提升的同时去掉末尾无意义 0（`1.10` → `1.1`，`1.00` → `1`）。
+- **`game-choice-icon` 样式**：`width: 46px` 改为 `min-width: 46px` + `white-space: nowrap` + `padding: 0 4px`，防止图标文字换行挤压。
+- **`help.md`** 同步更新自救板额度按目标独立计算 + 认主认宠规则的说明。
+
 ### v2.4.1（2026-08-08）
 
 本版本核心是从零引入用户分析（类 Google Analytics）能力，同时顺带完成两处目录结构调整、认主认宠的信息展示与上线提醒、以及一个大话骰死锁修复。**包含破坏性升级步骤，见下方「目录结构调整」。**

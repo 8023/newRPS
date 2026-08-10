@@ -114,15 +114,22 @@ type analyticsRangeView struct {
 
 	// 玩法
 	Punishment analyticsPunishmentBlock `json:"punishment"`
-	Activity   []analyticsNamedSeries   `json:"activity"`
-	PetBond    analyticsPetBondBlock    `json:"petBond"`
-	Chat       analyticsChatBlock       `json:"chat"`
+	// Activity 保留旧版分析接口的完整活动序列；新面板使用下面两个按语义拆分的字段。
+	Activity []analyticsNamedSeries `json:"activity"`
+	// ProfileChanges「用户信息变更」：性别/阵营变更、改名、更换头像、自定义称号。
+	ProfileChanges []analyticsNamedSeries `json:"profileChanges"`
+	// NameWarGiveaway「名争·白给」：开启名争、开启白给、白给留言板、名争改名、开启极限模式。
+	NameWarGiveaway []analyticsNamedSeries `json:"nameWarGiveaway"`
+	// NewOldUsers「新老用户」：按账号（playerId）维度，区别于设备维度的 NewVsReturning。
+	NewOldUsers analyticsNewOldUsers  `json:"newOldUsers"`
+	PetBond     analyticsPetBondBlock `json:"petBond"`
+	Chat        analyticsChatBlock    `json:"chat"`
 
 	// 漏斗 / 留存
 	Funnel    []analyticsBucket       `json:"funnel"`
 	Retention analyticsRetentionBlock `json:"retention"`
 
-	// 新 vs 回访
+	// 新 vs 回访（按设备指纹维度，见 NewOldUsers 的账号维度对照）
 	NewVsReturning analyticsNewReturning `json:"newVsReturning"`
 }
 
@@ -196,6 +203,13 @@ type analyticsRetentionBlock struct {
 type analyticsNewReturning struct {
 	New       []int64 `json:"new"`
 	Returning []int64 `json:"returning"`
+}
+
+// analyticsNewOldUsers 是按注册账号（playerId）维度的新老拆分，与 analyticsNewReturning
+// 的设备指纹维度是两套不同口径（同一账号换设备会被设备维度误判为"新"，反之亦然）。
+type analyticsNewOldUsers struct {
+	New      []int64 `json:"new"`      // 当日新建账号数（= activity.create 当日计数）
+	OldLogin []int64 `json:"oldLogin"` // 当日登录的老账号个数 = 当日登录去重账号数 - 当日新建账号数
 }
 
 func clampAnalyticsDays(d int) int {
@@ -328,6 +342,18 @@ func (snap *analyticsSnapshot) forRange(days int) *analyticsRangeView {
 		returning[i] = r
 	}
 
+	// 按账号（playerId）维度的新老拆分：create 当日计数即当日新建账号数（每个 playerId
+	// 一生只触发一次 create），loggedDAU 减去它就是当日登录的老账号个数。
+	newAccounts := keySeries(snap, metricActivity, "create", start, n)
+	oldLogin := make([]int64, len(logged))
+	for i := range logged {
+		v := logged[i] - newAccounts[i]
+		if v < 0 {
+			v = 0
+		}
+		oldLogin[i] = v
+	}
+
 	view := &analyticsRangeView{
 		Days: days, BuiltAt: snap.BuiltAt,
 		LiveOnline: snap.LiveOnline, LiveRooms: snap.LiveRooms, LiveBonds: snap.LiveBonds,
@@ -354,7 +380,7 @@ func (snap *analyticsSnapshot) forRange(days int) *analyticsRangeView {
 		Referrers:      sumByKey(snap, metricReferrer, start, n),
 		Provinces:      sumByKey(snap, metricProvince, start, n),
 		ISPs:           sumByKey(snap, metricISP, start, n),
-		SessionBuckets: orderedBuckets(sumByKey(snap, metricSessionBucket, start, n), []string{"0-10s", "10-60s", "1-5m", "5-15m", "15-60m", "60m+"}),
+		SessionBuckets: orderedBuckets(sumByKey(snap, metricSessionBucket, start, n), []string{"10s", "1min", "2min", "5min", "10min", "30min", "60min", "60min+"}),
 		ViewPV:         sumByKey(snap, metricViewPV, start, n),
 		GameRounds:     namedSeries(snap, metricGameRound, start, n, dayLabels),
 		GameResults:    sumByKey(snap, metricGameResult, start, n),
@@ -362,10 +388,13 @@ func (snap *analyticsSnapshot) forRange(days int) *analyticsRangeView {
 		Punishment: analyticsPunishmentBlock{
 			Publish: slice(snap.PunishPublish), Done: slice(snap.PunishDone), Reject: slice(snap.PunishReject),
 			DoneRate: rate(sum(slice(snap.PunishDone)), sum(slice(snap.PunishPublish))),
-			ProofMs:  orderedBuckets(sumByKey(snap, metricPunishProofMs, start, n), []string{"0-1m", "1-5m", "5-15m", "15-60m", "60m+"}),
+			ProofMs:  orderedBuckets(sumByKey(snap, metricPunishProofMs, start, n), []string{"10s", "30s", "1min", "5min", "10min", "20min", "20min+"}),
 		},
-		Activity: namedSeries(snap, metricActivity, start, n, dayLabels),
-		PetBond:  analyticsPetBondBlock{Total: slice(snap.PetbondTotal), New: slice(snap.PetbondNew)},
+		Activity:        namedSeries(snap, metricActivity, start, n, dayLabels),
+		ProfileChanges:  namedSeriesForKeys(snap, metricActivity, []string{"gender_change", "rename", "avatar_change", "self_title_change"}, start, n),
+		NameWarGiveaway: namedSeriesForKeys(snap, metricActivity, []string{"nameWar_enable", "giveaway_enable", "giveaway_board_submit", "nameWar_rename", "extreme_enable"}, start, n),
+		NewOldUsers:     analyticsNewOldUsers{New: newAccounts, OldLogin: oldLogin},
+		PetBond:         analyticsPetBondBlock{Total: slice(snap.PetbondTotal), New: slice(snap.PetbondNew)},
 		Chat: analyticsChatBlock{
 			Lobby: slice(snap.ChatLobby), Room: slice(snap.ChatRoom), Speakers: slice(snap.ChatSpeakers),
 		},
@@ -424,6 +453,8 @@ func sumByKey(snap *analyticsSnapshot, metric string, start, n int) []analyticsB
 	return out
 }
 
+// orderedBuckets 只按 order 给定的固定桶重排/补零；不在 order 里的历史遗留桶键
+// （比如改颗粒度前 analytics_daily 里存量的旧桶名）直接丢弃，不与当前桶并列显示。
 func orderedBuckets(buckets []analyticsBucket, order []string) []analyticsBucket {
 	idx := map[string]int64{}
 	for _, b := range buckets {
@@ -467,6 +498,32 @@ func namedSeries(snap *analyticsSnapshot, metric string, start, n int, _ []strin
 	out := make([]analyticsNamedSeries, 0, len(list))
 	for _, x := range list {
 		out = append(out, analyticsNamedSeries{Key: x.k, Values: append([]int64(nil), x.s[start:]...)})
+	}
+	return out
+}
+
+// keySeries 取某个 metric 下固定一个 key 的按天序列（补零对齐到 [start,n) 窗口）。
+// 与 sumByKey/namedSeries「按总量排序取 top」不同，这里保证返回调用方指定的 key，
+// 哪怕它总量很小、排不进 top N 也不会被裁掉。
+func keySeries(snap *analyticsSnapshot, metric, key string, start, n int) []int64 {
+	var series int64Slice
+	if m := snap.ByKey[metric]; m != nil {
+		series = m[key]
+	}
+	if len(series) < n {
+		padded := make([]int64, n)
+		copy(padded[n-len(series):], series)
+		series = padded
+	}
+	return append([]int64(nil), series[start:]...)
+}
+
+// namedSeriesForKeys 是 namedSeries 的定制版：返回调用方指定的固定 keys（保持传入顺序），
+// 用于把笼统的 metricActivity 拆成几个有语义的分组图表，而不是笼统按总量取 top N。
+func namedSeriesForKeys(snap *analyticsSnapshot, metric string, keys []string, start, n int) []analyticsNamedSeries {
+	out := make([]analyticsNamedSeries, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, analyticsNamedSeries{Key: k, Values: keySeries(snap, metric, k, start, n)})
 	}
 	return out
 }
@@ -621,7 +678,13 @@ func (s *Server) rebuildDay(day int64, tz int) ([]analyticsDailyRow, error) {
 	}
 
 	// 会话聚合
-	var dau, loggedDAU, sessions, pageviews, newVis, avgMs, bounces sql.NullInt64
+	// 注意：AVG(duration_ms) 在 SQLite 里永远是 REAL（即便外面包了
+	// COALESCE(...,0)），必须用 NullFloat64 接，否则平均值一旦带小数
+	// （即字符串表示带 "."），database/sql 的 float64->int64 转换
+	// （走的是格式化成字符串再 ParseInt 这条路）就会直接报错，
+	// 导致本次 Scan 整体失败、当天全部维度（含来源/省份/ISP）都聚合不出来。
+	var dau, loggedDAU, sessions, pageviews, newVis, bounces sql.NullInt64
+	var avgMs sql.NullFloat64
 	err := db.QueryRow(`
 		SELECT COUNT(DISTINCT visitor),
 		       COUNT(DISTINCT NULLIF(player_id,'')),
@@ -641,17 +704,19 @@ func (s *Server) rebuildDay(day int64, tz int) ([]analyticsDailyRow, error) {
 	add(metricSessions, "", sessions.Int64)
 	add(metricPageviews, "", pageviews.Int64)
 	add(metricNewVisitors, "", newVis.Int64)
-	add(metricAvgSessionMs, "", avgMs.Int64)
+	add(metricAvgSessionMs, "", int64(avgMs.Float64))
 	add(metricBounceSessions, "", bounces.Int64)
 
 	// 时长桶
 	if err := s.queryKeyCounts(db, `
-		SELECT CASE WHEN duration_ms <   10000 THEN '0-10s'
-		            WHEN duration_ms <   60000 THEN '10-60s'
-		            WHEN duration_ms <  300000 THEN '1-5m'
-		            WHEN duration_ms <  900000 THEN '5-15m'
-		            WHEN duration_ms < 3600000 THEN '15-60m'
-		            ELSE '60m+' END, COUNT(*)
+		SELECT CASE WHEN duration_ms <    10000 THEN '10s'
+		            WHEN duration_ms <    60000 THEN '1min'
+		            WHEN duration_ms <   120000 THEN '2min'
+		            WHEN duration_ms <   300000 THEN '5min'
+		            WHEN duration_ms <   600000 THEN '10min'
+		            WHEN duration_ms <  1800000 THEN '30min'
+		            WHEN duration_ms <  3600000 THEN '60min'
+		            ELSE '60min+' END, COUNT(*)
 		FROM analytics_sessions WHERE day = ? GROUP BY 1`, day, metricSessionBucket, &rows); err != nil {
 		return nil, err
 	}
@@ -780,11 +845,13 @@ func (s *Server) rebuildDay(day int64, tz int) ([]analyticsDailyRow, error) {
 	add(metricPunishDone, "", done.Int64)
 	add(metricPunishReject, "", rej.Int64)
 	if err := queryKeyCountsRange(db, `
-		SELECT CASE WHEN (proof_at - task_at) < 60000 THEN '0-1m'
-		            WHEN (proof_at - task_at) < 300000 THEN '1-5m'
-		            WHEN (proof_at - task_at) < 900000 THEN '5-15m'
-		            WHEN (proof_at - task_at) < 3600000 THEN '15-60m'
-		            ELSE '60m+' END, COUNT(*)
+		SELECT CASE WHEN (proof_at - task_at) <    10000 THEN '10s'
+		            WHEN (proof_at - task_at) <    30000 THEN '30s'
+		            WHEN (proof_at - task_at) <    60000 THEN '1min'
+		            WHEN (proof_at - task_at) <   300000 THEN '5min'
+		            WHEN (proof_at - task_at) <   600000 THEN '10min'
+		            WHEN (proof_at - task_at) <  1200000 THEN '20min'
+		            ELSE '20min+' END, COUNT(*)
 		FROM punishment_events
 		WHERE task_at >= ? AND task_at < ? AND proof_at > task_at
 		GROUP BY 1`, dayStart, dayEnd, metricPunishProofMs, day, &rows); err != nil {

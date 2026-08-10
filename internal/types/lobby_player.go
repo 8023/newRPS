@@ -2,10 +2,11 @@ package types
 
 // LobbyPlayer 大厅/全局广播用的精简玩家视图。
 // 完整 PublicPlayer 通过 player:get / 进房快照 / 个人 me 下发。
-// 投票额度（GiveawayVote*）也在此列出：前端自身的 me.player 是通过与
-// lobby.players 中自己那条记录的 diff 合并来保持更新的（见 web/src/App.tsx），
-// 如果这里裁掉这些字段，投票后广播回来的自身记录会把额度字段抹成 undefined，
-// 导致前端一直显示满额度、且刷新倒计时永远不出现。
+// 旧版大厅客户端依赖的聚合投票字段仍保留并随自己的玩家记录广播；新客户端的精确额度
+// 走 giveaway:voteQuotas RPC 单播，不把按目标 map 放进大厅广播。
+// 前端自身的 me.player 是通过与 lobby.players 中自己那条记录的 diff 合并来保持更新的
+// （见 web/src/App.tsx）——凡是要放进这个结构体的字段都得遵守这条：漏了就会被广播抹成
+// undefined。
 type LobbyPlayer struct {
 	ID                  string       `json:"id"`
 	Name                string       `json:"name"`
@@ -159,14 +160,15 @@ func (p LobbyPlayer) AsPublicPlayer() PublicPlayer {
 		NameWarRenameProtectedUntil: p.NameWarRenameProtectedUntil, NameWarRenamedByName: p.NameWarRenamedByName,
 		GiveawayEnabled: p.GiveawayEnabled, GiveawayValue: p.GiveawayValue,
 		GiveawayBoardText: p.GiveawayBoardText, GiveawayBoardExpiresAt: p.GiveawayBoardExpiresAt,
-		GiveawayBoardLikes: p.GiveawayBoardLikes, GiveawayBoardDislikes: p.GiveawayBoardDislikes,
-		GiveawayVoteWindowStartedAt: p.GiveawayVoteWindowStartedAt,
-		GiveawayVoteLikesThisHour:   p.GiveawayVoteLikesThisHour, GiveawayVoteDislikesThisHour: p.GiveawayVoteDislikesThisHour,
+		GiveawayVoteWindowStartedAt:  p.GiveawayVoteWindowStartedAt,
+		GiveawayVoteLikesThisHour:    p.GiveawayVoteLikesThisHour,
+		GiveawayVoteDislikesThisHour: p.GiveawayVoteDislikesThisHour,
+		GiveawayBoardLikes:           p.GiveawayBoardLikes, GiveawayBoardDislikes: p.GiveawayBoardDislikes,
 		RankMultiplierUnlocked: p.RankMultiplierUnlocked, ExtremeModeEnabled: p.ExtremeModeEnabled,
 		ExtremeWinStreak: p.ExtremeWinStreak, ExtremeForceClosed: p.ExtremeForceClosed,
 		ExtremeForceClosedAt: p.ExtremeForceClosedAt, ExtremeRenameProtectedUntil: p.ExtremeRenameProtectedUntil,
 		ExtremeRenamedByName: p.ExtremeRenamedByName,
-		BondMasterEnabled: p.BondMasterEnabled, BondPetEnabled: p.BondPetEnabled, BondPublicDisplay: p.BondPublicDisplay,
+		BondMasterEnabled:    p.BondMasterEnabled, BondPetEnabled: p.BondPetEnabled, BondPublicDisplay: p.BondPublicDisplay,
 		RoomID: p.RoomID,
 		Stats: PublicStats{
 			Wins: p.Stats.Wins, Losses: p.Stats.Losses, Draws: p.Stats.Draws,

@@ -79,6 +79,66 @@ func TestRebuildDayFromSeed(t *testing.T) {
 	}
 }
 
+// TestRebuildDayNonIntegerAvgSessionMs 回归测试：SQLite 的 AVG(duration_ms)
+// 结果是 REAL，一旦跨会话平均值带小数（如 1.5ms），rebuildDay 必须仍能正常
+// 出结果，而不是在 Scan 阶段整体报错——历史上这里错用 sql.NullInt64 接
+// float64 列，导致平均值非整数的那一天全部维度（含来源/省份/ISP）都聚合不出来。
+func TestRebuildDayNonIntegerAvgSessionMs(t *testing.T) {
+	dir := t.TempDir()
+	db, err := openDatabase(dir)
+	if err != nil {
+		t.Fatalf("openDatabase: %v", err)
+	}
+	defer db.Close()
+
+	store := newAnalyticsStore(db)
+	tz := 480
+	day := analyticsDay(nowMs(), tz)
+	base := nowMs() - 10_000
+	// 两个会话时长分别为 1ms / 2ms，平均值 1.5ms 是非整数。
+	for i, dur := range []int64{1, 2} {
+		v := fmt.Sprintf("v%d", i)
+		_ = store.writeBatch(
+			analyticsVisitorRow{Visitor: v, FirstAt: base, FirstDay: day, LastAt: base + dur, SessionsDelta: 1},
+			true,
+			analyticsSessionRow{
+				ID: fmt.Sprintf("s%d", i), Visitor: v, StartedAt: base, LastAt: base + dur, Day: day,
+				Browser: "Chrome", OS: "Windows", DeviceType: "desktop",
+				PageviewsDelta: 1, EventsDelta: 1, IsNew: 1,
+			},
+			nil,
+		)
+	}
+
+	ro, err := openAnalyticsReadOnlyDB(dir)
+	if err != nil {
+		t.Fatalf("ro: %v", err)
+	}
+	defer ro.Close()
+
+	s := &Server{
+		db: db, analyticsDB: store, analyticsRO: ro,
+		analyticsTZOffsetMin: tz, analyticsEnabled: true,
+		analyticsSalt: []byte("x"),
+	}
+	rows, err := s.rebuildDay(day, tz)
+	if err != nil {
+		t.Fatalf("rebuildDay should tolerate non-integer AVG(duration_ms): %v", err)
+	}
+	found := false
+	for _, r := range rows {
+		if r.Metric == metricAvgSessionMs {
+			found = true
+			if r.Value != 1 { // int64(1.5)
+				t.Fatalf("avg session ms = %d, want 1", r.Value)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected avg_session_ms row")
+	}
+}
+
 func TestBackfillRetentionRefreshesRecentCohort(t *testing.T) {
 	dir := t.TempDir()
 	db, err := openDatabase(dir)
@@ -184,5 +244,12 @@ func TestBuildSnapshotGameRoundByKey(t *testing.T) {
 	}
 	if len(view.GameRounds[0].Values) != 1 || view.GameRounds[0].Values[0] != 5 {
 		t.Fatalf("game round values = %+v, want [5]", view.GameRounds[0].Values)
+	}
+}
+
+func TestOrderedBucketsDropsLegacyKeys(t *testing.T) {
+	got := orderedBuckets([]analyticsBucket{{Key: "1-5m", Value: 4}}, []string{"0-1m", "1-2m"})
+	if len(got) != 2 || got[0].Key != "0-1m" || got[0].Value != 0 || got[1].Key != "1-2m" || got[1].Value != 0 {
+		t.Fatalf("legacy bucket should have been dropped, not merged into current order: %+v", got)
 	}
 }

@@ -361,7 +361,8 @@ func (s *Server) handleAvatarImage(w http.ResponseWriter, r *http.Request) {
 		oldAvatarURL := player.AvatarURL
 		player.AvatarURL = ""
 		if oldAvatarURL != "" {
-			s.logPlayerActivity("avatar_clear", player.ID, "", oldAvatarURL, ipAddress, devKey, fingerprint, "")
+			// 清除头像并入「更换头像」活动埋点计数，不再单独区分 clear/change。
+			s.logPlayerActivity("avatar_change", player.ID, "", oldAvatarURL, ipAddress, devKey, fingerprint, "")
 		}
 		s.refreshPlayerSnapshots(player)
 		s.broadcastPlayerUpdate(player)

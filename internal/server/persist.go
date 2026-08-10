@@ -76,7 +76,7 @@ func (s *Server) serializePlayer(p *PlayerState) (persistedPlayer, bool) {
 		ExtremeLastDecayHour: p.ExtremeLastDecayHour,
 		RankedLastDecayDay:   p.RankedLastDecayDay,
 		PushMentionEnabled:   p.PushMentionEnabled, PushTurnEnabled: p.PushTurnEnabled, PushSeatEnabled: p.PushSeatEnabled,
-		PushBondEnabled: p.PushBondEnabled,
+		PushBondEnabled:   p.PushBondEnabled,
 		BondMasterEnabled: p.BondMasterEnabled, BondPetEnabled: p.BondPetEnabled, BondPublicDisplay: p.BondPublicDisplay,
 		Stats: p.Stats, GameStats: p.GameStats,
 		CreatedAt: p.CreatedAt, LastSeenAt: p.LastSeenAt,
@@ -211,7 +211,7 @@ func (s *Server) ingestPersistedPlayer(item persistedPlayer) bool {
 				Punishments: item.Stats.Punishments, RankedPoints: item.Stats.RankedPoints,
 				HighestScore: item.Stats.HighestScore, LowestScore: item.Stats.LowestScore,
 				Title: title, TitleSegmentID: item.Stats.TitleSegmentID, TitleCustom: item.Stats.TitleCustom,
-					SelfTitle: item.Stats.SelfTitle,
+				SelfTitle: item.Stats.SelfTitle,
 				// 累计在线时长必须从库灌回内存：漏读会导致每次重启从 0 起算，
 				// 随后 flush 把库里的正确值覆盖成仅本进程会话。
 				TotalOnlineMs: item.Stats.TotalOnlineMs,

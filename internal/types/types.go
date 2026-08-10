@@ -219,22 +219,24 @@ type PublicPlayer struct {
 	GiveawayBoardDislikes            *int         `json:"giveawayBoardDislikes,omitempty"`
 	GiveawayBoardLikesThisHour       *int         `json:"giveawayBoardLikesThisHour,omitempty"`
 	GiveawayBoardLikeWindowStartedAt *int64       `json:"giveawayBoardLikeWindowStartedAt,omitempty"`
-	GiveawayVoteWindowStartedAt      *int64       `json:"giveawayVoteWindowStartedAt,omitempty"`
-	GiveawayVoteCount                *int         `json:"giveawayVoteCount,omitempty"`
-	GiveawayVoteLikesThisHour        *int         `json:"giveawayVoteLikesThisHour,omitempty"`
-	GiveawayVoteDislikesThisHour     *int         `json:"giveawayVoteDislikesThisHour,omitempty"`
-	RankMultiplierUnlocked           *bool        `json:"rankMultiplierUnlocked,omitempty"`
-	ExtremeModeEnabled               *bool        `json:"extremeModeEnabled,omitempty"`
-	ExtremeModeToggledAt             *int64       `json:"extremeModeToggledAt,omitempty"`
-	ExtremeModeCooldownUntil         *int64       `json:"extremeModeCooldownUntil,omitempty"`
-	ExtremeWinStreak                 *int         `json:"extremeWinStreak,omitempty"`
-	ExtremeLastDecayHour             *int64       `json:"extremeLastDecayHour,omitempty"`
-	RankedLastDecayDay               *int64       `json:"rankedLastDecayDay,omitempty"`
-	ExtremeForceClosed               *bool        `json:"extremeForceClosed,omitempty"`
-	ExtremeForceClosedAt             *int64       `json:"extremeForceClosedAt,omitempty"`
-	ExtremeRenameProtectedUntil      *int64       `json:"extremeRenameProtectedUntil,omitempty"`
-	ExtremeRenamedBy                 string       `json:"extremeRenamedBy,omitempty"`
-	ExtremeRenamedByName             string       `json:"extremeRenamedByName,omitempty"`
+	// 旧版聚合投票字段继续保留用于 wire/JSON 兼容；新客户端使用按 actor→target 的 GiveawayVoteQuota。
+	// 服务端不会用这些字段执行新额度限制，但会在成功投票后更新它们并广播，兼容旧客户端显示。
+	GiveawayVoteWindowStartedAt  *int64 `json:"giveawayVoteWindowStartedAt,omitempty"`
+	GiveawayVoteCount            *int   `json:"giveawayVoteCount,omitempty"`
+	GiveawayVoteLikesThisHour    *int   `json:"giveawayVoteLikesThisHour,omitempty"`
+	GiveawayVoteDislikesThisHour *int   `json:"giveawayVoteDislikesThisHour,omitempty"`
+	RankMultiplierUnlocked       *bool  `json:"rankMultiplierUnlocked,omitempty"`
+	ExtremeModeEnabled           *bool  `json:"extremeModeEnabled,omitempty"`
+	ExtremeModeToggledAt         *int64 `json:"extremeModeToggledAt,omitempty"`
+	ExtremeModeCooldownUntil     *int64 `json:"extremeModeCooldownUntil,omitempty"`
+	ExtremeWinStreak             *int   `json:"extremeWinStreak,omitempty"`
+	ExtremeLastDecayHour         *int64 `json:"extremeLastDecayHour,omitempty"`
+	RankedLastDecayDay           *int64 `json:"rankedLastDecayDay,omitempty"`
+	ExtremeForceClosed           *bool  `json:"extremeForceClosed,omitempty"`
+	ExtremeForceClosedAt         *int64 `json:"extremeForceClosedAt,omitempty"`
+	ExtremeRenameProtectedUntil  *int64 `json:"extremeRenameProtectedUntil,omitempty"`
+	ExtremeRenamedBy             string `json:"extremeRenamedBy,omitempty"`
+	ExtremeRenamedByName         string `json:"extremeRenamedByName,omitempty"`
 	// 认主/认宠玩法偏好（关闭开关不解除已有关系，只禁止新增）。
 	BondMasterEnabled *bool       `json:"bondMasterEnabled,omitempty"`
 	BondPetEnabled    *bool       `json:"bondPetEnabled,omitempty"`
@@ -783,7 +785,7 @@ type AppConfig struct {
 	// TitleTagStyles：称号标签按赋予来源（system/self/master/admin）的颜色，形状与 RoomInfoTagStyle
 	// 一致（label + 三色）；见 PublicStats.TitleSource 与 internal/server/petbond.go 的 applyDisplayTitle。
 	TitleTagStyles map[string]RoomInfoTagStyle `json:"titleTagStyles"`
-	AccessControl                struct {
+	AccessControl  struct {
 		MaxOnlinePerIP     int `json:"maxOnlinePerIp"`
 		MaxCreatesPer10Min int `json:"maxCreatesPer10Min"`
 		// 以下字段是纯 IP 维度（不依赖客户端可伪造的浏览器指纹）的兜底上限，
@@ -823,12 +825,28 @@ type AppConfig struct {
 		ActiveBoostValue float64 `json:"activeBoostValue"`
 		// WinPenaltyValue：白给已开启的玩家每赢一局（含断线判负），白给值减少的百分比，默认 1。
 		WinPenaltyValue float64 `json:"winPenaltyValue"`
-		// LikeVoteLimitPerHour / LikeVoteValue：自救板点赞每小时可投次数上限、每次降低的百分比。
+		// LikeVoteLimitPerHour / LikeVoteValue：普通用户对自救板点赞每小时可投次数上限（对
+		// 每个上板玩家独立计时/计次，不是总量）、每次降低的百分比。
 		LikeVoteLimitPerHour int     `json:"likeVoteLimitPerHour"`
 		LikeVoteValue        float64 `json:"likeVoteValue"`
-		// DislikeVoteLimitPerHour / DislikeVoteValue：自救板倒赞每小时可投次数上限、每次增加的百分比。
+		// DislikeVoteLimitPerHour / DislikeVoteValue：普通用户对自救板倒赞每小时可投次数上限
+		// （同上，按目标独立计算）、每次增加的百分比。
 		DislikeVoteLimitPerHour int     `json:"dislikeVoteLimitPerHour"`
 		DislikeVoteValue        float64 `json:"dislikeVoteValue"`
+		// PetLikeVoteLimitPerHour / PetLikeVoteValue / PetDislikeVoteLimitPerHour /
+		// PetDislikeVoteValue：对自己的直系宠物（不含宠物的宠物等二级以上关系）投票时的每小时
+		// 次数上限、每次降低/增加的百分比，替代普通档位的四个同名字段。
+		PetLikeVoteLimitPerHour    int     `json:"petLikeVoteLimitPerHour"`
+		PetLikeVoteValue           float64 `json:"petLikeVoteValue"`
+		PetDislikeVoteLimitPerHour int     `json:"petDislikeVoteLimitPerHour"`
+		PetDislikeVoteValue        float64 `json:"petDislikeVoteValue"`
+		// MasterLikeVoteLimitPerHour / MasterLikeVoteValue / MasterDislikeVoteLimitPerHour /
+		// MasterDislikeVoteValue：对自己的直系主人（同上，不含二级以上关系）投票时的每小时
+		// 次数上限、每次降低/增加的百分比。
+		MasterLikeVoteLimitPerHour    int     `json:"masterLikeVoteLimitPerHour"`
+		MasterLikeVoteValue           float64 `json:"masterLikeVoteValue"`
+		MasterDislikeVoteLimitPerHour int     `json:"masterDislikeVoteLimitPerHour"`
+		MasterDislikeVoteValue        float64 `json:"masterDislikeVoteValue"`
 	} `json:"giveaway"`
 	PetBond     PetBondConfig     `json:"petBond"`
 	ExtremeMode ExtremeModeConfig `json:"extremeMode"`

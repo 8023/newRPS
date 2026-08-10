@@ -34259,6 +34259,14 @@ export const game = $root.game = (() => {
          * @property {number|null} [likeVoteValue] GiveawayConfig likeVoteValue
          * @property {number|null} [dislikeVoteLimitPerHour] GiveawayConfig dislikeVoteLimitPerHour
          * @property {number|null} [dislikeVoteValue] GiveawayConfig dislikeVoteValue
+         * @property {number|null} [petLikeVoteLimitPerHour] GiveawayConfig petLikeVoteLimitPerHour
+         * @property {number|null} [petDislikeVoteLimitPerHour] GiveawayConfig petDislikeVoteLimitPerHour
+         * @property {number|null} [masterLikeVoteLimitPerHour] GiveawayConfig masterLikeVoteLimitPerHour
+         * @property {number|null} [masterDislikeVoteLimitPerHour] GiveawayConfig masterDislikeVoteLimitPerHour
+         * @property {number|null} [petLikeVoteValue] GiveawayConfig petLikeVoteValue
+         * @property {number|null} [petDislikeVoteValue] GiveawayConfig petDislikeVoteValue
+         * @property {number|null} [masterLikeVoteValue] GiveawayConfig masterLikeVoteValue
+         * @property {number|null} [masterDislikeVoteValue] GiveawayConfig masterDislikeVoteValue
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -34371,6 +34379,70 @@ export const game = $root.game = (() => {
         GiveawayConfig.prototype.dislikeVoteValue = 0;
 
         /**
+         * GiveawayConfig petLikeVoteLimitPerHour.
+         * @member {number} petLikeVoteLimitPerHour
+         * @memberof game.GiveawayConfig
+         * @instance
+         */
+        GiveawayConfig.prototype.petLikeVoteLimitPerHour = 0;
+
+        /**
+         * GiveawayConfig petDislikeVoteLimitPerHour.
+         * @member {number} petDislikeVoteLimitPerHour
+         * @memberof game.GiveawayConfig
+         * @instance
+         */
+        GiveawayConfig.prototype.petDislikeVoteLimitPerHour = 0;
+
+        /**
+         * GiveawayConfig masterLikeVoteLimitPerHour.
+         * @member {number} masterLikeVoteLimitPerHour
+         * @memberof game.GiveawayConfig
+         * @instance
+         */
+        GiveawayConfig.prototype.masterLikeVoteLimitPerHour = 0;
+
+        /**
+         * GiveawayConfig masterDislikeVoteLimitPerHour.
+         * @member {number} masterDislikeVoteLimitPerHour
+         * @memberof game.GiveawayConfig
+         * @instance
+         */
+        GiveawayConfig.prototype.masterDislikeVoteLimitPerHour = 0;
+
+        /**
+         * GiveawayConfig petLikeVoteValue.
+         * @member {number} petLikeVoteValue
+         * @memberof game.GiveawayConfig
+         * @instance
+         */
+        GiveawayConfig.prototype.petLikeVoteValue = 0;
+
+        /**
+         * GiveawayConfig petDislikeVoteValue.
+         * @member {number} petDislikeVoteValue
+         * @memberof game.GiveawayConfig
+         * @instance
+         */
+        GiveawayConfig.prototype.petDislikeVoteValue = 0;
+
+        /**
+         * GiveawayConfig masterLikeVoteValue.
+         * @member {number} masterLikeVoteValue
+         * @memberof game.GiveawayConfig
+         * @instance
+         */
+        GiveawayConfig.prototype.masterLikeVoteValue = 0;
+
+        /**
+         * GiveawayConfig masterDislikeVoteValue.
+         * @member {number} masterDislikeVoteValue
+         * @memberof game.GiveawayConfig
+         * @instance
+         */
+        GiveawayConfig.prototype.masterDislikeVoteValue = 0;
+
+        /**
          * Creates a new GiveawayConfig instance using the specified properties.
          * @function create
          * @memberof game.GiveawayConfig
@@ -34422,6 +34494,22 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 9, wireType 0 =*/72).int32(message.dislikeVoteLimitPerHour);
             if (message.dislikeVoteValue != null && $Object.hasOwnProperty.call(message, "dislikeVoteValue") && !$Object.is(message.dislikeVoteValue, 0))
                 writer.uint32(/* id 10, wireType 1 =*/81).double(message.dislikeVoteValue);
+            if (message.petLikeVoteLimitPerHour != null && $Object.hasOwnProperty.call(message, "petLikeVoteLimitPerHour") && message.petLikeVoteLimitPerHour !== 0)
+                writer.uint32(/* id 11, wireType 0 =*/88).int32(message.petLikeVoteLimitPerHour);
+            if (message.petDislikeVoteLimitPerHour != null && $Object.hasOwnProperty.call(message, "petDislikeVoteLimitPerHour") && message.petDislikeVoteLimitPerHour !== 0)
+                writer.uint32(/* id 12, wireType 0 =*/96).int32(message.petDislikeVoteLimitPerHour);
+            if (message.masterLikeVoteLimitPerHour != null && $Object.hasOwnProperty.call(message, "masterLikeVoteLimitPerHour") && message.masterLikeVoteLimitPerHour !== 0)
+                writer.uint32(/* id 13, wireType 0 =*/104).int32(message.masterLikeVoteLimitPerHour);
+            if (message.masterDislikeVoteLimitPerHour != null && $Object.hasOwnProperty.call(message, "masterDislikeVoteLimitPerHour") && message.masterDislikeVoteLimitPerHour !== 0)
+                writer.uint32(/* id 14, wireType 0 =*/112).int32(message.masterDislikeVoteLimitPerHour);
+            if (message.petLikeVoteValue != null && $Object.hasOwnProperty.call(message, "petLikeVoteValue") && !$Object.is(message.petLikeVoteValue, 0))
+                writer.uint32(/* id 15, wireType 1 =*/121).double(message.petLikeVoteValue);
+            if (message.petDislikeVoteValue != null && $Object.hasOwnProperty.call(message, "petDislikeVoteValue") && !$Object.is(message.petDislikeVoteValue, 0))
+                writer.uint32(/* id 16, wireType 1 =*/129).double(message.petDislikeVoteValue);
+            if (message.masterLikeVoteValue != null && $Object.hasOwnProperty.call(message, "masterLikeVoteValue") && !$Object.is(message.masterLikeVoteValue, 0))
+                writer.uint32(/* id 17, wireType 1 =*/137).double(message.masterLikeVoteValue);
+            if (message.masterDislikeVoteValue != null && $Object.hasOwnProperty.call(message, "masterDislikeVoteValue") && !$Object.is(message.masterDislikeVoteValue, 0))
+                writer.uint32(/* id 18, wireType 1 =*/145).double(message.masterDislikeVoteValue);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -34559,6 +34647,78 @@ export const game = $root.game = (() => {
                             delete message.dislikeVoteValue;
                         continue;
                     }
+                case 11: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.petLikeVoteLimitPerHour = value;
+                        else
+                            delete message.petLikeVoteLimitPerHour;
+                        continue;
+                    }
+                case 12: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.petDislikeVoteLimitPerHour = value;
+                        else
+                            delete message.petDislikeVoteLimitPerHour;
+                        continue;
+                    }
+                case 13: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.masterLikeVoteLimitPerHour = value;
+                        else
+                            delete message.masterLikeVoteLimitPerHour;
+                        continue;
+                    }
+                case 14: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.masterDislikeVoteLimitPerHour = value;
+                        else
+                            delete message.masterDislikeVoteLimitPerHour;
+                        continue;
+                    }
+                case 15: {
+                        if (wireType !== 1)
+                            break;
+                        if (!$Object.is(value = reader.double(), 0))
+                            message.petLikeVoteValue = value;
+                        else
+                            delete message.petLikeVoteValue;
+                        continue;
+                    }
+                case 16: {
+                        if (wireType !== 1)
+                            break;
+                        if (!$Object.is(value = reader.double(), 0))
+                            message.petDislikeVoteValue = value;
+                        else
+                            delete message.petDislikeVoteValue;
+                        continue;
+                    }
+                case 17: {
+                        if (wireType !== 1)
+                            break;
+                        if (!$Object.is(value = reader.double(), 0))
+                            message.masterLikeVoteValue = value;
+                        else
+                            delete message.masterLikeVoteValue;
+                        continue;
+                    }
+                case 18: {
+                        if (wireType !== 1)
+                            break;
+                        if (!$Object.is(value = reader.double(), 0))
+                            message.masterDislikeVoteValue = value;
+                        else
+                            delete message.masterDislikeVoteValue;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -34632,6 +34792,30 @@ export const game = $root.game = (() => {
             if (message.dislikeVoteValue != null && $Object.hasOwnProperty.call(message, "dislikeVoteValue"))
                 if (typeof message.dislikeVoteValue !== "number")
                     return "dislikeVoteValue: number expected";
+            if (message.petLikeVoteLimitPerHour != null && $Object.hasOwnProperty.call(message, "petLikeVoteLimitPerHour"))
+                if (!$util.isInteger(message.petLikeVoteLimitPerHour))
+                    return "petLikeVoteLimitPerHour: integer expected";
+            if (message.petDislikeVoteLimitPerHour != null && $Object.hasOwnProperty.call(message, "petDislikeVoteLimitPerHour"))
+                if (!$util.isInteger(message.petDislikeVoteLimitPerHour))
+                    return "petDislikeVoteLimitPerHour: integer expected";
+            if (message.masterLikeVoteLimitPerHour != null && $Object.hasOwnProperty.call(message, "masterLikeVoteLimitPerHour"))
+                if (!$util.isInteger(message.masterLikeVoteLimitPerHour))
+                    return "masterLikeVoteLimitPerHour: integer expected";
+            if (message.masterDislikeVoteLimitPerHour != null && $Object.hasOwnProperty.call(message, "masterDislikeVoteLimitPerHour"))
+                if (!$util.isInteger(message.masterDislikeVoteLimitPerHour))
+                    return "masterDislikeVoteLimitPerHour: integer expected";
+            if (message.petLikeVoteValue != null && $Object.hasOwnProperty.call(message, "petLikeVoteValue"))
+                if (typeof message.petLikeVoteValue !== "number")
+                    return "petLikeVoteValue: number expected";
+            if (message.petDislikeVoteValue != null && $Object.hasOwnProperty.call(message, "petDislikeVoteValue"))
+                if (typeof message.petDislikeVoteValue !== "number")
+                    return "petDislikeVoteValue: number expected";
+            if (message.masterLikeVoteValue != null && $Object.hasOwnProperty.call(message, "masterLikeVoteValue"))
+                if (typeof message.masterLikeVoteValue !== "number")
+                    return "masterLikeVoteValue: number expected";
+            if (message.masterDislikeVoteValue != null && $Object.hasOwnProperty.call(message, "masterDislikeVoteValue"))
+                if (typeof message.masterDislikeVoteValue !== "number")
+                    return "masterDislikeVoteValue: number expected";
             return null;
         };
 
@@ -34683,6 +34867,30 @@ export const game = $root.game = (() => {
             if (object.dislikeVoteValue != null)
                 if (!$Object.is($Number(object.dislikeVoteValue), 0))
                     message.dislikeVoteValue = $Number(object.dislikeVoteValue);
+            if (object.petLikeVoteLimitPerHour != null)
+                if ($Number(object.petLikeVoteLimitPerHour) !== 0)
+                    message.petLikeVoteLimitPerHour = object.petLikeVoteLimitPerHour | 0;
+            if (object.petDislikeVoteLimitPerHour != null)
+                if ($Number(object.petDislikeVoteLimitPerHour) !== 0)
+                    message.petDislikeVoteLimitPerHour = object.petDislikeVoteLimitPerHour | 0;
+            if (object.masterLikeVoteLimitPerHour != null)
+                if ($Number(object.masterLikeVoteLimitPerHour) !== 0)
+                    message.masterLikeVoteLimitPerHour = object.masterLikeVoteLimitPerHour | 0;
+            if (object.masterDislikeVoteLimitPerHour != null)
+                if ($Number(object.masterDislikeVoteLimitPerHour) !== 0)
+                    message.masterDislikeVoteLimitPerHour = object.masterDislikeVoteLimitPerHour | 0;
+            if (object.petLikeVoteValue != null)
+                if (!$Object.is($Number(object.petLikeVoteValue), 0))
+                    message.petLikeVoteValue = $Number(object.petLikeVoteValue);
+            if (object.petDislikeVoteValue != null)
+                if (!$Object.is($Number(object.petDislikeVoteValue), 0))
+                    message.petDislikeVoteValue = $Number(object.petDislikeVoteValue);
+            if (object.masterLikeVoteValue != null)
+                if (!$Object.is($Number(object.masterLikeVoteValue), 0))
+                    message.masterLikeVoteValue = $Number(object.masterLikeVoteValue);
+            if (object.masterDislikeVoteValue != null)
+                if (!$Object.is($Number(object.masterDislikeVoteValue), 0))
+                    message.masterDislikeVoteValue = $Number(object.masterDislikeVoteValue);
             return message;
         };
 
@@ -34714,6 +34922,14 @@ export const game = $root.game = (() => {
                 object.likeVoteValue = 0;
                 object.dislikeVoteLimitPerHour = 0;
                 object.dislikeVoteValue = 0;
+                object.petLikeVoteLimitPerHour = 0;
+                object.petDislikeVoteLimitPerHour = 0;
+                object.masterLikeVoteLimitPerHour = 0;
+                object.masterDislikeVoteLimitPerHour = 0;
+                object.petLikeVoteValue = 0;
+                object.petDislikeVoteValue = 0;
+                object.masterLikeVoteValue = 0;
+                object.masterDislikeVoteValue = 0;
             }
             if (message.panelTitle != null && $Object.hasOwnProperty.call(message, "panelTitle"))
                 object.panelTitle = message.panelTitle;
@@ -34735,6 +34951,22 @@ export const game = $root.game = (() => {
                 object.dislikeVoteLimitPerHour = message.dislikeVoteLimitPerHour;
             if (message.dislikeVoteValue != null && $Object.hasOwnProperty.call(message, "dislikeVoteValue"))
                 object.dislikeVoteValue = options.json && !$isFinite(message.dislikeVoteValue) ? $String(message.dislikeVoteValue) : message.dislikeVoteValue;
+            if (message.petLikeVoteLimitPerHour != null && $Object.hasOwnProperty.call(message, "petLikeVoteLimitPerHour"))
+                object.petLikeVoteLimitPerHour = message.petLikeVoteLimitPerHour;
+            if (message.petDislikeVoteLimitPerHour != null && $Object.hasOwnProperty.call(message, "petDislikeVoteLimitPerHour"))
+                object.petDislikeVoteLimitPerHour = message.petDislikeVoteLimitPerHour;
+            if (message.masterLikeVoteLimitPerHour != null && $Object.hasOwnProperty.call(message, "masterLikeVoteLimitPerHour"))
+                object.masterLikeVoteLimitPerHour = message.masterLikeVoteLimitPerHour;
+            if (message.masterDislikeVoteLimitPerHour != null && $Object.hasOwnProperty.call(message, "masterDislikeVoteLimitPerHour"))
+                object.masterDislikeVoteLimitPerHour = message.masterDislikeVoteLimitPerHour;
+            if (message.petLikeVoteValue != null && $Object.hasOwnProperty.call(message, "petLikeVoteValue"))
+                object.petLikeVoteValue = options.json && !$isFinite(message.petLikeVoteValue) ? $String(message.petLikeVoteValue) : message.petLikeVoteValue;
+            if (message.petDislikeVoteValue != null && $Object.hasOwnProperty.call(message, "petDislikeVoteValue"))
+                object.petDislikeVoteValue = options.json && !$isFinite(message.petDislikeVoteValue) ? $String(message.petDislikeVoteValue) : message.petDislikeVoteValue;
+            if (message.masterLikeVoteValue != null && $Object.hasOwnProperty.call(message, "masterLikeVoteValue"))
+                object.masterLikeVoteValue = options.json && !$isFinite(message.masterLikeVoteValue) ? $String(message.masterLikeVoteValue) : message.masterLikeVoteValue;
+            if (message.masterDislikeVoteValue != null && $Object.hasOwnProperty.call(message, "masterDislikeVoteValue"))
+                object.masterDislikeVoteValue = options.json && !$isFinite(message.masterDislikeVoteValue) ? $String(message.masterDislikeVoteValue) : message.masterDislikeVoteValue;
             return object;
         };
 

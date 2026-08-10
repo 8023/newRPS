@@ -143,10 +143,12 @@ message PublicPlayer {
   int32 giveaway_board_dislikes = 47;
   int32 giveaway_board_likes_this_hour = 49;
   int64 giveaway_board_like_window_started_at = 51;
-  int64 giveaway_vote_window_started_at = 53;
-  int32 giveaway_vote_count = 55;
-  int32 giveaway_vote_likes_this_hour = 57;
-  int32 giveaway_vote_dislikes_this_hour = 59;
+  // 旧版客户端仍依赖这些聚合字段；新客户端的精确额度通过 giveaway:voteQuotas 查询。
+  // 保留原字段号，避免升级后旧客户端解析/合并 PublicPlayer 时发生接口断裂。
+  int64 giveaway_vote_window_started_at = 53 [deprecated = true];
+  int32 giveaway_vote_count = 55 [deprecated = true];
+  int32 giveaway_vote_likes_this_hour = 57 [deprecated = true];
+  int32 giveaway_vote_dislikes_this_hour = 59 [deprecated = true];
 
   bool rank_multiplier_unlocked = 61;
   bool extreme_mode_enabled = 63;
@@ -198,11 +200,10 @@ message LobbyPlayer {
   int64 giveaway_board_expires_at = 29;
   int32 giveaway_board_likes = 31;
   int32 giveaway_board_dislikes = 33;
-  // 投票额度：大厅广播会合并到 me.player（见 types.LobbyPlayer 注释）。
-  // 缺字段会导致额度被抹成 0/undefined，前端一直显示满额度。
-  int64 giveaway_vote_window_started_at = 52;
-  int32 giveaway_vote_likes_this_hour = 53;
-  int32 giveaway_vote_dislikes_this_hour = 54;
+  // 旧版大厅客户端会从自己的 LobbyPlayer 合并这些聚合额度字段；保留原字段号。
+  int64 giveaway_vote_window_started_at = 52 [deprecated = true];
+  int32 giveaway_vote_likes_this_hour = 53 [deprecated = true];
+  int32 giveaway_vote_dislikes_this_hour = 54 [deprecated = true];
 
   bool rank_multiplier_unlocked = 35;
   bool extreme_mode_enabled = 37;
@@ -827,6 +828,17 @@ message GiveawayConfig {
   // 自救板倒赞：每小时可投次数上限、每次增加的百分比。
   int32 dislike_vote_limit_per_hour = 9;
   double dislike_vote_value = 10;
+  // 以下次数上限、降低/增加百分比都按「投票者 与 被投票者的认主认宠关系」三档独立配置，
+  // 且按 actor→target 这一对独立计时/计次（不是投票者的全局总量）。只有直系关系（不含
+  // 宠物的宠物等二级以上关系）才会命中宠物/主人档，否则一律走上面的普通档位。
+  int32 pet_like_vote_limit_per_hour = 11;
+  int32 pet_dislike_vote_limit_per_hour = 12;
+  int32 master_like_vote_limit_per_hour = 13;
+  int32 master_dislike_vote_limit_per_hour = 14;
+  double pet_like_vote_value = 15;
+  double pet_dislike_vote_value = 16;
+  double master_like_vote_value = 17;
+  double master_dislike_vote_value = 18;
 }
 
 message PetBondConfig {

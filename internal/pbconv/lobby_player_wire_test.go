@@ -6,9 +6,8 @@ import (
 	"github.com/doumiao/newRPS/internal/types"
 )
 
-// TestLobbyPlayerGiveawayVoteFieldsRoundTrip 守住大厅精简玩家上的投票额度字段。
-// 领域类型 types.LobbyPlayer 已有这些字段（前端 me.player 与 lobby.players 合并依赖它们），
-// 若 proto LobbyPlayer 漏掉，大厅广播会把额度抹掉，表现为“永远满额度”。
+// TestLobbyPlayerHandMappedFields 守住 lobbyPlayerToProto 里手写映射的标量/子消息字段
+// （不走通用 JSONCamelToProto，漏映射不会在编译期报错，只能靠测试兜底）。
 func TestLobbyPlayerHandMappedFields(t *testing.T) {
 	likes, streak := 3, 7
 	val := 12.5
@@ -60,13 +59,11 @@ func TestLobbyPlayerHandMappedFields(t *testing.T) {
 }
 
 func boolPtr(v bool) *bool { return &v }
-
 func TestLobbyPlayerGiveawayVoteFieldsRoundTrip(t *testing.T) {
 	started := int64(1_700_000_000_000)
 	likes, dislikes := 2, 5
 	src := types.LobbyPlayer{
-		ID:                           "p1",
-		Name:                         "测试",
+		ID: "p1", Name: "测试",
 		GiveawayVoteWindowStartedAt:  &started,
 		GiveawayVoteLikesThisHour:    &likes,
 		GiveawayVoteDislikesThisHour: &dislikes,
@@ -84,11 +81,7 @@ func TestLobbyPlayerGiveawayVoteFieldsRoundTrip(t *testing.T) {
 	if pb.GiveawayVoteDislikesThisHour != 5 {
 		t.Fatalf("dislikes this hour: got %d", pb.GiveawayVoteDislikesThisHour)
 	}
-
-	// 经 Lobby 快照 front 形态也应保留（大厅 DELTA/FULL 路径）。
-	snap := types.LobbySnapshot{
-		Players: map[string]types.LobbyPlayer{"p1": src},
-	}
+	snap := types.LobbySnapshot{Players: map[string]types.LobbyPlayer{"p1": src}}
 	lpb, err := LobbyToProto(snap)
 	if err != nil {
 		t.Fatal(err)
@@ -105,14 +98,12 @@ func TestLobbyPlayerGiveawayVoteFieldsRoundTrip(t *testing.T) {
 	if p == nil {
 		t.Fatalf("player not map: %#v", players[0])
 	}
-	if int(asFloat(p["giveawayVoteLikesThisHour"])) != 2 {
-		t.Fatalf("front likes=%#v", p["giveawayVoteLikesThisHour"])
-	}
-	if int(asFloat(p["giveawayVoteDislikesThisHour"])) != 5 {
-		t.Fatalf("front dislikes=%#v", p["giveawayVoteDislikesThisHour"])
+	if int(asFloat(p["giveawayVoteLikesThisHour"])) != 2 || int(asFloat(p["giveawayVoteDislikesThisHour"])) != 5 {
+		t.Fatalf("front vote fields: %#v", p)
 	}
 	if asFloat(p["giveawayVoteWindowStartedAt"]) != float64(started) {
 		t.Fatalf("front window=%#v", p["giveawayVoteWindowStartedAt"])
+
 	}
 }
 

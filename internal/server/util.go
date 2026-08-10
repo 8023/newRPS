@@ -70,7 +70,7 @@ func clampF(value, min, max float64) float64 {
 }
 
 func clampGiveawayValue(value float64) float64 {
-	return clampF(math.Round(value*10)/10, 0, 100)
+	return clampF(math.Round(value*100)/100, 0, 100)
 }
 
 func currentExtremeDecayHour(now int64) int64 {

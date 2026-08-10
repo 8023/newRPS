@@ -809,25 +809,32 @@ type PublicPlayer struct {
 	GiveawayBoardDislikes            int32                  `protobuf:"varint,47,opt,name=giveaway_board_dislikes,json=giveawayBoardDislikes,proto3" json:"giveaway_board_dislikes,omitempty"`
 	GiveawayBoardLikesThisHour       int32                  `protobuf:"varint,49,opt,name=giveaway_board_likes_this_hour,json=giveawayBoardLikesThisHour,proto3" json:"giveaway_board_likes_this_hour,omitempty"`
 	GiveawayBoardLikeWindowStartedAt int64                  `protobuf:"varint,51,opt,name=giveaway_board_like_window_started_at,json=giveawayBoardLikeWindowStartedAt,proto3" json:"giveaway_board_like_window_started_at,omitempty"`
-	GiveawayVoteWindowStartedAt      int64                  `protobuf:"varint,53,opt,name=giveaway_vote_window_started_at,json=giveawayVoteWindowStartedAt,proto3" json:"giveaway_vote_window_started_at,omitempty"`
-	GiveawayVoteCount                int32                  `protobuf:"varint,55,opt,name=giveaway_vote_count,json=giveawayVoteCount,proto3" json:"giveaway_vote_count,omitempty"`
-	GiveawayVoteLikesThisHour        int32                  `protobuf:"varint,57,opt,name=giveaway_vote_likes_this_hour,json=giveawayVoteLikesThisHour,proto3" json:"giveaway_vote_likes_this_hour,omitempty"`
-	GiveawayVoteDislikesThisHour     int32                  `protobuf:"varint,59,opt,name=giveaway_vote_dislikes_this_hour,json=giveawayVoteDislikesThisHour,proto3" json:"giveaway_vote_dislikes_this_hour,omitempty"`
-	RankMultiplierUnlocked           bool                   `protobuf:"varint,61,opt,name=rank_multiplier_unlocked,json=rankMultiplierUnlocked,proto3" json:"rank_multiplier_unlocked,omitempty"`
-	ExtremeModeEnabled               bool                   `protobuf:"varint,63,opt,name=extreme_mode_enabled,json=extremeModeEnabled,proto3" json:"extreme_mode_enabled,omitempty"`
-	ExtremeModeToggledAt             int64                  `protobuf:"varint,65,opt,name=extreme_mode_toggled_at,json=extremeModeToggledAt,proto3" json:"extreme_mode_toggled_at,omitempty"`
-	ExtremeModeCooldownUntil         int64                  `protobuf:"varint,67,opt,name=extreme_mode_cooldown_until,json=extremeModeCooldownUntil,proto3" json:"extreme_mode_cooldown_until,omitempty"`
-	ExtremeWinStreak                 int32                  `protobuf:"varint,69,opt,name=extreme_win_streak,json=extremeWinStreak,proto3" json:"extreme_win_streak,omitempty"`
-	ExtremeLastDecayHour             int64                  `protobuf:"varint,71,opt,name=extreme_last_decay_hour,json=extremeLastDecayHour,proto3" json:"extreme_last_decay_hour,omitempty"`
-	ExtremeForceClosed               bool                   `protobuf:"varint,73,opt,name=extreme_force_closed,json=extremeForceClosed,proto3" json:"extreme_force_closed,omitempty"`
-	ExtremeForceClosedAt             int64                  `protobuf:"varint,75,opt,name=extreme_force_closed_at,json=extremeForceClosedAt,proto3" json:"extreme_force_closed_at,omitempty"`
-	ExtremeRenameProtectedUntil      int64                  `protobuf:"varint,77,opt,name=extreme_rename_protected_until,json=extremeRenameProtectedUntil,proto3" json:"extreme_rename_protected_until,omitempty"`
-	ExtremeRenamedBy                 string                 `protobuf:"bytes,79,opt,name=extreme_renamed_by,json=extremeRenamedBy,proto3" json:"extreme_renamed_by,omitempty"`
-	ExtremeRenamedByName             string                 `protobuf:"bytes,80,opt,name=extreme_renamed_by_name,json=extremeRenamedByName,proto3" json:"extreme_renamed_by_name,omitempty"`
-	RoomId                           string                 `protobuf:"bytes,81,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
-	IsAdmin                          bool                   `protobuf:"varint,82,opt,name=is_admin,json=isAdmin,proto3" json:"is_admin,omitempty"`
-	Stats                            *PublicStats           `protobuf:"bytes,84,opt,name=stats,proto3" json:"stats,omitempty"`
-	GameStats                        *GameStats             `protobuf:"bytes,85,opt,name=game_stats,json=gameStats,proto3" json:"game_stats,omitempty"`
+	// 旧版客户端仍依赖这些聚合字段；新客户端的精确额度通过 giveaway:voteQuotas 查询。
+	// 保留原字段号，避免升级后旧客户端解析/合并 PublicPlayer 时发生接口断裂。
+	//
+	// Deprecated: Marked as deprecated in api/proto/game.proto.
+	GiveawayVoteWindowStartedAt int64 `protobuf:"varint,53,opt,name=giveaway_vote_window_started_at,json=giveawayVoteWindowStartedAt,proto3" json:"giveaway_vote_window_started_at,omitempty"`
+	// Deprecated: Marked as deprecated in api/proto/game.proto.
+	GiveawayVoteCount int32 `protobuf:"varint,55,opt,name=giveaway_vote_count,json=giveawayVoteCount,proto3" json:"giveaway_vote_count,omitempty"`
+	// Deprecated: Marked as deprecated in api/proto/game.proto.
+	GiveawayVoteLikesThisHour int32 `protobuf:"varint,57,opt,name=giveaway_vote_likes_this_hour,json=giveawayVoteLikesThisHour,proto3" json:"giveaway_vote_likes_this_hour,omitempty"`
+	// Deprecated: Marked as deprecated in api/proto/game.proto.
+	GiveawayVoteDislikesThisHour int32        `protobuf:"varint,59,opt,name=giveaway_vote_dislikes_this_hour,json=giveawayVoteDislikesThisHour,proto3" json:"giveaway_vote_dislikes_this_hour,omitempty"`
+	RankMultiplierUnlocked       bool         `protobuf:"varint,61,opt,name=rank_multiplier_unlocked,json=rankMultiplierUnlocked,proto3" json:"rank_multiplier_unlocked,omitempty"`
+	ExtremeModeEnabled           bool         `protobuf:"varint,63,opt,name=extreme_mode_enabled,json=extremeModeEnabled,proto3" json:"extreme_mode_enabled,omitempty"`
+	ExtremeModeToggledAt         int64        `protobuf:"varint,65,opt,name=extreme_mode_toggled_at,json=extremeModeToggledAt,proto3" json:"extreme_mode_toggled_at,omitempty"`
+	ExtremeModeCooldownUntil     int64        `protobuf:"varint,67,opt,name=extreme_mode_cooldown_until,json=extremeModeCooldownUntil,proto3" json:"extreme_mode_cooldown_until,omitempty"`
+	ExtremeWinStreak             int32        `protobuf:"varint,69,opt,name=extreme_win_streak,json=extremeWinStreak,proto3" json:"extreme_win_streak,omitempty"`
+	ExtremeLastDecayHour         int64        `protobuf:"varint,71,opt,name=extreme_last_decay_hour,json=extremeLastDecayHour,proto3" json:"extreme_last_decay_hour,omitempty"`
+	ExtremeForceClosed           bool         `protobuf:"varint,73,opt,name=extreme_force_closed,json=extremeForceClosed,proto3" json:"extreme_force_closed,omitempty"`
+	ExtremeForceClosedAt         int64        `protobuf:"varint,75,opt,name=extreme_force_closed_at,json=extremeForceClosedAt,proto3" json:"extreme_force_closed_at,omitempty"`
+	ExtremeRenameProtectedUntil  int64        `protobuf:"varint,77,opt,name=extreme_rename_protected_until,json=extremeRenameProtectedUntil,proto3" json:"extreme_rename_protected_until,omitempty"`
+	ExtremeRenamedBy             string       `protobuf:"bytes,79,opt,name=extreme_renamed_by,json=extremeRenamedBy,proto3" json:"extreme_renamed_by,omitempty"`
+	ExtremeRenamedByName         string       `protobuf:"bytes,80,opt,name=extreme_renamed_by_name,json=extremeRenamedByName,proto3" json:"extreme_renamed_by_name,omitempty"`
+	RoomId                       string       `protobuf:"bytes,81,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
+	IsAdmin                      bool         `protobuf:"varint,82,opt,name=is_admin,json=isAdmin,proto3" json:"is_admin,omitempty"`
+	Stats                        *PublicStats `protobuf:"bytes,84,opt,name=stats,proto3" json:"stats,omitempty"`
+	GameStats                    *GameStats   `protobuf:"bytes,85,opt,name=game_stats,json=gameStats,proto3" json:"game_stats,omitempty"`
 	// 认主/认宠玩法偏好
 	BondMasterEnabled bool `protobuf:"varint,87,opt,name=bond_master_enabled,json=bondMasterEnabled,proto3" json:"bond_master_enabled,omitempty"`
 	BondPetEnabled    bool `protobuf:"varint,88,opt,name=bond_pet_enabled,json=bondPetEnabled,proto3" json:"bond_pet_enabled,omitempty"`
@@ -1104,6 +1111,7 @@ func (x *PublicPlayer) GetGiveawayBoardLikeWindowStartedAt() int64 {
 	return 0
 }
 
+// Deprecated: Marked as deprecated in api/proto/game.proto.
 func (x *PublicPlayer) GetGiveawayVoteWindowStartedAt() int64 {
 	if x != nil {
 		return x.GiveawayVoteWindowStartedAt
@@ -1111,6 +1119,7 @@ func (x *PublicPlayer) GetGiveawayVoteWindowStartedAt() int64 {
 	return 0
 }
 
+// Deprecated: Marked as deprecated in api/proto/game.proto.
 func (x *PublicPlayer) GetGiveawayVoteCount() int32 {
 	if x != nil {
 		return x.GiveawayVoteCount
@@ -1118,6 +1127,7 @@ func (x *PublicPlayer) GetGiveawayVoteCount() int32 {
 	return 0
 }
 
+// Deprecated: Marked as deprecated in api/proto/game.proto.
 func (x *PublicPlayer) GetGiveawayVoteLikesThisHour() int32 {
 	if x != nil {
 		return x.GiveawayVoteLikesThisHour
@@ -1125,6 +1135,7 @@ func (x *PublicPlayer) GetGiveawayVoteLikesThisHour() int32 {
 	return 0
 }
 
+// Deprecated: Marked as deprecated in api/proto/game.proto.
 func (x *PublicPlayer) GetGiveawayVoteDislikesThisHour() int32 {
 	if x != nil {
 		return x.GiveawayVoteDislikesThisHour
@@ -1284,10 +1295,13 @@ type LobbyPlayer struct {
 	GiveawayBoardExpiresAt      int64                  `protobuf:"varint,29,opt,name=giveaway_board_expires_at,json=giveawayBoardExpiresAt,proto3" json:"giveaway_board_expires_at,omitempty"`
 	GiveawayBoardLikes          int32                  `protobuf:"varint,31,opt,name=giveaway_board_likes,json=giveawayBoardLikes,proto3" json:"giveaway_board_likes,omitempty"`
 	GiveawayBoardDislikes       int32                  `protobuf:"varint,33,opt,name=giveaway_board_dislikes,json=giveawayBoardDislikes,proto3" json:"giveaway_board_dislikes,omitempty"`
-	// 投票额度：大厅广播会合并到 me.player（见 types.LobbyPlayer 注释）。
-	// 缺字段会导致额度被抹成 0/undefined，前端一直显示满额度。
-	GiveawayVoteWindowStartedAt  int64       `protobuf:"varint,52,opt,name=giveaway_vote_window_started_at,json=giveawayVoteWindowStartedAt,proto3" json:"giveaway_vote_window_started_at,omitempty"`
-	GiveawayVoteLikesThisHour    int32       `protobuf:"varint,53,opt,name=giveaway_vote_likes_this_hour,json=giveawayVoteLikesThisHour,proto3" json:"giveaway_vote_likes_this_hour,omitempty"`
+	// 旧版大厅客户端会从自己的 LobbyPlayer 合并这些聚合额度字段；保留原字段号。
+	//
+	// Deprecated: Marked as deprecated in api/proto/game.proto.
+	GiveawayVoteWindowStartedAt int64 `protobuf:"varint,52,opt,name=giveaway_vote_window_started_at,json=giveawayVoteWindowStartedAt,proto3" json:"giveaway_vote_window_started_at,omitempty"`
+	// Deprecated: Marked as deprecated in api/proto/game.proto.
+	GiveawayVoteLikesThisHour int32 `protobuf:"varint,53,opt,name=giveaway_vote_likes_this_hour,json=giveawayVoteLikesThisHour,proto3" json:"giveaway_vote_likes_this_hour,omitempty"`
+	// Deprecated: Marked as deprecated in api/proto/game.proto.
 	GiveawayVoteDislikesThisHour int32       `protobuf:"varint,54,opt,name=giveaway_vote_dislikes_this_hour,json=giveawayVoteDislikesThisHour,proto3" json:"giveaway_vote_dislikes_this_hour,omitempty"`
 	RankMultiplierUnlocked       bool        `protobuf:"varint,35,opt,name=rank_multiplier_unlocked,json=rankMultiplierUnlocked,proto3" json:"rank_multiplier_unlocked,omitempty"`
 	ExtremeModeEnabled           bool        `protobuf:"varint,37,opt,name=extreme_mode_enabled,json=extremeModeEnabled,proto3" json:"extreme_mode_enabled,omitempty"`
@@ -1498,6 +1512,7 @@ func (x *LobbyPlayer) GetGiveawayBoardDislikes() int32 {
 	return 0
 }
 
+// Deprecated: Marked as deprecated in api/proto/game.proto.
 func (x *LobbyPlayer) GetGiveawayVoteWindowStartedAt() int64 {
 	if x != nil {
 		return x.GiveawayVoteWindowStartedAt
@@ -1505,6 +1520,7 @@ func (x *LobbyPlayer) GetGiveawayVoteWindowStartedAt() int64 {
 	return 0
 }
 
+// Deprecated: Marked as deprecated in api/proto/game.proto.
 func (x *LobbyPlayer) GetGiveawayVoteLikesThisHour() int32 {
 	if x != nil {
 		return x.GiveawayVoteLikesThisHour
@@ -1512,6 +1528,7 @@ func (x *LobbyPlayer) GetGiveawayVoteLikesThisHour() int32 {
 	return 0
 }
 
+// Deprecated: Marked as deprecated in api/proto/game.proto.
 func (x *LobbyPlayer) GetGiveawayVoteDislikesThisHour() int32 {
 	if x != nil {
 		return x.GiveawayVoteDislikesThisHour
@@ -6767,8 +6784,19 @@ type GiveawayConfig struct {
 	// 自救板倒赞：每小时可投次数上限、每次增加的百分比。
 	DislikeVoteLimitPerHour int32   `protobuf:"varint,9,opt,name=dislike_vote_limit_per_hour,json=dislikeVoteLimitPerHour,proto3" json:"dislike_vote_limit_per_hour,omitempty"`
 	DislikeVoteValue        float64 `protobuf:"fixed64,10,opt,name=dislike_vote_value,json=dislikeVoteValue,proto3" json:"dislike_vote_value,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	// 以下次数上限、降低/增加百分比都按「投票者 与 被投票者的认主认宠关系」三档独立配置，
+	// 且按 actor→target 这一对独立计时/计次（不是投票者的全局总量）。只有直系关系（不含
+	// 宠物的宠物等二级以上关系）才会命中宠物/主人档，否则一律走上面的普通档位。
+	PetLikeVoteLimitPerHour       int32   `protobuf:"varint,11,opt,name=pet_like_vote_limit_per_hour,json=petLikeVoteLimitPerHour,proto3" json:"pet_like_vote_limit_per_hour,omitempty"`
+	PetDislikeVoteLimitPerHour    int32   `protobuf:"varint,12,opt,name=pet_dislike_vote_limit_per_hour,json=petDislikeVoteLimitPerHour,proto3" json:"pet_dislike_vote_limit_per_hour,omitempty"`
+	MasterLikeVoteLimitPerHour    int32   `protobuf:"varint,13,opt,name=master_like_vote_limit_per_hour,json=masterLikeVoteLimitPerHour,proto3" json:"master_like_vote_limit_per_hour,omitempty"`
+	MasterDislikeVoteLimitPerHour int32   `protobuf:"varint,14,opt,name=master_dislike_vote_limit_per_hour,json=masterDislikeVoteLimitPerHour,proto3" json:"master_dislike_vote_limit_per_hour,omitempty"`
+	PetLikeVoteValue              float64 `protobuf:"fixed64,15,opt,name=pet_like_vote_value,json=petLikeVoteValue,proto3" json:"pet_like_vote_value,omitempty"`
+	PetDislikeVoteValue           float64 `protobuf:"fixed64,16,opt,name=pet_dislike_vote_value,json=petDislikeVoteValue,proto3" json:"pet_dislike_vote_value,omitempty"`
+	MasterLikeVoteValue           float64 `protobuf:"fixed64,17,opt,name=master_like_vote_value,json=masterLikeVoteValue,proto3" json:"master_like_vote_value,omitempty"`
+	MasterDislikeVoteValue        float64 `protobuf:"fixed64,18,opt,name=master_dislike_vote_value,json=masterDislikeVoteValue,proto3" json:"master_dislike_vote_value,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *GiveawayConfig) Reset() {
@@ -6867,6 +6895,62 @@ func (x *GiveawayConfig) GetDislikeVoteLimitPerHour() int32 {
 func (x *GiveawayConfig) GetDislikeVoteValue() float64 {
 	if x != nil {
 		return x.DislikeVoteValue
+	}
+	return 0
+}
+
+func (x *GiveawayConfig) GetPetLikeVoteLimitPerHour() int32 {
+	if x != nil {
+		return x.PetLikeVoteLimitPerHour
+	}
+	return 0
+}
+
+func (x *GiveawayConfig) GetPetDislikeVoteLimitPerHour() int32 {
+	if x != nil {
+		return x.PetDislikeVoteLimitPerHour
+	}
+	return 0
+}
+
+func (x *GiveawayConfig) GetMasterLikeVoteLimitPerHour() int32 {
+	if x != nil {
+		return x.MasterLikeVoteLimitPerHour
+	}
+	return 0
+}
+
+func (x *GiveawayConfig) GetMasterDislikeVoteLimitPerHour() int32 {
+	if x != nil {
+		return x.MasterDislikeVoteLimitPerHour
+	}
+	return 0
+}
+
+func (x *GiveawayConfig) GetPetLikeVoteValue() float64 {
+	if x != nil {
+		return x.PetLikeVoteValue
+	}
+	return 0
+}
+
+func (x *GiveawayConfig) GetPetDislikeVoteValue() float64 {
+	if x != nil {
+		return x.PetDislikeVoteValue
+	}
+	return 0
+}
+
+func (x *GiveawayConfig) GetMasterLikeVoteValue() float64 {
+	if x != nil {
+		return x.MasterLikeVoteValue
+	}
+	return 0
+}
+
+func (x *GiveawayConfig) GetMasterDislikeVoteValue() float64 {
+	if x != nil {
+		return x.MasterDislikeVoteValue
 	}
 	return 0
 }
@@ -8133,7 +8217,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\ttictactoe\x18\x03 \x01(\v2\r.game.GameWLDR\ttictactoe\x12%\n" +
 	"\x06gomoku\x18\x04 \x01(\v2\r.game.GameWLDR\x06gomoku\x12+\n" +
 	"\tliarsdice\x18\x05 \x01(\v2\r.game.GameWLDR\tliarsdice\x12%\n" +
-	"\x06jungle\x18\x06 \x01(\v2\r.game.GameWLDR\x06jungle\"\xba\x15\n" +
+	"\x06jungle\x18\x06 \x01(\v2\r.game.GameWLDR\x06jungle\"\xca\x15\n" +
 	"\fPublicPlayer\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
@@ -8171,11 +8255,11 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x14giveaway_board_likes\x18- \x01(\x05R\x12giveawayBoardLikes\x126\n" +
 	"\x17giveaway_board_dislikes\x18/ \x01(\x05R\x15giveawayBoardDislikes\x12B\n" +
 	"\x1egiveaway_board_likes_this_hour\x181 \x01(\x05R\x1agiveawayBoardLikesThisHour\x12O\n" +
-	"%giveaway_board_like_window_started_at\x183 \x01(\x03R giveawayBoardLikeWindowStartedAt\x12D\n" +
-	"\x1fgiveaway_vote_window_started_at\x185 \x01(\x03R\x1bgiveawayVoteWindowStartedAt\x12.\n" +
-	"\x13giveaway_vote_count\x187 \x01(\x05R\x11giveawayVoteCount\x12@\n" +
-	"\x1dgiveaway_vote_likes_this_hour\x189 \x01(\x05R\x19giveawayVoteLikesThisHour\x12F\n" +
-	" giveaway_vote_dislikes_this_hour\x18; \x01(\x05R\x1cgiveawayVoteDislikesThisHour\x128\n" +
+	"%giveaway_board_like_window_started_at\x183 \x01(\x03R giveawayBoardLikeWindowStartedAt\x12H\n" +
+	"\x1fgiveaway_vote_window_started_at\x185 \x01(\x03B\x02\x18\x01R\x1bgiveawayVoteWindowStartedAt\x122\n" +
+	"\x13giveaway_vote_count\x187 \x01(\x05B\x02\x18\x01R\x11giveawayVoteCount\x12D\n" +
+	"\x1dgiveaway_vote_likes_this_hour\x189 \x01(\x05B\x02\x18\x01R\x19giveawayVoteLikesThisHour\x12J\n" +
+	" giveaway_vote_dislikes_this_hour\x18; \x01(\x05B\x02\x18\x01R\x1cgiveawayVoteDislikesThisHour\x128\n" +
 	"\x18rank_multiplier_unlocked\x18= \x01(\bR\x16rankMultiplierUnlocked\x120\n" +
 	"\x14extreme_mode_enabled\x18? \x01(\bR\x12extremeModeEnabled\x125\n" +
 	"\x17extreme_mode_toggled_at\x18A \x01(\x03R\x14extremeModeToggledAt\x12=\n" +
@@ -8194,7 +8278,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"game_stats\x18U \x01(\v2\x0f.game.GameStatsR\tgameStats\x12.\n" +
 	"\x13bond_master_enabled\x18W \x01(\bR\x11bondMasterEnabled\x12(\n" +
 	"\x10bond_pet_enabled\x18X \x01(\bR\x0ebondPetEnabled\x12.\n" +
-	"\x13bond_public_display\x18Y \x01(\bR\x11bondPublicDisplay\"\xd8\x0e\n" +
+	"\x13bond_public_display\x18Y \x01(\bR\x11bondPublicDisplay\"\xe4\x0e\n" +
 	"\vLobbyPlayer\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
@@ -8220,10 +8304,10 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x13giveaway_board_text\x18\x1c \x01(\tR\x11giveawayBoardText\x129\n" +
 	"\x19giveaway_board_expires_at\x18\x1d \x01(\x03R\x16giveawayBoardExpiresAt\x120\n" +
 	"\x14giveaway_board_likes\x18\x1f \x01(\x05R\x12giveawayBoardLikes\x126\n" +
-	"\x17giveaway_board_dislikes\x18! \x01(\x05R\x15giveawayBoardDislikes\x12D\n" +
-	"\x1fgiveaway_vote_window_started_at\x184 \x01(\x03R\x1bgiveawayVoteWindowStartedAt\x12@\n" +
-	"\x1dgiveaway_vote_likes_this_hour\x185 \x01(\x05R\x19giveawayVoteLikesThisHour\x12F\n" +
-	" giveaway_vote_dislikes_this_hour\x186 \x01(\x05R\x1cgiveawayVoteDislikesThisHour\x128\n" +
+	"\x17giveaway_board_dislikes\x18! \x01(\x05R\x15giveawayBoardDislikes\x12H\n" +
+	"\x1fgiveaway_vote_window_started_at\x184 \x01(\x03B\x02\x18\x01R\x1bgiveawayVoteWindowStartedAt\x12D\n" +
+	"\x1dgiveaway_vote_likes_this_hour\x185 \x01(\x05B\x02\x18\x01R\x19giveawayVoteLikesThisHour\x12J\n" +
+	" giveaway_vote_dislikes_this_hour\x186 \x01(\x05B\x02\x18\x01R\x1cgiveawayVoteDislikesThisHour\x128\n" +
 	"\x18rank_multiplier_unlocked\x18# \x01(\bR\x16rankMultiplierUnlocked\x120\n" +
 	"\x14extreme_mode_enabled\x18% \x01(\bR\x12extremeModeEnabled\x12,\n" +
 	"\x12extreme_win_streak\x18' \x01(\x05R\x10extremeWinStreak\x120\n" +
@@ -8774,7 +8858,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x14name_war_loser_label\x18\x05 \x01(\tR\x11nameWarLoserLabel\x12;\n" +
 	"\x1aextreme_force_closed_label\x18\x06 \x01(\tR\x17extremeForceClosedLabel\x12+\n" +
 	"\x11penalty_threshold\x18\a \x01(\x05R\x10penaltyThreshold\x12*\n" +
-	"\x11rename_min_points\x18\b \x01(\x05R\x0frenameMinPoints\"\xd2\x03\n" +
+	"\x11rename_min_points\x18\b \x01(\x05R\x0frenameMinPoints\"\xba\a\n" +
 	"\x0eGiveawayConfig\x12\x1f\n" +
 	"\vpanel_title\x18\x01 \x01(\tR\n" +
 	"panelTitle\x12+\n" +
@@ -8788,7 +8872,15 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x0flike_vote_value\x18\b \x01(\x01R\rlikeVoteValue\x12<\n" +
 	"\x1bdislike_vote_limit_per_hour\x18\t \x01(\x05R\x17dislikeVoteLimitPerHour\x12,\n" +
 	"\x12dislike_vote_value\x18\n" +
-	" \x01(\x01R\x10dislikeVoteValue\"\xb8\x01\n" +
+	" \x01(\x01R\x10dislikeVoteValue\x12=\n" +
+	"\x1cpet_like_vote_limit_per_hour\x18\v \x01(\x05R\x17petLikeVoteLimitPerHour\x12C\n" +
+	"\x1fpet_dislike_vote_limit_per_hour\x18\f \x01(\x05R\x1apetDislikeVoteLimitPerHour\x12C\n" +
+	"\x1fmaster_like_vote_limit_per_hour\x18\r \x01(\x05R\x1amasterLikeVoteLimitPerHour\x12I\n" +
+	"\"master_dislike_vote_limit_per_hour\x18\x0e \x01(\x05R\x1dmasterDislikeVoteLimitPerHour\x12-\n" +
+	"\x13pet_like_vote_value\x18\x0f \x01(\x01R\x10petLikeVoteValue\x123\n" +
+	"\x16pet_dislike_vote_value\x18\x10 \x01(\x01R\x13petDislikeVoteValue\x123\n" +
+	"\x16master_like_vote_value\x18\x11 \x01(\x01R\x13masterLikeVoteValue\x129\n" +
+	"\x19master_dislike_vote_value\x18\x12 \x01(\x01R\x16masterDislikeVoteValue\"\xb8\x01\n" +
 	"\rPetBondConfig\x12\x1f\n" +
 	"\vpanel_title\x18\x01 \x01(\tR\n" +
 	"panelTitle\x12-\n" +

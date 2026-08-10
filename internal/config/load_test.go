@@ -75,6 +75,26 @@ func TestValidateConfigRejectsInvalidIPBackstopFields(t *testing.T) {
 	}
 }
 
+func TestFixGiveawayVoteLimitsPreservesExplicitNegative(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	broken := cfg
+	broken.Giveaway.PetLikeVoteValue = -1
+	broken.Giveaway.MasterDislikeVoteLimitPerHour = 0
+	fixed := fixGiveawayVoteLimits(broken)
+	if fixed.Giveaway.PetLikeVoteValue != -1 {
+		t.Fatalf("negative pet vote value was silently replaced: %v", fixed.Giveaway.PetLikeVoteValue)
+	}
+	if fixed.Giveaway.MasterDislikeVoteLimitPerHour != cfg.Giveaway.DislikeVoteLimitPerHour {
+		t.Fatalf("zero legacy field should fall back, got %d", fixed.Giveaway.MasterDislikeVoteLimitPerHour)
+	}
+	if _, err := ValidateConfig(fixed); err == nil {
+		t.Fatal("negative pet vote value must still fail validation")
+	}
+}
+
 func TestSaveConfigRoundTrip(t *testing.T) {
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -93,5 +113,41 @@ func TestSaveConfigRoundTrip(t *testing.T) {
 	cfg.AccessControl.MaxCreatesPer10Min = orig
 	if _, err := SaveConfig(cfg); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSaveConfigBackfillsMissingGiveawayVoteLimits(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := cfg.Giveaway
+	legacy := cfg
+	legacy.Giveaway.PetLikeVoteLimitPerHour = 0
+	legacy.Giveaway.PetLikeVoteValue = 0
+	legacy.Giveaway.PetDislikeVoteLimitPerHour = 0
+	legacy.Giveaway.PetDislikeVoteValue = 0
+	legacy.Giveaway.MasterLikeVoteLimitPerHour = 0
+	legacy.Giveaway.MasterLikeVoteValue = 0
+	legacy.Giveaway.MasterDislikeVoteLimitPerHour = 0
+	legacy.Giveaway.MasterDislikeVoteValue = 0
+
+	saved, err := SaveConfig(legacy)
+	if err != nil {
+		t.Fatalf("legacy config should still save: %v", err)
+	}
+	if saved.Giveaway.PetLikeVoteLimitPerHour != want.LikeVoteLimitPerHour ||
+		saved.Giveaway.PetLikeVoteValue != want.LikeVoteValue ||
+		saved.Giveaway.PetDislikeVoteLimitPerHour != want.DislikeVoteLimitPerHour ||
+		saved.Giveaway.PetDislikeVoteValue != want.DislikeVoteValue ||
+		saved.Giveaway.MasterLikeVoteLimitPerHour != want.LikeVoteLimitPerHour ||
+		saved.Giveaway.MasterLikeVoteValue != want.LikeVoteValue ||
+		saved.Giveaway.MasterDislikeVoteLimitPerHour != want.DislikeVoteLimitPerHour ||
+		saved.Giveaway.MasterDislikeVoteValue != want.DislikeVoteValue {
+		t.Fatalf("missing vote limits were not backfilled: %+v", saved.Giveaway)
+	}
+
+	if _, err := SaveConfig(cfg); err != nil {
+		t.Fatalf("restore config: %v", err)
 	}
 }

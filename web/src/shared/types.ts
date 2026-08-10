@@ -215,6 +215,7 @@ export type PublicPlayer = {
   giveawayBoardDislikes?: number;
   giveawayBoardLikeWindowStartedAt?: number;
   giveawayBoardLikesThisHour?: number;
+  // 旧版客户端仍读取这些聚合字段；新客户端的精确额度通过 giveaway:voteQuotas 查询。
   giveawayVoteWindowStartedAt?: number;
   giveawayVoteCount?: number;
   giveawayVoteLikesThisHour?: number;
@@ -240,6 +241,20 @@ export type PublicPlayer = {
   isAdmin?: boolean;
   stats: PublicStats;
   gameStats: GameStats;
+};
+
+/** 自救板投票额度：我对某一个目标玩家还剩多少点赞/倒赞次数，来自 giveaway:vote /
+ * giveaway:voteQuotas 的回包，按 actor→target 独立计算，不进 PublicPlayer 广播。 */
+export type GiveawayVoteQuota = {
+  targetId: string;
+  likeLimit: number;
+  likeValue: number;
+  likesUsed: number;
+  dislikeLimit: number;
+  dislikeValue: number;
+  dislikesUsed: number;
+  /** 0 表示尚未在本窗口投过票（额度视为满）；否则为窗口起始的服务器时间戳。 */
+  windowStartedAt: number;
 };
 
 export type PetBondConfig = {
@@ -663,12 +678,22 @@ export type AppConfig = {
     activeBoostValue: number;
     /** 白给已开启的玩家每赢一局（含断线判负），白给值减少的百分比 */
     winPenaltyValue: number;
-    /** 自救板点赞每小时可投次数上限、每次降低的百分比 */
+    /** 普通用户对自救板点赞每小时可投次数上限（对每个目标独立计算）、每次降低的百分比 */
     likeVoteLimitPerHour: number;
     likeVoteValue: number;
-    /** 自救板倒赞每小时可投次数上限、每次增加的百分比 */
+    /** 普通用户对自救板倒赞每小时可投次数上限（同上）、每次增加的百分比 */
     dislikeVoteLimitPerHour: number;
     dislikeVoteValue: number;
+    /** 对自己直系宠物（不含二级以上关系）投票时的每小时点赞/倒赞次数上限、每次降低/增加的百分比 */
+    petLikeVoteLimitPerHour: number;
+    petLikeVoteValue: number;
+    petDislikeVoteLimitPerHour: number;
+    petDislikeVoteValue: number;
+    /** 对自己直系主人（不含二级以上关系）投票时的每小时点赞/倒赞次数上限、每次降低/增加的百分比 */
+    masterLikeVoteLimitPerHour: number;
+    masterLikeVoteValue: number;
+    masterDislikeVoteLimitPerHour: number;
+    masterDislikeVoteValue: number;
   };
   petBond: PetBondConfig;
   extremeMode: {
@@ -778,10 +803,18 @@ export type AnalyticsRangeView = {
     doneRate: number;
     proofMs: AnalyticsBucket[];
   };
+  /** 旧版分析面板使用的完整玩家活动序列，保留用于接口兼容。 */
   activity: AnalyticsNamedSeries[];
+  /** 用户信息变更：性别/阵营变更、改名、更换头像、自定义称号。 */
+  profileChanges: AnalyticsNamedSeries[];
+  /** 名争·白给：开启名争、开启白给、白给留言板、名争改名。 */
+  nameWarGiveaway: AnalyticsNamedSeries[];
+  /** 新老用户：按账号（playerId）维度，区别于 newVsReturning 的设备维度。 */
+  newOldUsers: { new: number[]; oldLogin: number[] };
   petBond: { total: number[]; new: number[] };
   chat: { lobby: number[]; room: number[]; speakers: number[] };
   funnel: AnalyticsBucket[];
   retention: AnalyticsRetention;
+  /** 新访客 vs 回访：按设备指纹维度，区别于 newOldUsers 的账号维度。 */
   newVsReturning: { new: number[]; returning: number[] };
 };

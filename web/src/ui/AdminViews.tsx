@@ -575,51 +575,45 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
     }
 
     if (activeSection === "punishments") {
-      const playerRoomNameItemId = "__player_room_names__";
       const filteredPunishments = draft.punishments.filter((punishment) => {
         const keyword = punishmentSearch.trim().toLowerCase();
         if (!keyword) return true;
         return `${punishment.id} ${punishment.name} ${punishment.description}`.toLowerCase().includes(keyword);
       });
-      const isPlayerRoomNameSelected = activePunishmentId === playerRoomNameItemId;
       const selectedIndex = Math.max(0, draft.punishments.findIndex((punishment) => punishment.id === activePunishmentId));
       const punishment = draft.punishments[selectedIndex];
       const taskGroups = taskGroupsFromFactions(draft.genderFactions);
       return (
         <div className="config-section admin-section-card">
           <AdminSectionHeader title="惩罚池" subtitle="编辑不同阵营系统惩罚任务、房间名生成。系统任务文案可用 {loser}/{winner} 插入败者/胜者昵称。" />
+          <div className="mini-card player-punishment-room-name-card">
+            <div className="admin-card-title">
+              <strong>玩家发布模式房名词库</strong>
+              <small>示例：{sampleRoomName(draft.playerPunishmentRoomNamePool)}</small>
+            </div>
+            <p className="hint">创建房间时“惩罚来源”选择“玩家发布”，会用这里生成随机房间名；它不是某一条系统惩罚，只是同样需要一套房名词库，因此单独放在这里管理，与下方系统惩罚列表无关。</p>
+            <RoomNamePoolEditor title="玩家发布任务随机房名词库" pool={draft.playerPunishmentRoomNamePool || defaultAdminRoomNamePool()} onChange={(playerPunishmentRoomNamePool) => patch({ playerPunishmentRoomNamePool })} />
+          </div>
+          <AdminSectionHeader title="系统惩罚列表" subtitle="创建房间时“惩罚来源”选择“系统”时可选的惩罚任务。" />
           <div className="punishment-manager">
             <aside className="punishment-index-panel">
               <input value={punishmentSearch} onChange={(event) => setPunishmentSearch(event.target.value)} placeholder="搜索惩罚名称 / ID / 简介" />
               <div className="punishment-index-list">
                 {filteredPunishments.map((item) => (
-                  <button className={!isPlayerRoomNameSelected && item.id === punishment?.id ? "active" : ""} key={item.id} onClick={() => setActivePunishmentId(item.id)}>
+                  <button className={item.id === punishment?.id ? "active" : ""} key={item.id} onClick={() => setActivePunishmentId(item.id)}>
                     <span>{item.name}</span>
                     <small>{item.id} · {punishmentTasks(item, draft).length} 个任务</small>
                   </button>
                 ))}
                 {filteredPunishments.length === 0 && <p className="empty">没有匹配的惩罚</p>}
               </div>
-              <button className={`special-index-item ${isPlayerRoomNameSelected ? "active" : ""}`} onClick={() => setActivePunishmentId(playerRoomNameItemId)}>
-                <span>玩家发布任务房名</span>
-                <small>玩家发布模式 · {draft.playerPunishmentRoomNamePool?.subjects.length || 0} 个关键词</small>
-              </button>
               <button onClick={() => {
                 const nextId = nextAdminId("punish", draft.punishments.map((item) => item.id));
                 setActivePunishmentId(nextId);
                 patch({ punishments: [...draft.punishments, { id: nextId, name: "新惩罚", description: "写下惩罚说明", cardImageUrl: "", cardImageOpacity: 0.26, roomBackgroundImages: [], variants: Object.fromEntries(taskGroups.map((group) => [group.id, "写下这个分组专属任务"])), tasks: [{ id: "task1", name: "默认任务", backgroundImages: [], backgroundOpacity: 0.22, variants: Object.fromEntries(taskGroups.map((group) => [group.id, "写下这个分组专属任务"])) }], roomNamePool: defaultAdminRoomNamePool() }] });
               }}>添加惩罚</button>
             </aside>
-            {isPlayerRoomNameSelected ? (
-              <div className="mini-card punishment-detail-panel player-punishment-room-name-card">
-                <div className="admin-card-title">
-                  <strong>玩家发布任务模式房名词库</strong>
-                  <small>示例：{sampleRoomName(draft.playerPunishmentRoomNamePool)}</small>
-                </div>
-                <p className="hint">创建房间选择“玩家发布”时，会用这里生成随机房间名。它不属于某一个系统惩罚，所以作为惩罚池里的特殊项目管理。</p>
-                <RoomNamePoolEditor title="玩家发布任务随机房名词库" pool={draft.playerPunishmentRoomNamePool || defaultAdminRoomNamePool()} onChange={(playerPunishmentRoomNamePool) => patch({ playerPunishmentRoomNamePool })} />
-              </div>
-            ) : punishment && (
+            {punishment && (
               <div className="mini-card punishment-detail-panel">
                 <div className="admin-card-title">
                   <strong>{punishment.name}</strong>
@@ -814,6 +808,8 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
               <input type="number" min={0.1} max={100} step={0.1} value={draft.giveaway.winPenaltyValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, winPenaltyValue: Number(event.target.value) } })} />
             </label>
           </div>
+          <p className="hint">以下三档（普通用户 / 对自己宠物 / 对自己主人）的每小时次数上限、每次点赞降低值、每次倒赞增加值均可分别设置，按「投票者与被投票者的认主认宠关系」（只认直系，不含宠物的宠物等二级以上关系）挑选对应档位，且对每个上板玩家独立计时/计次（不是投票者的总量）。</p>
+          <AdminSectionHeader title="普通用户" subtitle="投票者与被投票者之间没有认主认宠关系时使用。" />
           <div className="config-row">
             <label className="field-label">
               <span>点赞每小时次数上限</span>
@@ -821,7 +817,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
             </label>
             <label className="field-label">
               <span>点赞降低值 (%)</span>
-              <input type="number" min={0.1} max={100} step={0.1} value={draft.giveaway.likeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, likeVoteValue: Number(event.target.value) } })} />
+              <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.likeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, likeVoteValue: Number(event.target.value) } })} />
             </label>
           </div>
           <div className="config-row">
@@ -832,6 +828,48 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
             <label className="field-label">
               <span>倒赞增加值 (%)</span>
               <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.dislikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, dislikeVoteValue: Number(event.target.value) } })} />
+            </label>
+          </div>
+          <AdminSectionHeader title="对自己宠物" subtitle="投票者是被投票者的直系主人时使用。" />
+          <div className="config-row">
+            <label className="field-label">
+              <span>点赞每小时次数上限</span>
+              <input type="number" min={1} step={1} value={draft.giveaway.petLikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, petLikeVoteLimitPerHour: Number(event.target.value) } })} />
+            </label>
+            <label className="field-label">
+              <span>点赞降低值 (%)</span>
+              <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.petLikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, petLikeVoteValue: Number(event.target.value) } })} />
+            </label>
+          </div>
+          <div className="config-row">
+            <label className="field-label">
+              <span>倒赞每小时次数上限</span>
+              <input type="number" min={1} step={1} value={draft.giveaway.petDislikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, petDislikeVoteLimitPerHour: Number(event.target.value) } })} />
+            </label>
+            <label className="field-label">
+              <span>倒赞增加值 (%)</span>
+              <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.petDislikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, petDislikeVoteValue: Number(event.target.value) } })} />
+            </label>
+          </div>
+          <AdminSectionHeader title="对自己主人" subtitle="投票者是被投票者的直系宠物时使用。" />
+          <div className="config-row">
+            <label className="field-label">
+              <span>点赞每小时次数上限</span>
+              <input type="number" min={1} step={1} value={draft.giveaway.masterLikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, masterLikeVoteLimitPerHour: Number(event.target.value) } })} />
+            </label>
+            <label className="field-label">
+              <span>点赞降低值 (%)</span>
+              <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.masterLikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, masterLikeVoteValue: Number(event.target.value) } })} />
+            </label>
+          </div>
+          <div className="config-row">
+            <label className="field-label">
+              <span>倒赞每小时次数上限</span>
+              <input type="number" min={1} step={1} value={draft.giveaway.masterDislikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, masterDislikeVoteLimitPerHour: Number(event.target.value) } })} />
+            </label>
+            <label className="field-label">
+              <span>倒赞增加值 (%)</span>
+              <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.masterDislikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, masterDislikeVoteValue: Number(event.target.value) } })} />
             </label>
           </div>
           <p className="hint">胜利扣减仅对已开启白给模式的胜方生效（含断线判负）。</p>

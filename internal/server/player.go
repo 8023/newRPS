@@ -287,7 +287,7 @@ func (s *Server) refreshGiveawayBoard(player *PlayerState, now int64) {
 	player.GiveawayBoardLikeWindowStartedAt = nil
 }
 
-// addGiveawayValue 按 delta 调整白给值（正负皆可，最终钳制到 0-100 且保留 1 位小数）。
+// addGiveawayValue 按 delta 调整白给值（正负皆可，最终钳制到 0-100 且保留 2 位小数）。
 // 白给值归零后自动关闭白给玩法（赢一局的惩罚、被点踩等都会走这里，不用每处调用方各自判断）。
 func (s *Server) addGiveawayValue(player *PlayerState, delta float64) {
 	v := ptrFloat(player.GiveawayValue) + delta
@@ -309,6 +309,87 @@ func (s *Server) applyGiveawayWinPenalty(winner *PlayerState) {
 		return
 	}
 	s.addGiveawayValue(winner, -s.cfg.Giveaway.WinPenaltyValue)
+}
+
+// giveawayVoteWindowMs 是自救板投票额度的滚动窗口长度（每对 actor→target 各自独立起算）。
+const giveawayVoteWindowMs = 3_600_000
+
+// giveawayVoteQuota 是某个 actor 对某一个 target 的投票额度状态（PlayerState.GiveawayVoteQuotas
+// 的 value）。
+type giveawayVoteQuota struct {
+	WindowStartedAt int64
+	Likes           int
+	Dislikes        int
+}
+
+// giveawayVoteRulesFor 按 actor 与 target 的认主认宠关系返回这一对的点赞/倒赞每小时次数
+// 上限、以及每次投票对白给值的降低/增加百分比——只认直系关系（不含宠物的宠物等二级以上
+// 关系），命中则用宠物档/主人档，否则普通档；三档的次数上限和升降值都各自独立配置。
+func (s *Server) giveawayVoteRulesFor(actor, target *PlayerState) (likeLimit, dislikeLimit int, likeValue, dislikeValue float64) {
+	cfg := s.cfg.Giveaway
+	switch {
+	case s.getBond(actor.ID, target.ID) != nil: // target 是 actor 的直系宠物
+		return cfg.PetLikeVoteLimitPerHour, cfg.PetDislikeVoteLimitPerHour, cfg.PetLikeVoteValue, cfg.PetDislikeVoteValue
+	case s.getBond(target.ID, actor.ID) != nil: // target 是 actor 的直系主人
+		return cfg.MasterLikeVoteLimitPerHour, cfg.MasterDislikeVoteLimitPerHour, cfg.MasterLikeVoteValue, cfg.MasterDislikeVoteValue
+	default:
+		return cfg.LikeVoteLimitPerHour, cfg.DislikeVoteLimitPerHour, cfg.LikeVoteValue, cfg.DislikeVoteValue
+	}
+}
+
+// giveawayVoteQuotaFor 取出（必要时懒重置）actor 对 targetID 这一对的额度状态。窗口过期
+// 后清零重新起算，不影响 actor 对其它目标的额度。
+func (s *Server) giveawayVoteQuotaFor(actor *PlayerState, targetID string, now int64) *giveawayVoteQuota {
+	if actor.GiveawayVoteQuotas == nil {
+		actor.GiveawayVoteQuotas = map[string]*giveawayVoteQuota{}
+	}
+	q := actor.GiveawayVoteQuotas[targetID]
+	if q == nil || now-q.WindowStartedAt >= giveawayVoteWindowMs {
+		q = &giveawayVoteQuota{WindowStartedAt: now}
+		actor.GiveawayVoteQuotas[targetID] = q
+	}
+	return q
+}
+
+// giveawayVoteQuotaView 组装某一对 actor→target 的额度快照，供 RPC 回包给 actor 自己
+// （giveaway:vote 的回执 / giveaway:voteQuotas 的查询结果）；未过期的窗口起始时间原样带上，
+// 方便前端按本地时钟推算"N 分钟后刷新"，过期或从未投过票则视为满额度、窗口为 0。
+func (s *Server) giveawayVoteQuotaView(actor, target *PlayerState, now int64) map[string]any {
+	likeLimit, dislikeLimit, likeValue, dislikeValue := s.giveawayVoteRulesFor(actor, target)
+	likesUsed, dislikesUsed, windowStartedAt := 0, 0, int64(0)
+	if q := actor.GiveawayVoteQuotas[target.ID]; q != nil && now-q.WindowStartedAt < giveawayVoteWindowMs {
+		likesUsed, dislikesUsed, windowStartedAt = q.Likes, q.Dislikes, q.WindowStartedAt
+	}
+	return map[string]any{
+		"targetId":        target.ID,
+		"likeLimit":       likeLimit,
+		"likeValue":       likeValue,
+		"likesUsed":       likesUsed,
+		"dislikeLimit":    dislikeLimit,
+		"dislikeValue":    dislikeValue,
+		"dislikesUsed":    dislikesUsed,
+		"windowStartedAt": windowStartedAt,
+	}
+}
+
+// updateLegacyGiveawayVoteStats 维护旧客户端仍读取的 actor 聚合投票字段。新额度限制按
+// actor→target 的 GiveawayVoteQuotas 执行，这些字段只作为兼容性展示，不参与新限流判断。
+func (s *Server) updateLegacyGiveawayVoteStats(actor *PlayerState, vote string, now int64) {
+	if actor == nil {
+		return
+	}
+	if actor.GiveawayVoteWindowStartedAt == nil || now-*actor.GiveawayVoteWindowStartedAt >= giveawayVoteWindowMs {
+		actor.GiveawayVoteWindowStartedAt = int64Ptr(now)
+		actor.GiveawayVoteCount = intPtr(0)
+		actor.GiveawayVoteLikesThisHour = intPtr(0)
+		actor.GiveawayVoteDislikesThisHour = intPtr(0)
+	}
+	actor.GiveawayVoteCount = intPtr(ptrInt(actor.GiveawayVoteCount) + 1)
+	if vote == "like" {
+		actor.GiveawayVoteLikesThisHour = intPtr(ptrInt(actor.GiveawayVoteLikesThisHour) + 1)
+	} else if vote == "dislike" {
+		actor.GiveawayVoteDislikesThisHour = intPtr(ptrInt(actor.GiveawayVoteDislikesThisHour) + 1)
+	}
 }
 
 func (s *Server) refreshNameWarState(player *PlayerState, now int64) bool {

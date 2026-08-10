@@ -282,8 +282,12 @@ main {
 .player-avatar-fallback>.player-avatar-char {
   display: block;
   line-height: 1;
-  /* 中日韩字形在 em 盒内常略偏下，轻微上移到视觉中心 */
-  transform: translateY(-0.06em);
+  /* 中日韩字形在 em 盒内常略偏下，轻微上移到视觉中心。
+   * 这里刻意用 margin 而不是 transform：力导向图把头像放进 <foreignObject> 里，
+   * 靠每帧改 x/y 属性拖动节点——带 transform 的子元素在这种场景下会被部分浏览器
+   * 当成独立合成层缓存，父级 foreignObject 挪动时这个字不会跟着重绘，导致
+   * "头像动、首字不动"。margin 走正常文档流布局，不受此影响。 */
+  margin-top: -0.06em;
 }
 
 .player-badge.compact {
@@ -1024,8 +1028,7 @@ main {
   color: var(--page-text);
 }
 
-.giveaway-card-meta,
-.giveaway-quota-line {
+.giveaway-card-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1033,13 +1036,6 @@ main {
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
-}
-
-.giveaway-quota-line span {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--panel-soft) 84%, transparent);
-  padding: 3px 7px;
 }
 
 .giveaway-card-head,
@@ -1134,7 +1130,6 @@ main {
 }
 
 .game-choice-icon {
-  width: 46px;
   min-width: 46px;
   height: 46px;
   display: grid;
@@ -1144,6 +1139,8 @@ main {
   background: color-mix(in srgb, var(--panel-soft) 70%, var(--button-bg));
   font-size: 20px;
   line-height: 1;
+  white-space: nowrap;
+  padding: 0 4px;
 }
 
 .game-choice-copy {
@@ -5178,6 +5175,30 @@ main {
   padding-bottom: 8px;
 }
 
+.petbond-graph-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.petbond-graph-filter-depth {
+  display: grid;
+  gap: 4px;
+  width: 92px;
+}
+
+.petbond-graph-filter-depth input {
+  min-height: 36px;
+}
+
+.petbond-graph-filter-hint {
+  color: var(--muted);
+  font-size: 12px;
+  padding-bottom: 8px;
+}
+
 .petbond-picker {
   position: relative;
   display: grid;
@@ -5263,7 +5284,7 @@ main {
 .petbond-graph-svg {
   display: block;
   width: 100%;
-  height: 460px;
+  height: 690px;
   touch-action: none;
 }
 
@@ -5734,25 +5755,6 @@ main {
 .punishment-index-list button.active {
   border-color: var(--primary);
   background: color-mix(in srgb, var(--primary) 18%, var(--panel-solid));
-}
-
-.special-index-item {
-  display: grid;
-  gap: 3px;
-  justify-content: stretch;
-  text-align: left;
-  border-color: color-mix(in srgb, var(--primary) 36%, var(--border));
-  background: color-mix(in srgb, var(--panel-solid) 90%, var(--primary));
-}
-
-.special-index-item.active {
-  border-color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 22%, var(--panel-solid));
-}
-
-.special-index-item small {
-  color: var(--muted);
-  font-size: 12px;
 }
 
 .punishment-index-list small {

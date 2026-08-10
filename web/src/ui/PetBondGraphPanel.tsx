@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { PublicPlayer } from "../shared/types";
 import { ask } from "../lib/rpc";
 import { PlayerAvatar, PlayerBadge } from "./AppViews";
@@ -17,21 +17,28 @@ type PlayerHit = { id: string; name: string; connected: boolean };
 
 type SimNode = { x: number; y: number; vx: number; vy: number; fx?: number; fy?: number };
 
-const WIDTH = 720;
-const HEIGHT = 460;
+const DEFAULT_WIDTH = 720;
+const HEIGHT = 690;
 const NODE_RADIUS = 18;
 const AVATAR_SIZE = 36;
 const DRAG_CLICK_THRESHOLD = 5;
 
-/** 力导向图节点/边不受 React state 频繁重渲染影响：物理状态放 ref，动画帧只用 tick 触发重绘。 */
-function usePetBondSimulation(graph: PetBondGraphData) {
+/** 力导向图节点/边不受 React state 频繁重渲染影响：物理状态放 ref，动画帧只用 tick 触发重绘。
+ * width 会随容器实际渲染宽度变化（见组件内 ResizeObserver），因此也放进 ref 供动画帧读取最新值，
+ * 避免因 width 变化而重启整个动画循环。 */
+function usePetBondSimulation(graph: PetBondGraphData, width: number) {
   const simRef = useRef<Record<string, SimNode>>({});
   const graphRef = useRef(graph);
+  const widthRef = useRef(width);
   const [, setTick] = useState(0);
 
   useEffect(() => {
     graphRef.current = graph;
   }, [graph]);
+
+  useEffect(() => {
+    widthRef.current = width;
+  }, [width]);
 
   // 节点集合变化时补齐新节点的初始位置（环形分布），清掉已消失节点的模拟状态。
   useEffect(() => {
@@ -40,11 +47,12 @@ function usePetBondSimulation(graph: PetBondGraphData) {
     for (const id of Object.keys(sim)) {
       if (!ids.has(id)) delete sim[id];
     }
+    const w = widthRef.current;
     graph.nodes.forEach((node, index) => {
       if (sim[node.id]) return;
       const angle = (index / Math.max(1, graph.nodes.length)) * Math.PI * 2;
       sim[node.id] = {
-        x: WIDTH / 2 + Math.cos(angle) * 150 + (Math.random() - 0.5) * 30,
+        x: w / 2 + Math.cos(angle) * 150 + (Math.random() - 0.5) * 30,
         y: HEIGHT / 2 + Math.sin(angle) * 150 + (Math.random() - 0.5) * 30,
         vx: 0, vy: 0
       };
@@ -58,6 +66,7 @@ function usePetBondSimulation(graph: PetBondGraphData) {
       if (!alive) return;
       const sim = simRef.current;
       const current = graphRef.current;
+      const w = widthRef.current;
       const ids = Object.keys(sim);
       for (const id of ids) {
         const node = sim[id];
@@ -75,7 +84,7 @@ function usePetBondSimulation(graph: PetBondGraphData) {
           fy += (dy / dist) * force;
         }
         // 向心力，避免节点飘出画布
-        fx += (WIDTH / 2 - node.x) * 0.0025;
+        fx += (w / 2 - node.x) * 0.0025;
         fy += (HEIGHT / 2 - node.y) * 0.0025;
         node.vx = (node.vx + fx) * 0.85;
         node.vy = (node.vy + fy) * 0.85;
@@ -104,7 +113,8 @@ function usePetBondSimulation(graph: PetBondGraphData) {
           node.vy = 0;
           continue;
         }
-        node.x = Math.min(WIDTH - AVATAR_SIZE, Math.max(AVATAR_SIZE, node.x + node.vx));
+        const maxX = Math.max(AVATAR_SIZE, w - AVATAR_SIZE);
+        node.x = Math.min(maxX, Math.max(AVATAR_SIZE, node.x + node.vx));
         node.y = Math.min(HEIGHT - AVATAR_SIZE - 16, Math.max(AVATAR_SIZE, node.y + node.vy));
       }
       setTick((t) => (t + 1) % 1_000_000);
@@ -120,6 +130,34 @@ function usePetBondSimulation(graph: PetBondGraphData) {
   }, []);
 
   return simRef;
+}
+
+/** 以 rootId 为中心，把主/宠边当无向图做 BFS，收集 depth 跳以内可达的玩家 id。
+ * depth=2 时会自然覆盖“主人的主人”“主人的其它宠物”“宠物的其它主人”等场景——
+ * 因为这些节点都通过共同的中间节点落在 2 跳以内。 */
+function collectPetBondNeighbors(graph: PetBondGraphData, rootId: string, depth: number): Set<string> {
+  const adjacency = new Map<string, string[]>();
+  for (const edge of graph.edges) {
+    if (!adjacency.has(edge.masterId)) adjacency.set(edge.masterId, []);
+    if (!adjacency.has(edge.petId)) adjacency.set(edge.petId, []);
+    adjacency.get(edge.masterId)!.push(edge.petId);
+    adjacency.get(edge.petId)!.push(edge.masterId);
+  }
+  const visited = new Set<string>([rootId]);
+  let frontier = [rootId];
+  for (let hop = 0; hop < depth && frontier.length > 0; hop++) {
+    const next: string[] = [];
+    for (const id of frontier) {
+      for (const neighbor of adjacency.get(id) || []) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          next.push(neighbor);
+        }
+      }
+    }
+    frontier = next;
+  }
+  return visited;
 }
 
 function PlayerPicker({
@@ -176,12 +214,53 @@ export function PetBondGraphPanel({ onError }: { onError: (message: string) => v
   const [petHits, setPetHits] = useState<PlayerHit[]>([]);
   const [petPicked, setPetPicked] = useState<PlayerHit | null>(null);
 
-  const simRef = usePetBondSimulation(graph);
+  const [filterQuery, setFilterQuery] = useState("");
+  const [filterHits, setFilterHits] = useState<PlayerHit[]>([]);
+  const [filterPicked, setFilterPicked] = useState<PlayerHit | null>(null);
+  const [filterDepth, setFilterDepth] = useState(10);
+
+  // 关系图不再是固定尺寸：宽度随卡片实际渲染宽度变化，撑满 petbond-graph-svg；高度固定。
+  const [svgWidth, setSvgWidth] = useState(DEFAULT_WIDTH);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const update = () => {
+      const width = el.getBoundingClientRect().width;
+      if (width > 0) setSvgWidth(width);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // 筛选：选定一位玩家后，只保留与其在 filterDepth 跳以内可达的主宠关系；未选人时不筛选。
+  const visibleIds = useMemo(() => {
+    if (!filterPicked) return null;
+    if (!graph.nodes.some((n) => n.id === filterPicked.id)) return new Set<string>();
+    return collectPetBondNeighbors(graph, filterPicked.id, Math.max(0, filterDepth));
+  }, [graph, filterPicked, filterDepth]);
+
+  const displayGraph = useMemo<PetBondGraphData>(() => {
+    if (!visibleIds) return graph;
+    return {
+      nodes: graph.nodes.filter((n) => visibleIds.has(n.id)),
+      edges: graph.edges.filter((e) => visibleIds.has(e.masterId) && visibleIds.has(e.petId))
+    };
+  }, [graph, visibleIds]);
+
+  const simRef = usePetBondSimulation(displayGraph, svgWidth);
   const dragIdRef = useRef<string | null>(null);
   const dragMovedRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const dragOffsetRef = useRef({ x: 0, y: 0 });
   const svgRef = useRef<SVGSVGElement | null>(null);
+
+  useEffect(() => {
+    if (selectedId && visibleIds && !visibleIds.has(selectedId)) setSelectedId(null);
+  }, [visibleIds, selectedId]);
 
   async function load() {
     setLoading(true);
@@ -222,6 +301,11 @@ export function PetBondGraphPanel({ onError }: { onError: (message: string) => v
     return () => clearTimeout(handle);
   }, [petQuery]);
 
+  useEffect(() => {
+    const handle = setTimeout(() => searchPlayers(filterQuery, setFilterHits), 250);
+    return () => clearTimeout(handle);
+  }, [filterQuery]);
+
   async function addRelation() {
     if (!masterPicked || !petPicked) return;
     if (masterPicked.id === petPicked.id) {
@@ -257,7 +341,7 @@ export function PetBondGraphPanel({ onError }: { onError: (message: string) => v
 
   function toSvgPoint(clientX: number, clientY: number) {
     const svg = svgRef.current;
-    if (!svg) return { x: WIDTH / 2, y: HEIGHT / 2 };
+    if (!svg) return { x: svgWidth / 2, y: HEIGHT / 2 };
     const screenMatrix = svg.getScreenCTM();
     if (screenMatrix) {
       const point = svg.createSVGPoint();
@@ -268,7 +352,7 @@ export function PetBondGraphPanel({ onError }: { onError: (message: string) => v
     }
     const rect = svg.getBoundingClientRect();
     return {
-      x: ((clientX - rect.left) / Math.max(1, rect.width)) * WIDTH,
+      x: ((clientX - rect.left) / Math.max(1, rect.width)) * svgWidth,
       y: ((clientY - rect.top) / Math.max(1, rect.height)) * HEIGHT
     };
   }
@@ -319,8 +403,9 @@ export function PetBondGraphPanel({ onError }: { onError: (message: string) => v
     if (event.target === event.currentTarget) setSelectedId(null);
   }
 
-  const selectedNode = selectedId ? graph.nodes.find((n) => n.id === selectedId) || null : null;
+  const selectedNode = selectedId ? displayGraph.nodes.find((n) => n.id === selectedId) || null : null;
   const selectedPos = selectedId ? simRef.current[selectedId] : null;
+  const filtering = Boolean(filterPicked);
 
   return (
     <>
@@ -330,7 +415,12 @@ export function PetBondGraphPanel({ onError }: { onError: (message: string) => v
       />
       <div className="admin-preview-card">
         <span>概况</span>
-        <p>{graph.nodes.length} 位玩家 · {graph.edges.length} 条主宠关系{loading ? "（刷新中…）" : ""}</p>
+        <p>
+          {filtering
+            ? `筛选后 ${displayGraph.nodes.length} 位玩家 · ${displayGraph.edges.length} 条关系（共 ${graph.nodes.length} 位玩家 · ${graph.edges.length} 条主宠关系）`
+            : `${graph.nodes.length} 位玩家 · ${graph.edges.length} 条主宠关系`}
+          {loading ? "（刷新中…）" : ""}
+        </p>
       </div>
       <div className="petbond-graph-add">
         <PlayerPicker label="主人" query={masterQuery} onQuery={setMasterQuery} hits={masterHits} picked={masterPicked} onPick={setMasterPicked} />
@@ -341,10 +431,31 @@ export function PetBondGraphPanel({ onError }: { onError: (message: string) => v
         </button>
         <button type="button" onClick={load} disabled={loading}>刷新</button>
       </div>
-      <div className="petbond-graph-wrap">
+      <div className="petbond-graph-filter">
+        <PlayerPicker label="聚焦玩家" query={filterQuery} onQuery={setFilterQuery} hits={filterHits} picked={filterPicked} onPick={setFilterPicked} />
+        <label className="petbond-graph-filter-depth">
+          <span className="field-label-caption">关系深度</span>
+          <input
+            type="number"
+            min={0}
+            max={50}
+            value={filterDepth}
+            onChange={(event) => setFilterDepth(Math.max(0, Math.min(50, Number(event.target.value) || 0)))}
+          />
+        </label>
+        {filtering && (
+          <button type="button" onClick={() => { setFilterPicked(null); setFilterQuery(""); }}>
+            清除筛选
+          </button>
+        )}
+        <span className="petbond-graph-filter-hint">
+          {filtering ? "只显示与该玩家在设定深度内可达的主宠关系链" : "选定玩家后可按关系深度隐藏其余无关的主宠关系"}
+        </span>
+      </div>
+      <div className="petbond-graph-wrap" ref={wrapRef}>
         <svg
           ref={svgRef}
-          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+          viewBox={`0 0 ${svgWidth} ${HEIGHT}`}
           className="petbond-graph-svg"
           onPointerMove={onSvgPointerMove}
           onPointerUp={releaseDrag}
@@ -356,7 +467,7 @@ export function PetBondGraphPanel({ onError }: { onError: (message: string) => v
               <path d="M0,0 L8,4 L0,8 Z" />
             </marker>
           </defs>
-          {graph.edges.map((edge) => {
+          {displayGraph.edges.map((edge) => {
             const a = simRef.current[edge.masterId];
             const b = simRef.current[edge.petId];
             if (!a || !b) return null;
@@ -386,8 +497,8 @@ export function PetBondGraphPanel({ onError }: { onError: (message: string) => v
               </g>
             );
           })}
-          {graph.nodes.map((node) => {
-            const pos = simRef.current[node.id] || { x: WIDTH / 2, y: HEIGHT / 2 };
+          {displayGraph.nodes.map((node) => {
+            const pos = simRef.current[node.id] || { x: svgWidth / 2, y: HEIGHT / 2 };
             return (
               <foreignObject
                 key={node.id}
@@ -409,7 +520,7 @@ export function PetBondGraphPanel({ onError }: { onError: (message: string) => v
           })}
           {selectedNode && selectedPos && (
             <foreignObject
-              x={Math.min(WIDTH - 300, Math.max(4, selectedPos.x - 150))}
+              x={Math.min(Math.max(4, svgWidth - 300), Math.max(4, selectedPos.x - 150))}
               y={Math.max(4, selectedPos.y - AVATAR_SIZE - 74)}
               width={300}
               height={70}
@@ -421,7 +532,11 @@ export function PetBondGraphPanel({ onError }: { onError: (message: string) => v
             </foreignObject>
           )}
         </svg>
-        {graph.nodes.length === 0 && !loading && <p className="empty">暂无主宠关系，先在上方搜索建立一条吧</p>}
+        {displayGraph.nodes.length === 0 && !loading && (
+          <p className="empty">
+            {filtering ? "没有符合筛选条件的主宠关系，试试调大关系深度或换个玩家" : "暂无主宠关系，先在上方搜索建立一条吧"}
+          </p>
+        )}
       </div>
     </>
   );

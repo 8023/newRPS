@@ -34,6 +34,14 @@ func TestGiveawayConfigNumericFieldsRoundTrip(t *testing.T) {
 	cfg.Giveaway.LikeVoteValue = 3.5
 	cfg.Giveaway.DislikeVoteLimitPerHour = 23
 	cfg.Giveaway.DislikeVoteValue = 0.7
+	cfg.Giveaway.PetLikeVoteLimitPerHour = 31
+	cfg.Giveaway.PetLikeVoteValue = 1.1
+	cfg.Giveaway.PetDislikeVoteLimitPerHour = 37
+	cfg.Giveaway.PetDislikeVoteValue = 0.11
+	cfg.Giveaway.MasterLikeVoteLimitPerHour = 41
+	cfg.Giveaway.MasterLikeVoteValue = 1.2
+	cfg.Giveaway.MasterDislikeVoteLimitPerHour = 43
+	cfg.Giveaway.MasterDislikeVoteValue = 0.12
 
 	pb, err := ConfigToProto(cfg)
 	if err != nil {
@@ -52,6 +60,12 @@ func TestGiveawayConfigNumericFieldsRoundTrip(t *testing.T) {
 	if g.DislikeVoteLimitPerHour != 23 || g.DislikeVoteValue != 0.7 {
 		t.Fatalf("dislike: got limit=%d value=%v", g.DislikeVoteLimitPerHour, g.DislikeVoteValue)
 	}
+	if g.PetLikeVoteLimitPerHour != 31 || g.PetLikeVoteValue != 1.1 || g.PetDislikeVoteLimitPerHour != 37 || g.PetDislikeVoteValue != 0.11 {
+		t.Fatalf("pet: got likeLimit=%d likeValue=%v dislikeLimit=%d dislikeValue=%v", g.PetLikeVoteLimitPerHour, g.PetLikeVoteValue, g.PetDislikeVoteLimitPerHour, g.PetDislikeVoteValue)
+	}
+	if g.MasterLikeVoteLimitPerHour != 41 || g.MasterLikeVoteValue != 1.2 || g.MasterDislikeVoteLimitPerHour != 43 || g.MasterDislikeVoteValue != 0.12 {
+		t.Fatalf("master: got likeLimit=%d likeValue=%v dislikeLimit=%d dislikeValue=%v", g.MasterLikeVoteLimitPerHour, g.MasterLikeVoteValue, g.MasterDislikeVoteLimitPerHour, g.MasterDislikeVoteValue)
+	}
 
 	front, err := ConfigProtoToFront(pb)
 	if err != nil {
@@ -63,6 +77,12 @@ func TestGiveawayConfigNumericFieldsRoundTrip(t *testing.T) {
 	}
 	if int(asFloat(fg["likeVoteLimitPerHour"])) != 17 {
 		t.Fatalf("front likeVoteLimitPerHour=%#v", fg["likeVoteLimitPerHour"])
+	}
+	if int(asFloat(fg["petLikeVoteLimitPerHour"])) != 31 || int(asFloat(fg["masterDislikeVoteLimitPerHour"])) != 43 {
+		t.Fatalf("front pet/master limits=%#v / %#v", fg["petLikeVoteLimitPerHour"], fg["masterDislikeVoteLimitPerHour"])
+	}
+	if asFloat(fg["petLikeVoteValue"]) != 1.1 || asFloat(fg["masterDislikeVoteValue"]) != 0.12 {
+		t.Fatalf("front pet/master values=%#v / %#v", fg["petLikeVoteValue"], fg["masterDislikeVoteValue"])
 	}
 	if asFloat(fg["dislikeVoteValue"]) != 0.7 {
 		t.Fatalf("front dislikeVoteValue=%#v", fg["dislikeVoteValue"])

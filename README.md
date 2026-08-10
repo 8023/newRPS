@@ -30,9 +30,10 @@
 │   │   └── shared/types.ts
 │   ├── index.html
 │   ├── package.json
-│   └── vite.config.ts   # 构建输出到仓库根 dist/
-├── dist/                # 前端构建产物（gitignore；Go 静态托管）
-├── bin/server           # Go 可执行文件（gitignore；Linux amd64）
+│   └── vite.config.ts   # 构建输出到 bin/dist/
+├── bin/                 # Go 产物目录（gitignore；单一目录，Release 升级只需覆盖它）
+│   ├── server           # Go 可执行文件（Linux amd64）
+│   └── dist/            # 前端构建产物（Go 静态托管）
 ├── work/                # db/database.db、uploads、session.secret、analytics.salt（gitignore）
 ├── go.mod
 ├── package.json         # 根脚本（并发 dev / 一键 build）
@@ -47,9 +48,9 @@
 
 | 附件 | 内容 |
 |------|------|
-| `newRPS-<version>-linux-amd64.tar.gz` | `bin/server`、`dist/`、`docker-compose.yml`、`.env.example`、`config/json/*.json`、`config/xdb/ip2region_v4.xdb`（+ 可选 `ip2region_v6.xdb`）、空 `work/`、简要 `README.md` |
+| `newRPS-<version>-linux-amd64.tar.gz` | `bin/`（含可执行文件 `server` 与前端静态产物 `dist/`）、`docker-compose.yml`、`.env.example`、`config/json/*.json`、`config/xdb/ip2region_v4.xdb`（+ 可选 `ip2region_v6.xdb`）、空 `work/`、简要 `README.md` |
 
-解压后即可 `docker compose up -d`。源码仓库仅用于开发；`bin/`、`dist/` 已 gitignore。
+解压后即可 `docker compose up -d`。源码仓库仅用于开发；`bin/` 已 gitignore。
 
 ## 本地运行
 
@@ -59,7 +60,7 @@
 # 根目录：装前端依赖 + 构建
 npm install
 npm install --prefix web
-npm run build          # web → dist/ 且编译 bin/server
+npm run build          # web → bin/dist/ 且编译 bin/server
 
 HOST=127.0.0.1 PORT=9988 ./bin/server
 ```
@@ -105,7 +106,7 @@ docker compose logs -f gamehouse
 无 `gh` 时在 GitHub Release 网页下载附件即可。开发机也可 `npm run build` 后用仓库内 compose 启动。
 
 - 访问：`http://服务器IP:9988`（`HOST_PORT`，默认 9988）
-- 挂载：`bin/server`、`dist`（只读）+ `work` / `config`（持久化）
+- 挂载：`bin/server`、`bin/dist`（只读）+ `work` / `config`（持久化）
 - 停止：`docker compose down`（数据目录保留）
 
 #### 升级服务器且不丢玩家数据
@@ -124,7 +125,7 @@ docker compose logs -f gamehouse
 | `work/analytics.salt` | 分析访客二次哈希盐 | 丢了则访客身份全部重置（DAU/留存断档），不影响登录 |
 | `.env` | `SESSION_SECRET`、`ADMIN_PASSWORD` 等 | **`SESSION_SECRET` 不要换**，否则等同全员掉登录 |
 
-可用新版本覆盖的：`bin/`、`dist/`、`docker-compose.yml`。配置仅在确认需要重置时再覆盖 `config/`。
+可用新版本覆盖的：`bin/`（含 `dist/`）、`docker-compose.yml`。配置仅在确认需要重置时再覆盖 `config/`。
 
 ⚠️ **本版本（用户分析）破坏性升级**：默认启动会加载 `config/xdb/ip2region_v4.xdb`（约 11MB，必需）。旧的升级命令只 `cp -a bin dist`，**不会**带上该文件，升级后进程会直接退出。请在本版本升级时做一次手动步骤：
 
@@ -152,7 +153,7 @@ tar czf backup-$(date +%F).tgz work config .env
 # 解压新包到临时目录，覆盖程序（保留 work/config/.env）
 tmpdir=$(mktemp -d)
 tar -xzf newRPS-2.1.24-linux-amd64.tar.gz -C "$tmpdir"
-cp -a "$tmpdir/bin" "$tmpdir/dist" "$tmpdir/docker-compose.yml" .
+cp -a "$tmpdir/bin" "$tmpdir/docker-compose.yml" .
 rm -rf "$tmpdir"
 
 # bin/server 是 bind mount；程序与前端同时升级时强制重建容器，避免继续持有旧二进制。
@@ -210,7 +211,7 @@ curl -fsS http://127.0.0.1:${HOST_PORT:-9988}/api/push/vapid-key
 | GET | `/api/config/export` | 导出配置（需管理员口令） |
 | GET | `/ws` | WebSocket |
 | GET | `/uploads/*` | 上传文件 |
-| GET | `/*` | 前端静态（`dist/`） |
+| GET | `/*` | 前端静态（`bin/dist/`） |
 
 ### 证明图
 

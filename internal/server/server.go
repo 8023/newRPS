@@ -132,13 +132,16 @@ func New() (*Server, error) {
 	if host == "" {
 		host = "0.0.0.0"
 	}
-	// 优先仓库根 dist/（vite outDir: ../dist），兼容旧路径 web/dist
-	distDir := filepath.Join(root, "dist")
+	// 前端构建产物固定输出到 bin/dist/（vite outDir: ../bin/dist，与 bin/server 同目录，
+	// Release tar 解压后即此布局）；直接跑二进制时优先找这里。
+	// docker-compose.yml 把 ./bin/server、./bin/dist 分别挂载成容器内的 /app/server、
+	// /app/dist（拍平掉了 bin/ 这一层——容器里没有 /app/bin 目录），此时 root 是
+	// /app（因为 /app/config/json/site.json 通过 volume 挂载存在），bin/dist 探测不到，
+	// 需要回退到 root 下的 dist/；这不是历史遗留兼容，是当前 Docker 部署路径本身如此。
+	distDir := filepath.Join(root, "bin", "dist")
 	if _, err := os.Stat(distDir); err != nil {
-		alt := filepath.Join(root, "web", "dist")
-		if _, err2 := os.Stat(alt); err2 == nil {
-			distDir = alt
-		} else {
+		distDir = filepath.Join(root, "dist")
+		if _, err := os.Stat(distDir); err != nil {
 			distDir = ""
 		}
 	}

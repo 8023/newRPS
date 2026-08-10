@@ -659,7 +659,15 @@ function materializeConfig(cfg: any): any {
       likeVoteLimitPerHour: pos(g.likeVoteLimitPerHour, 3),
       likeVoteValue: pos(g.likeVoteValue, 1),
       dislikeVoteLimitPerHour: pos(g.dislikeVoteLimitPerHour, 10),
-      dislikeVoteValue: pos(g.dislikeVoteValue, 0.1)
+      dislikeVoteValue: pos(g.dislikeVoteValue, 0.1),
+      petLikeVoteLimitPerHour: pos(g.petLikeVoteLimitPerHour, 5),
+      petLikeVoteValue: pos(g.petLikeVoteValue, 1),
+      petDislikeVoteLimitPerHour: pos(g.petDislikeVoteLimitPerHour, 15),
+      petDislikeVoteValue: pos(g.petDislikeVoteValue, 0.1),
+      masterLikeVoteLimitPerHour: pos(g.masterLikeVoteLimitPerHour, 5),
+      masterLikeVoteValue: pos(g.masterLikeVoteValue, 1),
+      masterDislikeVoteLimitPerHour: pos(g.masterDislikeVoteLimitPerHour, 15),
+      masterDislikeVoteValue: pos(g.masterDislikeVoteValue, 0.1)
     };
   }
   if (!c.nameWar || typeof c.nameWar !== "object") c.nameWar = {};

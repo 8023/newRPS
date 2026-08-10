@@ -11,8 +11,9 @@ import (
 )
 
 // logPlayerActivity 记录一条玩家审计事件到 player_activity_events（改名/头像/性别阵营/
-// 大话骰名战/送礼/极限模式开关等）。oldValue 只有 rename/avatar_change/avatar_clear/
-// gender_change 这类"有旧值可对比"的 action 会填；text 只有 giveaway_board_submit 会填
+// 大话骰名战/送礼/极限模式开关等）。oldValue 只有 rename/avatar_change/gender_change 这类
+// "有旧值可对比"的 action 会填（清除头像也并入 avatar_change，不单独记 avatar_clear）；
+// text 只有 giveaway_board_submit 会填
 // （自救板内容）。调用点都在 s.mu 持锁期间，同步写库是有意为之——这类事件低频、
 // user-initiated，和 eventStore 的房间/惩罚事件同一量级，可以复用同一个已验证过的权衡。
 func (s *Server) logPlayerActivity(action, playerID, newValue, oldValue, ip, device, fingerprint, text string) {
@@ -87,6 +88,8 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{4, 60_000, 60_000}, s.onGiveawaySubmitBoard
 	case "giveaway:vote":
 		return RateLimitOptions{30, 60_000, 30_000}, s.onGiveawayVote
+	case "giveaway:voteQuotas":
+		return RateLimitOptions{20, 60_000, 15_000}, s.onGiveawayVoteQuotas
 	case "rankMultiplier:unlock":
 		return RateLimitOptions{6, 60_000, 30_000}, s.onRankMultiplierUnlock
 	case "extreme:forceClose":
@@ -602,12 +605,9 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 		if !nextNameWarEnabled {
 			s.syncTitleForRankSegment(player, false)
 		}
-		if nameWarChanged {
-			action := "nameWar_disable"
-			if nextNameWarEnabled {
-				action = "nameWar_enable"
-			}
-			s.logPlayerActivity(action, player.ID, player.Name, "", client.ipAddress, client.deviceKey, client.fingerprint, "")
+		// 只记「开启」，关闭不产生活动埋点（数据分析面板只关心名争的开启量）。
+		if nameWarChanged && nextNameWarEnabled {
+			s.logPlayerActivity("nameWar_enable", player.ID, player.Name, "", client.ipAddress, client.deviceKey, client.fingerprint, "")
 		}
 	}
 	oldGenderSignature := player.GenderID + "|" + player.GenderLabel + "|" + player.FactionID
@@ -629,12 +629,9 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 		// 所以走到这里之前 GiveawayValue 必然是 0，直接赋值不用再和旧值比较）。
 		player.GiveawayValue = floatPtr(0.1)
 	}
-	if giveawayChanged {
-		action := "giveaway_disable"
-		if nextGiveawayEnabled {
-			action = "giveaway_enable"
-		}
-		s.logPlayerActivity(action, player.ID, player.Name, "", client.ipAddress, client.deviceKey, client.fingerprint, "")
+	// 只记「开启」，关闭不产生活动埋点。
+	if giveawayChanged && nextGiveawayEnabled {
+		s.logPlayerActivity("giveaway_enable", player.ID, player.Name, "", client.ipAddress, client.deviceKey, client.fingerprint, "")
 	}
 	if !ptrBool(player.GiveawayEnabled) && ptrFloat(player.GiveawayValue) <= 0 {
 		player.GiveawayValue = floatPtr(0)
@@ -653,11 +650,10 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 		} else {
 			player.ExtremeModeCooldownUntil = int64Ptr(now + int64(s.cfg.ExtremeMode.CooldownHours)*3_600_000)
 		}
-		extremeAction := "extreme_disable"
+		// 只记「开启」，关闭不产生活动埋点。
 		if nextExtremeModeEnabled {
-			extremeAction = "extreme_enable"
+			s.logPlayerActivity("extreme_enable", player.ID, player.Name, "", client.ipAddress, client.deviceKey, client.fingerprint, "")
 		}
-		s.logPlayerActivity(extremeAction, player.ID, player.Name, "", client.ipAddress, client.deviceKey, client.fingerprint, "")
 	}
 	// 认主/认宠开关：关闭不解除已有关系，只禁止新增；公开展示关闭则大厅关系图隐藏自己。
 	nextBondMaster := p.BondMasterEnabled != nil && *p.BondMasterEnabled
@@ -763,6 +759,9 @@ func (s *Server) onGiveawaySubmitBoard(client *Client, env wsEnvelope) {
 	client.reply(env.ID, map[string]any{"player": s.publicPlayer(player)}, "")
 }
 
+// onGiveawayVote 处理白给自救板的点赞/倒赞。额度按 actor→target 这一对独立计时/计次
+// （见 giveawayVoteQuotaFor），不是 actor 的全局总量——同一 actor 对不同 target 互不影响，
+// 对同一 target 的点赞额度和倒赞额度也分开计。上限与升降值都按认主认宠关系分档（giveawayVoteRulesFor）。
 func (s *Server) onGiveawayVote(client *Client, env wsEnvelope) {
 	var p struct {
 		TargetID string `json:"targetId"`
@@ -792,55 +791,82 @@ func (s *Server) onGiveawayVote(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "投票类型不正确")
 		return
 	}
-	boardVersion := ptrInt64(target.GiveawayBoardSubmittedAt)
-	if actor.GiveawayVotedTargets != nil && actor.GiveawayVotedTargets[target.ID] == boardVersion {
-		client.reply(env.ID, nil, "你已经对这条自救内容投过票了")
-		return
-	}
 	now := nowMs()
-	if actor.GiveawayVoteWindowStartedAt == nil || now-*actor.GiveawayVoteWindowStartedAt >= 3_600_000 {
-		actor.GiveawayVoteWindowStartedAt = int64Ptr(now)
-		actor.GiveawayVoteCount = intPtr(0)
-		actor.GiveawayVoteLikesThisHour = intPtr(0)
-		actor.GiveawayVoteDislikesThisHour = intPtr(0)
-	}
+	likeLimit, dislikeLimit, likeValue, dislikeValue := s.giveawayVoteRulesFor(actor, target)
+	quota := s.giveawayVoteQuotaFor(actor, target.ID, now)
 	if p.Vote == "like" {
-		if ptrInt(actor.GiveawayVoteLikesThisHour) >= s.cfg.Giveaway.LikeVoteLimitPerHour {
-			client.reply(env.ID, nil, "你本小时点赞降值次数已满")
+		if quota.Likes >= likeLimit {
+			client.reply(env.ID, nil, "你对这位玩家本小时的点赞降值次数已满")
 			return
 		}
-		actor.GiveawayVoteLikesThisHour = intPtr(ptrInt(actor.GiveawayVoteLikesThisHour) + 1)
+		quota.Likes++
 		target.GiveawayBoardLikes = intPtr(ptrInt(target.GiveawayBoardLikes) + 1)
-		s.addGiveawayValue(target, -s.cfg.Giveaway.LikeVoteValue)
+		s.addGiveawayValue(target, -likeValue)
 		if ptrFloat(target.GiveawayValue) <= 0 {
 			target.GiveawayBoardText = ""
 			target.GiveawayBoardSubmittedAt = nil
 			target.GiveawayBoardExpiresAt = nil
 		}
 	} else {
-		if ptrInt(actor.GiveawayVoteDislikesThisHour) >= s.cfg.Giveaway.DislikeVoteLimitPerHour {
-			client.reply(env.ID, nil, "你本小时倒赞加值次数已满")
+		if quota.Dislikes >= dislikeLimit {
+			client.reply(env.ID, nil, "你对这位玩家本小时的倒赞加值次数已满")
 			return
 		}
-		actor.GiveawayVoteDislikesThisHour = intPtr(ptrInt(actor.GiveawayVoteDislikesThisHour) + 1)
+		quota.Dislikes++
 		target.GiveawayBoardDislikes = intPtr(ptrInt(target.GiveawayBoardDislikes) + 1)
-		s.addGiveawayValue(target, s.cfg.Giveaway.DislikeVoteValue)
+		s.addGiveawayValue(target, dislikeValue)
 	}
-	actor.GiveawayVoteCount = intPtr(ptrInt(actor.GiveawayVoteCount) + 1)
-	if actor.GiveawayVotedTargets == nil {
-		actor.GiveawayVotedTargets = map[string]int64{}
-	}
-	actor.GiveawayVotedTargets[target.ID] = boardVersion
-	s.broadcastPlayerUpdate(actor)
 	s.refreshPlayerSnapshots(target)
+	s.updateLegacyGiveawayVoteStats(actor, p.Vote, now)
+	s.broadcastPlayerUpdate(actor)
 	s.broadcastPlayerUpdate(target)
-	client.reply(env.ID, map[string]any{"ok": true}, "")
+	client.reply(env.ID, map[string]any{"ok": true, "quota": s.giveawayVoteQuotaView(actor, target, now)}, "")
 	if target.RoomID != "" {
 		s.broadcastRoom(target.RoomID, false)
 	}
 	if actor.RoomID != "" && actor.RoomID != target.RoomID {
 		s.broadcastRoom(actor.RoomID, false)
 	}
+}
+
+// onGiveawayVoteQuotas 按目标玩家 ID 批量查询 actor 自己对每个目标各自剩余的投票额度——
+// 只回给发起查询的这个连接（额度是"我对每个人还剩多少"，与其他玩家无关，不走广播）。
+// 用于自救板列表初次渲染 / 目标集合变化时补齐每张卡片下方的额度展示。
+func (s *Server) onGiveawayVoteQuotas(client *Client, env wsEnvelope) {
+	var p struct {
+		TargetIDs []string `json:"targetIds"`
+	}
+	_ = decodeD(env, &p)
+	actor := s.getPlayerByClient(client)
+	if actor == nil {
+		client.reply(env.ID, nil, "请先进入游戏")
+		return
+	}
+	now := nowMs()
+	quotas := map[string]any{}
+	seen := make(map[string]struct{}, len(p.TargetIDs))
+	for i, targetID := range p.TargetIDs {
+		if i >= 500 {
+			break
+		}
+		if targetID == "" || targetID == actor.ID {
+			continue
+		}
+		if _, ok := seen[targetID]; ok {
+			continue
+		}
+		target := s.players[targetID]
+		if target == nil {
+			continue
+		}
+		s.refreshGiveawayBoard(target, now)
+		if target.GiveawayBoardText == "" || target.GiveawayBoardExpiresAt == nil || *target.GiveawayBoardExpiresAt <= now {
+			continue
+		}
+		seen[targetID] = struct{}{}
+		quotas[targetID] = s.giveawayVoteQuotaView(actor, target, now)
+	}
+	client.reply(env.ID, map[string]any{"quotas": quotas}, "")
 }
 
 func (s *Server) onRankMultiplierUnlock(client *Client, env wsEnvelope) {
@@ -995,6 +1021,7 @@ func (s *Server) onNameWarRenameTarget(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "你 3 小时内已经修改了 3 个名字")
 		return
 	}
+	oldDisplayName := target.DisplayName
 	target.NameWarPenaltyName = cleanName
 	target.NameWarPunished = boolPtr(true)
 	target.NameWarRenameProtectedUntil = int64Ptr(now + 21_600_000)
@@ -1002,6 +1029,7 @@ func (s *Server) onNameWarRenameTarget(client *Client, env wsEnvelope) {
 	target.NameWarRenamedByName = playerShortName(actor)
 	actor.NameWarRenameCount = intPtr(ptrInt(actor.NameWarRenameCount) + 1)
 	target.DisplayName = formatDisplayName(target)
+	s.logPlayerActivity("nameWar_rename", target.ID, cleanName, oldDisplayName, client.ipAddress, client.deviceKey, client.fingerprint, "")
 	s.refreshPlayerSnapshots(target)
 	s.broadcastPlayerUpdate(target)
 	client.reply(env.ID, map[string]any{"ok": true}, "")

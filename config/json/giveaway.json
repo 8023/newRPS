@@ -8,5 +8,13 @@
   "likeVoteLimitPerHour": 3,
   "likeVoteValue": 1,
   "dislikeVoteLimitPerHour": 10,
-  "dislikeVoteValue": 0.1
+  "dislikeVoteValue": 0.1,
+  "petLikeVoteLimitPerHour": 5,
+  "petLikeVoteValue": 1,
+  "petDislikeVoteLimitPerHour": 15,
+  "petDislikeVoteValue": 0.1,
+  "masterLikeVoteLimitPerHour": 5,
+  "masterLikeVoteValue": 1,
+  "masterDislikeVoteLimitPerHour": 15,
+  "masterDislikeVoteValue": 0.1
 }

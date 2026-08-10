@@ -675,6 +675,30 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 	if input.Giveaway.DislikeVoteValue <= 0 || input.Giveaway.DislikeVoteValue > 100 {
 		return input, fmt.Errorf("倒赞增加值必须在 0（不含）到 100 之间")
 	}
+	if input.Giveaway.PetLikeVoteLimitPerHour < 1 {
+		return input, fmt.Errorf("对宠物点赞每小时次数上限至少为 1")
+	}
+	if input.Giveaway.PetLikeVoteValue <= 0 || input.Giveaway.PetLikeVoteValue > 100 {
+		return input, fmt.Errorf("对宠物点赞降低值必须在 0（不含）到 100 之间")
+	}
+	if input.Giveaway.PetDislikeVoteLimitPerHour < 1 {
+		return input, fmt.Errorf("对宠物倒赞每小时次数上限至少为 1")
+	}
+	if input.Giveaway.PetDislikeVoteValue <= 0 || input.Giveaway.PetDislikeVoteValue > 100 {
+		return input, fmt.Errorf("对宠物倒赞增加值必须在 0（不含）到 100 之间")
+	}
+	if input.Giveaway.MasterLikeVoteLimitPerHour < 1 {
+		return input, fmt.Errorf("对主人点赞每小时次数上限至少为 1")
+	}
+	if input.Giveaway.MasterLikeVoteValue <= 0 || input.Giveaway.MasterLikeVoteValue > 100 {
+		return input, fmt.Errorf("对主人点赞降低值必须在 0（不含）到 100 之间")
+	}
+	if input.Giveaway.MasterDislikeVoteLimitPerHour < 1 {
+		return input, fmt.Errorf("对主人倒赞每小时次数上限至少为 1")
+	}
+	if input.Giveaway.MasterDislikeVoteValue <= 0 || input.Giveaway.MasterDislikeVoteValue > 100 {
+		return input, fmt.Errorf("对主人倒赞增加值必须在 0（不含）到 100 之间")
+	}
 	if strings.TrimSpace(input.PetBond.PanelTitle) == "" {
 		return input, fmt.Errorf("宠物乐园面板标题不能为空")
 	}
@@ -799,6 +823,7 @@ func LoadConfig() (types.AppConfig, error) {
 		return types.AppConfig{}, err
 	}
 	cfg = fixAnnouncementBoardEnabled(configPath("announcement-board.json"), cfg)
+	cfg = fixGiveawayVoteLimits(cfg)
 	valid, err := ValidateConfig(cfg)
 	if err != nil {
 		return types.AppConfig{}, fmt.Errorf("配置校验失败: %w", err)
@@ -1055,6 +1080,39 @@ func writeSplitConfig(cfg types.AppConfig) error {
 	return nil
 }
 
+// fixGiveawayVoteLimits：本版本把自救板投票额度从"全体共用一档"拆成"普通/宠物/主人"
+// 三档（次数上限 + 升/降值百分比共 8 个字段），老部署的 giveaway.json 里没有这些新字段，
+// json.Unmarshal 会把它们留成 0——Validate 要求这些字段 >0（次数上限 >=1），缺字段就会导致
+// 老实例升级后直接启动失败（与 migrateAnnouncementBoardFile 等其它自愈函数同一诱因）。
+// 0 在这些字段上本就不是合法值，缺失或显式填 0 都按新增宠物/主人档回退到与普通档相同的数值。
+func fixGiveawayVoteLimits(cfg types.AppConfig) types.AppConfig {
+	if cfg.Giveaway.PetLikeVoteLimitPerHour == 0 {
+		cfg.Giveaway.PetLikeVoteLimitPerHour = cfg.Giveaway.LikeVoteLimitPerHour
+	}
+	if cfg.Giveaway.PetLikeVoteValue == 0 {
+		cfg.Giveaway.PetLikeVoteValue = cfg.Giveaway.LikeVoteValue
+	}
+	if cfg.Giveaway.PetDislikeVoteLimitPerHour == 0 {
+		cfg.Giveaway.PetDislikeVoteLimitPerHour = cfg.Giveaway.DislikeVoteLimitPerHour
+	}
+	if cfg.Giveaway.PetDislikeVoteValue == 0 {
+		cfg.Giveaway.PetDislikeVoteValue = cfg.Giveaway.DislikeVoteValue
+	}
+	if cfg.Giveaway.MasterLikeVoteLimitPerHour == 0 {
+		cfg.Giveaway.MasterLikeVoteLimitPerHour = cfg.Giveaway.LikeVoteLimitPerHour
+	}
+	if cfg.Giveaway.MasterLikeVoteValue == 0 {
+		cfg.Giveaway.MasterLikeVoteValue = cfg.Giveaway.LikeVoteValue
+	}
+	if cfg.Giveaway.MasterDislikeVoteLimitPerHour == 0 {
+		cfg.Giveaway.MasterDislikeVoteLimitPerHour = cfg.Giveaway.DislikeVoteLimitPerHour
+	}
+	if cfg.Giveaway.MasterDislikeVoteValue == 0 {
+		cfg.Giveaway.MasterDislikeVoteValue = cfg.Giveaway.DislikeVoteValue
+	}
+	return cfg
+}
+
 // fixAnnouncementBoardEnabled：JSON 缺省 bool 在 Go 为 false；缺 enabled 字段时视为 true。
 // path 可为 announcement-board.json 或旧单体整文件（历史字段名 dailyAnnouncement）。
 func fixAnnouncementBoardEnabled(path string, cfg types.AppConfig) types.AppConfig {
@@ -1089,6 +1147,9 @@ func fixAnnouncementBoardEnabled(path string, cfg types.AppConfig) types.AppConf
 
 // SaveConfig 校验后按功能文件原地写回 config/*.json。
 func SaveConfig(next types.AppConfig) (types.AppConfig, error) {
+	// 旧版管理端提交的配置没有新增的宠物/主人投票字段；与 LoadConfig 保持同一
+	// 兼容策略，缺省字段回退到普通档，否则升级后保存任意其它配置都会被 Validate 拒绝。
+	next = fixGiveawayVoteLimits(next)
 	valid, err := ValidateConfig(next)
 	if err != nil {
 		return types.AppConfig{}, err

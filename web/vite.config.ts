@@ -12,9 +12,10 @@ export default defineConfig({
       crypto: "./src/lib/node-empty-shim.ts"
     }
   },
-  // 构建产物放到仓库根 dist/，便于 Go 服务端静态托管
+  // 构建产物放到 ../bin/dist/（与 bin/server 同目录），便于 Go 服务端静态托管，
+  // 也让 Release 部署包只有一个 bin/ 目录需要覆盖（不再有独立的顶层 dist/）
   build: {
-    outDir: "../dist",
+    outDir: "../bin/dist",
     emptyOutDir: true
   },
   server: {

@@ -116,15 +116,15 @@ type PlayerState struct {
 	PushTurnEnabled    *bool // 轮到我出招/落子
 	PushSeatEnabled    *bool // 我的房间参战席被坐满
 	PushBondEnabled    *bool // 我的主/宠上线
-	// GiveawayVotedTargets：本玩家已投过票的自救板，key 为目标玩家 ID，value 为投票时
-	// 目标那条 GiveawayBoardSubmittedAt（即"板子版本"）。防止同一条 giveaway:vote 请求
-	// 被抓包重放对同一条自救内容反复计分——目标重新上板（新版本）后可以再投一次。
-	// 纯内存态，不落库，与其它每小时计数器（GiveawayVoteLikesThisHour 等）同一约定。
-	GiveawayVotedTargets map[string]int64
-	Persistent           bool
-	CurrentSID           string
-	CreatedAt            int64
-	LastSeenAt           int64
+	// GiveawayVoteQuotas：本玩家对白给自救板每个目标各自独立的每小时点赞/倒赞额度，
+	// key 为目标玩家 ID。与旧版"全体目标共用一个每小时总额度"不同——每个目标的窗口各自
+	// 独立起算/过期，互不影响。纯内存态，不落库，掉线/重启后清零（可接受：额度本就是
+	// 每小时刷新的限流用途，不是需要长期保留的资产）。
+	GiveawayVoteQuotas map[string]*giveawayVoteQuota
+	Persistent         bool
+	CurrentSID         string
+	CreatedAt          int64
+	LastSeenAt         int64
 	// disconnect timers (invalidated via generation)
 	graceGen   int
 	timerGen   int
@@ -351,15 +351,15 @@ type Server struct {
 	analyticsKick chan struct{}
 	// analyticsEnabled / analyticsGeoEnabled / analyticsTZOffsetMin / analyticsRawRetentionDays：
 	// 启动时从环境变量解析，运行期只读。
-	analyticsEnabled         bool
-	analyticsGeoEnabled      bool
-	analyticsTZOffsetMin     int
+	analyticsEnabled          bool
+	analyticsGeoEnabled       bool
+	analyticsTZOffsetMin      int
 	analyticsRawRetentionDays int
-	analyticsSalt            []byte
-	vapid                    vapidKeys
-	adminClientIDs map[string]struct{}
-	sidToClientID  map[string]string
-	clientIDToSID  map[string]string
+	analyticsSalt             []byte
+	vapid                     vapidKeys
+	adminClientIDs            map[string]struct{}
+	sidToClientID             map[string]string
+	clientIDToSID             map[string]string
 	// clientIDsByDevice：deviceKey → 当前套接字集合（同指纹限连）
 	clientIDsByDevice map[string]map[string]struct{}
 	rateBuckets       map[string]*rateBucket

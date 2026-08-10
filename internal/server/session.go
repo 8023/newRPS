@@ -192,6 +192,19 @@ func (s *Server) pruneEphemeralState() {
 			delete(s.ipCreateAttempts, k)
 		}
 	}
+	for _, player := range s.players {
+		if player == nil || len(player.GiveawayVoteQuotas) == 0 {
+			continue
+		}
+		for targetID, q := range player.GiveawayVoteQuotas {
+			if q == nil || q.WindowStartedAt <= 0 || now-q.WindowStartedAt >= giveawayVoteWindowMs {
+				delete(player.GiveawayVoteQuotas, targetID)
+			}
+		}
+		if len(player.GiveawayVoteQuotas) == 0 {
+			player.GiveawayVoteQuotas = nil
+		}
+	}
 }
 
 // errorLogHeader 是 error.csv 的固定表头：所有拒绝/失败类事件的字段并集。
@@ -203,10 +216,10 @@ var errorLogHeader = []string{
 }
 
 // errorDetailColumn 把 securityLog 调用方用的字段名映射到 error.csv 的固定列名。
-// - "fp" 是浏览器指纹，和 connections.csv 里的 "fingerprint" 列对齐。
-// - 调用方 details 里的 "event" 是触发问题的具体业务事件名（如 room:move），
-//   和 securityLog 自身的 event 参数（"rate_limit" 这类事件分类）是两回事，
-//   映射到 "wsEvent" 列，避免同名覆盖。
+//   - "fp" 是浏览器指纹，和 connections.csv 里的 "fingerprint" 列对齐。
+//   - 调用方 details 里的 "event" 是触发问题的具体业务事件名（如 room:move），
+//     和 securityLog 自身的 event 参数（"rate_limit" 这类事件分类）是两回事，
+//     映射到 "wsEvent" 列，避免同名覆盖。
 func errorDetailColumn(key string) string {
 	switch key {
 	case "fp":

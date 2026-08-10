@@ -12,10 +12,12 @@ import (
 // player_activity_events：低频、user-initiated 事件（改名/头像/性别阵营/大话骰名战/送礼/
 // 极限模式开关等），调用点都在 s.mu 持锁期间，写入量级和 eventStore 的房间/惩罚事件相当，
 // 沿用其同步加锁写模式。new_value/old_value 是泛化后的"变更后/变更前"值，具体含义随 action
-// 变化：rename 存昵称，avatar_change/avatar_clear 存头像 URL，gender_change 存性别展示文本
-// （genderLabel，预设/自定义都适用；阵营变化不影响是否记录，只要 genderId+genderLabel+
-// factionId 组合有变化就算一次 gender_change）；
+// 变化：rename 存昵称，avatar_change 存头像 URL（清除头像也并入 avatar_change 计数，不单独
+// 区分 clear），gender_change 存性别展示文本（genderLabel，预设/自定义都适用；阵营变化不
+// 影响是否记录，只要 genderId+genderLabel+factionId 组合有变化就算一次 gender_change）；
 // 不适用新旧值对比的 action（如 nameWar_enable、giveaway_board_submit）只填 new_value 或都留空。
+// nameWar_enable/giveaway_enable/extreme_enable 这三个开关类 action 只在「开启」时记一条，
+// 关闭不记（数据分析面板只关心开启量，见 analytics_agg.go 的 NameWarGiveaway）。
 //
 // connection_events：一条连接一行，但只在连接结束（正常断连 / 进程优雅关停）时才一次性
 // insertConnectionEvent 写入完整一行——connect 时只把 connectedAt/compression 记在内存里
@@ -70,7 +72,7 @@ func newActivityStore(db *sql.DB) *activityStore {
 }
 
 // insertPlayerActivityEvent 记录一条玩家审计事件；action 如 "create"/"rename"/
-// "avatar_change"/"avatar_clear"/"gender_change"/"nameWar_enable"/"giveaway_board_submit"
+// "avatar_change"/"gender_change"/"nameWar_enable"/"giveaway_board_submit"/"nameWar_rename"
 // 等，见 handlers.go/http.go 各调用点。newValue/oldValue 含义随 action 变化，见上方表注释。
 func (a *activityStore) insertPlayerActivityEvent(at int64, action, playerID, newValue, oldValue, ip, device, fingerprint, text string) error {
 	if a == nil || a.db == nil {

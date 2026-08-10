@@ -11053,6 +11053,30 @@ export namespace game {
         /** GiveawayConfig dislikeVoteValue. */
         dislikeVoteValue: number;
 
+        /** GiveawayConfig petLikeVoteLimitPerHour. */
+        petLikeVoteLimitPerHour: number;
+
+        /** GiveawayConfig petDislikeVoteLimitPerHour. */
+        petDislikeVoteLimitPerHour: number;
+
+        /** GiveawayConfig masterLikeVoteLimitPerHour. */
+        masterLikeVoteLimitPerHour: number;
+
+        /** GiveawayConfig masterDislikeVoteLimitPerHour. */
+        masterDislikeVoteLimitPerHour: number;
+
+        /** GiveawayConfig petLikeVoteValue. */
+        petLikeVoteValue: number;
+
+        /** GiveawayConfig petDislikeVoteValue. */
+        petDislikeVoteValue: number;
+
+        /** GiveawayConfig masterLikeVoteValue. */
+        masterLikeVoteValue: number;
+
+        /** GiveawayConfig masterDislikeVoteValue. */
+        masterDislikeVoteValue: number;
+
         /**
          * Creates a new GiveawayConfig instance using the specified properties.
          * @param [properties] Properties to set
@@ -11166,6 +11190,30 @@ export namespace game {
 
             /** GiveawayConfig dislikeVoteValue */
             dislikeVoteValue?: (number|null);
+
+            /** GiveawayConfig petLikeVoteLimitPerHour */
+            petLikeVoteLimitPerHour?: (number|null);
+
+            /** GiveawayConfig petDislikeVoteLimitPerHour */
+            petDislikeVoteLimitPerHour?: (number|null);
+
+            /** GiveawayConfig masterLikeVoteLimitPerHour */
+            masterLikeVoteLimitPerHour?: (number|null);
+
+            /** GiveawayConfig masterDislikeVoteLimitPerHour */
+            masterDislikeVoteLimitPerHour?: (number|null);
+
+            /** GiveawayConfig petLikeVoteValue */
+            petLikeVoteValue?: (number|null);
+
+            /** GiveawayConfig petDislikeVoteValue */
+            petDislikeVoteValue?: (number|null);
+
+            /** GiveawayConfig masterLikeVoteValue */
+            masterLikeVoteValue?: (number|null);
+
+            /** GiveawayConfig masterDislikeVoteValue */
+            masterDislikeVoteValue?: (number|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

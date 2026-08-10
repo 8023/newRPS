@@ -1,7 +1,7 @@
 import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type ReactNode, type UIEvent as ReactUIEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Coffee, Crown, DoorOpen, ExternalLink, Eye, HeartHandshake, Info, Moon, Pencil, Save, Send, Shield, Sun, Swords, Upload, UserRound, Users, BookOpen } from "lucide-react";
 import type {
-  AppConfig, ChatMessage, GenderColors, GenderFaction, LobbySnapshot, Move, PetBondBadgeFields, PetBondState, PublicPlayer,
+  AppConfig, ChatMessage, GenderColors, GenderFaction, GiveawayVoteQuota, LobbySnapshot, Move, PetBondBadgeFields, PetBondState, PublicPlayer,
   PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant
 } from "../shared/types";
 import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, DEFAULT_NAME_WAR_RENAME_MIN_POINTS, normalizePublicPlayer, withPetBondDefaults, withRankedScoreDefaults } from "../lib/normalize";
@@ -3724,13 +3724,19 @@ export function UniversalRenamePanel({ config, targets, me, onError }: { config:
 export function GiveawayPanel({ config, players, me, onError }: { config: AppConfig; players: PublicPlayer[]; me: PublicPlayer; onError: (message: string) => void }) {
   const [text, setText] = useState("");
   const [now, setNow] = useState(Date.now());
+  const [bondRevision, setBondRevision] = useState(0);
+  // 投票额度按 actor→target 独立计算（见服务端 giveawayVoteRulesFor），不再是 me 身上的全局字段，
+  // 走 giveaway:voteQuotas 单独查询、只对自己可见（不进大厅广播）。
+  const [quotas, setQuotas] = useState<Record<string, GiveawayVoteQuota>>({});
   const { collapsed, toggle: toggleCollapsed } = useMobileCollapse("giveaway");
   const activeBoards = players
     .filter((player) => player.giveawayBoardText && player.giveawayBoardExpiresAt && player.giveawayBoardExpiresAt > now)
     .sort((a, b) => (b.giveawayBoardSubmittedAt || 0) - (a.giveawayBoardSubmittedAt || 0));
   const myActiveBoard = activeBoards.find((player) => player.id === me.id);
   const canSubmit = Boolean(me.giveawayEnabled && (me.giveawayValue || 0) > 0 && !myActiveBoard);
-  const voteQuota = giveawayVoteQuota(me, now, config.giveaway.likeVoteLimitPerHour, config.giveaway.dislikeVoteLimitPerHour);
+  const voteTargetIds = activeBoards.filter((player) => player.id !== me.id).map((player) => player.id).sort();
+  const voteTargetKey = voteTargetIds.join(",");
+  const voteRulesKey = [config.giveaway.likeVoteLimitPerHour, config.giveaway.likeVoteValue, config.giveaway.dislikeVoteLimitPerHour, config.giveaway.dislikeVoteValue, config.giveaway.petLikeVoteLimitPerHour, config.giveaway.petLikeVoteValue, config.giveaway.petDislikeVoteLimitPerHour, config.giveaway.petDislikeVoteValue, config.giveaway.masterLikeVoteLimitPerHour, config.giveaway.masterLikeVoteValue, config.giveaway.masterDislikeVoteLimitPerHour, config.giveaway.masterDislikeVoteValue].join("|");
 
   useEffect(() => {
     const hasExpiry = players.some((player) => player.giveawayBoardExpiresAt && player.giveawayBoardExpiresAt > Date.now());
@@ -3738,6 +3744,25 @@ export function GiveawayPanel({ config, players, me, onError }: { config: AppCon
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [players]);
+  useEffect(() => {
+    const onPetBondUpdate = () => setBondRevision((revision) => revision + 1);
+    const onConnect = () => setBondRevision((revision) => revision + 1);
+    socket.on("petbond:update", onPetBondUpdate);
+    socket.on("connect", onConnect);
+    return () => {
+      socket.off("petbond:update", onPetBondUpdate);
+      socket.off("connect", onConnect);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!voteTargetIds.length) return;
+    let cancelled = false;
+    ask<{ quotas: Record<string, GiveawayVoteQuota> }>("giveaway:voteQuotas", { targetIds: voteTargetIds })
+      .then((result) => { if (!cancelled) setQuotas((old) => ({ ...old, ...result.quotas })); })
+      .catch(() => { /* 额度展示是锦上添花，静默失败即可，不打断投票操作本身 */ });
+    return () => { cancelled = true; };
+  }, [voteTargetKey, voteRulesKey, bondRevision]);
 
   async function submitBoard() {
     const cleanText = text.trim();
@@ -3752,7 +3777,8 @@ export function GiveawayPanel({ config, players, me, onError }: { config: AppCon
 
   async function vote(targetId: string, voteType: "like" | "dislike") {
     try {
-      await ask("giveaway:vote", { targetId, vote: voteType });
+      const result = await ask<{ ok: boolean; quota: GiveawayVoteQuota }>("giveaway:vote", { targetId, vote: voteType });
+      if (result.quota) setQuotas((old) => ({ ...old, [targetId]: result.quota }));
     } catch (error) {
       onError(error instanceof Error ? error.message : "操作失败");
     }
@@ -3779,15 +3805,12 @@ export function GiveawayPanel({ config, players, me, onError }: { config: AppCon
             <button className="primary small" onClick={submitBoard}>上板 12 小时</button>
           </div>
         )}
-        {activeBoards.length > 0 && (
-          <div className="giveaway-quota-line">
-            <span>👍 还可 {voteQuota.likesLeft}/{config.giveaway.likeVoteLimitPerHour} · 👎 还可 {voteQuota.dislikesLeft}/{config.giveaway.dislikeVoteLimitPerHour} · {voteQuota.refreshText}</span>
-          </div>
-        )}
         <div className="giveaway-board-list">
           {activeBoards.map((player) => {
             const isSelf = player.id === me.id;
             const expiresText = player.giveawayBoardExpiresAt ? formatDuration(player.giveawayBoardExpiresAt - now) : "";
+            const rawQuota = isSelf ? undefined : quotas[player.id];
+            const quota = describeGiveawayVoteQuota(rawQuota, now);
             return (
               <article className="giveaway-card" key={player.id}>
                 <div className="giveaway-card-head">
@@ -3795,12 +3818,12 @@ export function GiveawayPanel({ config, players, me, onError }: { config: AppCon
                 </div>
                 <p className="giveaway-board-text">{player.giveawayBoardText}</p>
                 <div className="giveaway-card-meta">
-                  <span>剩余 {expiresText}</span>
-                  <span>👍 {player.giveawayBoardLikes || 0} · 👎 {player.giveawayBoardDislikes || 0}</span>
+                  <span>👍 {player.giveawayBoardLikes || 0} · 👎 {player.giveawayBoardDislikes || 0} · 剩余 {expiresText}</span>
                 </div>
+                {quota && <div className="giveaway-card-meta">{quota.text}</div>}
                 <div className="giveaway-actions">
-                  <button disabled={isSelf || voteQuota.likesLeft <= 0} onClick={() => vote(player.id, "like")}>👍 -{formatGiveawayValue(config.giveaway.likeVoteValue)}%</button>
-                  <button disabled={isSelf || voteQuota.dislikesLeft <= 0} onClick={() => vote(player.id, "dislike")}>👎 +{formatGiveawayValue(config.giveaway.dislikeVoteValue)}%</button>
+                  <button disabled={isSelf || (quota ? quota.likesLeft <= 0 : false)} onClick={() => vote(player.id, "like")}>👍 -{formatGiveawayValue(rawQuota?.likeValue ?? config.giveaway.likeVoteValue)}%</button>
+                  <button disabled={isSelf || (quota ? quota.dislikesLeft <= 0 : false)} onClick={() => vote(player.id, "dislike")}>👎 +{formatGiveawayValue(rawQuota?.dislikeValue ?? config.giveaway.dislikeVoteValue)}%</button>
                 </div>
               </article>
             );
@@ -3812,23 +3835,27 @@ export function GiveawayPanel({ config, players, me, onError }: { config: AppCon
   );
 }
 
-export function giveawayVoteQuota(player: PublicPlayer, now: number, likeLimit = 3, dislikeLimit = 10) {
-  const startedAt = player.giveawayVoteWindowStartedAt || 0;
+/** 把 giveaway:vote / giveaway:voteQuotas 回包的原始额度换算成展示文案，窗口过期按本地时钟
+ * 自动清零（与服务端懒重置逻辑一致，见 giveawayVoteQuotaFor）。quota 未拿到（还在首次加载）
+ * 时调用方应跳过渲染，而不是当作满额度显示——避免闪一下错误数字。 */
+export function describeGiveawayVoteQuota(quota: GiveawayVoteQuota | undefined, now: number) {
+  if (!quota) return null;
   const windowMs = 3_600_000;
-  const expired = !startedAt || now - startedAt >= windowMs;
-  const likesUsed = expired ? 0 : player.giveawayVoteLikesThisHour || 0;
-  const dislikesUsed = expired ? 0 : player.giveawayVoteDislikesThisHour || 0;
+  const expired = !quota.windowStartedAt || now - quota.windowStartedAt >= windowMs;
+  const likesUsed = expired ? 0 : quota.likesUsed;
+  const dislikesUsed = expired ? 0 : quota.dislikesUsed;
+  const likesLeft = Math.max(0, quota.likeLimit - likesUsed);
+  const dislikesLeft = Math.max(0, quota.dislikeLimit - dislikesUsed);
+  const base = `👍 还可 ${likesLeft}/${quota.likeLimit} · 👎 还可 ${dislikesLeft}/${quota.dislikeLimit}`;
+  if (expired) return { likesLeft, dislikesLeft, text: base };
   // 刷新文案统一用「分钟」单位（向下取整），例如 2 小时 → 120 分钟；不足 1 分钟 → 0 分钟
-  const remainMinutes = expired ? 60 : Math.floor(Math.max(0, startedAt + windowMs - now) / 60_000);
-  return {
-    likesLeft: Math.max(0, likeLimit - likesUsed),
-    dislikesLeft: Math.max(0, dislikeLimit - dislikesUsed),
-    refreshText: `${remainMinutes} 分钟后刷新`
-  };
+  const remainMinutes = Math.floor(Math.max(0, quota.windowStartedAt + windowMs - now) / 60_000);
+  return { likesLeft, dislikesLeft, text: `${base} · ${remainMinutes} 分钟后刷新` };
 }
 
 export function formatGiveawayValue(value: number) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+  if (!Number.isFinite(value)) return "0";
+  return value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
 }
 
 const emptyPetBondState = (): PetBondState => ({
