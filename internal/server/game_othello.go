@@ -809,8 +809,7 @@ func (s *Server) forceEndOthelloGame(room *RoomState, result types.RoundResult, 
 	for i, p := range punishedPlayers {
 		punishedNames[i] = playerShortName(p)
 	}
-	punishment := s.currentPunishment(room)
-	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, result, punishment)
+	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, result)
 	playerA := s.humanPlayerFromSeat(room, types.SeatA)
 	playerB := s.humanPlayerFromSeat(room, types.SeatB)
 	room.Othello.BlackCount = blackCount
@@ -883,10 +882,7 @@ func (s *Server) forceEndOthelloGame(room *RoomState, result types.RoundResult, 
 		item.EffectiveStake = &es
 	}
 	if len(punishedNames) > 0 {
-		item.PunishmentName = s.punishmentNameForRoom(room, punishment)
-		if room.Settings.PunishmentSource != "player" && punishment != nil {
-			item.PunishmentDescription = punishment.Description
-		}
+		item.PunishmentName = s.punishmentRoundLabel(room, punishmentTasks)
 	}
 	s.addRoundHistory(room, item)
 	notice := opts.Notice
@@ -933,8 +929,7 @@ func (s *Server) applyOthelloDisconnectForfeit(room *RoomState, forfeit Disconne
 	for i, p := range punishedPlayers {
 		punishedNames[i] = playerShortName(p)
 	}
-	punishment := s.currentPunishment(room)
-	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, types.RoundResult(forfeit.WinnerSeat), punishment)
+	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, types.RoundResult(forfeit.WinnerSeat))
 	s.resetExtremeWinStreak(loser)
 	streakText := ""
 	if room.Settings.EnableRanked {
@@ -998,10 +993,7 @@ func (s *Server) applyOthelloDisconnectForfeit(room *RoomState, forfeit Disconne
 		item.EffectiveStake = &es
 	}
 	if len(punishedNames) > 0 {
-		item.PunishmentName = s.punishmentNameForRoom(room, punishment)
-		if room.Settings.PunishmentSource != "player" && punishment != nil {
-			item.PunishmentDescription = punishment.Description
-		}
+		item.PunishmentName = s.punishmentRoundLabel(room, punishmentTasks)
 	}
 	s.addRoundHistory(room, item)
 	s.roomNotice(room, room.ResultText)

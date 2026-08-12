@@ -16,8 +16,8 @@ func TestLoadConfigFromSplitJSON(t *testing.T) {
 	if cfg.Site.Name == "" {
 		t.Fatal("empty site name")
 	}
-	if len(cfg.Punishments) == 0 || len(cfg.Punishments[0].Tasks) == 0 {
-		t.Fatal("punishments incomplete")
+	if len(cfg.PunishmentTags) == 0 {
+		t.Fatal("punishment tags incomplete")
 	}
 	// games.json 白名单必须覆盖全部玩法 id，否则建房列表会静默丢掉条目（斗兽棋曾踩坑）。
 	wantGames := map[string]bool{"rps": true, "othello": true, "tictactoe": true, "liarsdice": true, "gomoku": true, "jungle": true}
@@ -149,5 +149,53 @@ func TestSaveConfigBackfillsMissingGiveawayVoteLimits(t *testing.T) {
 
 	if _, err := SaveConfig(cfg); err != nil {
 		t.Fatalf("restore config: %v", err)
+	}
+}
+
+func TestSaveConfigMigratesLegacyPunishments(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if _, restoreErr := SaveConfig(cfg); restoreErr != nil {
+			t.Errorf("restore config: %v", restoreErr)
+		}
+	}()
+
+	// 模拟旧管理端只提交 Punishments 数组、新标签字段为空。
+	// 任务池已迁 SQLite，SaveConfig 只把旧类型拍平成标签。
+	legacy := cfg
+	legacy.PunishmentTags = nil
+	legacy.Punishments = []types.PunishmentConfig{{
+		ID: "truth", Name: "真心话",
+		Description: "回答一个问题。",
+		Variants: map[string]string{
+			"default": "回答一个默认问题。",
+			"male":    "回答一个勇气问题。",
+			"female":  "回答一个心情问题。",
+		},
+		Tasks: []types.PunishmentTaskConfig{{
+			ID: "legacy-task", Name: "旧任务", Variants: map[string]string{
+				"default": "回答一个默认问题。",
+				"male":    "回答一个勇气问题。",
+				"female":  "回答一个心情问题。",
+			},
+		}},
+		RoomNamePool: &types.RoomNamePool{
+			Adjectives: []string{"坦白"}, Subjects: []string{"真心话"}, RoomWords: []string{"小屋"},
+		},
+		RoomBackgroundImages: []string{},
+	}}
+
+	saved, err := SaveConfig(legacy)
+	if err != nil {
+		t.Fatalf("legacy admin config should save after in-memory migration: %v", err)
+	}
+	if len(saved.PunishmentTags) != 1 || saved.PunishmentTags[0].ID != "truth" {
+		t.Fatalf("legacy punishment should flatten to 1 tag: tags=%+v", saved.PunishmentTags)
+	}
+	if len(saved.Punishments) != 0 {
+		t.Fatalf("legacy Punishments field should be cleared after save: %+v", saved.Punishments)
 	}
 }

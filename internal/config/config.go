@@ -245,29 +245,184 @@ func distinctTaskGroups(factions []types.GenderFaction) []string {
 	return out
 }
 
-func normalizePunishmentTasks(punishment types.PunishmentConfig, groups []string) []types.PunishmentTaskConfig {
-	out := make([]types.PunishmentTaskConfig, 0, len(punishment.Tasks))
-	for i, task := range punishment.Tasks {
+// NormalizePunishmentTasks 清洗任务池列表：trim 文案/ID，任务难度夹紧到 1-99，
+// 标签/阵营去重去空（不在此处校验标签 ID 是否存在——那是调用方的事）。
+// -1 是"不参与随机抽取，仅供系列任务按 ID 引用"的显式标记，唯一合法取值即 -1，
+// 其余负数一律归一化为 -1（不保留具体负值，避免被误解为有额外含义）；
+// 0 及正数才是真实难度，夹紧到 1-99。
+// 导出给 server 包的 punishmentTasksSave 复用。
+func NormalizePunishmentTasks(tasks []types.PunishmentTaskConfig) []types.PunishmentTaskConfig {
+	out := make([]types.PunishmentTaskConfig, 0, len(tasks))
+	for i, task := range tasks {
 		id := strings.TrimSpace(task.ID)
 		if id == "" {
 			id = fmt.Sprintf("task%d", i+1)
 		}
-		name := strings.TrimSpace(task.Name)
-		variants := make(map[string]string)
-		for _, group := range groups {
-			v := ""
-			if task.Variants != nil {
-				v = strings.TrimSpace(task.Variants[group])
-			}
-			variants[group] = v
+		order := task.Order
+		if order < 0 {
+			order = -1
+		} else {
+			order = clampNumber(float64(order), 1, 99)
 		}
 		out = append(out, types.PunishmentTaskConfig{
 			ID:                id,
-			Name:              name,
+			Name:              strings.TrimSpace(task.Name),
+			Text:              strings.TrimSpace(task.Text),
+			TagIDs:            dedupStrings(cleanLines(task.TagIDs)),
+			FactionIDs:        dedupStrings(cleanLines(task.FactionIDs)),
+			Order:             order,
 			BackgroundImages:  cleanLines(task.BackgroundImages),
 			BackgroundOpacity: clampOpacity(task.BackgroundOpacity),
-			Variants:          variants,
 		})
+	}
+	return out
+}
+
+// NormalizePunishmentSeriesTasks 清洗系列任务列表：trim、房名/背景规范化，
+// 每步 TaskIDs 去重去空（不校验任务 ID 是否存在——允许悬空引用）。
+// 导出给 server 包的 punishmentSeriesSave 复用。
+func NormalizePunishmentSeriesTasks(series []types.PunishmentSeriesTaskConfig) []types.PunishmentSeriesTaskConfig {
+	out := make([]types.PunishmentSeriesTaskConfig, 0, len(series))
+	for _, s := range series {
+		s.ID = strings.TrimSpace(s.ID)
+		s.Name = strings.TrimSpace(s.Name)
+		s.RoomBackgroundImages = cleanLines(s.RoomBackgroundImages)
+		s.RoomNamePool = normalizeRoomNamePool(s.RoomNamePool)
+		steps := make([]types.PunishmentSeriesStep, 0, len(s.Steps))
+		for _, step := range s.Steps {
+			steps = append(steps, types.PunishmentSeriesStep{
+				TaskIDs: dedupStrings(cleanLines(step.TaskIDs)),
+			})
+		}
+		s.Steps = steps
+		out = append(out, s)
+	}
+	return out
+}
+
+func normalizePunishmentTags(tags []types.PunishmentTagConfig) []types.PunishmentTagConfig {
+	out := make([]types.PunishmentTagConfig, 0, len(tags))
+	for _, tag := range tags {
+		tag.ID = strings.TrimSpace(tag.ID)
+		tag.Name = strings.TrimSpace(tag.Name)
+		tag.RoomBackgroundImages = cleanLines(tag.RoomBackgroundImages)
+		tag.RoomNamePool = normalizeRoomNamePool(tag.RoomNamePool)
+		out = append(out, tag)
+	}
+	return out
+}
+
+func normalizePunishmentRandomSettings(rs types.PunishmentRandomSettings) types.PunishmentRandomSettings {
+	if rs.OrderStep < 0 {
+		rs.OrderStep = 0
+	}
+	if rs.MaxDifficultyOvershoot < 0 {
+		rs.MaxDifficultyOvershoot = 0
+	}
+	return rs
+}
+
+// punishmentsFileData 是 punishments.json 磁盘形态（仅标签 + 全局难度参数）。
+// 任务池/系列任务已迁到 SQLite；旧文件里的 tasks/seriesTasks 字段由标准
+// encoding/json 忽略（unknown field 默认丢弃），并由 server 一次性导入。
+type punishmentsFileData struct {
+	Tags                   []types.PunishmentTagConfig `json:"tags"`
+	OrderStep              float64                     `json:"orderStep"`
+	MaxDifficultyOvershoot float64                     `json:"maxDifficultyOvershoot"`
+}
+
+// punishmentsLegacyDiskData 仅用于磁盘迁移路径：旧 punishments.json 顶层数组拍平、
+// 以及 server 一次性导入前从磁盘读出 tasks/seriesTasks。
+// seriesTasks 用宽松 JSON 承接旧 subtasks/variants 结构，不绑新领域类型。
+type punishmentsLegacyDiskData struct {
+	Tags                   []types.PunishmentTagConfig  `json:"tags"`
+	Tasks                  []types.PunishmentTaskConfig `json:"tasks"`
+	SeriesTasks            json.RawMessage              `json:"seriesTasks"`
+	OrderStep              float64                      `json:"orderStep"`
+	MaxDifficultyOvershoot float64                      `json:"maxDifficultyOvershoot"`
+}
+
+func punishmentsFileFromConfig(cfg types.AppConfig) punishmentsFileData {
+	return punishmentsFileData{
+		Tags:                   cfg.PunishmentTags,
+		OrderStep:              cfg.PunishmentRandomSettings.OrderStep,
+		MaxDifficultyOvershoot: cfg.PunishmentRandomSettings.MaxDifficultyOvershoot,
+	}
+}
+
+// punishmentsFileWriteData 是实际写盘用的形态：在 punishmentsFileData 之外，原样带上
+// 磁盘上尚未被一次性迁移消费掉的旧 tasks/seriesTasks 字段（若有），避免任何一次
+// config:save/config:reset（包括与惩罚任务毫无关系的字段改动）把这两个字段连带整份
+// 文件一起冲掉——迁移是否已跑完全看 SQLite 里 punishment_tasks 表是否有行，不看
+// 磁盘文件；写盘时无条件保留能读到的旧字段，多写不多余（迁移完成后就是纯死数据，
+// 但比"抢在迁移之前被写没"安全）。
+type punishmentsFileWriteData struct {
+	Tags                   []types.PunishmentTagConfig `json:"tags"`
+	OrderStep              float64                     `json:"orderStep"`
+	MaxDifficultyOvershoot float64                     `json:"maxDifficultyOvershoot"`
+	Tasks                  json.RawMessage             `json:"tasks,omitempty"`
+	SeriesTasks            json.RawMessage             `json:"seriesTasks,omitempty"`
+}
+
+// preserveLegacyPunishmentPoolJSON 从磁盘现有 punishments.json 原样读出 tasks/seriesTasks
+// 两个字段（未知/缺失/解析失败时返回 nil，不阻断保存）。
+func preserveLegacyPunishmentPoolJSON(path string) (tasks, seriesTasks json.RawMessage) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, nil
+	}
+	var probe struct {
+		Tasks       json.RawMessage `json:"tasks"`
+		SeriesTasks json.RawMessage `json:"seriesTasks"`
+	}
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return nil, nil
+	}
+	return probe.Tasks, probe.SeriesTasks
+}
+
+func applyPunishmentsFile(cfg *types.AppConfig, file punishmentsFileData) {
+	cfg.PunishmentTags = file.Tags
+	cfg.PunishmentRandomSettings = types.PunishmentRandomSettings{
+		OrderStep:              file.OrderStep,
+		MaxDifficultyOvershoot: file.MaxDifficultyOvershoot,
+	}
+	// 清空旧字段，避免下发/写回时混入。
+	cfg.Punishments = nil
+	// 系列摘要由 server.publicConfig 现算，不从磁盘读。
+	cfg.PunishmentSeriesSummaries = nil
+}
+
+// ReadLegacyPunishmentPoolFromDisk 从磁盘 punishments.json 原始读取已废弃的
+// tasks/seriesTasks 字段，供 server 一次性导入 SQLite。
+// seriesTasks 保持 RawMessage，因旧结构是 subtasks/variants，新结构是 steps/taskIds，
+// 解析留给 server 的迁移逻辑。
+func ReadLegacyPunishmentPoolFromDisk() (tasks []types.PunishmentTaskConfig, seriesRaw json.RawMessage, err error) {
+	path := configPath("punishments.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil, nil
+		}
+		return nil, nil, err
+	}
+	var file punishmentsLegacyDiskData
+	if err := json.Unmarshal(data, &file); err != nil {
+		return nil, nil, fmt.Errorf("解析惩罚配置失败 %s: %w", path, err)
+	}
+	return file.Tasks, file.SeriesTasks, nil
+}
+
+// dedupStrings 按出现顺序去重（用于任务的阵营标签多选，避免后台重复勾选被存两遍）。
+func dedupStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
 	}
 	return out
 }
@@ -311,17 +466,8 @@ func normalizeConfig(input types.AppConfig) types.AppConfig {
 		titles = append(titles, segment)
 	}
 
-	punishments := make([]types.PunishmentConfig, 0, len(input.Punishments))
-	for _, punishment := range input.Punishments {
-		punishment.ID = strings.TrimSpace(punishment.ID)
-		punishment.Name = strings.TrimSpace(punishment.Name)
-		punishment.Description = strings.TrimSpace(punishment.Description)
-		punishment.CardImageOpacity = clampOpacity(punishment.CardImageOpacity)
-		punishment.RoomBackgroundImages = cleanLines(punishment.RoomBackgroundImages)
-		punishment.Tasks = normalizePunishmentTasks(punishment, groups)
-		punishment.RoomNamePool = normalizeRoomNamePool(punishment.RoomNamePool)
-		punishments = append(punishments, punishment)
-	}
+	punishmentTags := normalizePunishmentTags(input.PunishmentTags)
+	punishmentRandom := normalizePunishmentRandomSettings(input.PunishmentRandomSettings)
 
 	adminPass := strings.TrimSpace(input.Site.AdminPassword)
 	if env := strings.TrimSpace(os.Getenv("ADMIN_PASSWORD")); env != "" {
@@ -395,7 +541,10 @@ func normalizeConfig(input types.AppConfig) types.AppConfig {
 	out.GenderFactions = genderFactions
 	out.Genders = genders
 	out.Titles = titles
-	out.Punishments = punishments
+	out.PunishmentTags = punishmentTags
+	out.PunishmentRandomSettings = punishmentRandom
+	out.PunishmentSeriesSummaries = nil // 不从配置加载；由 server.publicConfig 现算
+	out.Punishments = nil
 	out.RoomTags = cleanLines(input.RoomTags)
 	out.Games = games
 	out.RoomInfoTags = roomInfoTags
@@ -547,46 +696,29 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 			}
 		}
 	}
-	if len(input.Punishments) == 0 {
-		return input, fmt.Errorf("至少需要一个惩罚选项")
+	if len(input.PunishmentTags) == 0 {
+		return input, fmt.Errorf("至少需要一个惩罚标签")
 	}
-	for _, punishment := range input.Punishments {
-		if len(punishment.Tasks) == 0 {
-			return input, fmt.Errorf("%s 至少需要一个任务", punishment.Name)
+	tagIDs := make([]string, len(input.PunishmentTags))
+	for i, tag := range input.PunishmentTags {
+		tagIDs[i] = tag.ID
+	}
+	if err := assertUnique(tagIDs, "惩罚标签 ID"); err != nil {
+		return input, err
+	}
+	for _, tag := range input.PunishmentTags {
+		if tag.Name == "" {
+			return input, fmt.Errorf("惩罚标签 %s 的名称不能为空", tag.ID)
 		}
-		if punishment.CardImageOpacity < 0 || punishment.CardImageOpacity > 1 {
-			return input, fmt.Errorf("%s 的卡片背景透明率必须在 0 到 1 之间", punishment.Name)
+		if tag.RoomBackgroundImages == nil {
+			return input, fmt.Errorf("%s 的房间背景图库格式不正确", tag.Name)
 		}
-		if punishment.RoomBackgroundImages == nil {
-			return input, fmt.Errorf("%s 的房间背景图库格式不正确", punishment.Name)
-		}
-		taskIDs := make([]string, len(punishment.Tasks))
-		for i, t := range punishment.Tasks {
-			taskIDs[i] = t.ID
-		}
-		if err := assertUnique(taskIDs, punishment.Name+" 任务 ID"); err != nil {
-			return input, err
-		}
-		for _, task := range punishment.Tasks {
-			if task.Name == "" {
-				return input, fmt.Errorf("%s 里有任务名称为空", punishment.Name)
-			}
-			if task.BackgroundImages == nil {
-				return input, fmt.Errorf("%s / %s 的任务背景图库格式不正确", punishment.Name, task.Name)
-			}
-			if task.BackgroundOpacity < 0 || task.BackgroundOpacity > 1 {
-				return input, fmt.Errorf("%s / %s 的任务背景透明率必须在 0 到 1 之间", punishment.Name, task.Name)
-			}
-			for _, group := range taskGroups {
-				if strings.TrimSpace(task.Variants[group]) == "" {
-					return input, fmt.Errorf("%s / %s 缺少 %s 分组任务版本", punishment.Name, task.Name, group)
-				}
-			}
-		}
-		if punishment.RoomNamePool == nil || len(punishment.RoomNamePool.Subjects) == 0 || len(punishment.RoomNamePool.RoomWords) == 0 {
-			return input, fmt.Errorf("%s 的随机房名至少需要名词/动词和房间词", punishment.Name)
+		if tag.RoomNamePool == nil || len(tag.RoomNamePool.Subjects) == 0 || len(tag.RoomNamePool.RoomWords) == 0 {
+			return input, fmt.Errorf("%s 的随机房名至少需要名词/动词和房间词", tag.Name)
 		}
 	}
+	// 任务池 / 系列任务已迁到 SQLite，不再随 AppConfig 校验；见 server 的
+	// punishmentTasksSave / punishmentSeriesSave。
 	if input.PlayerPunishmentRoomNamePool == nil || len(input.PlayerPunishmentRoomNamePool.Subjects) == 0 || len(input.PlayerPunishmentRoomNamePool.RoomWords) == 0 {
 		return input, fmt.Errorf("玩家发布任务随机房名至少需要名词/动词和房间词")
 	}
@@ -818,6 +950,9 @@ func LoadConfig() (types.AppConfig, error) {
 	if err := ensureTitleTagStylesFile(); err != nil {
 		return types.AppConfig{}, err
 	}
+	if err := migratePunishmentsFile(); err != nil {
+		return types.AppConfig{}, err
+	}
 	cfg, err := readSplitConfig()
 	if err != nil {
 		return types.AppConfig{}, err
@@ -829,6 +964,347 @@ func LoadConfig() (types.AppConfig, error) {
 		return types.AppConfig{}, fmt.Errorf("配置校验失败: %w", err)
 	}
 	return valid, nil
+}
+
+// punishmentTaskMigrationRecord 是新旧两种任务格式的联合读取结构。旧版任务把文案放在
+// variants[group]，新版任务则把文案放在 text 并用 factionIds 指定适用阵营；这里故意用
+// 原始 JSON 结构承接旧字段，避免先反序列化到新版类型后把旧文案静默丢掉。
+type punishmentTaskMigrationRecord struct {
+	ID                string            `json:"id"`
+	Name              string            `json:"name"`
+	Text              string            `json:"text"`
+	FactionIDs        []string          `json:"factionIds"`
+	Order             int               `json:"order"`
+	Variants          map[string]string `json:"variants"`
+	BackgroundImages  []string          `json:"backgroundImages"`
+	BackgroundOpacity float64           `json:"backgroundOpacity"`
+}
+
+type punishmentMigrationRecord struct {
+	ID                     string                          `json:"id"`
+	Name                   string                          `json:"name"`
+	Description            string                          `json:"description"`
+	Variants               map[string]string               `json:"variants"`
+	Tasks                  []punishmentTaskMigrationRecord `json:"tasks"`
+	CardImageURL           string                          `json:"cardImageUrl"`
+	CardImageOpacity       float64                         `json:"cardImageOpacity"`
+	RoomBackgroundImages   []string                        `json:"roomBackgroundImages"`
+	RoomNamePool           *types.RoomNamePool             `json:"roomNamePool"`
+	OrderStep              float64                         `json:"orderStep"`
+	MaxDifficultyOvershoot float64                         `json:"maxDifficultyOvershoot"`
+}
+
+func hasLegacyPunishments(records []punishmentMigrationRecord) bool {
+	for _, punishment := range records {
+		if strings.TrimSpace(punishment.Description) != "" || len(punishment.Variants) > 0 {
+			return true
+		}
+		for _, task := range punishment.Tasks {
+			if len(task.Variants) > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func convertPunishmentRecords(records []punishmentMigrationRecord, factionIDsByGroup map[string][]string) []types.PunishmentConfig {
+	converted := make([]types.PunishmentConfig, 0, len(records))
+	for _, punishment := range records {
+		out := types.PunishmentConfig{
+			ID:                     strings.TrimSpace(punishment.ID),
+			Name:                   strings.TrimSpace(punishment.Name),
+			CardImageURL:           strings.TrimSpace(punishment.CardImageURL),
+			CardImageOpacity:       punishment.CardImageOpacity,
+			RoomBackgroundImages:   cleanLines(punishment.RoomBackgroundImages),
+			RoomNamePool:           punishment.RoomNamePool,
+			OrderStep:              punishment.OrderStep,
+			MaxDifficultyOvershoot: punishment.MaxDifficultyOvershoot,
+			Tasks:                  make([]types.PunishmentTaskConfig, 0),
+		}
+		for taskIndex, task := range punishment.Tasks {
+			order := task.Order
+			if order <= 0 {
+				order = 50
+			}
+			if len(task.Variants) == 0 && strings.TrimSpace(task.Text) != "" {
+				out.Tasks = append(out.Tasks, types.PunishmentTaskConfig{
+					ID:                strings.TrimSpace(task.ID),
+					Name:              strings.TrimSpace(task.Name),
+					Text:              strings.TrimSpace(task.Text),
+					FactionIDs:        cleanLines(task.FactionIDs),
+					Order:             order,
+					BackgroundImages:  cleanLines(task.BackgroundImages),
+					BackgroundOpacity: task.BackgroundOpacity,
+				})
+				continue
+			}
+
+			baseID := strings.TrimSpace(task.ID)
+			if baseID == "" {
+				baseID = fmt.Sprintf("task%d", taskIndex+1)
+			}
+			baseName := strings.TrimSpace(task.Name)
+			if baseName == "" {
+				baseName = fmt.Sprintf("任务 %d", taskIndex+1)
+			}
+			created := 0
+			for _, group := range []string{"default", "male", "female"} {
+				text := strings.TrimSpace(task.Variants[group])
+				if text == "" {
+					text = strings.TrimSpace(punishment.Variants[group])
+				}
+				if text == "" {
+					text = strings.TrimSpace(punishment.Description)
+				}
+				if text == "" {
+					continue
+				}
+				factionIDs := append([]string(nil), factionIDsByGroup[group]...)
+				if group != "default" && len(factionIDs) == 0 {
+					// 当前配置没有该任务分组时，旧文案没有可对应的玩家阵营。
+					continue
+				}
+				id := baseID + "_" + group
+				if created == 0 && len(task.Variants) == 0 && len(punishment.Variants) == 0 {
+					id = baseID
+				}
+				out.Tasks = append(out.Tasks, types.PunishmentTaskConfig{
+					ID:                id,
+					Name:              baseName,
+					Text:              text,
+					FactionIDs:        factionIDs,
+					Order:             order,
+					BackgroundImages:  cleanLines(task.BackgroundImages),
+					BackgroundOpacity: task.BackgroundOpacity,
+				})
+				created++
+			}
+			if created == 0 {
+				out.Tasks = append(out.Tasks, types.PunishmentTaskConfig{
+					ID: baseID, Name: baseName, Text: "请完成本局惩罚。", FactionIDs: []string{}, Order: order,
+					BackgroundImages: cleanLines(task.BackgroundImages), BackgroundOpacity: task.BackgroundOpacity,
+				})
+			}
+		}
+		if len(out.Tasks) == 0 {
+			out.Tasks = []types.PunishmentTaskConfig{{
+				ID: "task1", Name: "默认任务", Text: "请完成本局惩罚。", FactionIDs: []string{}, Order: 50,
+				BackgroundImages: []string{}, BackgroundOpacity: 0.22,
+			}}
+		}
+		converted = append(converted, out)
+	}
+	return converted
+}
+
+// upgradeLegacyPunishmentsForSave：管理端若仍提交旧「任务类型」数组（Punishments 非空且
+// 新标签字段为空），现场拍平成 tags（任务池不再进 AppConfig，由磁盘迁移 + SQLite 导入承接）。
+func upgradeLegacyPunishmentsForSave(input types.AppConfig) (types.AppConfig, error) {
+	if len(input.PunishmentTags) > 0 {
+		input.Punishments = nil
+		return input, nil
+	}
+	if len(input.Punishments) == 0 {
+		return input, nil
+	}
+	data, err := json.Marshal(input.Punishments)
+	if err != nil {
+		return input, fmt.Errorf("读取旧惩罚配置失败: %w", err)
+	}
+	var records []punishmentMigrationRecord
+	if err := json.Unmarshal(data, &records); err != nil {
+		return input, fmt.Errorf("读取旧惩罚配置失败: %w", err)
+	}
+	if hasLegacyPunishments(records) {
+		factionIDsByGroup := map[string][]string{}
+		for _, faction := range input.GenderFactions {
+			group := strings.TrimSpace(faction.TaskGroup)
+			if group == "" {
+				group = "default"
+			}
+			if id := strings.TrimSpace(faction.ID); id != "" {
+				factionIDsByGroup[group] = append(factionIDsByGroup[group], id)
+			}
+		}
+		converted := convertPunishmentRecords(records, factionIDsByGroup)
+		raw, err := json.Marshal(converted)
+		if err != nil {
+			return input, err
+		}
+		if err := json.Unmarshal(raw, &records); err != nil {
+			return input, err
+		}
+	}
+	file := flattenPunishmentTypesToFile(records)
+	// 只把标签/难度写回 AppConfig；tasks 仍写在磁盘（migratePunishmentsFile 路径），
+	// 由 server 一次性导入 SQLite。这里 Save 路径只保留标签。
+	applyPunishmentsFile(&input, punishmentsFileData{
+		Tags:                   file.Tags,
+		OrderStep:              file.OrderStep,
+		MaxDifficultyOvershoot: file.MaxDifficultyOvershoot,
+	})
+	return input, nil
+}
+
+// migratePunishmentsFile 将旧版 punishments.json 迁到「标签 + 拍平任务 + 系列」结构：
+//  1. 若仍是顶层数组（旧任务类型容器），先展开 variants→factionIds，再拍平成 tags/tasks；
+//  2. 若已是对象但缺少 tags 字段，同样触发拍平；
+//  3. 已是新结构（顶层含 tags）则跳过。
+// 迁移后写回磁盘；旧文件保留为 punishments.json.bak（若尚无备份）。
+func migratePunishmentsFile() error {
+	path := configPath("punishments.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "" {
+		return fmt.Errorf("惩罚配置为空 %s", path)
+	}
+
+	// 已是新结构：顶层对象且含 tags。
+	if trimmed[0] == '{' {
+		var probe map[string]json.RawMessage
+		if err := json.Unmarshal(data, &probe); err != nil {
+			return fmt.Errorf("解析惩罚配置失败 %s: %w", path, err)
+		}
+		if _, ok := probe["tags"]; ok {
+			return nil
+		}
+		// 对象但无 tags：视为异常/半迁移，尝试按旧数组字段继续不适用，直接报错提示。
+		return fmt.Errorf("惩罚配置 %s 缺少 tags 字段，请检查或从备份恢复", path)
+	}
+
+	// 顶层数组：旧「任务类型」列表。
+	var records []punishmentMigrationRecord
+	if err := json.Unmarshal(data, &records); err != nil {
+		return fmt.Errorf("解析惩罚配置失败 %s: %w", path, err)
+	}
+
+	// 先做 variants → factionIds 展开（若有），再拍平成 tags/tasks。
+	if hasLegacyPunishments(records) {
+		factionIDsByGroup, err := punishmentFactionIDsByTaskGroup()
+		if err != nil {
+			return err
+		}
+		convertedTypes := convertPunishmentRecords(records, factionIDsByGroup)
+		// 把转换结果再编码成 migration record 形态，便于统一拍平。
+		raw, err := json.Marshal(convertedTypes)
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(raw, &records); err != nil {
+			return err
+		}
+	}
+
+	file := flattenPunishmentTypesToFile(records)
+	backupPath := path + ".bak"
+	if _, err := os.Stat(backupPath); err == nil {
+		// 备份已存在时直接覆盖写新结构（幂等），不再二次备份。
+		if err := writeJSONFile(path, file); err != nil {
+			return fmt.Errorf("写入迁移后的惩罚配置失败: %w", err)
+		}
+		return nil
+	}
+	if err := os.Rename(path, backupPath); err != nil {
+		return fmt.Errorf("备份旧惩罚配置失败: %w", err)
+	}
+	if err := writeJSONFile(path, file); err != nil {
+		_ = os.Rename(backupPath, path)
+		return fmt.Errorf("写入迁移后的惩罚配置失败: %w", err)
+	}
+	return nil
+}
+
+// flattenPunishmentTypesToFile 把旧「任务类型」列表拍平成标签 + 任务（磁盘迁移用）。
+// 全局难度取第一个类型上的非零值，否则默认 2/5；系列任务留空。
+// 返回 legacy 形态以便 migratePunishmentsFile 把 tasks 写进磁盘，供 server 导入 SQLite。
+func flattenPunishmentTypesToFile(records []punishmentMigrationRecord) punishmentsLegacyDiskData {
+	file := punishmentsLegacyDiskData{
+		Tags:                   make([]types.PunishmentTagConfig, 0, len(records)),
+		Tasks:                  make([]types.PunishmentTaskConfig, 0),
+		SeriesTasks:            json.RawMessage("[]"),
+		OrderStep:              2,
+		MaxDifficultyOvershoot: 5,
+	}
+	stepSet, overSet := false, false
+	for _, rec := range records {
+		tagID := strings.TrimSpace(rec.ID)
+		if tagID == "" {
+			continue
+		}
+		file.Tags = append(file.Tags, types.PunishmentTagConfig{
+			ID:                   tagID,
+			Name:                 strings.TrimSpace(rec.Name),
+			RoomNamePool:         rec.RoomNamePool,
+			RoomBackgroundImages: cleanLines(rec.RoomBackgroundImages),
+		})
+		if !stepSet && rec.OrderStep > 0 {
+			file.OrderStep = rec.OrderStep
+			stepSet = true
+		}
+		if !overSet && rec.MaxDifficultyOvershoot > 0 {
+			file.MaxDifficultyOvershoot = rec.MaxDifficultyOvershoot
+			overSet = true
+		}
+		for ti, task := range rec.Tasks {
+			order := task.Order
+			if order <= 0 {
+				order = 50
+			}
+			id := strings.TrimSpace(task.ID)
+			if id == "" {
+				id = fmt.Sprintf("%s_task%d", tagID, ti+1)
+			} else if !strings.HasPrefix(id, tagID+"_") {
+				// 避免不同旧类型下同名 task_default 撞 ID。
+				id = tagID + "_" + id
+			}
+			file.Tasks = append(file.Tasks, types.PunishmentTaskConfig{
+				ID:                id,
+				Name:              strings.TrimSpace(task.Name),
+				Text:              strings.TrimSpace(task.Text),
+				TagIDs:            []string{tagID},
+				FactionIDs:        cleanLines(task.FactionIDs),
+				Order:             order,
+				BackgroundImages:  cleanLines(task.BackgroundImages),
+				BackgroundOpacity: task.BackgroundOpacity,
+			})
+		}
+	}
+	return file
+}
+
+func punishmentFactionIDsByTaskGroup() (map[string][]string, error) {
+	result := map[string][]string{}
+	path := configPath("gender-factions.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return result, nil
+		}
+		return nil, fmt.Errorf("读取阵营配置失败 %s: %w", path, err)
+	}
+	var factions []types.GenderFaction
+	if err := json.Unmarshal(data, &factions); err != nil {
+		return nil, fmt.Errorf("解析阵营配置失败 %s: %w", path, err)
+	}
+	for _, faction := range factions {
+		group := strings.TrimSpace(faction.TaskGroup)
+		if group == "" {
+			group = "default"
+		}
+		id := strings.TrimSpace(faction.ID)
+		if id == "" {
+			continue
+		}
+		result[group] = append(result[group], id)
+	}
+	return result, nil
 }
 
 // migrateAnnouncementBoardFile：v2.1.28 把 daily-announcement.json 改名为
@@ -994,8 +1470,55 @@ func ensureSplitConfig() error {
 	if err := readJSONFile(mono, &cfg); err != nil {
 		return err
 	}
+	// 旧单体可能只有 punishments 数组，没有 tags；现场拍平后再拆分写盘。
+	// 任务池已不进 AppConfig，但拍平后的 tasks 仍需写入 punishments.json，
+	// 供 server 一次性导入 SQLite。
+	var monothlicPool *punishmentsLegacyDiskData
+	if len(cfg.PunishmentTags) == 0 && len(cfg.Punishments) > 0 {
+		data, err := json.Marshal(cfg.Punishments)
+		if err != nil {
+			return fmt.Errorf("迁移单体惩罚配置失败: %w", err)
+		}
+		var records []punishmentMigrationRecord
+		if err := json.Unmarshal(data, &records); err != nil {
+			return fmt.Errorf("迁移单体惩罚配置失败: %w", err)
+		}
+		if hasLegacyPunishments(records) {
+			factionIDsByGroup := map[string][]string{}
+			for _, faction := range cfg.GenderFactions {
+				group := strings.TrimSpace(faction.TaskGroup)
+				if group == "" {
+					group = "default"
+				}
+				if id := strings.TrimSpace(faction.ID); id != "" {
+					factionIDsByGroup[group] = append(factionIDsByGroup[group], id)
+				}
+			}
+			converted := convertPunishmentRecords(records, factionIDsByGroup)
+			raw, err := json.Marshal(converted)
+			if err != nil {
+				return fmt.Errorf("迁移单体惩罚配置失败: %w", err)
+			}
+			if err := json.Unmarshal(raw, &records); err != nil {
+				return fmt.Errorf("迁移单体惩罚配置失败: %w", err)
+			}
+		}
+		file := flattenPunishmentTypesToFile(records)
+		monothlicPool = &file
+		applyPunishmentsFile(&cfg, punishmentsFileData{
+			Tags:                   file.Tags,
+			OrderStep:              file.OrderStep,
+			MaxDifficultyOvershoot: file.MaxDifficultyOvershoot,
+		})
+	}
 	if err := writeSplitConfig(cfg); err != nil {
 		return fmt.Errorf("迁移单体配置到拆分文件失败: %w", err)
+	}
+	// 单体拍平产生的 tasks 写回 punishments.json（含 tasks 字段），供 SQLite 导入。
+	if monothlicPool != nil {
+		if err := writeJSONFile(configPath("punishments.json"), *monothlicPool); err != nil {
+			return fmt.Errorf("写入迁移后的惩罚任务池失败: %w", err)
+		}
 	}
 	// 旧文件改名为 .bak，避免与拆分文件混淆
 	for _, name := range []string{"active.json", "default.json"} {
@@ -1013,6 +1536,7 @@ func readSplitConfig() (types.AppConfig, error) {
 		file string
 		dest any
 	}
+	var punishmentsFile punishmentsFileData
 	parts := []part{
 		{"site.json", &cfg.Site},
 		{"announcement-board.json", &cfg.AnnouncementBoard},
@@ -1020,7 +1544,7 @@ func readSplitConfig() (types.AppConfig, error) {
 		{"genders.json", &cfg.Genders},
 		{"gender-factions.json", &cfg.GenderFactions},
 		{"titles.json", &cfg.Titles},
-		{"punishments.json", &cfg.Punishments},
+		{"punishments.json", &punishmentsFile},
 		{"player-punishment-room-name-pool.json", &cfg.PlayerPunishmentRoomNamePool},
 		{"room-tags.json", &cfg.RoomTags},
 		{"room-info-tags.json", &cfg.RoomInfoTags},
@@ -1039,6 +1563,7 @@ func readSplitConfig() (types.AppConfig, error) {
 			return types.AppConfig{}, err
 		}
 	}
+	applyPunishmentsFile(&cfg, punishmentsFile)
 	return cfg, nil
 }
 
@@ -1047,6 +1572,18 @@ func writeSplitConfig(cfg types.AppConfig) error {
 	pool := cfg.PlayerPunishmentRoomNamePool
 	if pool == nil {
 		pool = &types.RoomNamePool{}
+	}
+	punishmentsFile := punishmentsFileFromConfig(cfg)
+	if punishmentsFile.Tags == nil {
+		punishmentsFile.Tags = []types.PunishmentTagConfig{}
+	}
+	legacyTasks, legacySeries := preserveLegacyPunishmentPoolJSON(configPath("punishments.json"))
+	punishmentsOut := punishmentsFileWriteData{
+		Tags:                   punishmentsFile.Tags,
+		OrderStep:              punishmentsFile.OrderStep,
+		MaxDifficultyOvershoot: punishmentsFile.MaxDifficultyOvershoot,
+		Tasks:                  legacyTasks,
+		SeriesTasks:            legacySeries,
 	}
 	parts := []struct {
 		file  string
@@ -1058,7 +1595,7 @@ func writeSplitConfig(cfg types.AppConfig) error {
 		{"genders.json", cfg.Genders},
 		{"gender-factions.json", cfg.GenderFactions},
 		{"titles.json", cfg.Titles},
-		{"punishments.json", cfg.Punishments},
+		{"punishments.json", punishmentsOut},
 		{"player-punishment-room-name-pool.json", pool},
 		{"room-tags.json", cfg.RoomTags},
 		{"room-info-tags.json", cfg.RoomInfoTags},
@@ -1150,6 +1687,10 @@ func SaveConfig(next types.AppConfig) (types.AppConfig, error) {
 	// 旧版管理端提交的配置没有新增的宠物/主人投票字段；与 LoadConfig 保持同一
 	// 兼容策略，缺省字段回退到普通档，否则升级后保存任意其它配置都会被 Validate 拒绝。
 	next = fixGiveawayVoteLimits(next)
+	var err error
+	if next, err = upgradeLegacyPunishmentsForSave(next); err != nil {
+		return types.AppConfig{}, err
+	}
 	valid, err := ValidateConfig(next)
 	if err != nil {
 		return types.AppConfig{}, err

@@ -14,6 +14,45 @@ func emptyStrings(s []string) []string {
 	return s
 }
 
+// sanitizePunishmentTasks 清洗任务池列表，供 admin:action 回复用。
+func sanitizePunishmentTasks(tasks []types.PunishmentTaskConfig) []types.PunishmentTaskConfig {
+	if tasks == nil {
+		return []types.PunishmentTaskConfig{}
+	}
+	out := make([]types.PunishmentTaskConfig, len(tasks))
+	for i, t := range tasks {
+		t.TagIDs = emptyStrings(t.TagIDs)
+		t.FactionIDs = emptyStrings(t.FactionIDs)
+		t.BackgroundImages = emptyStrings(t.BackgroundImages)
+		out[i] = t
+	}
+	return out
+}
+
+// sanitizePunishmentSeries 清洗系列任务列表，供 admin:action 回复用。
+func sanitizePunishmentSeries(series []types.PunishmentSeriesTaskConfig) []types.PunishmentSeriesTaskConfig {
+	if series == nil {
+		return []types.PunishmentSeriesTaskConfig{}
+	}
+	out := make([]types.PunishmentSeriesTaskConfig, len(series))
+	for i, s := range series {
+		s.RoomBackgroundImages = emptyStrings(s.RoomBackgroundImages)
+		if s.RoomNamePool != nil {
+			s.RoomNamePool.Adjectives = emptyStrings(s.RoomNamePool.Adjectives)
+			s.RoomNamePool.Subjects = emptyStrings(s.RoomNamePool.Subjects)
+			s.RoomNamePool.RoomWords = emptyStrings(s.RoomNamePool.RoomWords)
+		}
+		if s.Steps == nil {
+			s.Steps = []types.PunishmentSeriesStep{}
+		}
+		for j := range s.Steps {
+			s.Steps[j].TaskIDs = emptyStrings(s.Steps[j].TaskIDs)
+		}
+		out[i] = s
+	}
+	return out
+}
+
 func emptyPlayers(s []types.PublicPlayer) []types.PublicPlayer {
 	if s == nil {
 		return []types.PublicPlayer{}
@@ -131,6 +170,8 @@ func seatAnyMap(m map[types.SeatKey]any) map[types.SeatKey]any {
 
 func sanitizeRoomSettings(settings types.RoomSettings) types.RoomSettings {
 	settings.PunishmentIDs = emptyStrings(settings.PunishmentIDs)
+	settings.PunishmentTagsIncluded = emptyStrings(settings.PunishmentTagsIncluded)
+	settings.PunishmentTagsExcluded = emptyStrings(settings.PunishmentTagsExcluded)
 	settings.Tags = emptyStrings(settings.Tags)
 	return settings
 }
@@ -286,6 +327,8 @@ func sanitizeRoomSnapshot(snap types.RoomSnapshot) types.RoomSnapshot {
 
 func sanitizeLobbyRoom(info types.LobbyRoomInfo) types.LobbyRoomInfo {
 	info.PunishmentIDs = emptyStrings(info.PunishmentIDs)
+	info.PunishmentTagsIncluded = emptyStrings(info.PunishmentTagsIncluded)
+	info.PunishmentTagsExcluded = emptyStrings(info.PunishmentTagsExcluded)
 	info.Tags = emptyStrings(info.Tags)
 	if info.Versus == nil {
 		info.Versus = map[types.SeatKey]any{types.SeatA: nil, types.SeatB: nil}
@@ -334,29 +377,29 @@ func sanitizePublicConfig(cfg types.AppConfig) types.AppConfig {
 			cfg.Titles[i].FactionNames[k] = emptyStrings(v)
 		}
 	}
-	if cfg.Punishments == nil {
-		cfg.Punishments = []types.PunishmentConfig{}
+	cfg.Punishments = nil
+	if cfg.PunishmentTags == nil {
+		cfg.PunishmentTags = []types.PunishmentTagConfig{}
 	}
-	for i := range cfg.Punishments {
-		p := &cfg.Punishments[i]
-		if p.Variants == nil {
-			p.Variants = map[string]string{}
+	for i := range cfg.PunishmentTags {
+		t := &cfg.PunishmentTags[i]
+		t.RoomBackgroundImages = emptyStrings(t.RoomBackgroundImages)
+		if t.RoomNamePool != nil {
+			t.RoomNamePool.Adjectives = emptyStrings(t.RoomNamePool.Adjectives)
+			t.RoomNamePool.Subjects = emptyStrings(t.RoomNamePool.Subjects)
+			t.RoomNamePool.RoomWords = emptyStrings(t.RoomNamePool.RoomWords)
 		}
-		p.RoomBackgroundImages = emptyStrings(p.RoomBackgroundImages)
-		if p.Tasks == nil {
-			p.Tasks = []types.PunishmentTaskConfig{}
-		}
-		for j := range p.Tasks {
-			t := &p.Tasks[j]
-			if t.Variants == nil {
-				t.Variants = map[string]string{}
-			}
-			t.BackgroundImages = emptyStrings(t.BackgroundImages)
-		}
-		if p.RoomNamePool != nil {
-			p.RoomNamePool.Adjectives = emptyStrings(p.RoomNamePool.Adjectives)
-			p.RoomNamePool.Subjects = emptyStrings(p.RoomNamePool.Subjects)
-			p.RoomNamePool.RoomWords = emptyStrings(p.RoomNamePool.RoomWords)
+	}
+	if cfg.PunishmentSeriesSummaries == nil {
+		cfg.PunishmentSeriesSummaries = []types.PunishmentSeriesSummary{}
+	}
+	for i := range cfg.PunishmentSeriesSummaries {
+		sm := &cfg.PunishmentSeriesSummaries[i]
+		sm.RoomBackgroundImages = emptyStrings(sm.RoomBackgroundImages)
+		if sm.RoomNamePool != nil {
+			sm.RoomNamePool.Adjectives = emptyStrings(sm.RoomNamePool.Adjectives)
+			sm.RoomNamePool.Subjects = emptyStrings(sm.RoomNamePool.Subjects)
+			sm.RoomNamePool.RoomWords = emptyStrings(sm.RoomNamePool.RoomWords)
 		}
 	}
 	if cfg.PlayerPunishmentRoomNamePool != nil {

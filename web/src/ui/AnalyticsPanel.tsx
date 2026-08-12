@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
-  Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, LineChart,
+  Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart,
   Pie, PieChart, Rectangle, ResponsiveContainer, Tooltip, XAxis, YAxis
 } from "recharts";
 import type {
@@ -32,7 +32,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   self_title_change: "自定义称号", avatar_change: "更换头像",
   nameWar_enable: "开启名争", giveaway_enable: "开启白给",
   giveaway_board_submit: "白给留言板", nameWar_rename: "名争改名",
-  extreme_enable: "开启极限模式"
+  extreme_enable: "开启极限"
 };
 
 function labelFor(labels: Record<string, string> | undefined, key: string): string {
@@ -91,12 +91,17 @@ function formatDelta(d: number): string {
   return pct > 0 ? `↑${pct}%` : `↓${Math.abs(pct)}%`;
 }
 
-function AnalyticsTooltip({ active, payload, label }: {
+function AnalyticsTooltip({ active, payload, label, showTotal }: {
   active?: boolean;
   payload?: Array<{ name?: string; value?: number; color?: string }>;
   label?: string;
+  /** 堆叠图（对局数/开房数）悬停时附带当日各系列之和 */
+  showTotal?: boolean;
 }) {
   if (!active || !payload?.length) return null;
+  const total = showTotal
+    ? payload.reduce((sum, p) => sum + (Number(p.value) || 0), 0)
+    : 0;
   return (
     <div className="analytics-tooltip">
       {label != null && label !== "" && <div className="analytics-tooltip-label">{label}</div>}
@@ -107,6 +112,13 @@ function AnalyticsTooltip({ active, payload, label }: {
           <strong>{formatNum(Number(p.value) || 0)}</strong>
         </div>
       ))}
+      {showTotal && (
+        <div className="analytics-tooltip-row analytics-tooltip-total">
+          <span className="analytics-tooltip-swatch analytics-tooltip-swatch-total" />
+          <span>总计</span>
+          <strong>{formatNum(total)}</strong>
+        </div>
+      )}
     </div>
   );
 }
@@ -234,7 +246,7 @@ function SeriesTable({ days, series, labels }: {
 function RetentionHeatmap({ matrix, cohorts, offsets }: {
   matrix: number[][]; cohorts: string[]; offsets: number[];
 }) {
-  if (!matrix.length) return <p className="empty">暂无留存数据（需前端埋点上线后的访客）</p>;
+  if (!matrix.length) return <p className="empty">暂无留存数据（需有成功注册的用户）</p>;
   // 只展示最近 14 个 cohort × offset 0-14，避免 30×30 过密
   const maxC = 14;
   const maxO = 15;
@@ -295,7 +307,7 @@ function trendRows(data: AnalyticsRangeView) {
     // 设备指纹维度（新老设备）
     newVisitors: data.series.newVisitors[i] || 0,
     returning: data.series.returning[i] || 0,
-    // 账号 playerId 维度（新老用户）
+    // 用户 playerId 维度（新老用户）
     newUsers: data.newOldUsers?.new?.[i] || 0,
     oldLogin: data.newOldUsers?.oldLogin?.[i] || 0
   }));
@@ -513,7 +525,7 @@ export function AnalyticsPanel({ onError }: { onError: (message: string) => void
             </ChartCard>
           </div>
 
-          <ChartCard title="留存热力图 (D0–D14)">
+          <ChartCard title="用户留存热力图 (D0–D14)">
             <RetentionHeatmap
               matrix={data.retention?.matrix || []}
               cohorts={data.retention?.cohorts || []}
@@ -533,37 +545,8 @@ export function AnalyticsPanel({ onError }: { onError: (message: string) => void
             <HBarCard title="ISP" rows={(data.isps || []).slice(0, 6)} donut />
           </div>
 
-          <ChartCard title="会话时长分布" table={<BucketTable rows={data.sessionBuckets || []} />}>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={data.sessionBuckets || []} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
-                <XAxis dataKey="key" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-                <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-                <Tooltip content={<AnalyticsTooltip />} />
-                <Bar dataKey="value" name="会话数" maxBarSize={24} radius={[4, 4, 0, 0]} isAnimationActive={false}>
-                  {(data.sessionBuckets || []).map((_, i) => (
-                    <Cell key={i} fill={SEQ_COLORS[i % SEQ_COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartCard>
-
-          <ChartCard
-            title="每日对局数（按游戏）"
-            table={<SeriesTable days={data.series.days} series={data.gameRounds || []} labels={GAME_LABELS} />}
-          >
-            <StackedGameChart days={data.series.days} series={data.gameRounds || []} labels={GAME_LABELS} />
-          </ChartCard>
-
           <div className="analytics-row-2">
             <HBarCard title="对局结果" rows={relabelGameResultBuckets(data.gameResults || [])} />
-            <ChartCard title="开房数" table={<SeriesTable days={data.series.days} series={data.roomCreates || []} labels={GAME_LABELS} />}>
-              <StackedGameChart days={data.series.days} series={data.roomCreates || []} labels={GAME_LABELS} />
-            </ChartCard>
-          </div>
-
-          <div className="analytics-row-2">
             <ChartCard title="惩罚任务" table={
               <table className="analytics-data-table">
                 <thead><tr><th>日期</th><th>发布</th><th>完成</th><th>驳回</th></tr></thead>
@@ -583,7 +566,7 @@ export function AnalyticsPanel({ onError }: { onError: (message: string) => void
                 完成率 <strong>{((data.punishment?.doneRate || 0) * 100).toFixed(1)}%</strong>
               </p>
               <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={data.series.days.map((day, i) => ({
+                <BarChart data={data.series.days.map((day, i) => ({
                   day,
                   publish: data.punishment?.publish?.[i] || 0,
                   done: data.punishment?.done?.[i] || 0,
@@ -594,10 +577,46 @@ export function AnalyticsPanel({ onError }: { onError: (message: string) => void
                   <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <Tooltip content={<AnalyticsTooltip />} />
                   <Legend />
-                  <Line type="monotone" dataKey="publish" name="发布" stroke="var(--chart-1)" strokeWidth={2} dot={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="done" name="完成" stroke="var(--chart-3)" strokeWidth={2} dot={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="reject" name="驳回" stroke="var(--chart-critical)" strokeWidth={2} dot={false} isAnimationActive={false} />
-                </LineChart>
+                  <Bar dataKey="publish" name="发布" stackId="a" fill="var(--chart-1)" maxBarSize={24}
+                    shape={(p: any) => <StackedSegment {...p} dataKey="publish" seriesKeys={["publish", "done", "reject"]} />}
+                    isAnimationActive={false} />
+                  <Bar dataKey="done" name="完成" stackId="a" fill="var(--chart-3)" maxBarSize={24}
+                    shape={(p: any) => <StackedSegment {...p} dataKey="done" seriesKeys={["publish", "done", "reject"]} />}
+                    isAnimationActive={false} />
+                  <Bar dataKey="reject" name="驳回" stackId="a" fill="var(--chart-critical)" maxBarSize={24}
+                    shape={(p: any) => <StackedSegment {...p} dataKey="reject" seriesKeys={["publish", "done", "reject"]} />}
+                    isAnimationActive={false} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          </div>
+
+          <div className="analytics-row-2">
+            <ChartCard
+              title="对局数"
+              table={<SeriesTable days={data.series.days} series={data.gameRounds || []} labels={GAME_LABELS} />}
+            >
+              <StackedGameChart days={data.series.days} series={data.gameRounds || []} labels={GAME_LABELS} />
+            </ChartCard>
+            <ChartCard title="开房数" table={<SeriesTable days={data.series.days} series={data.roomCreates || []} labels={GAME_LABELS} />}>
+              <StackedGameChart days={data.series.days} series={data.roomCreates || []} labels={GAME_LABELS} />
+            </ChartCard>
+          </div>
+
+          <div className="analytics-row-2">
+            <ChartCard title="会话时长分布" table={<BucketTable rows={data.sessionBuckets || []} />}>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={data.sessionBuckets || []} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
+                  <XAxis dataKey="key" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <Tooltip content={<AnalyticsTooltip />} />
+                  <Bar dataKey="value" name="会话数" maxBarSize={24} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                    {(data.sessionBuckets || []).map((_, i) => (
+                      <Cell key={i} fill={SEQ_COLORS[i % SEQ_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             </ChartCard>
 
@@ -636,20 +655,36 @@ export function AnalyticsPanel({ onError }: { onError: (message: string) => void
                 </tbody>
               </table>
             }>
+              {/* 总数（存量）与新增（日增量）量级不同，双 Y 轴各自缩放。 */}
               <ResponsiveContainer width="100%" height={220}>
-                <ComposedChart data={data.series.days.map((day, i) => ({
-                  day,
-                  total: data.petBond?.total?.[i] || 0,
-                  new: data.petBond?.new?.[i] || 0
-                }))}>
+                <LineChart
+                  data={data.series.days.map((day, i) => ({
+                    day,
+                    total: data.petBond?.total?.[i] || 0,
+                    new: data.petBond?.new?.[i] || 0
+                  }))}
+                  margin={{ left: 4, right: 4 }}
+                >
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
                   <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-                  <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <YAxis
+                    yAxisId="left"
+                    tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }}
+                    stroke="var(--chart-axis)"
+                    width={40}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }}
+                    stroke="var(--chart-axis)"
+                    width={40}
+                  />
                   <Tooltip content={<AnalyticsTooltip />} />
                   <Legend />
-                  <Bar dataKey="new" name="新增" fill="var(--chart-2)" maxBarSize={24} radius={[4, 4, 0, 0]} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="total" name="总数" stroke="var(--chart-1)" strokeWidth={2} dot={false} isAnimationActive={false} />
-                </ComposedChart>
+                  <Line yAxisId="left" type="monotone" dataKey="new" name="新增" stroke="var(--chart-2)" strokeWidth={2} dot={false} isAnimationActive={false} />
+                  <Line yAxisId="right" type="monotone" dataKey="total" name="总数" stroke="var(--chart-1)" strokeWidth={2} dot={false} isAnimationActive={false} />
+                </LineChart>
               </ResponsiveContainer>
             </ChartCard>
           </div>
@@ -661,14 +696,109 @@ export function AnalyticsPanel({ onError }: { onError: (message: string) => void
 
             <ChartCard title="聊天活跃" table={
               <table className="analytics-data-table">
-                <thead><tr><th>日期</th><th>大厅</th><th>房间</th><th>发言人</th></tr></thead>
+                <thead><tr><th>日期</th><th>大厅</th><th>房间</th></tr></thead>
                 <tbody>
                   {data.series.days.map((d, i) => (
                     <tr key={d}>
                       <td>{d}</td>
                       <td>{data.chat?.lobby?.[i] || 0}</td>
                       <td>{data.chat?.room?.[i] || 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            }>
+              {/* 大厅/房间消息量级常差 2～3 个数量级，双 Y 轴各自缩放。 */}
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart
+                  data={data.series.days.map((day, i) => ({
+                    day,
+                    lobby: data.chat?.lobby?.[i] || 0,
+                    room: data.chat?.room?.[i] || 0
+                  }))}
+                  margin={{ left: 4, right: 4 }}
+                >
+                  <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
+                  <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <YAxis
+                    yAxisId="left"
+                    tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }}
+                    stroke="var(--chart-axis)"
+                    width={40}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }}
+                    stroke="var(--chart-axis)"
+                    width={40}
+                  />
+                  <Tooltip content={<AnalyticsTooltip />} />
+                  <Legend />
+                  <Line yAxisId="left" type="monotone" dataKey="lobby" name="大厅消息" stroke="var(--chart-1)" strokeWidth={2} dot={false} isAnimationActive={false} />
+                  <Line yAxisId="right" type="monotone" dataKey="room" name="房间消息" stroke="var(--chart-2)" strokeWidth={2} dot={false} isAnimationActive={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          </div>
+
+          <div className="analytics-row-2">
+            <ChartCard title="单房对局" table={
+              <table className="analytics-data-table">
+                <thead><tr><th>日期</th><th>最多</th><th>平均</th></tr></thead>
+                <tbody>
+                  {data.series.days.map((d, i) => (
+                    <tr key={d}>
+                      <td>{d}</td>
+                      <td>{data.roomRounds?.max?.[i] || 0}</td>
+                      <td>{data.roomRounds?.avg?.[i] || 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            }>
+              {/* max 与 avg 量级可能差较大，双 Y 轴各自缩放。 */}
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart
+                  data={data.series.days.map((day, i) => ({
+                    day,
+                    max: data.roomRounds?.max?.[i] || 0,
+                    avg: data.roomRounds?.avg?.[i] || 0
+                  }))}
+                  margin={{ left: 4, right: 4 }}
+                >
+                  <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
+                  <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <YAxis
+                    yAxisId="left"
+                    tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }}
+                    stroke="var(--chart-axis)"
+                    width={40}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }}
+                    stroke="var(--chart-axis)"
+                    width={40}
+                  />
+                  <Tooltip content={<AnalyticsTooltip />} />
+                  <Legend />
+                  <Line yAxisId="left" type="monotone" dataKey="max" name="单房最多" stroke="var(--chart-1)" strokeWidth={2} dot={false} isAnimationActive={false} />
+                  <Line yAxisId="right" type="monotone" dataKey="avg" name="单房平均" stroke="var(--chart-2)" strokeWidth={2} dot={false} isAnimationActive={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </ChartCard>
+
+            <ChartCard title="聊天人数" table={
+              <table className="analytics-data-table">
+                <thead><tr><th>日期</th><th>大厅</th><th>房间</th></tr></thead>
+                <tbody>
+                  {data.series.days.map((d, i) => (
+                    <tr key={d}>
+                      <td>{d}</td>
                       <td>{data.chat?.speakers?.[i] || 0}</td>
+                      <td>{data.chat?.speakersRoom?.[i] || 0}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -677,18 +807,16 @@ export function AnalyticsPanel({ onError }: { onError: (message: string) => void
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={data.series.days.map((day, i) => ({
                   day,
-                  lobby: data.chat?.lobby?.[i] || 0,
-                  room: data.chat?.room?.[i] || 0,
-                  speakers: data.chat?.speakers?.[i] || 0
+                  lobby: data.chat?.speakers?.[i] || 0,
+                  room: data.chat?.speakersRoom?.[i] || 0
                 }))}>
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
                   <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <Tooltip content={<AnalyticsTooltip />} />
                   <Legend />
-                  <Line type="monotone" dataKey="lobby" name="大厅消息" stroke="var(--chart-1)" strokeWidth={2} dot={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="room" name="房间消息" stroke="var(--chart-2)" strokeWidth={2} dot={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="speakers" name="发言人数" stroke="var(--chart-3)" strokeWidth={2} dot={false} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="lobby" name="大厅发言人" stroke="var(--chart-1)" strokeWidth={2} dot={false} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="room" name="房间发言人" stroke="var(--chart-2)" strokeWidth={2} dot={false} isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
             </ChartCard>
@@ -700,8 +828,8 @@ export function AnalyticsPanel({ onError }: { onError: (message: string) => void
                 <CartesianGrid stroke="var(--chart-grid)" horizontal={false} strokeDasharray="" />
                 <XAxis type="number" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                 <YAxis type="category" dataKey="key" width={80} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-                <Tooltip content={<AnalyticsTooltip />} />
-                <Bar dataKey="value" name="人数" maxBarSize={24} radius={[0, 4, 4, 0]} isAnimationActive={false}>
+                <Tooltip content={<FunnelTooltip steps={funnelOrdered(data.funnel || [])} />} />
+                <Bar dataKey="value" name="设备 UV" maxBarSize={24} radius={[0, 4, 4, 0]} isAnimationActive={false}>
                   {funnelOrdered(data.funnel || []).map((_, i) => (
                     <Cell key={i} fill={SEQ_COLORS[i % SEQ_COLORS.length]} />
                   ))}
@@ -761,12 +889,54 @@ export function AnalyticsPanel({ onError }: { onError: (message: string) => void
 }
 
 function funnelOrdered(rows: AnalyticsBucket[]): AnalyticsBucket[] {
-  const order = ["visit", "login", "room", "round", "punish_done"];
+  // 与 analytics_agg rebuildDay 的 funnel 键一致：五层均为设备 UV
+  const order = ["visit", "lobby", "room", "round", "finish"];
   const labels: Record<string, string> = {
-    visit: "访问", login: "登录", room: "进房", round: "开局", punish_done: "完成惩罚"
+    visit: "访问", lobby: "进大厅", room: "进房", round: "开局", finish: "完成对局"
   };
   const map = new Map(rows.map((r) => [r.key, r.value]));
-  return order.map((k) => ({ key: labels[k] || k, value: map.get(k) || 0 }));
+  return order.map((k, i) => ({ key: labels[k] || k, value: map.get(k) || 0, stepIndex: i } as AnalyticsBucket & { stepIndex: number }));
+}
+
+/** 转化漏斗悬停：绝对设备 UV + 相对上一级 / 相对访问 的转化率 */
+function FunnelTooltip({ active, payload, steps }: {
+  active?: boolean;
+  payload?: Array<{ name?: string; value?: number; color?: string; payload?: { key?: string; value?: number; stepIndex?: number } }>;
+  steps: Array<{ key: string; value: number }>;
+}) {
+  if (!active || !payload?.length) return null;
+  const p = payload[0];
+  const value = Number(p.value) || 0;
+  const label = p.payload?.key || "";
+  const idx = typeof p.payload?.stepIndex === "number"
+    ? p.payload.stepIndex
+    : steps.findIndex((s) => s.key === label);
+  const top = steps[0]?.value || 0;
+  const prev = idx > 0 ? (steps[idx - 1]?.value || 0) : 0;
+  const fmtPct = (num: number, den: number) => {
+    if (den <= 0) return "—";
+    return `${((num / den) * 100).toFixed(1)}%`;
+  };
+  return (
+    <div className="analytics-tooltip">
+      {label !== "" && <div className="analytics-tooltip-label">{label}</div>}
+      <div className="analytics-tooltip-row">
+        <span className="analytics-tooltip-swatch" style={{ background: p.color }} />
+        <span>设备 UV</span>
+        <strong>{formatNum(value)}</strong>
+      </div>
+      {idx > 0 && (
+        <div className="analytics-tooltip-row analytics-tooltip-meta">
+          <span>相对上一级</span>
+          <strong>{fmtPct(value, prev)}</strong>
+        </div>
+      )}
+      <div className="analytics-tooltip-row analytics-tooltip-meta">
+        <span>相对访问</span>
+        <strong>{idx === 0 ? "100%" : fmtPct(value, top)}</strong>
+      </div>
+    </div>
+  );
 }
 
 function HBarCard({ title, rows, donut }: { title: string; rows: AnalyticsBucket[]; donut?: boolean }) {
@@ -805,11 +975,31 @@ function HBarCard({ title, rows, donut }: { title: string; rows: AnalyticsBucket
   );
 }
 
+// 后端 namedSeries 按当前窗口总量降序排列（且总量并列时取决于 Go map 遍历顺序），
+// series 数组顺序会在两次轮询之间悄悄变化。堆叠柱状图的 Bar 挂载顺序决定了
+// Recharts 内部的堆叠层序，而 <Bar> 用 key={s.key} 做 keyed diff——顺序变化时
+// React 只会挪动已有实例，不一定触发层序重新登记，导致"当前渲染顺序"和"实际堆叠层序"
+// 出现错位，StackedSegment 找出的"顶层"就可能不是视觉上真正露出的那一段（圆角错位到中间）。
+// 用 labels（游戏白名单）里固定的 key 顺序重排 series，让同一张图表在任意两次轮询之间
+// 顺序恒定，从根上消除这种错位，顺带也让每个游戏的配色不会跟着轮询到的顺序漂移。
+function orderSeriesStably(series: AnalyticsNamedSeries[], labels?: Record<string, string>): AnalyticsNamedSeries[] {
+  if (!labels) return series;
+  const order = Object.keys(labels);
+  return [...series].sort((a, b) => {
+    const ia = order.indexOf(a.key);
+    const ib = order.indexOf(b.key);
+    const ra = ia === -1 ? order.length : ia;
+    const rb = ib === -1 ? order.length : ib;
+    return ra !== rb ? ra - rb : a.key.localeCompare(b.key);
+  });
+}
+
 function StackedGameChart({
-  days, series, asLine, labels
+  days, series: rawSeries, asLine, labels
 }: {
   days: string[]; series: AnalyticsNamedSeries[]; asLine?: boolean; labels?: Record<string, string>;
 }) {
+  const series = orderSeriesStably(rawSeries, labels);
   if (!series.length) return <p className="empty">暂无数据</p>;
   const rows = seriesToChartRows(days, series);
   if (asLine) {
@@ -829,13 +1019,14 @@ function StackedGameChart({
       </ResponsiveContainer>
     );
   }
+  // 对局数 / 开房数：气泡里附带当日各游戏之和
   return (
     <ResponsiveContainer width="100%" height={240}>
       <BarChart data={rows}>
         <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
         <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
         <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-        <Tooltip content={<AnalyticsTooltip />} />
+        <Tooltip content={<AnalyticsTooltip showTotal />} />
         <Legend />
         {series.map((s, i) => (
           <Bar key={s.key} dataKey={s.key} name={labelFor(labels, s.key)} stackId="a"

@@ -202,10 +202,18 @@ class GameSocket {
         }
         return;
       }
-      this.emit("ping", { t: Date.now() }, () => {
+      this.emit("ping", { t: Date.now() }, (response) => {
         this.lastPongAt = Date.now();
+        this.handlePingBuildId(response);
       });
     }, 25_000);
+  }
+
+  // 心跳应答里顺带的 buildId 转发成本地事件，与连接建立时的一次性 server:hello 推送
+  // 走同一个下游处理逻辑，App 侧只需订阅一个事件即可覆盖两条通道。
+  private handlePingBuildId(response: any) {
+    const buildId = response?.buildId;
+    if (typeof buildId === "string" && buildId) this.emitLocal("server:hello", { buildId });
   }
 
   private stopHeartbeat() {
@@ -223,8 +231,9 @@ class GameSocket {
       return;
     }
     if (this.ws.readyState === WebSocket.OPEN) {
-      this.emit("ping", { t: Date.now() }, () => {
+      this.emit("ping", { t: Date.now() }, (response) => {
         this.lastPongAt = Date.now();
+        this.handlePingBuildId(response);
       });
     }
   }

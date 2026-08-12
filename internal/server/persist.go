@@ -47,10 +47,12 @@ type persistedPlayer struct {
 	BondMasterEnabled            *bool             `json:"bondMasterEnabled,omitempty"`
 	BondPetEnabled               *bool             `json:"bondPetEnabled,omitempty"`
 	BondPublicDisplay            *bool             `json:"bondPublicDisplay,omitempty"`
-	Stats                        types.PublicStats `json:"stats"`
-	GameStats                    types.GameStats   `json:"gameStats"`
-	CreatedAt                    int64             `json:"createdAt,omitempty"`
-	LastSeenAt                   int64             `json:"lastSeenAt,omitempty"`
+	// PunishmentTagPrefs：tagId -> include|exclude，整表 DELETE+INSERT 同步。
+	PunishmentTagPrefs map[string]string `json:"punishmentTagPrefs,omitempty"`
+	Stats              types.PublicStats `json:"stats"`
+	GameStats          types.GameStats   `json:"gameStats"`
+	CreatedAt          int64             `json:"createdAt,omitempty"`
+	LastSeenAt         int64             `json:"lastSeenAt,omitempty"`
 }
 
 func (s *Server) serializePlayer(p *PlayerState) (persistedPlayer, bool) {
@@ -78,9 +80,21 @@ func (s *Server) serializePlayer(p *PlayerState) (persistedPlayer, bool) {
 		PushMentionEnabled:   p.PushMentionEnabled, PushTurnEnabled: p.PushTurnEnabled, PushSeatEnabled: p.PushSeatEnabled,
 		PushBondEnabled:   p.PushBondEnabled,
 		BondMasterEnabled: p.BondMasterEnabled, BondPetEnabled: p.BondPetEnabled, BondPublicDisplay: p.BondPublicDisplay,
-		Stats: p.Stats, GameStats: p.GameStats,
+		PunishmentTagPrefs: copyStringMap(p.PunishmentTagPrefs),
+		Stats:              p.Stats, GameStats: p.GameStats,
 		CreatedAt: p.CreatedAt, LastSeenAt: p.LastSeenAt,
 	}, true
+}
+
+func copyStringMap(m map[string]string) map[string]string {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }
 
 func (s *Server) serializePlayers() []persistedPlayer {
@@ -227,6 +241,7 @@ func (s *Server) ingestPersistedPlayer(item persistedPlayer) bool {
 		PushTurnEnabled:    item.PushTurnEnabled,
 		PushSeatEnabled:    item.PushSeatEnabled,
 		PushBondEnabled:    item.PushBondEnabled,
+		PunishmentTagPrefs: copyStringMap(item.PunishmentTagPrefs),
 		CreatedAt:          createdAt,
 		LastSeenAt:         lastSeenAt,
 	}

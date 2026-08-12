@@ -278,75 +278,99 @@ func (s *Server) normalizeRoomTags(settings types.RoomSettings) []string {
 	return out
 }
 
-func (s *Server) selectedPunishmentIDs(settings types.RoomSettings) []string {
-	rawIDs := settings.PunishmentIDs
-	if len(rawIDs) == 0 && settings.PunishmentID != "" {
-		rawIDs = []string{settings.PunishmentID}
+// filterValidTagIDs 保留配置中存在的标签 ID，去重，顺序按后台标签列表固定顺序。
+func (s *Server) filterValidTagIDs(ids []string) []string {
+	if len(ids) == 0 {
+		return nil
 	}
-	var valid []string
-	seen := map[string]struct{}{}
-	for _, id := range rawIDs {
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		found := false
-		for _, p := range s.cfg.Punishments {
-			if p.ID == id {
-				found = true
-				break
-			}
-		}
-		if found {
-			seen[id] = struct{}{}
-			valid = append(valid, id)
-		}
-	}
-	if len(valid) > 0 {
-		return valid
-	}
-	if len(s.cfg.Punishments) > 0 {
-		return []string{s.cfg.Punishments[0].ID}
-	}
-	return nil
-}
-
-func (s *Server) selectedPunishments(settings types.RoomSettings) []types.PunishmentConfig {
-	ids := s.selectedPunishmentIDs(settings)
-	var out []types.PunishmentConfig
+	want := map[string]struct{}{}
 	for _, id := range ids {
-		for _, p := range s.cfg.Punishments {
-			if p.ID == id {
-				out = append(out, p)
-				break
-			}
+		if id = strings.TrimSpace(id); id != "" {
+			want[id] = struct{}{}
+		}
+	}
+	var out []string
+	for _, tag := range s.cfg.PunishmentTags {
+		if _, ok := want[tag.ID]; ok {
+			out = append(out, tag.ID)
 		}
 	}
 	return out
 }
 
-func (s *Server) primaryPunishmentForSettings(settings types.RoomSettings) *types.PunishmentConfig {
-	ids := s.selectedPunishmentIDs(settings)
-	if len(ids) == 0 {
+// firstTagWithRoomNamePool 按后台标签固定顺序遍历已选标签，返回第一个房名词库非空的。
+func (s *Server) firstTagWithRoomNamePool(included []string) *types.PunishmentTagConfig {
+	want := map[string]struct{}{}
+	for _, id := range included {
+		want[id] = struct{}{}
+	}
+	for i := range s.cfg.PunishmentTags {
+		tag := &s.cfg.PunishmentTags[i]
+		if _, ok := want[tag.ID]; !ok {
+			continue
+		}
+		if tag.RoomNamePool != nil && len(tag.RoomNamePool.Subjects) > 0 && len(tag.RoomNamePool.RoomWords) > 0 {
+			return tag
+		}
+	}
+	return nil
+}
+
+// firstTagWithBackground 按后台标签固定顺序遍历已选标签，返回第一个背景图库非空的。
+func (s *Server) firstTagWithBackground(included []string) *types.PunishmentTagConfig {
+	want := map[string]struct{}{}
+	for _, id := range included {
+		want[id] = struct{}{}
+	}
+	for i := range s.cfg.PunishmentTags {
+		tag := &s.cfg.PunishmentTags[i]
+		if _, ok := want[tag.ID]; !ok {
+			continue
+		}
+		if len(tag.RoomBackgroundImages) > 0 {
+			return tag
+		}
+	}
+	return nil
+}
+
+// findSeriesByID 只返回"可用"的系列（seriesIsUsable：每一步候选任务合起来覆盖全部
+// 已定义阵营）——阵营覆盖不全的系列即便已保存到库里，对外也视为不存在：建房面板选不到，
+// 房间设置校验拒绝，运行时也不会产出任务。
+func (s *Server) findSeriesByID(id string) *types.PunishmentSeriesTaskConfig {
+	id = strings.TrimSpace(id)
+	if id == "" {
 		return nil
 	}
-	lastID := ids[len(ids)-1]
-	for i := range s.cfg.Punishments {
-		if s.cfg.Punishments[i].ID == lastID {
-			return &s.cfg.Punishments[i]
+	for i := range s.punishmentSeriesCache {
+		if s.punishmentSeriesCache[i].ID == id {
+			series := &s.punishmentSeriesCache[i]
+			if !s.seriesIsUsable(*series) {
+				return nil
+			}
+			return series
 		}
 	}
 	return nil
 }
 
 func (s *Server) roomNamePoolForSettings(settings types.RoomSettings) *types.RoomNamePool {
-	if settings.EnablePunishment && settings.PunishmentSource == "player" {
+	if !settings.EnablePunishment {
+		return nil
+	}
+	src := normalizePunishmentSource(settings.PunishmentSource)
+	if src == "player" {
 		return s.cfg.PlayerPunishmentRoomNamePool
 	}
-	if settings.EnablePunishment {
-		p := s.primaryPunishmentForSettings(settings)
-		if p != nil {
-			return p.RoomNamePool
+	if src == "series" {
+		if series := s.findSeriesByID(settings.PunishmentSeriesID); series != nil {
+			return series.RoomNamePool
 		}
+		return nil
+	}
+	// random：遍历已选标签，取第一个有房名词库的。
+	if tag := s.firstTagWithRoomNamePool(settings.PunishmentTagsIncluded); tag != nil {
+		return tag.RoomNamePool
 	}
 	return nil
 }
@@ -420,14 +444,23 @@ func (s *Server) normalizeRoomName(settings types.RoomSettings) string {
 }
 
 func (s *Server) randomRoomBackground(settings types.RoomSettings) string {
-	if !settings.EnablePunishment || settings.PunishmentSource == "player" {
+	if !settings.EnablePunishment {
 		return ""
 	}
-	p := s.primaryPunishmentForSettings(settings)
-	if p == nil || len(p.RoomBackgroundImages) == 0 {
+	src := normalizePunishmentSource(settings.PunishmentSource)
+	if src == "player" {
 		return ""
 	}
-	return randomFromF(p.RoomBackgroundImages)
+	if src == "series" {
+		if series := s.findSeriesByID(settings.PunishmentSeriesID); series != nil && len(series.RoomBackgroundImages) > 0 {
+			return randomFromF(series.RoomBackgroundImages)
+		}
+		return ""
+	}
+	if tag := s.firstTagWithBackground(settings.PunishmentTagsIncluded); tag != nil {
+		return randomFromF(tag.RoomBackgroundImages)
+	}
+	return ""
 }
 
 func (s *Server) humanPlayerFromSeat(room *RoomState, seat types.SeatKey) *PlayerState {

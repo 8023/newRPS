@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -35,12 +36,146 @@ func copyConfigDirForTest(t *testing.T) string {
 	return dst
 }
 
+// stripPunishmentFactionIDs 曾用于清空 punishments.json 任务上的阵营引用。
+// 任务池已迁出 AppConfig，ValidateConfig 不再校验任务阵营，此函数保留为空操作以兼容调用点。
+func stripPunishmentFactionIDs(t *testing.T, cfgDir string) {
+	t.Helper()
+	_ = cfgDir
+}
+
 // withRootDir 临时把包级 rootDir 指向 dir，测试结束后还原，避免污染后续测试。
 func withRootDir(t *testing.T, dir string) {
 	t.Helper()
 	orig := rootDir
 	rootDir = dir
 	t.Cleanup(func() { rootDir = orig })
+}
+
+func TestLoadConfigMigratesLegacyPunishmentsFile(t *testing.T) {
+	dir := copyConfigDirForTest(t)
+	cfgDir := filepath.Join(dir, "config", "json")
+	legacy := `[
+  {
+    "id": "truth",
+    "name": "真心话",
+    "description": "回答一个问题。",
+    "variants": {
+      "default": "回答一个默认问题。",
+      "male": "回答一个勇气问题。",
+      "female": "回答一个心情问题。"
+    },
+    "tasks": [{
+      "id": "task1",
+      "name": "默认任务",
+      "variants": {
+        "default": "回答一个默认问题。",
+        "male": "回答一个勇气问题。",
+        "female": "回答一个心情问题。"
+      },
+      "backgroundOpacity": 0.22
+    }],
+    "roomNamePool": {
+      "adjectives": ["坦白"],
+      "subjects": ["真心话"],
+      "roomWords": ["小屋"]
+    }
+  }
+]`
+	if err := os.WriteFile(filepath.Join(cfgDir, "punishments.json"), []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	withRootDir(t, dir)
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig should migrate legacy punishment tasks, got error: %v", err)
+	}
+	if len(cfg.PunishmentTags) != 1 || cfg.PunishmentTags[0].ID != "truth" {
+		t.Fatalf("legacy punishment should flatten to 1 tag: tags=%+v", cfg.PunishmentTags)
+	}
+	// 任务池不再进 AppConfig，但磁盘上仍应写出拍平后的 tasks，供 server 导入 SQLite。
+	tasks, _, err := ReadLegacyPunishmentPoolFromDisk()
+	if err != nil {
+		t.Fatalf("read legacy pool: %v", err)
+	}
+	if len(tasks) != 3 {
+		t.Fatalf("legacy disk tasks should be 3, got %d: %+v", len(tasks), tasks)
+	}
+	texts := map[string]string{}
+	for _, task := range tasks {
+		texts[task.ID] = task.Text
+		if task.Order != 50 {
+			t.Fatalf("legacy task order should use the neutral default, got %d", task.Order)
+		}
+	}
+	if texts["truth_task1_default"] != "回答一个默认问题。" || texts["truth_task1_male"] != "回答一个勇气问题。" || texts["truth_task1_female"] != "回答一个心情问题。" {
+		t.Fatalf("legacy task texts were not preserved: %#v", texts)
+	}
+	if _, err := os.Stat(filepath.Join(cfgDir, "punishments.json.bak")); err != nil {
+		t.Fatalf("legacy punishment file should be backed up: %v", err)
+	}
+	if _, err := LoadConfig(); err != nil {
+		t.Fatalf("second LoadConfig should be idempotent after punishment migration: %v", err)
+	}
+}
+
+func TestLoadConfigMigratesLegacyPunishmentsFromMonolithicConfig(t *testing.T) {
+	dir := copyConfigDirForTest(t)
+	cfgDir := filepath.Join(dir, "config", "json")
+	withRootDir(t, dir)
+	cfg, err := readSplitConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]json.RawMessage
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	legacy := []byte(`[{"id":"truth","name":"真心话","description":"回答一个问题。","variants":{"default":"回答默认问题。","male":"回答勇气问题。","female":"回答心情问题。"},"tasks":[{"id":"task1","name":"默认任务","variants":{"default":"回答默认问题。","male":"回答勇气问题。","female":"回答心情问题。"}}],"roomNamePool":{"adjectives":["坦白"],"subjects":["真心话"],"roomWords":["小屋"]}}]`)
+	document["punishments"] = legacy
+	// 清除新结构字段，模拟真正的旧单体配置。
+	delete(document, "punishmentTags")
+	delete(document, "punishmentSeriesSummaries")
+	delete(document, "punishmentRandomSettings")
+	data, err = json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgDir, "default.json"), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range splitConfigFiles {
+		if err := os.Remove(filepath.Join(cfgDir, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	loaded, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("monolithic legacy config should migrate without losing punishment text: %v", err)
+	}
+	if len(loaded.PunishmentTags) != 1 {
+		t.Fatalf("monolithic punishment migration incomplete: tags=%+v", loaded.PunishmentTags)
+	}
+	// 任务文案落在磁盘 tasks 字段，供后续 SQLite 导入，不进 AppConfig。
+	tasks, _, err := ReadLegacyPunishmentPoolFromDisk()
+	if err != nil {
+		t.Fatalf("read legacy pool: %v", err)
+	}
+	found := false
+	for _, task := range tasks {
+		if task.Text == "回答默认问题。" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("monolithic punishment migration lost task text on disk: %+v", tasks)
+	}
 }
 
 // TestLoadConfigMigratesLegacyDeployDir 模拟官方升级流程（README「升级服务器且不丢玩家数据」）
@@ -128,6 +263,7 @@ func TestLoadConfigMigratesLegacyGenderFactionsFile(t *testing.T) {
 	if err := os.Remove(filepath.Join(cfgDir, "genders.json")); err != nil {
 		t.Fatal(err)
 	}
+	stripPunishmentFactionIDs(t, cfgDir)
 
 	withRootDir(t, dir)
 

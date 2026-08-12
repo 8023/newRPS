@@ -116,6 +116,11 @@ type PlayerState struct {
 	PushTurnEnabled    *bool // 轮到我出招/落子
 	PushSeatEnabled    *bool // 我的房间参战席被坐满
 	PushBondEnabled    *bool // 我的主/宠上线
+	// PunishmentTagPrefs：随机任务标签三态偏好（tagId -> "include"|"exclude"），开房面板
+	// 预填用；同样是私有字段，不进 PublicPlayer——否则会随座位/观战快照、player:get、
+	// 聊天作者列表广播给其他玩家，等于把"我想避开哪些惩罚标签"暴露给所有人。只在
+	// player:join 的应答里作为独立字段下发给玩家本人，见 onPlayerJoin。
+	PunishmentTagPrefs map[string]string
 	// GiveawayVoteQuotas：本玩家对白给自救板每个目标各自独立的每小时点赞/倒赞额度，
 	// key 为目标玩家 ID。与旧版"全体目标共用一个每小时总额度"不同——每个目标的窗口各自
 	// 独立起算/过期，互不影响。纯内存态，不落库，掉线/重启后清零（可接受：额度本就是
@@ -216,11 +221,16 @@ type RoomState struct {
 	ResultText                  string
 	PunishedPlayerIDs           []string
 	Proofs                      []types.PunishmentProof
-	Score                       map[types.SeatKey]int
-	SeatedScore                 map[types.SeatKey]int
-	SeatStats                   map[types.SeatKey]types.SeatStats
-	RoundHistory                []types.RoundHistoryItem
-	OwnerID                     string
+	// PunishmentTaskProgress：本房间内已完成的系统任务惩罚局数，用于按任务难度递增抽取
+	// （见 punishment.go 的 pickSystemTaskForPlayer/buildPunishmentTasksWithWinnerName）。
+	// 与玩家、与具体任务类型均无关——房间内任意败者抽到任意类型都会推进同一计数；且每完成一局
+	// 只 +1，即便平局双罚/双败一局同时惩罚两名玩家也不例外。随房间建立初始化为 0，随房间销毁释放。
+	PunishmentTaskProgress int
+	Score                  map[types.SeatKey]int
+	SeatedScore            map[types.SeatKey]int
+	SeatStats              map[types.SeatKey]types.SeatStats
+	RoundHistory           []types.RoundHistoryItem
+	OwnerID                string
 	// CreatorName：创建者的展示名快照（创建时的 playerShortName），供房间关闭时写入
 	// rooms 表用；不能在关闭时现取，届时创建者可能已改名甚至不在房间里了。
 	CreatorName      string
@@ -336,6 +346,12 @@ type Server struct {
 	// pushDB：Web Push 订阅存储；vapid：VAPID 密钥对（work/vapid.json 或环境变量）
 	pushDB   *pushStore
 	playerDB *playerStore
+	// punishmentStore：任务池 + 系列任务 SQLite 持久化；运行时读路径走下方缓存。
+	punishmentStore *punishmentStore
+	// punishmentTasksCache / punishmentSeriesCache：启动 list 一次，admin save 后刷新，
+	// 与 s.cfg 同锁（s.mu）保护；选任务逻辑一律读缓存，不直接查 SQLite。
+	punishmentTasksCache  []types.PunishmentTaskConfig
+	punishmentSeriesCache []types.PunishmentSeriesTaskConfig
 	// petBondDB / petBonds / petBondRequests：认主关系与待办申请（内存权威 + SQLite 写穿）
 	petBondDB       *petBondStore
 	petBonds        map[string]*petBond        // bondKey(master,pet) -> bond

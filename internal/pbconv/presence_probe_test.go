@@ -200,3 +200,37 @@ func TestLobbyHasPasswordStillPresent(t *testing.T) {
 		t.Fatalf("hasPassword want true, got %#v", r["hasPassword"])
 	}
 }
+
+func TestLobbyPunishmentSelectionSurvivesWire(t *testing.T) {
+	snap := types.LobbySnapshot{
+		Players: map[string]types.LobbyPlayer{},
+		Rooms: map[string]types.LobbyRoomInfo{
+			"r1": {
+				ID: "r1", EnablePunishment: true, PunishmentSource: "series",
+				PunishmentTagsIncluded: []string{"truth"},
+				PunishmentTagsExcluded: []string{"water"}, PunishmentSeriesID: "s1",
+				Versus: map[types.SeatKey]any{types.SeatA: nil, types.SeatB: nil}, Tags: []string{},
+			},
+		},
+		NormalLeaderboard: []types.LobbyPlayer{}, RankedLeaderboard: []types.LobbyPlayer{},
+		Suggestions: []types.Suggestion{}, LobbyChat: []types.ChatMessage{},
+	}
+	doc, _, _, err := MarshalStateLobby(snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tree, err := StateDocToFront(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rooms := tree.(map[string]any)["rooms"].([]any)
+	r := rooms[0].(map[string]any)
+	if r["punishmentSource"] != "series" || r["punishmentSeriesId"] != "s1" {
+		t.Fatalf("selection lost: %#v", r)
+	}
+	included, _ := r["punishmentTagsIncluded"].([]any)
+	excluded, _ := r["punishmentTagsExcluded"].([]any)
+	if len(included) != 1 || included[0] != "truth" || len(excluded) != 1 || excluded[0] != "water" {
+		t.Fatalf("tag selection lost: included=%#v excluded=%#v", included, excluded)
+	}
+}

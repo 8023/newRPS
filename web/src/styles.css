@@ -20,6 +20,8 @@
   --primary-hover: #4aa7e6;
   --pink: #ffd7e9;
   --pink-border: #f2a9ca;
+  --reject: #f0c4c8;
+  --reject-border: #d48a92;
   --notice-bg: #fff5fa;
   --notice-border: #f3bad3;
   --shadow: rgba(102, 183, 238, 0.12);
@@ -43,6 +45,8 @@
   --primary-hover: #6db5ee;
   --pink: #553449;
   --pink-border: #8b5270;
+  --reject: #5a3840;
+  --reject-border: #8b5560;
   --notice-bg: #342335;
   --notice-border: #7b4d72;
   --shadow: rgba(0, 0, 0, 0.28);
@@ -541,6 +545,19 @@ main {
 .announcement-popup .icon-button {
   flex: 0 0 auto;
   background: color-mix(in srgb, var(--panel-solid) 70%, transparent);
+}
+
+/* 版本更新提示：复用 .announcement-popup 的基础样式，仅需要按钮组横排。
+   若全服公告恰好同时展示，靠通用兄弟选择器错开垂直位置，避免叠在一起。 */
+.version-update-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.announcement-popup ~ .version-update-popup {
+  top: 168px;
 }
 
 .security-disclaimer-backdrop {
@@ -1130,8 +1147,10 @@ main {
 }
 
 .game-choice-icon {
-  min-width: 46px;
+  position: relative;
+  width: 46px;
   height: 46px;
+  flex: 0 0 46px;
   display: grid;
   place-items: center;
   border: 1px solid var(--border);
@@ -1141,6 +1160,70 @@ main {
   line-height: 1;
   white-space: nowrap;
   padding: 0 4px;
+  overflow: hidden;
+}
+
+/* 多图标排布（锤子剪刀布三手势、井字棋/五子棋对角双子）统一用绝对定位按「中心点」摆放。
+   不要改回 grid + 1fr：1fr 的下限是 min-content，emoji 字形宽度（约 1.24em）会把轨道撑得比容器还宽，
+   导致图标溢出 46px 圆角框被 overflow:hidden 裁掉——这正是之前右侧图标缺一块的原因。
+   inset:0 让它覆盖父框的 padding box，拿到完整 44×44 定位空间。 */
+.game-choice-icon-rps,
+.game-choice-icon-diagonal {
+  position: absolute;
+  inset: 0;
+  line-height: 1;
+}
+
+.game-choice-icon-rps>span,
+.game-choice-icon-diagonal>span {
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
+/* 三手势倒三角（上两下一），彼此几乎相切，整体向中心收拢。 */
+.game-choice-icon-rps {
+  font-size: 17px;
+}
+
+.game-choice-icon-rps>span:nth-child(1) {
+  left: 27%;
+  top: 30%;
+}
+
+.game-choice-icon-rps>span:nth-child(2) {
+  left: 73%;
+  top: 30%;
+}
+
+.game-choice-icon-rps>span:nth-child(3) {
+  left: 50%;
+  top: 69%;
+}
+
+.game-choice-icon-pair {
+  font-size: 13px;
+}
+
+/* 井字棋/五子棋：两个图标沿左上→右下对角线排布，与黑白棋的水平并排区分开。
+   坐标关于 50% 对称，所以纯文本字形（●○）也不会出现视觉偏移。 */
+.game-choice-icon-diagonal {
+  font-size: 16px;
+}
+
+.game-choice-icon-diagonal>span:nth-child(1) {
+  left: 32%;
+  top: 32%;
+}
+
+.game-choice-icon-diagonal>span:nth-child(2) {
+  left: 68%;
+  top: 68%;
+}
+
+/* 五子棋的 ●○ 是文本字形（墨迹只占约 0.6em），按 emoji 的字号会明显小一圈，单独放大补回来。
+   不要用 line-height < 1 来压高度：那样行盒比字形内容区还矮，内容区会反过来溢出父框。 */
+.game-choice-icon-diagonal-text {
+  font-size: 20px;
 }
 
 .game-choice-copy {
@@ -4508,23 +4591,39 @@ main {
   gap: 8px;
 }
 
-.admin-image-upload {
-  width: fit-content;
-  max-width: 100%;
-  border: 1px dashed var(--primary);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--primary) 12%, var(--panel-solid));
-  color: var(--page-text);
-  padding: 8px 10px;
-  display: inline-flex;
+.admin-bg-image-field {
+  display: grid;
   gap: 7px;
-  align-items: center;
-  cursor: pointer;
+}
+
+.admin-bg-image-field>span {
+  color: var(--muted);
   font-size: 13px;
   font-weight: 800;
 }
 
-.admin-image-upload input {
+.admin-bg-image-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-bg-image-row em {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 13px;
+}
+
+.admin-bg-image-preview {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+
+.admin-bg-image-input {
   display: none;
 }
 
@@ -4543,6 +4642,52 @@ main {
   display: grid;
   grid-template-columns: 1fr;
   gap: 10px;
+}
+
+.punishment-tag-tri-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.punishment-tag-tri {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel-soft) 80%, var(--button-bg));
+  color: var(--page-text);
+  cursor: pointer;
+  font-size: 0.92rem;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.punishment-tag-tri.include {
+  background: var(--primary);
+  border-color: var(--primary-hover);
+  color: #fff;
+}
+
+.punishment-tag-tri.exclude {
+  background: var(--reject);
+  border-color: var(--reject-border);
+  color: var(--page-text);
+}
+
+.admin-subtab-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.admin-subtab-row button.active {
+  background: var(--primary);
+  border-color: var(--primary-hover);
+  color: #fff;
 }
 
 .punishment-choice-card {
@@ -5506,6 +5651,15 @@ main {
   font-weight: 700;
 }
 
+/* 与旁边的输入框标签对齐：占位空的 span 撑开同样高度，按钮宽度撑满，视觉上与输入框同一行同一高度 */
+.field-label-action span {
+  visibility: hidden;
+}
+
+.field-label-action button {
+  width: 100%;
+}
+
 /* 管理员在后台手动设置过的称号：黄色输入框，与按积分自动计算的称号区分开 */
 .input-title-custom {
   border-color: #c9971f;
@@ -5530,6 +5684,7 @@ main {
 .admin-danger-row {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   margin: -2px 0 8px;
 }
 
@@ -5553,6 +5708,21 @@ main {
   background: color-mix(in srgb, var(--panel-solid) 92%, var(--primary));
   box-shadow: 0 12px 32px color-mix(in srgb, var(--shadow) 70%, transparent);
   padding: 10px;
+}
+
+/* 任务池/系列任务子 Tab 各自独立保存，视觉上呼应 .admin-sticky-actions（同色系边框/圆角/
+   阴影），但不 sticky——它就停在子 Tab 内容顶部，不需要在页面里悬浮。 */
+.admin-subtab-save-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-solid) 92%, var(--primary));
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--shadow) 70%, transparent);
+  padding: 10px;
+  margin-bottom: 12px;
 }
 
 .visual-config {
@@ -5709,6 +5879,21 @@ main {
   min-height: 74px;
 }
 
+.faction-checkbox-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 4px;
+}
+
+.faction-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .punishment-task-list {
   display: grid;
   gap: 10px;
@@ -5740,15 +5925,19 @@ main {
   max-height: 520px;
   overflow: auto;
   display: grid;
-  gap: 6px;
+  grid-auto-rows: min-content;
+  gap: 8px;
   padding-right: 2px;
 }
 
 .punishment-index-list button {
   display: grid;
-  gap: 3px;
+  gap: 4px;
+  align-items: start;
   justify-content: stretch;
   text-align: left;
+  height: auto;
+  min-height: 0;
   background: var(--panel-soft);
 }
 
@@ -5757,9 +5946,14 @@ main {
   background: color-mix(in srgb, var(--primary) 18%, var(--panel-solid));
 }
 
+.punishment-index-list button span {
+  line-height: 1.35;
+}
+
 .punishment-index-list small {
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.35;
 }
 
 .punishment-detail-panel {
@@ -5774,12 +5968,100 @@ main {
   align-items: center;
 }
 
-.punishment-task-editor summary small {
+.punishment-task-editor summary small:not(.danger-hint) {
   color: var(--muted);
+}
+
+.punishment-step-summary-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* 上移/下移/添加/删除固定分组、贴右对齐，不随 space-between 被拉开。 */
+.punishment-step-summary-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
 }
 
 .punishment-task-editor[open] {
   gap: 10px;
+}
+
+.task-picker-selected {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.task-picker-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-soft);
+  font-size: 13px;
+}
+
+.task-picker-chip>span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-picker-chip-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.task-picker-panel {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-picker-list {
+  max-height: 240px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-picker-item {
+  flex-shrink: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-solid);
+}
+
+.task-picker-item:hover {
+  border-color: var(--primary);
+}
+
+.task-picker-item small,
+.task-picker-item .hint {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .task-card,
@@ -6668,6 +6950,7 @@ main {
   --chart-good: #0ca30c;
   --chart-critical: #d03b3b;
 }
+
 :root[data-theme="dark"] {
   --chart-1: #3987e5;
   --chart-2: #d95926;
@@ -6790,6 +7073,7 @@ main {
 }
 
 @media (max-width: 960px) {
+
   .analytics-row-2,
   .analytics-row-3 {
     grid-template-columns: 1fr;
@@ -6901,6 +7185,28 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
+.analytics-tooltip-total {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.analytics-tooltip-meta {
+  color: var(--chart-ink-muted);
+  margin-top: 2px;
+  font-size: 11px;
+}
+
+.analytics-tooltip-meta strong {
+  color: var(--chart-ink);
+}
+
+.analytics-tooltip-swatch-total {
+  background: transparent;
+  border: 1px solid var(--chart-ink-muted);
+}
+
 .analytics-donut-wrap {
   position: relative;
 }
@@ -6973,21 +7279,49 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
-.analytics-heatmap-cell.seq-0 { background: transparent; }
-.analytics-heatmap-cell.seq-1 { background: var(--chart-seq-1); color: #0b1f38; }
-.analytics-heatmap-cell.seq-2 { background: var(--chart-seq-2); color: #0b1f38; }
-.analytics-heatmap-cell.seq-3 { background: var(--chart-seq-3); color: #fff; }
-.analytics-heatmap-cell.seq-4 { background: var(--chart-seq-4); color: #fff; }
-.analytics-heatmap-cell.seq-5 { background: var(--chart-seq-5); color: #fff; }
-.analytics-heatmap-cell.seq-6 { background: var(--chart-seq-6); color: #fff; }
+.analytics-heatmap-cell.seq-0 {
+  background: transparent;
+}
+
+.analytics-heatmap-cell.seq-1 {
+  background: var(--chart-seq-1);
+  color: #0b1f38;
+}
+
+.analytics-heatmap-cell.seq-2 {
+  background: var(--chart-seq-2);
+  color: #0b1f38;
+}
+
+.analytics-heatmap-cell.seq-3 {
+  background: var(--chart-seq-3);
+  color: #fff;
+}
+
+.analytics-heatmap-cell.seq-4 {
+  background: var(--chart-seq-4);
+  color: #fff;
+}
+
+.analytics-heatmap-cell.seq-5 {
+  background: var(--chart-seq-5);
+  color: #fff;
+}
+
+.analytics-heatmap-cell.seq-6 {
+  background: var(--chart-seq-6);
+  color: #fff;
+}
 
 /* 主宠力导向图：与数据分析面板共享 chart 配色语言 */
 .petbond-graph-edge {
   stroke: color-mix(in srgb, var(--chart-1) 55%, var(--border));
 }
+
 .petbond-graph-edge-label rect {
   fill: var(--chart-surface);
 }
+
 .petbond-graph-edge-label:hover rect {
   fill: color-mix(in srgb, var(--chart-5) 35%, var(--panel-solid));
   stroke: var(--chart-5);

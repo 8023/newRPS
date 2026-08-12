@@ -13,7 +13,8 @@ import (
 var (
 	analyticsEventNames = map[string]struct{}{
 		"pageview": {}, "session_ping": {}, "login_success": {}, "theme_toggle": {},
-		"game_round": {}, "other": {},
+		// game_start：对局进入 playing/出拳/行棋；game_round：对局结算（一局一次）。
+		"game_start": {}, "game_round": {}, "other": {},
 	}
 	analyticsViewKeys = map[string]struct{}{
 		"login": {}, "lobby": {}, "room": {}, "admin": {},
@@ -160,24 +161,45 @@ func (s *Server) onAnalyticsCollect(client *Client, env wsEnvelope) {
 
 // logAnalyticsServerEvent 记录服务端侧产生的分析事件（source=1）。
 // 调用点都在 s.mu 持锁期间，只做非阻塞入队。
-func (s *Server) logAnalyticsServerEvent(name, detail string, value int64, playerID string) {
+// roomID 写入 analytics_events.view（服务端事件不用 view 做页面路由）：
+// 供「单房对局 max/avg」按房间聚合；空串表示未知房间，不参与该聚合。
+func (s *Server) logAnalyticsServerEvent(name, detail string, value int64, playerID, roomID string) {
 	if !s.analyticsEnabled {
 		return
 	}
 	name = whitelistOrOther(name, analyticsEventNames)
 	detail = sanitizeAnalyticsDetail(detail)
+	roomID = sanitizeAnalyticsRoomID(roomID)
 	now := nowMs()
 	payload := analyticsBatchPayload{
 		// 无 session/visitor：服务端事件只进 analytics_events
 		Events: []analyticsEventRow{{
 			At: now, Day: analyticsDay(now, s.analyticsTZOffsetMin),
 			Source: 1, PlayerID: playerID, Name: name, Detail: detail, Value: value,
+			View: roomID,
 		}},
 		EventsDelta: 1,
 		LastAt:      now,
 		Day:         analyticsDay(now, s.analyticsTZOffsetMin),
 	}
 	s.logAnalyticsBatch(payload)
+}
+
+// sanitizeAnalyticsRoomID 约束 room_id 字符与长度，避免脏数据撑爆按 view GROUP BY 的聚合。
+// randomID 是 base64.RawURLEncoding，可能含 A-Za-z0-9-_。
+func sanitizeAnalyticsRoomID(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" || len(id) > 64 {
+		return ""
+	}
+	for i := 0; i < len(id); i++ {
+		c := id[i]
+		ok := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_'
+		if !ok {
+			return ""
+		}
+	}
+	return id
 }
 
 func (s *Server) logAnalyticsBatch(p analyticsBatchPayload) {

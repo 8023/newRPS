@@ -171,6 +171,11 @@ message PublicPlayer {
   bool bond_master_enabled = 87;
   bool bond_pet_enabled = 88;
   bool bond_public_display = 89;
+
+  // 惩罚标签偏好是仅本人可见的 player:join RAW 应答兄弟字段，不能进入会被广播的
+  // PublicPlayer；保留曾在开发版误用过的编号/名字，防止以后再次把私有偏好接进公开结构。
+  reserved 90;
+  reserved "punishment_tag_prefs";
 }
 
 // 大厅精简玩家
@@ -265,9 +270,10 @@ message RoomSettings {
   reserved 4, 5; // was enable_bot, bot_difficulty
   reserved "enable_bot", "bot_difficulty";
   bool enable_punishment = 6;
+  // punishment_source 取值：random（随机任务，原 system）| series（系列任务）| player（玩家发布）
   string punishment_source = 7;
-  string punishment_id = 8;
-  repeated string punishment_ids = 9;
+  string punishment_id = 8 [deprecated = true];
+  repeated string punishment_ids = 9 [deprecated = true];
   string room_background_image = 10;
   bool enable_tags = 11;
   repeated string tags = 12;
@@ -292,6 +298,11 @@ message RoomSettings {
   string jungle_board_theme = 32;
   int32 jungle_move_seconds = 33;
   int32 jungle_game_minutes = 34;
+  // 随机任务模式下用户选中/拒绝的标签（无序）；系列任务模式下不用。
+  repeated string punishment_tags_included = 35;
+  repeated string punishment_tags_excluded = 36;
+  // 系列任务模式下选中的系列 ID。
+  string punishment_series_id = 37;
 }
 
 message GomokuUndoRequest {
@@ -384,6 +395,8 @@ message PunishmentTask {
   double background_opacity = 7;
   string assigned_by = 9;
   string assigned_by_name = 10;
+  // type_name：该任务抽取自哪个任务类型（如"真心话"），玩家发布任务模式下为空。
+  string type_name = 11;
 }
 
 message HistoryProof {
@@ -422,7 +435,8 @@ message RoundHistoryItem {
   int32 effective_stake = 21;
   bool extreme_ranked = 23;
   string punishment_name = 24;
-  string punishment_description = 25;
+  // Kept for wire compatibility with history produced by older servers.
+  string punishment_description = 25 [deprecated = true];
   repeated PunishmentTask punishment_tasks = 26;
   repeated string punished_names = 27;
   repeated HistoryProof proofs = 28;
@@ -647,6 +661,11 @@ message LobbyRoomInfo {
   int32 gomoku_undo_limit = 30;
   int32 jungle_move_seconds = 31;
   int32 jungle_game_minutes = 32;
+  // 新惩罚选择结构；14/15 旧字段继续保留给旧客户端解码。
+  string punishment_source = 33;
+  repeated string punishment_tags_included = 34;
+  repeated string punishment_tags_excluded = 35;
+  string punishment_series_id = 36;
 }
 
 message LobbyPlayerEntry {
@@ -708,9 +727,16 @@ message TitleTagStyleEntry {
 message PunishmentTaskConfig {
   string id = 1;
   string name = 2;
-  repeated StringPair variants = 3;
+  // Legacy fields keep their original numbers so stored/legacy payloads remain
+  // decodable; this does not promise full old-frontend/new-backend interoperability.
+  repeated StringPair variants = 3 [deprecated = true];
   repeated string background_images = 4;
   double background_opacity = 5;
+  string text = 6;
+  repeated string faction_ids = 7;
+  int32 order = 8;
+  // 随机任务所属标签；可为空（为空时仅供系列按 ID 引用，不进随机池）。
+  repeated string tag_ids = 9;
 }
 
 message TitleSegment {
@@ -727,16 +753,68 @@ message TitleSegment {
   repeated FactionNames faction_names = 5;
 }
 
+// 旧版"任务类型"容器。新版拆成标签 + 拍平任务 + 系列任务，本 message 仅保留
+// 字段号以免旧 wire 解码冲突；新服务端不再填充。
 message PunishmentConfig {
+  option deprecated = true;
   string id = 1;
   string name = 2;
-  string description = 3;
-  repeated StringPair variants = 4;
+  string description = 3 [deprecated = true];
+  repeated StringPair variants = 4 [deprecated = true];
   repeated PunishmentTaskConfig tasks = 5;
   string card_image_url = 6;
   double card_image_opacity = 7;
   repeated string room_background_images = 8;
   RoomNamePool room_name_pool = 9;
+  double order_step = 10;
+  double order_spread = 11;
+  double max_difficulty_overshoot = 12;
+}
+
+// 惩罚标签：替代原"任务类型"作为开房筛选维度；同时提供房名词库/背景图库。
+message PunishmentTagConfig {
+  string id = 1;
+  string name = 2;
+  RoomNamePool room_name_pool = 3;
+  repeated string room_background_images = 4;
+}
+
+// 随机任务全局难度参数（不再按类型区分）。
+message PunishmentRandomSettings {
+  double order_step = 1;
+  // 历史字段，倒伽马下不参与计算，保留以免旧配置/控件报错。
+  double order_spread = 2;
+  double max_difficulty_overshoot = 3;
+}
+
+message PunishmentSubtaskVariant {
+  repeated string faction_ids = 1;
+  string text = 2;
+  repeated string background_images = 3;
+  double background_opacity = 4;
+}
+
+message PunishmentSubtask {
+  repeated PunishmentSubtaskVariant variants = 1;
+}
+
+message PunishmentSeriesTaskConfig {
+  string id = 1;
+  string name = 2;
+  RoomNamePool room_name_pool = 3;
+  repeated string room_background_images = 4;
+  // 旧版内联 subtasks/variants；新版系列详情走 SQLite + admin:action，
+  // 本字段仅保留字段号以免旧 wire 解码冲突。
+  repeated PunishmentSubtask subtasks = 5;
+}
+
+// 建房面板公开用的系列任务目录摘要（不含任务文案 / taskIds）。
+message PunishmentSeriesSummary {
+  string id = 1;
+  string name = 2;
+  RoomNamePool room_name_pool = 3;
+  repeated string room_background_images = 4;
+  int32 step_count = 5;
 }
 
 message GameConfig {
@@ -854,7 +932,8 @@ message AppConfig {
   repeated GenderOption genders = 3;
   repeated GenderFaction gender_factions = 4;
   repeated TitleSegment titles = 5;
-  repeated PunishmentConfig punishments = 6;
+  // 旧版任务类型列表；新版改用 punishment_tags + 随机难度参数 + SQLite 任务池/系列。
+  repeated PunishmentConfig punishments = 6 [deprecated = true];
   RoomNamePool player_punishment_room_name_pool = 7;
   repeated string room_tags = 8;
   repeated RoomInfoTagEntry room_info_tags = 9;
@@ -870,6 +949,13 @@ message AppConfig {
   RankedScoreConfig ranked_score = 18;
   PetBondConfig pet_bond = 19;
   repeated TitleTagStyleEntry title_tag_styles = 20;
+  repeated PunishmentTagConfig punishment_tags = 21;
+  // 任务池/系列详情已迁 SQLite；字段号保留以免旧 wire 冲突。
+  repeated PunishmentTaskConfig punishment_tasks = 22 [deprecated = true];
+  repeated PunishmentSeriesTaskConfig punishment_series_tasks = 23 [deprecated = true];
+  PunishmentRandomSettings punishment_random_settings = 24;
+  // 建房选系列用的公开目录摘要（不含任务文案）。
+  repeated PunishmentSeriesSummary punishment_series_summaries = 25;
 }
 
 message RankedScoreConfig {

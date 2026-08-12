@@ -240,6 +240,7 @@ func New() (*Server, error) {
 		s.eventDB = newEventStore(db)
 		s.pushDB = newPushStore(db)
 		s.playerDB = newPlayerStore(db)
+		s.punishmentStore = newPunishmentStore(db)
 		s.activityDB = newActivityStore(db)
 		s.petBondDB = newPetBondStore(db)
 		s.analyticsDB = newAnalyticsStore(db)
@@ -256,6 +257,9 @@ func New() (*Server, error) {
 	}
 	s.petBonds = map[string]*petBond{}
 	s.petBondRequests = map[string]*petBondRequest{}
+	// 任务池/系列：一次性从 punishments.json 导入（表空时），再加载到内存缓存。
+	s.migratePunishmentPoolFromJSONIfNeeded()
+	s.reloadPunishmentCaches()
 	// VAPID 密钥：失败不阻断游戏服务，但会记错误日志；公钥接口返回 503，
 	// 设置页会明确显示订阅失败，sendPush 也会因公钥为空跳过。
 	if keys, err := loadOrGenerateVAPIDKeys(root); err != nil {

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/doumiao/newRPS/internal/config"
 	"github.com/doumiao/newRPS/internal/types"
 )
 
@@ -24,7 +25,218 @@ const defaultNameWarRenameMinPoints = 500
 func (s *Server) publicConfig() types.AppConfig {
 	cfg := s.cfg
 	cfg.Site.AdminPassword = ""
+	cfg.PunishmentSeriesSummaries = s.buildPunishmentSeriesSummaries()
 	return sanitizePublicConfig(cfg)
+}
+
+// buildPunishmentSeriesSummaries 从系列缓存生成建房用公开目录（无任务文案/taskIds）。
+// 阵营覆盖不全（seriesIsUsable==false）的系列不出现在目录里，等同不可选。
+func (s *Server) buildPunishmentSeriesSummaries() []types.PunishmentSeriesSummary {
+	out := make([]types.PunishmentSeriesSummary, 0, len(s.punishmentSeriesCache))
+	taskByID := make(map[string]*types.PunishmentTaskConfig, len(s.punishmentTasksCache))
+	for i := range s.punishmentTasksCache {
+		task := &s.punishmentTasksCache[i]
+		taskByID[task.ID] = task
+	}
+	for _, series := range s.punishmentSeriesCache {
+		if !s.seriesIsUsableWithTaskMap(series, taskByID) {
+			continue
+		}
+		out = append(out, types.PunishmentSeriesSummary{
+			ID:                   series.ID,
+			Name:                 series.Name,
+			RoomNamePool:         series.RoomNamePool,
+			RoomBackgroundImages: series.RoomBackgroundImages,
+			StepCount:            len(series.Steps),
+		})
+	}
+	return out
+}
+
+// reloadPunishmentCaches 从 SQLite 刷新内存缓存（启动 / admin save 后调用）。
+// 调用方须持有 s.mu，或在尚无并发访问的启动路径调用。
+func (s *Server) reloadPunishmentCaches() {
+	if s.punishmentStore == nil {
+		s.punishmentTasksCache = []types.PunishmentTaskConfig{}
+		s.punishmentSeriesCache = []types.PunishmentSeriesTaskConfig{}
+		return
+	}
+	if tasks, err := s.punishmentStore.listTasks(); err != nil {
+		s.errorLog("punishment_tasks_load_failed", err.Error())
+		s.punishmentTasksCache = []types.PunishmentTaskConfig{}
+	} else {
+		s.punishmentTasksCache = tasks
+	}
+	if series, err := s.punishmentStore.listSeries(); err != nil {
+		s.errorLog("punishment_series_load_failed", err.Error())
+		s.punishmentSeriesCache = []types.PunishmentSeriesTaskConfig{}
+	} else {
+		s.punishmentSeriesCache = series
+	}
+}
+
+// savePunishmentTasks 清洗/校验后全量替换任务池，并刷新缓存。调用方须持有 s.mu。
+func (s *Server) savePunishmentTasks(tasks []types.PunishmentTaskConfig) error {
+	tasks = config.NormalizePunishmentTasks(tasks)
+	if len(tasks) == 0 {
+		return fmt.Errorf("至少需要一条任务")
+	}
+	ids := make([]string, len(tasks))
+	for i, t := range tasks {
+		ids[i] = t.ID
+	}
+	if err := assertUniqueIDs(ids, "任务 ID"); err != nil {
+		return err
+	}
+	tagSet := map[string]struct{}{}
+	for _, tag := range s.cfg.PunishmentTags {
+		tagSet[tag.ID] = struct{}{}
+	}
+	factionSet := map[string]struct{}{}
+	for _, f := range s.cfg.GenderFactions {
+		factionSet[f.ID] = struct{}{}
+	}
+	for _, t := range tasks {
+		label := t.Name
+		if label == "" {
+			label = t.ID
+		}
+		if strings.TrimSpace(t.Text) == "" {
+			return fmt.Errorf("随机任务 %s 的文案不能为空", label)
+		}
+		for _, tid := range t.TagIDs {
+			// series:<id> 内部标签（迁移产物）不在标签管理里，放行；其余须存在。
+			if strings.HasPrefix(tid, "series:") {
+				continue
+			}
+			if _, ok := tagSet[tid]; !ok {
+				return fmt.Errorf("随机任务 %s 引用了不存在的标签 %s", label, tid)
+			}
+		}
+		if t.Order != -1 && (t.Order < 1 || t.Order > 99) {
+			return fmt.Errorf("随机任务 %s 的任务难度必须是 -1（不参与随机抽取）或在 1 到 99 之间", label)
+		}
+		for _, fid := range t.FactionIDs {
+			if _, ok := factionSet[fid]; !ok {
+				return fmt.Errorf("随机任务 %s 勾选了不存在的阵营 %s", label, fid)
+			}
+		}
+		if t.BackgroundImages == nil {
+			return fmt.Errorf("随机任务 %s 的背景图库格式不正确", label)
+		}
+		if t.BackgroundOpacity < 0 || t.BackgroundOpacity > 1 {
+			return fmt.Errorf("随机任务 %s 的背景透明率必须在 0 到 1 之间", label)
+		}
+	}
+	if s.punishmentStore == nil {
+		return fmt.Errorf("任务池存储不可用")
+	}
+	if err := s.punishmentStore.replaceTasks(tasks); err != nil {
+		s.errorLog("punishment_tasks_save_failed", err.Error())
+		return fmt.Errorf("保存任务池失败")
+	}
+	s.punishmentTasksCache = tasks
+	return nil
+}
+
+// savePunishmentSeries 清洗/校验后全量替换系列任务，并刷新缓存。调用方须持有 s.mu。
+// 不校验 TaskIDs 是否指向存在任务（允许悬空引用，运行时跳过）。
+func (s *Server) savePunishmentSeries(series []types.PunishmentSeriesTaskConfig) error {
+	series = config.NormalizePunishmentSeriesTasks(series)
+	ids := make([]string, len(series))
+	for i, ser := range series {
+		ids[i] = ser.ID
+	}
+	if err := assertUniqueIDs(ids, "系列任务 ID"); err != nil {
+		return err
+	}
+	for _, ser := range series {
+		if ser.Name == "" {
+			return fmt.Errorf("系列任务 %s 的名称不能为空", ser.ID)
+		}
+		if ser.RoomBackgroundImages == nil {
+			return fmt.Errorf("%s 的房间背景图库格式不正确", ser.Name)
+		}
+		if ser.RoomNamePool == nil || len(ser.RoomNamePool.Subjects) == 0 || len(ser.RoomNamePool.RoomWords) == 0 {
+			return fmt.Errorf("%s 的随机房名至少需要名词/动词和房间词", ser.Name)
+		}
+		if len(ser.Steps) == 0 {
+			return fmt.Errorf("%s 至少需要一个子任务", ser.Name)
+		}
+		for si, step := range ser.Steps {
+			if len(step.TaskIDs) == 0 {
+				return fmt.Errorf("%s 第 %d 步至少需要一个任务", ser.Name, si+1)
+			}
+		}
+	}
+	if s.punishmentStore == nil {
+		return fmt.Errorf("系列任务存储不可用")
+	}
+	if err := s.punishmentStore.replaceSeries(series); err != nil {
+		s.errorLog("punishment_series_save_failed", err.Error())
+		return fmt.Errorf("保存系列任务失败")
+	}
+	s.punishmentSeriesCache = series
+	return nil
+}
+
+// cascadeRemovedTagsFromTasks 在惩罚配置保存后：从任务池 tagIds 里摘除已删除的标签 ID。
+// 不阻断保存；空标签任务合法保留，可继续供系列按 ID 引用，但不会进入随机候选池。
+func (s *Server) cascadeRemovedTagsFromTasks(oldTags, newTags []types.PunishmentTagConfig) {
+	if s.punishmentStore == nil || len(s.punishmentTasksCache) == 0 {
+		return
+	}
+	newSet := map[string]struct{}{}
+	for _, t := range newTags {
+		newSet[t.ID] = struct{}{}
+	}
+	removed := map[string]struct{}{}
+	for _, t := range oldTags {
+		if _, ok := newSet[t.ID]; !ok {
+			removed[t.ID] = struct{}{}
+		}
+	}
+	if len(removed) == 0 {
+		return
+	}
+	changed := false
+	next := make([]types.PunishmentTaskConfig, len(s.punishmentTasksCache))
+	copy(next, s.punishmentTasksCache)
+	for i := range next {
+		// 重新切片避免共享底层数组副作用
+		orig := append([]string(nil), next[i].TagIDs...)
+		filtered := orig[:0]
+		for _, id := range orig {
+			if _, gone := removed[id]; gone {
+				changed = true
+				continue
+			}
+			filtered = append(filtered, id)
+		}
+		next[i].TagIDs = filtered
+	}
+	if !changed {
+		return
+	}
+	if err := s.punishmentStore.replaceTasks(next); err != nil {
+		s.errorLog("punishment_tag_cascade_failed", err.Error())
+		return
+	}
+	s.punishmentTasksCache = next
+}
+
+func assertUniqueIDs(ids []string, label string) error {
+	seen := map[string]struct{}{}
+	for _, id := range ids {
+		if id == "" {
+			return fmt.Errorf("%s 不能为空", label)
+		}
+		if _, ok := seen[id]; ok {
+			return fmt.Errorf("%s 重复: %s", label, id)
+		}
+		seen[id] = struct{}{}
+	}
+	return nil
 }
 
 // adminLoginFailure* 常量：管理员口令校验失败的锁定阈值。只统计失败次数（正确口令的
@@ -203,7 +415,8 @@ func (s *Server) findFaction(factionID string) types.GenderFaction {
 	return fallback
 }
 
-// taskGroupForFaction 把阵营 id 解析成任务分组（male/female/default），供称号/惩罚按分组取文案。
+// taskGroupForFaction 把阵营 id 解析成任务分组（male/female/default），供称号按分组取文案
+// （系统任务已改为按 FactionIDs 直接筛选，不再依赖任务分组，见 punishment.go 的 candidateTasksForFaction）。
 func (s *Server) taskGroupForFaction(factionID string) string {
 	group := s.findFaction(factionID).TaskGroup
 	if group == "" {

@@ -409,11 +409,18 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 			roomSnap = s.roomSnapshot(room, true, true)
 		}
 	}
+	punishmentTagPrefs := player.PunishmentTagPrefs
+	if punishmentTagPrefs == nil {
+		punishmentTagPrefs = map[string]string{}
+	}
 	joinReply := map[string]any{
 		"player": s.publicPlayer(player),
 		"token":  sessionToken,
 		"roomId": player.RoomID,
 		"room":   roomSnap,
+		// punishmentTagPrefs：仅本人可见的开房标签偏好，不放进 PublicPlayer（会被广播给其他
+		// 玩家），单独作为应答的兄弟字段下发，见 state.go PlayerState.PunishmentTagPrefs 注释。
+		"punishmentTagPrefs": punishmentTagPrefs,
 	}
 	if reissuedSecret != "" {
 		joinReply["reissuedSecret"] = reissuedSecret
@@ -1071,12 +1078,15 @@ func (s *Server) onConfigSave(client *Client, env wsEnvelope) {
 	if strings.TrimSpace(next.Site.AdminPassword) == "" {
 		next.Site.AdminPassword = s.cfg.Site.AdminPassword
 	}
+	oldTags := append([]types.PunishmentTagConfig(nil), s.cfg.PunishmentTags...)
 	valid, err := config.SaveConfig(next)
 	if err != nil {
 		client.reply(env.ID, nil, err.Error())
 		return
 	}
 	s.cfg = valid
+	// 删除标签时从任务池 tagIds 级联摘除（不阻断）。
+	s.cascadeRemovedTagsFromTasks(oldTags, valid.PunishmentTags)
 	s.refreshAllPlayersForConfig()
 	client.reply(env.ID, map[string]any{"config": s.publicConfig()}, "")
 	s.broadcastLobby()

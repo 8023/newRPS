@@ -45,6 +45,13 @@ export function App() {
   const [toastText, setToastText] = useState("");
   const [toastLeaving, setToastLeaving] = useState(false);
   const [announcement, setAnnouncement] = useState<AnnouncementPayload | null>(null);
+  // 后端构建版本号与本次前端构建不一致时置位；只做提示，不自动刷新（避免误判/多开
+  // 场景下把用户的未保存输入或对局强制打断，也从根上杜绝"版本提示触发自动刷新"
+  // 被用来当作 DoS 放大手段的可能）。dismissedRemoteBuildId 记录用户已经关掉提示的
+  // 那个版本号：同一版本重复到达（心跳每 25s 一次）不会让横幅重新弹出；只有服务端
+  // 又发布了新的、不同的版本号，才会再次出现。
+  const [remoteBuildId, setRemoteBuildId] = useState<string | null>(null);
+  const [dismissedRemoteBuildId, setDismissedRemoteBuildId] = useState<string | null>(null);
   // 每天每个浏览器只需确认一次；未过期就跳过声明页，直接走原来的连接流程。
   const [disclaimerConfirmed, setDisclaimerConfirmed] = useState(() => localStorage.getItem(securityDisclaimerKey) === todayKey());
   const [connectionState, setConnectionState] = useState<"connected" | "connecting" | "disconnected">(() => socket.connected ? "connected" : "connecting");
@@ -296,6 +303,15 @@ export function App() {
     socket.on("announcement:show", (payload: AnnouncementPayload) => {
       setAnnouncement(payload);
     });
+    // server:hello：连接建立时的一次性推送 + 心跳应答兜底（见 ws.ts），带的是后端
+    // 当前构建版本号。"dev"/"unknown" 是本地开发或非 git checkout 的兜底字面量，
+    // 双方都可能出现，出现即视为不可比较，不触发提示。
+    socket.on("server:hello", ({ buildId }: { buildId?: string }) => {
+      if (!buildId || buildId === "dev" || buildId === "unknown") return;
+      if (__APP_BUILD_ID__ === "dev" || __APP_BUILD_ID__ === "unknown") return;
+      if (buildId === __APP_BUILD_ID__) return;
+      setRemoteBuildId(buildId);
+    });
     socket.on("connect", () => {
       setConnectionState("connected");
       resetWsAuthRetryCount();
@@ -356,6 +372,7 @@ export function App() {
       socket.off("room:closed");
       socket.off("config:update");
       socket.off("announcement:show");
+      socket.off("server:hello");
       socket.off("connect");
       socket.off("disconnect");
       socket.off("connect_error");
@@ -510,6 +527,18 @@ export function App() {
           <button className="icon-button" type="button" aria-label="关闭公告" onClick={() => setAnnouncement(null)}>×</button>
         </div>
       )}
+      {remoteBuildId && remoteBuildId !== dismissedRemoteBuildId && (
+        <div className="announcement-popup version-update-popup" role="alert">
+          <div>
+            <b>网站内容已更新</b>
+            <p>检测到新版本，当前页面可能已经过期，建议刷新以获取最新功能与修复。</p>
+          </div>
+          <div className="version-update-actions">
+            <button className="soft-button" type="button" onClick={() => window.location.reload()}>刷新</button>
+            <button className="icon-button" type="button" aria-label="关闭提示" onClick={() => setDismissedRemoteBuildId(remoteBuildId)}>×</button>
+          </div>
+        </div>
+      )}
       {view === "login" && restoringSession && !restoreKickPending && <section className="panel">正在恢复登录状态...</section>}
       {view === "login" && restoreKickPending && (
         <section className="login-card kick-confirm-card">
@@ -531,7 +560,7 @@ export function App() {
         setView(isAdminRoute() ? "admin" : next.room ? "room" : "lobby");
         if (next.room?.phase === "punishment") setNotice("已恢复到未完成的惩罚房间。");
       }} onError={setNotice} />}
-      {view === "lobby" && me && lobby && <Lobby config={config} lobby={lobby} me={me.player} onError={setNotice} onGoRoom={(nextRoom) => { if (nextRoom) setRoom(nextRoom); setView("room"); }} />}
+      {view === "lobby" && me && lobby && <Lobby config={config} lobby={lobby} me={me.player} punishmentTagPrefs={me.punishmentTagPrefs} onError={setNotice} onGoRoom={(nextRoom) => { if (nextRoom) setRoom(nextRoom); setView("room"); }} onPunishmentTagPrefsChange={(prefs) => setMe((old) => old ? { ...old, punishmentTagPrefs: prefs } : old)} />}
       {view === "room" && me && room && <Room config={config} room={room} me={me.player} lobby={lobby} onBack={() => setView("lobby")} onError={setNotice} />}
       {view === "admin" && lobby && (
         <Suspense fallback={<div className="loading">正在加载后台管理…</div>}>

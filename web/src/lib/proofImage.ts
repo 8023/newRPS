@@ -80,15 +80,3 @@ export async function prepareProofImageForUpload(file: File): Promise<File> {
     decoded.close();
   }
 }
-
-/** 后台管理图：尽量走同一套 WebP 流水线，失败则原样上传 */
-export async function compressAdminImageForUpload(file: File): Promise<File> {
-  if (!file.type.startsWith("image/") && !/\.(jpe?g|png|webp|heic|heif)$/i.test(file.name || "")) {
-    return file;
-  }
-  try {
-    return await prepareProofImageForUpload(file);
-  } catch {
-    return file;
-  }
-}

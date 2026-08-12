@@ -224,6 +224,21 @@ func (a *analyticsStore) writeBatch(visitor analyticsVisitorRow, sessionNew bool
 	return tx.Commit()
 }
 
+// deleteDailyMetricDays 删除某 metric 在 [startDay, endDay]（含）内的全部 EAV 行。
+// 用于口径切换（如设备留存 → 用户留存）时清掉缺失 offset 上的陈旧格子。
+func (a *analyticsStore) deleteDailyMetricDays(metric string, startDay, endDay int64) error {
+	if a == nil || a.db == nil {
+		return nil
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	_, err := a.db.Exec(
+		`DELETE FROM analytics_daily WHERE metric = ? AND day BETWEEN ? AND ?`,
+		metric, startDay, endDay,
+	)
+	return err
+}
+
 // upsertDaily 批量 UPSERT 日聚合行（同一事务）。
 func (a *analyticsStore) upsertDaily(rows []analyticsDailyRow) error {
 	if a == nil || a.db == nil || len(rows) == 0 {

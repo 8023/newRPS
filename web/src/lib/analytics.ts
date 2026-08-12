@@ -1,4 +1,5 @@
 import { socket } from "../main";
+import { randomUuid } from "./session";
 
 /** GA4 语义会话：30 分钟无活动过期。 */
 const SESSION_KEY = "rps-analytics-session";
@@ -42,7 +43,7 @@ function readSession(): SessionStore {
   } catch {
     /* ignore */
   }
-  return { id: crypto.randomUUID(), lastAt: 0 };
+  return { id: randomUuid(), lastAt: 0 };
 }
 
 function writeSession(s: SessionStore) {
@@ -57,7 +58,7 @@ function ensureSession(): string {
   const now = Date.now();
   let s = readSession();
   if (!s.id || now - s.lastAt > SESSION_IDLE_MS) {
-    s = { id: crypto.randomUUID(), lastAt: now };
+    s = { id: randomUuid(), lastAt: now };
     firstBatch = true;
   } else {
     s.lastAt = now;

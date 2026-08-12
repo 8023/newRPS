@@ -2,7 +2,7 @@ import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type Muta
 import { ChevronDown, Coffee, Crown, DoorOpen, ExternalLink, Eye, HeartHandshake, Info, Moon, Pencil, Save, Send, Shield, Sun, Swords, Upload, UserRound, Users, BookOpen } from "lucide-react";
 import type {
   AppConfig, ChatMessage, GenderColors, GenderFaction, GiveawayVoteQuota, LobbySnapshot, Move, PetBondBadgeFields, PetBondState, PublicPlayer,
-  PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant
+  RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant
 } from "../shared/types";
 import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, DEFAULT_NAME_WAR_RENAME_MIN_POINTS, normalizePublicPlayer, withPetBondDefaults, withRankedScoreDefaults } from "../lib/normalize";
 import { socket } from "../ws";
@@ -473,7 +473,7 @@ export function totalOnlineMsOf(player: PublicPlayer) {
   return safePlayerStats(player).totalOnlineMs || 0;
 }
 
-export function Lobby({ config, lobby, me, onError, onGoRoom }: { config: AppConfig; lobby: LobbySnapshot; me: PublicPlayer; onError: (message: string) => void; onGoRoom: (room?: RoomSnapshot) => void }) {
+export function Lobby({ config, lobby, me, punishmentTagPrefs, onError, onGoRoom, onPunishmentTagPrefsChange }: { config: AppConfig; lobby: LobbySnapshot; me: PublicPlayer; punishmentTagPrefs?: Record<string, string>; onError: (message: string) => void; onGoRoom: (room?: RoomSnapshot) => void; onPunishmentTagPrefsChange?: (prefs: Record<string, string>) => void }) {
   const [showCreate, setShowCreate] = useState(false);
   const [passwords, setPasswords] = useState<Record<string, string>>({});
   const [now, setNow] = useState(Date.now());
@@ -567,19 +567,33 @@ export function Lobby({ config, lobby, me, onError, onGoRoom }: { config: AppCon
           />
         </ChatBoardShell>
       </aside>
-      {showCreate && <CreateRoom config={config} me={me} onCreated={onGoRoom} onCancel={() => setShowCreate(false)} onError={onError} />}
+      {showCreate && <CreateRoom config={config} me={me} punishmentTagPrefs={punishmentTagPrefs} onCreated={onGoRoom} onPunishmentTagPrefsChange={onPunishmentTagPrefsChange} onCancel={() => setShowCreate(false)} onError={onError} />}
     </section>
   );
 }
 
-export function CreateRoom({ config, me, onCreated, onCancel, onError }: { config: AppConfig; me: PublicPlayer; onCreated: (room?: RoomSnapshot) => void; onCancel: () => void; onError: (message: string) => void }) {
+function prefsToTagSelection(prefs: Record<string, string> | undefined, tagIds: string[]) {
+  const included: string[] = [];
+  const excluded: string[] = [];
+  for (const id of tagIds) {
+    const state = prefs?.[id];
+    if (state === "include") included.push(id);
+    else if (state === "exclude") excluded.push(id);
+  }
+  return { included, excluded };
+}
+
+export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunishmentTagPrefsChange, onCancel, onError }: { config: AppConfig; me: PublicPlayer; punishmentTagPrefs?: Record<string, string>; onCreated: (room?: RoomSnapshot) => void; onPunishmentTagPrefsChange?: (prefs: Record<string, string>) => void; onCancel: () => void; onError: (message: string) => void }) {
+  const tagIds = (config.punishmentTags || []).map((t) => t.id);
+  const initialPrefs = prefsToTagSelection(punishmentTagPrefs, tagIds);
   const [settings, setSettings] = useState<RoomSettings>({
     name: defaultRoomName,
     gameId: "rps",
     enablePunishment: false,
-    punishmentSource: "system",
-    punishmentId: config.punishments[0]?.id,
-    punishmentIds: config.punishments[0]?.id ? [config.punishments[0].id] : [],
+    punishmentSource: "random",
+    punishmentTagsIncluded: initialPrefs.included,
+    punishmentTagsExcluded: initialPrefs.excluded,
+    punishmentSeriesId: config.punishmentSeriesSummaries?.[0]?.id || "",
     enableTags: false,
     tags: [],
     allowProofImage: true,
@@ -611,11 +625,21 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
     setSettings((old) => {
       let changed = false;
       const next = { ...old };
-      const validPunishmentIds = selectedPunishmentIdsForConfig(config, next);
-      if ((next.punishmentSource || "system") === "system" && !sameStringArray(validPunishmentIds, next.punishmentIds || [])) {
-        next.punishmentIds = validPunishmentIds;
-        next.punishmentId = validPunishmentIds[validPunishmentIds.length - 1];
-        changed = true;
+      const validIncl = filterTagIds(config, next.punishmentTagsIncluded || []);
+      const validExcl = filterTagIds(config, next.punishmentTagsExcluded || []);
+      if ((next.punishmentSource || "random") === "random" || next.punishmentSource === "system") {
+        if (!sameStringArray(validIncl, next.punishmentTagsIncluded || []) || !sameStringArray(validExcl, next.punishmentTagsExcluded || [])) {
+          next.punishmentTagsIncluded = validIncl;
+          next.punishmentTagsExcluded = validExcl;
+          changed = true;
+        }
+      }
+      if (next.punishmentSource === "series") {
+        const seriesIds = (config.punishmentSeriesSummaries || []).map((s) => s.id);
+        if (next.punishmentSeriesId && !seriesIds.includes(next.punishmentSeriesId)) {
+          next.punishmentSeriesId = seriesIds[0] || "";
+          changed = true;
+        }
       }
       if (next.tags?.some((tag) => !config.roomTags.includes(tag))) {
         next.tags = next.tags.filter((tag) => config.roomTags.includes(tag));
@@ -624,7 +648,7 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
       }
       return changed ? next : old;
     });
-  }, [config.punishments, config.roomTags]);
+  }, [config.punishmentTags, config.punishmentSeriesSummaries, config.roomTags]);
 
   function patch(next: Partial<RoomSettings>) {
     setSettings((old) => {
@@ -681,7 +705,7 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
         const maxP = merged.liarsDiceMaxPlayers || 3;
         merged.liarsDiceMinPlayers = Math.min(maxP, Math.max(2, next.liarsDiceMinPlayers || 3));
       }
-      if (next.punishmentSource === "player") {
+      if (next.punishmentSource === "player" || next.punishmentSource === "series" || next.punishmentSource === "random") {
         merged.enablePunishment = true;
       }
       if (next.enableRanked === false) {
@@ -722,12 +746,22 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
       } else if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) {
         merged.stake = 5;
       }
-      if (merged.punishmentSource === "system") {
-        merged.punishmentIds = selectedPunishmentIdsForConfig(config, merged);
-        merged.punishmentId = merged.punishmentIds[merged.punishmentIds.length - 1];
+      const src = merged.punishmentSource === "system" ? "random" : (merged.punishmentSource || "random");
+      merged.punishmentSource = src;
+      if (src === "random") {
+        merged.punishmentTagsIncluded = filterTagIds(config, merged.punishmentTagsIncluded || []);
+        merged.punishmentTagsExcluded = filterTagIds(config, merged.punishmentTagsExcluded || []);
+        merged.punishmentSeriesId = "";
+      } else if (src === "series") {
+        merged.punishmentTagsIncluded = [];
+        merged.punishmentTagsExcluded = [];
+        if (!merged.punishmentSeriesId) {
+          merged.punishmentSeriesId = config.punishmentSeriesSummaries?.[0]?.id || "";
+        }
       } else {
-        merged.punishmentIds = [];
-        merged.punishmentId = undefined;
+        merged.punishmentTagsIncluded = [];
+        merged.punishmentTagsExcluded = [];
+        merged.punishmentSeriesId = "";
       }
       if (next.enableTags === false) {
         merged.tags = [];
@@ -736,24 +770,49 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
         merged.tags = next.tags.filter((tag) => config.roomTags.includes(tag)).slice(0, 5);
         merged.enableTags = merged.tags.length > 0;
       }
-      if (!customRoomName && merged.enablePunishment && ("enablePunishment" in next || "punishmentId" in next || "punishmentIds" in next || "punishmentSource" in next)) {
+      if (!customRoomName && merged.enablePunishment && ("enablePunishment" in next || "punishmentTagsIncluded" in next || "punishmentTagsExcluded" in next || "punishmentSeriesId" in next || "punishmentSource" in next)) {
         merged.name = generateRoomName(config, merged);
       }
       return merged;
     });
   }
 
-  function togglePunishment(punishmentId: string) {
-    const current = selectedPunishmentIdsForConfig(config, settings);
-    const nextIds = current.includes(punishmentId)
-      ? current.length > 1 ? current.filter((id) => id !== punishmentId) : current
-      : [...current, punishmentId];
-    patch({ punishmentIds: nextIds, punishmentId: nextIds[nextIds.length - 1] });
+  /** 三态循环：缺省 → 选中 → 拒绝 → 缺省 */
+  function cycleTagState(tagId: string) {
+    const included = new Set(settings.punishmentTagsIncluded || []);
+    const excluded = new Set(settings.punishmentTagsExcluded || []);
+    if (included.has(tagId)) {
+      included.delete(tagId);
+      excluded.add(tagId);
+    } else if (excluded.has(tagId)) {
+      excluded.delete(tagId);
+    } else {
+      included.add(tagId);
+    }
+    patch({
+      punishmentTagsIncluded: (config.punishmentTags || []).map((t) => t.id).filter((id) => included.has(id)),
+      punishmentTagsExcluded: (config.punishmentTags || []).map((t) => t.id).filter((id) => excluded.has(id))
+    });
+  }
+
+  function tagTriState(tagId: string): "default" | "include" | "exclude" {
+    if ((settings.punishmentTagsIncluded || []).includes(tagId)) return "include";
+    if ((settings.punishmentTagsExcluded || []).includes(tagId)) return "exclude";
+    return "default";
   }
 
   async function create() {
     try {
       const result = await ask<{ room: RoomSnapshot }>("room:create", { settings });
+      // 与后端 handlers_room.go 的落库逻辑保持一致：随机任务模式下，创建成功即把本次标签
+      // 三态偏好同步进本地会话状态，避免同一会话内“创建-离开-再创建”读不到刚保存的偏好
+      // （只有下次 player:join / 刷新页面重新拉取时才会带上，体验上像是没生效）。
+      if (settings.enablePunishment && (settings.punishmentSource === "random" || settings.punishmentSource === "system") && onPunishmentTagPrefsChange) {
+        const prefs: Record<string, string> = {};
+        for (const id of settings.punishmentTagsIncluded || []) prefs[id] = "include";
+        for (const id of settings.punishmentTagsExcluded || []) prefs[id] = "exclude";
+        onPunishmentTagPrefsChange(prefs);
+      }
       onCreated(normalizeRoomSnapshot(result.room));
     } catch (error) {
       onError(error instanceof Error ? error.message : "创建失败");
@@ -1139,37 +1198,54 @@ export function CreateRoom({ config, me, onCreated, onCancel, onError }: { confi
               {settings.gameId === "liarsdice" && <p className="hint">大话骰惩罚仅对败者触发（叫点/开牌对决中的负方，或断线判负方）；其余参战玩家记平但不计分、不受罚。</p>}
               {settings.enablePunishment && (
                 <>
-                  <Select value={settings.punishmentSource || "system"} onChange={(value) => patch({ punishmentSource: value as RoomSettings["punishmentSource"] })} options={[
-                    { value: "system", label: "系统任务" },
+                  <Select value={(settings.punishmentSource === "system" ? "random" : settings.punishmentSource) || "random"} onChange={(value) => patch({ punishmentSource: value as RoomSettings["punishmentSource"] })} options={[
+                    { value: "random", label: "随机任务" },
+                    { value: "series", label: "系列任务" },
                     { value: "player", label: "玩家发布" }
                   ]} />
-                  {(settings.punishmentSource || "system") === "system" ? (
+                  {((settings.punishmentSource || "random") === "random" || settings.punishmentSource === "system") ? (
                     <>
-                      <p className="hint">已选择 {selectedPunishmentIdsForConfig(config, settings).length} 个惩罚池；每局会先随机一个惩罚池，再随机任务。</p>
-                      <div className="punishment-choice-grid">
-                        {config.punishments.map((punishment) => {
-                          const active = selectedPunishmentIdsForConfig(config, settings).includes(punishment.id);
+                      <p className="hint">点一下标签循环：缺省 → 选中 → 拒绝。选中的标签任务必须全部命中，拒绝的标签一律排除；全缺省时只按拒绝集合过滤。难度与房间绑定：本房间抽任务次数越多目标难度越高，更难一侧不会达到或超过「目标 + 上浮硬顶」。</p>
+                      <div className="punishment-tag-tri-grid">
+                        {(config.punishmentTags || []).map((tag) => {
+                          const state = tagTriState(tag.id);
                           return (
                             <button
                               type="button"
-                              className={`punishment-choice-card ${active ? "active" : ""}`}
-                              key={punishment.id}
-                              onClick={() => togglePunishment(punishment.id)}
-                              style={{
-                                "--punishment-bg": punishment.cardImageUrl ? `url(${punishment.cardImageUrl})` : "none",
-                                "--punishment-bg-opacity": String(punishment.cardImageOpacity ?? 0.26)
-                              } as CSSProperties}
+                              className={`punishment-tag-tri ${state}`}
+                              key={tag.id}
+                              onClick={() => cycleTagState(tag.id)}
                             >
-                              <div className="punishment-choice-meta">
-                                <em>{active ? "已选" : "可选"}</em>
-                                <em>{punishmentTasks(punishment, config).length} 个任务</em>
-                              </div>
-                              <span>{punishment.name}</span>
-                              <small>{punishment.description}</small>
+                              <span>{tag.name}</span>
                             </button>
                           );
                         })}
                       </div>
+                      {(config.punishmentTags || []).length === 0 && <p className="hint">后台还没有配置惩罚标签。</p>}
+                    </>
+                  ) : settings.punishmentSource === "series" ? (
+                    <>
+                      <p className="hint">系列任务按你个人进度严格顺序推进，与房间/对手无关；做完最后一条后会反复执行最后一条。</p>
+                      <div className="punishment-choice-grid">
+                        {(config.punishmentSeriesSummaries || []).map((series) => {
+                          const active = settings.punishmentSeriesId === series.id;
+                          return (
+                            <button
+                              type="button"
+                              className={`punishment-choice-card ${active ? "active" : ""}`}
+                              key={series.id}
+                              onClick={() => patch({ punishmentSeriesId: series.id })}
+                            >
+                              <div className="punishment-choice-meta">
+                                <em>{active ? "已选" : "可选"}</em>
+                                <em>{series.stepCount ?? 0} 步</em>
+                              </div>
+                              <span>{series.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {(config.punishmentSeriesSummaries || []).length === 0 && <p className="hint">后台还没有配置系列任务。</p>}
                     </>
                   ) : (
                     <p className="hint">本局结算后，由对手临时写惩罚任务；任务不会保存到后台配置。</p>
@@ -1204,9 +1280,7 @@ export function generateRoomName(config: AppConfig, settings: RoomSettings) {
   if (settings.gameId === "gomoku" && !settings.enablePunishment) return defaultGomokuRoomName;
   if (settings.gameId === "jungle" && !settings.enablePunishment) return defaultJungleRoomName;
   if (settings.gameId === "liarsdice" && !settings.enablePunishment) return defaultLiarsDiceRoomName;
-  const pool = settings.punishmentSource === "player"
-    ? config.playerPunishmentRoomNamePool
-    : primaryPunishmentForSettings(config, settings)?.roomNamePool;
+  const pool = roomNamePoolForSettings(config, settings);
   if (!pool) return defaultRoomName;
   const subject = randomItem(pool.subjects);
   const roomWord = randomItem(pool.roomWords);
@@ -1218,20 +1292,27 @@ export function randomItem(items: string[]) {
   return items[Math.floor(Math.random() * items.length)] || "";
 }
 
-export function selectedPunishmentIdsForConfig(config: AppConfig, settings: RoomSettings) {
-  const rawIds = settings.punishmentIds?.length ? settings.punishmentIds : settings.punishmentId ? [settings.punishmentId] : [];
-  const validIds = rawIds.filter((id, index) =>
-    rawIds.indexOf(id) === index &&
-    config.punishments.some((punishment) => punishment.id === id)
-  );
-  if (validIds.length) return validIds;
-  return config.punishments[0]?.id ? [config.punishments[0].id] : [];
+export function filterTagIds(config: AppConfig, ids: string[]) {
+  const valid = new Set((config.punishmentTags || []).map((t) => t.id));
+  return ids.filter((id, index) => ids.indexOf(id) === index && valid.has(id));
 }
 
-export function primaryPunishmentForSettings(config: AppConfig, settings: RoomSettings) {
-  const ids = selectedPunishmentIdsForConfig(config, settings);
-  const lastId = ids[ids.length - 1];
-  return config.punishments.find((punishment) => punishment.id === lastId);
+/** 按后台标签固定顺序取第一个有房名词库的已选标签。 */
+export function roomNamePoolForSettings(config: AppConfig, settings: RoomSettings) {
+  const src = settings.punishmentSource === "system" ? "random" : (settings.punishmentSource || "random");
+  if (src === "player") return config.playerPunishmentRoomNamePool;
+  if (src === "series") {
+    const series = (config.punishmentSeriesSummaries || []).find((s) => s.id === settings.punishmentSeriesId);
+    return series?.roomNamePool;
+  }
+  const included = new Set(settings.punishmentTagsIncluded || []);
+  for (const tag of config.punishmentTags || []) {
+    if (!included.has(tag.id)) continue;
+    if (tag.roomNamePool?.subjects?.length && tag.roomNamePool?.roomWords?.length) {
+      return tag.roomNamePool;
+    }
+  }
+  return undefined;
 }
 
 export function sameStringArray(left: string[], right: string[]) {
@@ -1248,13 +1329,36 @@ export function RankMultiplierBadge({ multiplier }: { multiplier?: number }) {
   return <span className="rank-multiplier-badge">x{multiplier}</span>;
 }
 
-export function gameIcon(gameId: RoomSettings["gameId"]) {
-  if (gameId === "othello") return "⚫⚪";
-  if (gameId === "tictactoe") return "❌⭕";
-  if (gameId === "gomoku") return "●○";
+export function gameIcon(gameId: RoomSettings["gameId"]): ReactNode {
+  // 黑白棋是两个并排的宽体 emoji，默认字号会撑破方形图标框、溢出圆角边框，缩小字号让它们老实待在框内。
+  if (gameId === "othello") return <span className="game-choice-icon-pair">⚫⚪</span>;
+  // 井字棋/五子棋两个图标沿对角线排布，与黑白棋的水平并排区分开。
+  if (gameId === "tictactoe") {
+    return (
+      <span className="game-choice-icon-diagonal">
+        <span>❌</span>
+        <span>⭕</span>
+      </span>
+    );
+  }
+  if (gameId === "gomoku") {
+    return (
+      <span className="game-choice-icon-diagonal game-choice-icon-diagonal-text">
+        <span>●</span>
+        <span>○</span>
+      </span>
+    );
+  }
   if (gameId === "jungle") return "🦁";
   if (gameId === "liarsdice") return "🎲";
-  return "✊✌️🖐️";
+  // 三个手势倒三角排布（上两下一），避免挤在一行导致溢出裁切。
+  return (
+    <span className="game-choice-icon-rps">
+      <span>✊</span>
+      <span>✌️</span>
+      <span>🖐️</span>
+    </span>
+  );
 }
 
 export function ExtremeRankedBadge({ enabled }: { enabled?: boolean }) {
@@ -3101,13 +3205,18 @@ export function gameInfoTag(config: AppConfig, gameId: RoomSettings["gameId"]) {
             : roomInfoTag(config, "gameRps");
 }
 
-export function punishmentSelectionText(config: AppConfig, settings: Pick<RoomSettings, "punishmentId" | "punishmentIds">) {
-  const punishments = selectedPunishmentIdsForConfig(config, settings as RoomSettings)
-    .map((id) => config.punishments.find((punishment) => punishment.id === id))
-    .filter((punishment): punishment is AppConfig["punishments"][number] => Boolean(punishment));
-  if (!punishments.length) return "";
-  const names = punishments.map((punishment) => punishment.name).join(" / ");
-  return punishments.length > 1 ? `：${punishments.length}选1 ${names}` : `：${names}`;
+export function punishmentSelectionText(config: AppConfig, settings: Pick<RoomSettings, "punishmentSource" | "punishmentTagsIncluded" | "punishmentSeriesId" | "punishmentId" | "punishmentIds">) {
+  const src = settings.punishmentSource === "system" ? "random" : (settings.punishmentSource || "random");
+  if (src === "player") return "：玩家发布";
+  if (src === "series") {
+    const series = (config.punishmentSeriesSummaries || []).find((s) => s.id === settings.punishmentSeriesId);
+    return series ? `：${series.name}` : "：系列任务";
+  }
+  const names = (settings.punishmentTagsIncluded || [])
+    .map((id) => (config.punishmentTags || []).find((t) => t.id === id)?.name)
+    .filter((name): name is string => Boolean(name));
+  if (!names.length) return "：随机任务";
+  return `：${names.join("、")}`;
 }
 
 export function RoomInfoTagList({ tags }: { tags: RoomInfoTagView[] }) {
@@ -4803,20 +4912,6 @@ export const titleTagStyleOrder = [
   { key: "master", label: "主人赋予" },
   { key: "admin", label: "管理员赋予" }
 ];
-
-export function punishmentTasks(punishment: AppConfig["punishments"][number], draft: AppConfig): PunishmentTaskConfig[] {
-  if (punishment.tasks?.length) return punishment.tasks;
-  return [{
-    id: "task1",
-    name: "默认任务",
-    backgroundImages: [],
-    backgroundOpacity: 0.22,
-    variants: Object.fromEntries(draft.genderFactions.map((faction) => [
-      faction.id,
-      punishment.variants?.[faction.id] || punishment.description || "请完成本局惩罚。"
-    ]))
-  }];
-}
 
 export function Toggle({ label, value, onChange, disabled = false }: { label: string; value: boolean; onChange: (value: boolean) => void; disabled?: boolean }) {
   return <label className="toggle"><input type="checkbox" checked={value} disabled={disabled} onChange={(event) => onChange(event.target.checked)} /> {label}</label>;

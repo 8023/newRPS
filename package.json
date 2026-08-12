@@ -9,7 +9,7 @@
     "dev:web": "npm run dev --prefix web",
     "build": "npm run build:server && npm run build --prefix web && npm run fix-perms",
     "build:web": "npm run build --prefix web",
-    "build:server": "CGO_ENABLED=1 go build -o bin/server ./cmd/server && chmod a+x bin/server",
+    "build:server": "CGO_ENABLED=1 go build -ldflags \"-X github.com/doumiao/newRPS/internal/server.BuildID=$(git rev-parse --short HEAD 2>/dev/null || echo dev)\" -o bin/server ./cmd/server && chmod a+x bin/server",
     "fix-perms": "chmod a+x bin/server 2>/dev/null || true; chmod 600 config/json/*.json 2>/dev/null || true",
     "test": "go test ./... && npm run build --prefix web",
     "start": "HOST=127.0.0.1 PORT=9988 ./bin/server",

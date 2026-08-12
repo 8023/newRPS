@@ -85,12 +85,68 @@ type RoomInfoTagStyle struct {
 	Label string `json:"label"`
 }
 
+// PunishmentTaskConfig 是一条拍平的任务池任务：
+// TagIDs 可选 0/1/多个，决定标签过滤，留空表示这条任务永远不会被随机模式抽到（但仍可被
+// 系列任务按 ID 直接引用）；FactionIDs 为具体阵营 ID（GenderFaction.ID）多选，
+// 留空表示永不匹配任何阵营；Order（1-99，语义为任务难度）决定抽取时房间级"目标难度"的靠拢方向，
+// 具体算法见 internal/server/punishment.go。Order 合法取值仅 -1 或 1-99：-1 是另一种
+// "不参与随机抽取"的显式标记（与 TagIDs 留空等效，二者可任选其一或同时使用），仍可被
+// 系列任务按 ID 引用，不参与难度加权计算；保存时其余负数会被归一化为 -1
+// （见 config.NormalizePunishmentTasks），不保留具体负值。
 type PunishmentTaskConfig struct {
-	ID                string            `json:"id"`
-	Name              string            `json:"name"`
-	Variants          map[string]string `json:"variants"`
-	BackgroundImages  []string          `json:"backgroundImages,omitempty"`
-	BackgroundOpacity float64           `json:"backgroundOpacity,omitempty"`
+	ID                string   `json:"id"`
+	Name              string   `json:"name"`
+	Text              string   `json:"text"`
+	TagIDs            []string `json:"tagIds"`
+	FactionIDs        []string `json:"factionIds"`
+	Order             int      `json:"order"`
+	BackgroundImages  []string `json:"backgroundImages,omitempty"`
+	BackgroundOpacity float64  `json:"backgroundOpacity,omitempty"`
+	// Variants：旧版按任务分组保存的文案。仅用于旧单体配置迁移，
+	// 新版任务运行时使用 Text + FactionIDs。
+	Variants map[string]string `json:"variants,omitempty"`
+}
+
+// PunishmentTagConfig 是惩罚标签（替代原"任务类型"容器）：开房时的三态筛选维度，
+// 同时提供房名词库/背景图库。
+type PunishmentTagConfig struct {
+	ID                   string        `json:"id"`
+	Name                 string        `json:"name"`
+	RoomNamePool         *RoomNamePool `json:"roomNamePool,omitempty"`
+	RoomBackgroundImages []string      `json:"roomBackgroundImages,omitempty"`
+}
+
+// PunishmentRandomSettings 是随机任务全局难度参数（不再按标签/类型区分）。
+type PunishmentRandomSettings struct {
+	OrderStep              float64 `json:"orderStep"`
+	MaxDifficultyOvershoot float64 `json:"maxDifficultyOvershoot"`
+}
+
+// PunishmentSeriesStep 是系列任务中的一步：引用任务池里的任务 ID。
+// 运行时收集所有精确命中受罚者阵营的任务并随机选择；FactionIDs 为空的任务
+// 永不命中，指向不存在 ID 的引用直接跳过。
+type PunishmentSeriesStep struct {
+	TaskIDs []string `json:"taskIds"`
+}
+
+// PunishmentSeriesTaskConfig 是一个系列任务的管理详情（SQLite 存储，走 admin:action，
+// 不进 AppConfig）：步骤严格按数组下标顺序执行，进度按玩家个人持久化（跨房间/跨对手）。
+type PunishmentSeriesTaskConfig struct {
+	ID                   string                 `json:"id"`
+	Name                 string                 `json:"name"`
+	RoomNamePool         *RoomNamePool          `json:"roomNamePool,omitempty"`
+	RoomBackgroundImages []string               `json:"roomBackgroundImages,omitempty"`
+	Steps                []PunishmentSeriesStep `json:"steps"`
+}
+
+// PunishmentSeriesSummary 是建房面板用的系列任务目录摘要（随 AppConfig 公开广播）：
+// 只含 id/name/房名/背景/步数，不含任何任务文案或 taskIds。
+type PunishmentSeriesSummary struct {
+	ID                   string        `json:"id"`
+	Name                 string        `json:"name"`
+	RoomNamePool         *RoomNamePool `json:"roomNamePool,omitempty"`
+	RoomBackgroundImages []string      `json:"roomBackgroundImages,omitempty"`
+	StepCount            int           `json:"stepCount"`
 }
 
 type PublicStats struct {
@@ -280,12 +336,20 @@ type RoomSettings struct {
 	Password         string `json:"password,omitempty"`
 	GameID           GameID `json:"gameId"`
 	EnablePunishment bool   `json:"enablePunishment"`
+	// PunishmentSource：random（随机任务，原 system）| series（系列任务）| player（玩家发布）。
+	// 空串与历史值 "system" 在服务端归一化为 "random"。
 	PunishmentSource string `json:"punishmentSource,omitempty"`
-	PunishmentID     string `json:"punishmentId,omitempty"`
+	// 以下两字段已废弃（原"任务类型"多选），保留以便旧客户端/旧房间快照解码。
+	PunishmentID  string   `json:"punishmentId,omitempty"`
+	PunishmentIDs []string `json:"punishmentIds"`
+	// 随机任务模式：用户选中/拒绝的标签（无序）。
+	PunishmentTagsIncluded []string `json:"punishmentTagsIncluded"`
+	PunishmentTagsExcluded []string `json:"punishmentTagsExcluded"`
+	// 系列任务模式：选中的系列 ID。
+	PunishmentSeriesID  string `json:"punishmentSeriesId,omitempty"`
+	RoomBackgroundImage string `json:"roomBackgroundImage,omitempty"`
+	EnableTags          bool   `json:"enableTags,omitempty"`
 	// 数组字段不用 omitempty：空切片会变成 null 或字段缺失，前端 .map/.includes 会挂
-	PunishmentIDs          []string       `json:"punishmentIds"`
-	RoomBackgroundImage    string         `json:"roomBackgroundImage,omitempty"`
-	EnableTags             bool           `json:"enableTags,omitempty"`
 	Tags                   []string       `json:"tags"`
 	AllowProofImage        *bool          `json:"allowProofImage,omitempty"`
 	TieDoublePunish        bool           `json:"tieDoublePunish"`
@@ -339,38 +403,37 @@ type Pos struct {
 }
 
 type RoundHistoryItem struct {
-	ID                    string           `json:"id"`
-	Round                 int              `json:"round"`
-	At                    int64            `json:"at"`
-	PlayerA               string           `json:"playerA"`
-	PlayerB               string           `json:"playerB"`
-	MoveA                 Move             `json:"moveA"`
-	MoveB                 Move             `json:"moveB"`
-	Result                RoundResult      `json:"result"`
-	ResultLabel           string           `json:"resultLabel"`
-	ResultText            string           `json:"resultText"`
-	GameID                GameID           `json:"gameId,omitempty"`
-	OthelloScore          *OthelloScore    `json:"othelloScore,omitempty"`
-	OthelloBlackSeat      SeatKey          `json:"othelloBlackSeat,omitempty"`
-	TicTacToeXSeat        SeatKey          `json:"tictactoeXSeat,omitempty"`
-	TicTacToeLine         []Pos            `json:"tictactoeLine,omitempty"`
-	GomokuBlackSeat       SeatKey          `json:"gomokuBlackSeat,omitempty"`
-	GomokuLine            []Pos            `json:"gomokuLine,omitempty"`
-	Ranked                bool             `json:"ranked"`
-	Stake                 *RankStake       `json:"stake,omitempty"`
-	RankMultiplier        *RankMultiplier  `json:"rankMultiplier,omitempty"`
-	EffectiveStake        *int             `json:"effectiveStake,omitempty"`
-	ExtremeRanked         bool             `json:"extremeRanked,omitempty"`
-	PunishmentName        string           `json:"punishmentName,omitempty"`
-	PunishmentDescription string           `json:"punishmentDescription,omitempty"`
-	PunishmentTasks       []PunishmentTask `json:"punishmentTasks"`
-	PunishedNames         []string         `json:"punishedNames"`
-	Proofs                []HistoryProof   `json:"proofs"`
-	LiarsDiceWinnerID     string           `json:"liarsDiceWinnerId,omitempty"`
-	LiarsDiceLoserID      string           `json:"liarsDiceLoserId,omitempty"`
-	LiarsDiceBidCount     int              `json:"liarsDiceBidCount,omitempty"`
-	LiarsDiceBidFace      int              `json:"liarsDiceBidFace,omitempty"`
-	LiarsDiceActualCount  int              `json:"liarsDiceActualCount,omitempty"`
+	ID                   string           `json:"id"`
+	Round                int              `json:"round"`
+	At                   int64            `json:"at"`
+	PlayerA              string           `json:"playerA"`
+	PlayerB              string           `json:"playerB"`
+	MoveA                Move             `json:"moveA"`
+	MoveB                Move             `json:"moveB"`
+	Result               RoundResult      `json:"result"`
+	ResultLabel          string           `json:"resultLabel"`
+	ResultText           string           `json:"resultText"`
+	GameID               GameID           `json:"gameId,omitempty"`
+	OthelloScore         *OthelloScore    `json:"othelloScore,omitempty"`
+	OthelloBlackSeat     SeatKey          `json:"othelloBlackSeat,omitempty"`
+	TicTacToeXSeat       SeatKey          `json:"tictactoeXSeat,omitempty"`
+	TicTacToeLine        []Pos            `json:"tictactoeLine,omitempty"`
+	GomokuBlackSeat      SeatKey          `json:"gomokuBlackSeat,omitempty"`
+	GomokuLine           []Pos            `json:"gomokuLine,omitempty"`
+	Ranked               bool             `json:"ranked"`
+	Stake                *RankStake       `json:"stake,omitempty"`
+	RankMultiplier       *RankMultiplier  `json:"rankMultiplier,omitempty"`
+	EffectiveStake       *int             `json:"effectiveStake,omitempty"`
+	ExtremeRanked        bool             `json:"extremeRanked,omitempty"`
+	PunishmentName       string           `json:"punishmentName,omitempty"`
+	PunishmentTasks      []PunishmentTask `json:"punishmentTasks"`
+	PunishedNames        []string         `json:"punishedNames"`
+	Proofs               []HistoryProof   `json:"proofs"`
+	LiarsDiceWinnerID    string           `json:"liarsDiceWinnerId,omitempty"`
+	LiarsDiceLoserID     string           `json:"liarsDiceLoserId,omitempty"`
+	LiarsDiceBidCount    int              `json:"liarsDiceBidCount,omitempty"`
+	LiarsDiceBidFace     int              `json:"liarsDiceBidFace,omitempty"`
+	LiarsDiceActualCount int              `json:"liarsDiceActualCount,omitempty"`
 	// LiarsDiceHands/LiarsDiceNames：结算后全员开牌，playerId -> 骰子/展示名。
 	// pbconv.historyToProto 里手动映射成 pair 列表，不走通用 JSONCamelToProto。
 	LiarsDiceHands     map[string][]int  `json:"liarsDiceHands,omitempty"`
@@ -393,6 +456,8 @@ type PunishmentTask struct {
 	BackgroundOpacity *float64 `json:"backgroundOpacity,omitempty"`
 	AssignedBy        string   `json:"assignedBy,omitempty"`
 	AssignedByName    string   `json:"assignedByName,omitempty"`
+	// TypeName：该任务抽取自哪个任务类型（如"真心话"），玩家发布任务模式下为空。
+	TypeName string `json:"typeName,omitempty"`
 	// EventID：punishment_events 表里对应行的 id，仅服务端用于后续 update，不下发前端。
 	EventID string `json:"-"`
 	// RejectCount：本局（本条任务）已被胜方连续审核不通过的次数，仅服务端用于额外扣分判定，不下发前端。
@@ -650,6 +715,10 @@ type LobbyRoomInfo struct {
 	EnablePunishment       bool            `json:"enablePunishment"`
 	PunishmentIDs          []string        `json:"punishmentIds"`
 	PunishmentID           string          `json:"punishmentId,omitempty"`
+	PunishmentSource       string          `json:"punishmentSource,omitempty"`
+	PunishmentTagsIncluded []string        `json:"punishmentTagsIncluded"`
+	PunishmentTagsExcluded []string        `json:"punishmentTagsExcluded"`
+	PunishmentSeriesID     string          `json:"punishmentSeriesId,omitempty"`
 	TieDoublePunish        bool            `json:"tieDoublePunish"`
 	RequireOpponentConfirm bool            `json:"requireOpponentConfirm"`
 	EnableRanked           bool            `json:"enableRanked"`
@@ -714,16 +783,20 @@ type TitleSegment struct {
 	FactionNames map[string][]string `json:"factionNames,omitempty"`
 }
 
+// PunishmentConfig 是旧版"任务类型"容器。新版已拆成 PunishmentTagConfig + 拍平
+// PunishmentTaskConfig + PunishmentSeriesTaskConfig；本结构仅用于配置迁移读入旧文件。
 type PunishmentConfig struct {
-	ID                   string                 `json:"id"`
-	Name                 string                 `json:"name"`
-	Description          string                 `json:"description"`
-	Variants             map[string]string      `json:"variants,omitempty"`
-	Tasks                []PunishmentTaskConfig `json:"tasks,omitempty"`
-	CardImageURL         string                 `json:"cardImageUrl,omitempty"`
-	CardImageOpacity     float64                `json:"cardImageOpacity,omitempty"`
-	RoomBackgroundImages []string               `json:"roomBackgroundImages,omitempty"`
-	RoomNamePool         *RoomNamePool          `json:"roomNamePool,omitempty"`
+	ID                     string                 `json:"id"`
+	Name                   string                 `json:"name"`
+	Description            string                 `json:"description,omitempty"`
+	Variants               map[string]string      `json:"variants,omitempty"`
+	Tasks                  []PunishmentTaskConfig `json:"tasks,omitempty"`
+	CardImageURL           string                 `json:"cardImageUrl,omitempty"`
+	CardImageOpacity       float64                `json:"cardImageOpacity,omitempty"`
+	RoomBackgroundImages   []string               `json:"roomBackgroundImages,omitempty"`
+	RoomNamePool           *RoomNamePool          `json:"roomNamePool,omitempty"`
+	OrderStep              float64                `json:"orderStep,omitempty"`
+	MaxDifficultyOvershoot float64                `json:"maxDifficultyOvershoot,omitempty"`
 }
 
 type GameConfig struct {
@@ -773,12 +846,19 @@ type AppConfig struct {
 		Description   string `json:"description"`
 		AdminPassword string `json:"adminPassword"`
 	} `json:"site"`
-	AnnouncementBoard            AnnouncementBoard           `json:"announcementBoard"`
-	SecurityDisclaimer           SecurityDisclaimerConfig    `json:"securityDisclaimer"`
-	Genders                      []GenderOption              `json:"genders"`
-	GenderFactions               []GenderFaction             `json:"genderFactions"`
-	Titles                       []TitleSegment              `json:"titles"`
-	Punishments                  []PunishmentConfig          `json:"punishments"`
+	AnnouncementBoard  AnnouncementBoard        `json:"announcementBoard"`
+	SecurityDisclaimer SecurityDisclaimerConfig `json:"securityDisclaimer"`
+	Genders            []GenderOption           `json:"genders"`
+	GenderFactions     []GenderFaction          `json:"genderFactions"`
+	Titles             []TitleSegment           `json:"titles"`
+	// Punishments：旧版任务类型列表，仅迁移读入；新代码读写用 punishmentTags + 随机难度参数。
+	// 任务池 / 系列任务详情已迁到 SQLite（punishment_tasks / punishment_series）。
+	Punishments    []PunishmentConfig    `json:"punishments,omitempty"`
+	PunishmentTags []PunishmentTagConfig `json:"punishmentTags"`
+	// PunishmentSeriesSummaries：建房选系列用的公开目录，不从 JSON 加载；
+	// 由 server.publicConfig() 每次现算现填（见 PunishmentSeriesSummary）。
+	PunishmentSeriesSummaries    []PunishmentSeriesSummary   `json:"punishmentSeriesSummaries,omitempty"`
+	PunishmentRandomSettings     PunishmentRandomSettings    `json:"punishmentRandomSettings"`
 	PlayerPunishmentRoomNamePool *RoomNamePool               `json:"playerPunishmentRoomNamePool,omitempty"`
 	RoomTags                     []string                    `json:"roomTags"`
 	RoomInfoTags                 map[string]RoomInfoTagStyle `json:"roomInfoTags"`

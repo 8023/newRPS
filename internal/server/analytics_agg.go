@@ -41,12 +41,15 @@ const (
 	metricActivity       = "activity"
 	metricPetbondNew     = "petbond_new"
 	metricPetbondTotal   = "petbond_total"
-	metricChatLobby      = "chat_lobby"
-	metricChatRoom       = "chat_room"
-	metricChatSpeakers   = "chat_speakers"
-	metricRegister       = "register"
-	metricFunnel         = "funnel"
-	metricLoggedDAU      = "logged_dau"
+	metricChatLobby         = "chat_lobby"
+	metricChatRoom          = "chat_room"
+	metricChatSpeakers      = "chat_speakers"       // 大厅发言去重人数（历史字段名）
+	metricChatRoomSpeakers  = "chat_room_speakers"  // 房间发言去重人数
+	metricRoomRoundsMax     = "room_rounds_max"     // 当日单房对局数最大值
+	metricRoomRoundsAvg     = "room_rounds_avg"     // 当日有对局的房间局数均值（四舍五入为整数）
+	metricRegister          = "register"
+	metricFunnel            = "funnel"
+	metricLoggedDAU         = "logged_dau"
 )
 
 // analyticsSnapshot 是聚合器产出的不可变内存快照；RPC 只读它。
@@ -58,9 +61,12 @@ type analyticsSnapshot struct {
 	PeakOnline, Connections, OnlineMs, LoggedDAU, Register              int64Slice
 	PunishPublish, PunishDone, PunishReject                             int64Slice
 	PetbondNew, PetbondTotal, ChatLobby, ChatRoom, ChatSpeakers         int64Slice
+	ChatRoomSpeakers, RoomRoundsMax, RoomRoundsAvg                      int64Slice
 	// 分维度：metric -> key -> 按天 values（与 Days 等长，缺日补 0）
 	ByKey map[string]map[string]int64Slice // metric -> key -> series
-	// 留存矩阵：cohortDay -> offset -> count（offset=0 为基数）
+	// 留存矩阵（用户维度）：cohortDay -> offset -> count
+	// cohort = 当日新建 players 数（players.created_at）；offset=0 为基数；
+	// Dn = 该 cohort 中在 first_day+n 仍有登录活动的 DISTINCT player_id。
 	Retention map[int64]map[int]int64
 	// 最近会话（脱敏，明细用）
 	RecentSessions []analyticsSessionBrief
@@ -120,16 +126,18 @@ type analyticsRangeView struct {
 	ProfileChanges []analyticsNamedSeries `json:"profileChanges"`
 	// NameWarGiveaway「名争·白给」：开启名争、开启白给、白给留言板、名争改名、开启极限模式。
 	NameWarGiveaway []analyticsNamedSeries `json:"nameWarGiveaway"`
-	// NewOldUsers「新老用户」：按账号（playerId）维度，区别于设备维度的 NewVsReturning。
+	// NewOldUsers「新老用户」：按用户（playerId）维度，区别于设备维度的 NewVsReturning。
 	NewOldUsers analyticsNewOldUsers  `json:"newOldUsers"`
 	PetBond     analyticsPetBondBlock `json:"petBond"`
 	Chat        analyticsChatBlock    `json:"chat"`
+	// RoomRounds「单房对局」：当日有对局的房间里，单房局数 max 与均值 avg。
+	RoomRounds analyticsRoomRoundsBlock `json:"roomRounds"`
 
 	// 漏斗 / 留存
 	Funnel    []analyticsBucket       `json:"funnel"`
 	Retention analyticsRetentionBlock `json:"retention"`
 
-	// 新 vs 回访（按设备指纹维度，见 NewOldUsers 的账号维度对照）
+	// 新 vs 回访（按设备指纹维度，见 NewOldUsers 的用户维度对照）
 	NewVsReturning analyticsNewReturning `json:"newVsReturning"`
 }
 
@@ -190,11 +198,21 @@ type analyticsPetBondBlock struct {
 type analyticsChatBlock struct {
 	Lobby    []int64 `json:"lobby"`
 	Room     []int64 `json:"room"`
+	// Speakers 大厅发言去重人数（历史字段名；与 SpeakersRoom 对照）。
 	Speakers []int64 `json:"speakers"`
+	// SpeakersRoom 房间发言去重人数（按 player_id，跨房间合并去重）。
+	SpeakersRoom []int64 `json:"speakersRoom"`
+}
+
+// analyticsRoomRoundsBlock 当日「有至少一局对局的房间」上的单房局数统计。
+type analyticsRoomRoundsBlock struct {
+	Max []int64 `json:"max"` // 单房最多几局
+	Avg []int64 `json:"avg"` // 各房局数均值（四舍五入整数）
 }
 
 type analyticsRetentionBlock struct {
-	// 矩阵 [cohortIndex][offset] 为留存率 0-100；offsets 0..30
+	// 用户留存：矩阵 [cohortIndex][offset] 为留存率 0-100；offsets 0..30。
+	// cohort = 当日首次注册（players.created_at）的用户；跨设备合并到同一 player_id。
 	Offsets []int       `json:"offsets"`
 	Cohorts []string    `json:"cohorts"` // 日标签
 	Matrix  [][]float64 `json:"matrix"`
@@ -205,11 +223,11 @@ type analyticsNewReturning struct {
 	Returning []int64 `json:"returning"`
 }
 
-// analyticsNewOldUsers 是按注册账号（playerId）维度的新老拆分，与 analyticsNewReturning
-// 的设备指纹维度是两套不同口径（同一账号换设备会被设备维度误判为"新"，反之亦然）。
+// analyticsNewOldUsers 是按注册用户（playerId）维度的新老拆分，与 analyticsNewReturning
+// 的设备指纹维度是两套不同口径（同一用户换设备会被设备维度误判为"新"，反之亦然）。
 type analyticsNewOldUsers struct {
-	New      []int64 `json:"new"`      // 当日新建账号数（= activity.create 当日计数）
-	OldLogin []int64 `json:"oldLogin"` // 当日登录的老账号个数 = 当日登录去重账号数 - 当日新建账号数
+	New      []int64 `json:"new"`      // 当日新建用户数（= activity.create 当日计数）
+	OldLogin []int64 `json:"oldLogin"` // 当日登录的老用户个数 = 当日登录去重用户数 - 当日新建用户数
 }
 
 func clampAnalyticsDays(d int) int {
@@ -342,8 +360,8 @@ func (snap *analyticsSnapshot) forRange(days int) *analyticsRangeView {
 		returning[i] = r
 	}
 
-	// 按账号（playerId）维度的新老拆分：create 当日计数即当日新建账号数（每个 playerId
-	// 一生只触发一次 create），loggedDAU 减去它就是当日登录的老账号个数。
+	// 按用户（playerId）维度的新老拆分：create 当日计数即当日新建用户数（每个 playerId
+	// 一生只触发一次 create），loggedDAU 减去它就是当日登录的老用户个数。
 	newAccounts := keySeries(snap, metricActivity, "create", start, n)
 	oldLogin := make([]int64, len(logged))
 	for i := range logged {
@@ -388,15 +406,26 @@ func (snap *analyticsSnapshot) forRange(days int) *analyticsRangeView {
 		Punishment: analyticsPunishmentBlock{
 			Publish: slice(snap.PunishPublish), Done: slice(snap.PunishDone), Reject: slice(snap.PunishReject),
 			DoneRate: rate(sum(slice(snap.PunishDone)), sum(slice(snap.PunishPublish))),
-			ProofMs:  orderedBuckets(sumByKey(snap, metricPunishProofMs, start, n), []string{"10s", "30s", "1min", "5min", "10min", "20min", "20min+"}),
+			// 证明耗时统计上几乎不出现 >5min；去掉 20min 桶，≥10min 统一归 10min+。
+			// 历史 sealed 日若仍有 20min/20min+ 键，经 mergeBucketAlias 并入 10min+ 以免丢数。
+			ProofMs: orderedBuckets(
+				mergeBucketAlias(sumByKey(snap, metricPunishProofMs, start, n), map[string]string{
+					"20min": "10min+", "20min+": "10min+",
+				}),
+				[]string{"10s", "30s", "1min", "5min", "10min", "10min+"},
+			),
 		},
 		Activity:        namedSeries(snap, metricActivity, start, n, dayLabels),
 		ProfileChanges:  namedSeriesForKeys(snap, metricActivity, []string{"gender_change", "rename", "avatar_change", "self_title_change"}, start, n),
 		NameWarGiveaway: namedSeriesForKeys(snap, metricActivity, []string{"nameWar_enable", "giveaway_enable", "giveaway_board_submit", "nameWar_rename", "extreme_enable"}, start, n),
 		NewOldUsers:     analyticsNewOldUsers{New: newAccounts, OldLogin: oldLogin},
-		PetBond:         analyticsPetBondBlock{Total: slice(snap.PetbondTotal), New: slice(snap.PetbondNew)},
+		PetBond: analyticsPetBondBlock{Total: slice(snap.PetbondTotal), New: slice(snap.PetbondNew)},
 		Chat: analyticsChatBlock{
-			Lobby: slice(snap.ChatLobby), Room: slice(snap.ChatRoom), Speakers: slice(snap.ChatSpeakers),
+			Lobby: slice(snap.ChatLobby), Room: slice(snap.ChatRoom),
+			Speakers: slice(snap.ChatSpeakers), SpeakersRoom: slice(snap.ChatRoomSpeakers),
+		},
+		RoomRounds: analyticsRoomRoundsBlock{
+			Max: slice(snap.RoomRoundsMax), Avg: slice(snap.RoomRoundsAvg),
 		},
 		Funnel:    sumByKey(snap, metricFunnel, start, n),
 		Retention: buildRetentionView(snap, start, n),
@@ -455,6 +484,7 @@ func sumByKey(snap *analyticsSnapshot, metric string, start, n int) []analyticsB
 
 // orderedBuckets 只按 order 给定的固定桶重排/补零；不在 order 里的历史遗留桶键
 // （比如改颗粒度前 analytics_daily 里存量的旧桶名）直接丢弃，不与当前桶并列显示。
+// 若需把旧键并入新键（而非丢弃），先经 mergeBucketAlias 再传入。
 func orderedBuckets(buckets []analyticsBucket, order []string) []analyticsBucket {
 	idx := map[string]int64{}
 	for _, b := range buckets {
@@ -463,6 +493,26 @@ func orderedBuckets(buckets []analyticsBucket, order []string) []analyticsBucket
 	out := make([]analyticsBucket, 0, len(order))
 	for _, k := range order {
 		out = append(out, analyticsBucket{Key: k, Value: idx[k]})
+	}
+	return out
+}
+
+// mergeBucketAlias 将 alias 中的旧桶键累加到目标键上（同名键合并），用于改桶后读 sealed 历史。
+func mergeBucketAlias(buckets []analyticsBucket, alias map[string]string) []analyticsBucket {
+	if len(buckets) == 0 || len(alias) == 0 {
+		return buckets
+	}
+	idx := map[string]int64{}
+	for _, b := range buckets {
+		k := b.Key
+		if to, ok := alias[k]; ok {
+			k = to
+		}
+		idx[k] += b.Value
+	}
+	out := make([]analyticsBucket, 0, len(idx))
+	for k, v := range idx {
+		out = append(out, analyticsBucket{Key: k, Value: v})
 	}
 	return out
 }
@@ -621,9 +671,9 @@ func (s *Server) rebuildUnsealedAndPublish() {
 			s.errorLog("analytics_upsert_daily_failed", err.Error())
 		}
 	}
-	// 最近 30 个 cohort 仍会随着新会话到来而变化；历史 cohort 在首次回填
-	// 后已成熟，不需要每分钟重复重算。只更新这段活动窗口，避免把完整 400 天
-	// 矩阵写回唯一的 SQLite 写连接。
+	// 最近 30 个 cohort 的用户留存仍会随登录到来而变化；历史 cohort 在
+	// 启动全量回填后已成熟，不需要每分钟重复重算。只更新这段活动窗口，
+	// 避免把完整 400 天矩阵写回唯一的 SQLite 写连接。
 	if err := s.backfillRetention(today-30, today, tz); err != nil {
 		s.errorLog("analytics_retention_refresh_failed", err.Error())
 	}
@@ -752,18 +802,18 @@ func (s *Server) rebuildDay(day int64, tz int) ([]analyticsDailyRow, error) {
 		return nil, err
 	}
 
-	// 服务端 game_round
+	// 服务端 game_round：value>0 为一局主记录（参战副记录 value=0 只供漏斗 UV，不计入对局数）
 	if err := s.queryKeyCounts(db, `
 		SELECT CASE WHEN instr(detail, ':') > 0
 		            THEN substr(detail, 1, instr(detail, ':') - 1)
 		            ELSE detail END, COUNT(*) FROM analytics_events
-		WHERE day=? AND source=1 AND name='game_round' AND detail<>'' GROUP BY 1`, day, metricGameRound, &rows); err != nil {
+		WHERE day=? AND source=1 AND name='game_round' AND value>0 AND detail<>'' GROUP BY 1`, day, metricGameRound, &rows); err != nil {
 		return nil, err
 	}
 	// game_result：detail 已是 gameId:result
 	if err := s.queryKeyCounts(db, `
 		SELECT detail, COUNT(*) FROM analytics_events
-		WHERE day=? AND source=1 AND name='game_round' AND detail LIKE '%:%' GROUP BY 1`, day, metricGameResult, &rows); err != nil {
+		WHERE day=? AND source=1 AND name='game_round' AND value>0 AND detail LIKE '%:%' GROUP BY 1`, day, metricGameResult, &rows); err != nil {
 		return nil, err
 	}
 
@@ -834,11 +884,12 @@ func (s *Server) rebuildDay(day int64, tz int) ([]analyticsDailyRow, error) {
 		return nil, err
 	}
 
-	// punishment
+	// punishment：status 与 eventstore 一致——assigned / pending / approved / rejected。
+	// 「完成」对应审核通过的 approved（不是 done；历史上曾误写成 done 导致完成数恒为 0）。
 	var pub, done, rej sql.NullInt64
 	_ = db.QueryRow(`
 		SELECT COUNT(*),
-		       SUM(CASE WHEN status='done' THEN 1 ELSE 0 END),
+		       SUM(CASE WHEN status='approved' THEN 1 ELSE 0 END),
 		       SUM(CASE WHEN status='rejected' THEN 1 ELSE 0 END)
 		FROM punishment_events WHERE task_at >= ? AND task_at < ?`, dayStart, dayEnd).Scan(&pub, &done, &rej)
 	add(metricPunishPublish, "", pub.Int64)
@@ -850,8 +901,7 @@ func (s *Server) rebuildDay(day int64, tz int) ([]analyticsDailyRow, error) {
 		            WHEN (proof_at - task_at) <    60000 THEN '1min'
 		            WHEN (proof_at - task_at) <   300000 THEN '5min'
 		            WHEN (proof_at - task_at) <   600000 THEN '10min'
-		            WHEN (proof_at - task_at) <  1200000 THEN '20min'
-		            ELSE '20min+' END, COUNT(*)
+		            ELSE '10min+' END, COUNT(*)
 		FROM punishment_events
 		WHERE task_at >= ? AND task_at < ? AND proof_at > task_at
 		GROUP BY 1`, dayStart, dayEnd, metricPunishProofMs, day, &rows); err != nil {
@@ -873,38 +923,126 @@ func (s *Server) rebuildDay(day int64, tz int) ([]analyticsDailyRow, error) {
 	_ = db.QueryRow(`SELECT COUNT(*) FROM pet_bonds WHERE created_at < ?`, dayEnd).Scan(&pbTotal)
 	add(metricPetbondTotal, "", pbTotal.Int64)
 
-	// chat
-	var lobbyN, lobbySp, roomN sql.NullInt64
+	// chat：消息条数 + 发言去重人数（大厅 / 房间分开）
+	var lobbyN, lobbySp, roomN, roomSp sql.NullInt64
 	_ = db.QueryRow(`SELECT COUNT(*), COUNT(DISTINCT player_id) FROM lobby_messages WHERE at >= ? AND at < ?`, dayStart, dayEnd).Scan(&lobbyN, &lobbySp)
-	_ = db.QueryRow(`SELECT COUNT(*) FROM room_messages WHERE at >= ? AND at < ?`, dayStart, dayEnd).Scan(&roomN)
+	_ = db.QueryRow(`SELECT COUNT(*), COUNT(DISTINCT NULLIF(player_id,'')) FROM room_messages WHERE at >= ? AND at < ?`, dayStart, dayEnd).Scan(&roomN, &roomSp)
 	add(metricChatLobby, "", lobbyN.Int64)
 	add(metricChatRoom, "", roomN.Int64)
 	add(metricChatSpeakers, "", lobbySp.Int64)
+	add(metricChatRoomSpeakers, "", roomSp.Int64)
+
+	// 单房对局 max / avg：依赖 game_round 主记录（value>0）的 view=room_id。
+	// 无 room_id 的历史事件不计入分母；当日无带 room_id 的对局时 max/avg 均为 0。
+	var roomMax sql.NullInt64
+	var roomAvg sql.NullFloat64
+	_ = db.QueryRow(`
+		SELECT COALESCE(MAX(c), 0), COALESCE(AVG(c), 0) FROM (
+			SELECT COUNT(*) AS c FROM analytics_events
+			WHERE day=? AND source=1 AND name='game_round' AND value>0 AND view<>''
+			GROUP BY view
+		)`, day).Scan(&roomMax, &roomAvg)
+	add(metricRoomRoundsMax, "", roomMax.Int64)
+	add(metricRoomRoundsAvg, "", int64(roomAvg.Float64+0.5))
 
 	// register
 	var reg sql.NullInt64
 	_ = db.QueryRow(`SELECT COUNT(*) FROM players WHERE created_at >= ? AND created_at < ?`, dayStart, dayEnd).Scan(&reg)
 	add(metricRegister, "", reg.Int64)
 
-	// funnel
+	// funnel：五层均为设备 UV（DISTINCT visitor）。
+	// visit  访问     = 当日会话 DISTINCT visitor
+	// lobby  进大厅   = pageview view=lobby 的 DISTINCT visitor
+	// room   进房     = create|join 玩家经当日 player_id→visitor 映射后的 DISTINCT visitor
+	// round  开局     = game_start 参战玩家映射后的 DISTINCT visitor
+	// finish 完成对局 = game_round 参战玩家映射后的 DISTINCT visitor（含 value=0 副记录）
+	// player→visitor 来自当日 analytics_sessions / analytics_events 中非空的 (player_id, visitor)。
 	add(metricFunnel, "visit", dau.Int64)
-	add(metricFunnel, "login", loggedDAU.Int64)
-	var roomUV sql.NullInt64
-	_ = db.QueryRow(`SELECT COUNT(DISTINCT user_id) FROM room_events WHERE action='join' AND at >= ? AND at < ?`, dayStart, dayEnd).Scan(&roomUV)
-	add(metricFunnel, "room", roomUV.Int64)
-	var roundN sql.NullInt64
-	_ = db.QueryRow(`SELECT COUNT(*) FROM analytics_events WHERE day=? AND source=1 AND name='game_round'`, day).Scan(&roundN)
-	add(metricFunnel, "round", roundN.Int64)
-	add(metricFunnel, "punish_done", done.Int64)
+	var lobbyUV sql.NullInt64
+	_ = db.QueryRow(`
+		SELECT COUNT(DISTINCT visitor) FROM analytics_events
+		WHERE day=? AND name='pageview' AND view='lobby' AND visitor<>''`, day).Scan(&lobbyUV)
+	add(metricFunnel, "lobby", lobbyUV.Int64)
+	roomUV, err := funnelDeviceUVFromPlayers(db, day, dayStart, dayEnd, funnelPlayersRoom)
+	if err != nil {
+		return nil, err
+	}
+	add(metricFunnel, "room", roomUV)
+	startUV, err := funnelDeviceUVFromPlayers(db, day, dayStart, dayEnd, funnelPlayersGameStart)
+	if err != nil {
+		return nil, err
+	}
+	add(metricFunnel, "round", startUV)
+	finishUV, err := funnelDeviceUVFromPlayers(db, day, dayStart, dayEnd, funnelPlayersGameRound)
+	if err != nil {
+		return nil, err
+	}
+	add(metricFunnel, "finish", finishUV)
 
-	// retention：对该日作为 cohort 的 offset 0..30（只在 cohort 日重算时写 offset 行会跨天——
-	// 简化：每天写「以该日为 cohort 的 offset=0 基数」，完整矩阵在 buildSnapshot 时从 visitors/sessions 现算。
-	// 这里仍写入 retention metric 供 EAV 存档。
+	// retention：用户 cohort 的 D0 基数 = 当日新建 players。
+	// 完整 D0–D30 矩阵由 backfillRetention 按 player_id 活动重算并 UPSERT。
 	var cohortBase sql.NullInt64
-	_ = db.QueryRow(`SELECT COUNT(*) FROM analytics_visitors WHERE first_day = ?`, day).Scan(&cohortBase)
+	_ = db.QueryRow(`SELECT COUNT(*) FROM players WHERE created_at >= ? AND created_at < ?`, dayStart, dayEnd).Scan(&cohortBase)
 	add(metricRetention, fmt.Sprintf("%d:0", day), cohortBase.Int64)
 
 	return rows, nil
+}
+
+// funnelPlayerSource 漏斗后三层「业务玩家集合」来源。
+type funnelPlayerSource int
+
+const (
+	funnelPlayersRoom funnelPlayerSource = iota
+	funnelPlayersGameStart
+	funnelPlayersGameRound
+)
+
+// dayPlayerVisitorSQL 当日 player_id → visitor 映射（会话 + 带 visitor 的事件并集）。
+const dayPlayerVisitorSQL = `
+	SELECT player_id, visitor FROM analytics_sessions
+	WHERE day = ? AND player_id <> '' AND visitor <> ''
+	UNION
+	SELECT player_id, visitor FROM analytics_events
+	WHERE day = ? AND player_id <> '' AND visitor <> ''`
+
+// funnelDeviceUVFromPlayers 将业务侧玩家集合经当日 player→visitor 映射折成设备 UV。
+func funnelDeviceUVFromPlayers(db *sql.DB, day, dayStart, dayEnd int64, src funnelPlayerSource) (int64, error) {
+	var q string
+	var args []any
+	switch src {
+	case funnelPlayersRoom:
+		q = `
+			SELECT COUNT(DISTINCT pv.visitor) FROM (
+				` + dayPlayerVisitorSQL + `
+			) pv
+			INNER JOIN room_events r ON r.user_id = pv.player_id
+			WHERE r.action IN ('create','join') AND r.user_id <> '' AND r.at >= ? AND r.at < ?`
+		args = []any{day, day, dayStart, dayEnd}
+	case funnelPlayersGameStart:
+		q = `
+			SELECT COUNT(DISTINCT pv.visitor) FROM (
+				` + dayPlayerVisitorSQL + `
+			) pv
+			INNER JOIN analytics_events e ON e.player_id = pv.player_id
+			WHERE e.day = ? AND e.source = 1 AND e.name = 'game_start' AND e.player_id <> ''`
+		args = []any{day, day, day}
+	case funnelPlayersGameRound:
+		// 含 value=0 的参战副记录，才能覆盖双方/全员
+		q = `
+			SELECT COUNT(DISTINCT pv.visitor) FROM (
+				` + dayPlayerVisitorSQL + `
+			) pv
+			INNER JOIN analytics_events e ON e.player_id = pv.player_id
+			WHERE e.day = ? AND e.source = 1 AND e.name = 'game_round' AND e.player_id <> ''`
+		args = []any{day, day, day}
+	default:
+		return 0, nil
+	}
+	var n sql.NullInt64
+	if err := db.QueryRow(q, args...).Scan(&n); err != nil {
+		return 0, err
+	}
+	return n.Int64, nil
 }
 
 func (s *Server) queryKeyCounts(db *sql.DB, query string, day int64, metric string, rows *[]analyticsDailyRow) error {
@@ -1024,23 +1162,69 @@ func (s *Server) backfillFromLegacyTables() {
 			s.errorLog("analytics_backfill_upsert_failed", err.Error())
 		}
 	}
-	// 补全留存矩阵到 daily。后续每分钟只刷新最近 30 个 cohort。
+	// 补全用户留存矩阵到 daily。后续每分钟只刷新最近 30 个 cohort。
 	if err := s.backfillRetention(startDay, today, tz); err != nil {
 		s.errorLog("analytics_retention_backfill_failed", err.Error())
 	}
 }
 
+// backfillRetention 按 player_id 重算 [startDay, today] 各 cohort 的 D0–D30 留存人数。
+//
+// 口径：
+//   - cohort 日 = players.created_at 折算的本地日（成功注册的用户，不含未同意条款就离开的访客）
+//   - Dn 回访 = 该用户在 first_day+n 仍有活动（analytics_sessions.player_id 或
+//     connection_events.player_id；注册日本身并入活动，保证 D0=基数）
+//   - 多设备认领到同一 player_id 会合并，不会因换端被算成流失
+//
+// 先删除这些 cohort 日上的旧 retention 行再写入，避免设备口径残留格子或缺失 offset 脏数据。
 func (s *Server) backfillRetention(startDay, today int64, tz int) error {
 	db := s.analyticsRO
-	if db == nil {
+	if db == nil || s.analyticsDB == nil {
 		return nil
 	}
+	if startDay > today {
+		return nil
+	}
+	offsetMs := int64(tz) * 60_000
+	// 活动窗口覆盖到 cohort+30（today 的 D30 要读到 today+30）
+	actStart := startDay
+	actEnd := today + 30
+
+	if err := s.analyticsDB.deleteDailyMetricDays(metricRetention, startDay, today); err != nil {
+		return err
+	}
+
 	rs, err := db.Query(`
-		SELECT v.first_day AS cohort, s.day - v.first_day AS offset, COUNT(DISTINCT s.visitor)
-		FROM analytics_visitors v
-		JOIN analytics_sessions s ON s.visitor = v.visitor
-		WHERE v.first_day BETWEEN ? AND ? AND s.day - v.first_day BETWEEN 0 AND 30
-		GROUP BY cohort, offset`, startDay, today)
+		WITH cohort AS (
+			SELECT id AS player_id,
+			       (created_at + ?) / 86400000 AS first_day
+			FROM players
+			WHERE created_at > 0
+			  AND (created_at + ?) / 86400000 BETWEEN ? AND ?
+		),
+		activity AS (
+			SELECT player_id, day AS act_day
+			FROM analytics_sessions
+			WHERE player_id <> ''
+			  AND day BETWEEN ? AND ?
+			UNION
+			SELECT player_id, (connected_at + ?) / 86400000 AS act_day
+			FROM connection_events
+			WHERE player_id IS NOT NULL AND player_id <> ''
+			  AND (connected_at + ?) / 86400000 BETWEEN ? AND ?
+			UNION
+			SELECT player_id, first_day AS act_day
+			FROM cohort
+		)
+		SELECT c.first_day AS cohort, a.act_day - c.first_day AS offset, COUNT(DISTINCT c.player_id)
+		FROM cohort c
+		JOIN activity a ON a.player_id = c.player_id
+		WHERE a.act_day - c.first_day BETWEEN 0 AND 30
+		GROUP BY cohort, offset`,
+		offsetMs, offsetMs, startDay, today,
+		actStart, actEnd,
+		offsetMs, offsetMs, actStart, actEnd,
+	)
 	if err != nil {
 		return err
 	}
@@ -1057,12 +1241,15 @@ func (s *Server) backfillRetention(startDay, today int64, tz int) error {
 			Sealed: boolToInt(cohort < today-1),
 		})
 	}
+	if err := rs.Err(); err != nil {
+		return err
+	}
 	if len(rows) > 0 {
 		if err := s.analyticsDB.upsertDaily(rows); err != nil {
 			return err
 		}
 	}
-	return rs.Err()
+	return nil
 }
 
 func boolToInt(b bool) int {
@@ -1123,6 +1310,7 @@ func (s *Server) buildSnapshot(tz, liveOnline, liveRooms, liveBonds int) (*analy
 		PunishPublish: scalar(), PunishDone: scalar(), PunishReject: scalar(),
 		PetbondNew: scalar(), PetbondTotal: scalar(),
 		ChatLobby: scalar(), ChatRoom: scalar(), ChatSpeakers: scalar(),
+		ChatRoomSpeakers: scalar(), RoomRoundsMax: scalar(), RoomRoundsAvg: scalar(),
 		ByKey:      map[string]map[string]int64Slice{},
 		Retention:  map[int64]map[int]int64{},
 		LiveOnline: liveOnline, LiveRooms: liveRooms, LiveBonds: liveBonds,
@@ -1190,6 +1378,12 @@ func (s *Server) buildSnapshot(tz, liveOnline, liveRooms, liveBonds int) (*analy
 			setScalar(&snap.ChatRoom, c.day, c.value)
 		case metricChatSpeakers:
 			setScalar(&snap.ChatSpeakers, c.day, c.value)
+		case metricChatRoomSpeakers:
+			setScalar(&snap.ChatRoomSpeakers, c.day, c.value)
+		case metricRoomRoundsMax:
+			setScalar(&snap.RoomRoundsMax, c.day, c.value)
+		case metricRoomRoundsAvg:
+			setScalar(&snap.RoomRoundsAvg, c.day, c.value)
 		case metricRetention:
 			// key = cohort:offset 或 我们写入时 day=cohort
 			parts := strings.Split(c.key, ":")

@@ -3050,6 +3050,15 @@ export namespace game {
         /** RoomSettings jungleGameMinutes. */
         jungleGameMinutes: number;
 
+        /** RoomSettings punishmentTagsIncluded. */
+        punishmentTagsIncluded: string[];
+
+        /** RoomSettings punishmentTagsExcluded. */
+        punishmentTagsExcluded: string[];
+
+        /** RoomSettings punishmentSeriesId. */
+        punishmentSeriesId: string;
+
         /**
          * Creates a new RoomSettings instance using the specified properties.
          * @param [properties] Properties to set
@@ -3226,6 +3235,15 @@ export namespace game {
 
             /** RoomSettings jungleGameMinutes */
             jungleGameMinutes?: (number|null);
+
+            /** RoomSettings punishmentTagsIncluded */
+            punishmentTagsIncluded?: (string[]|null);
+
+            /** RoomSettings punishmentTagsExcluded */
+            punishmentTagsExcluded?: (string[]|null);
+
+            /** RoomSettings punishmentSeriesId */
+            punishmentSeriesId?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -4505,6 +4523,9 @@ export namespace game {
         /** PunishmentTask assignedByName. */
         assignedByName: string;
 
+        /** PunishmentTask typeName. */
+        typeName: string;
+
         /**
          * Creates a new PunishmentTask instance using the specified properties.
          * @param [properties] Properties to set
@@ -4615,6 +4636,9 @@ export namespace game {
 
             /** PunishmentTask assignedByName */
             assignedByName?: (string|null);
+
+            /** PunishmentTask typeName */
+            typeName?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -8059,6 +8083,18 @@ export namespace game {
         /** LobbyRoomInfo jungleGameMinutes. */
         jungleGameMinutes: number;
 
+        /** LobbyRoomInfo punishmentSource. */
+        punishmentSource: string;
+
+        /** LobbyRoomInfo punishmentTagsIncluded. */
+        punishmentTagsIncluded: string[];
+
+        /** LobbyRoomInfo punishmentTagsExcluded. */
+        punishmentTagsExcluded: string[];
+
+        /** LobbyRoomInfo punishmentSeriesId. */
+        punishmentSeriesId: string;
+
         /**
          * Creates a new LobbyRoomInfo instance using the specified properties.
          * @param [properties] Properties to set
@@ -8229,6 +8265,18 @@ export namespace game {
 
             /** LobbyRoomInfo jungleGameMinutes */
             jungleGameMinutes?: (number|null);
+
+            /** LobbyRoomInfo punishmentSource */
+            punishmentSource?: (string|null);
+
+            /** LobbyRoomInfo punishmentTagsIncluded */
+            punishmentTagsIncluded?: (string[]|null);
+
+            /** LobbyRoomInfo punishmentTagsExcluded */
+            punishmentTagsExcluded?: (string[]|null);
+
+            /** LobbyRoomInfo punishmentSeriesId */
+            punishmentSeriesId?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -9328,6 +9376,18 @@ export namespace game {
         /** PunishmentTaskConfig backgroundOpacity. */
         backgroundOpacity: number;
 
+        /** PunishmentTaskConfig text. */
+        text: string;
+
+        /** PunishmentTaskConfig factionIds. */
+        factionIds: string[];
+
+        /** PunishmentTaskConfig order. */
+        order: number;
+
+        /** PunishmentTaskConfig tagIds. */
+        tagIds: string[];
+
         /**
          * Creates a new PunishmentTaskConfig instance using the specified properties.
          * @param [properties] Properties to set
@@ -9426,6 +9486,18 @@ export namespace game {
 
             /** PunishmentTaskConfig backgroundOpacity */
             backgroundOpacity?: (number|null);
+
+            /** PunishmentTaskConfig text */
+            text?: (string|null);
+
+            /** PunishmentTaskConfig factionIds */
+            factionIds?: (string[]|null);
+
+            /** PunishmentTaskConfig order */
+            order?: (number|null);
+
+            /** PunishmentTaskConfig tagIds */
+            tagIds?: (string[]|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -9745,6 +9817,15 @@ export namespace game {
         /** PunishmentConfig roomNamePool. */
         roomNamePool?: (game.RoomNamePool.$Properties|null);
 
+        /** PunishmentConfig orderStep. */
+        orderStep: number;
+
+        /** PunishmentConfig orderSpread. */
+        orderSpread: number;
+
+        /** PunishmentConfig maxDifficultyOvershoot. */
+        maxDifficultyOvershoot: number;
+
         /**
          * Creates a new PunishmentConfig instance using the specified properties.
          * @param [properties] Properties to set
@@ -9856,12 +9937,819 @@ export namespace game {
             /** PunishmentConfig roomNamePool */
             roomNamePool?: (game.RoomNamePool.$Properties|null);
 
+            /** PunishmentConfig orderStep */
+            orderStep?: (number|null);
+
+            /** PunishmentConfig orderSpread */
+            orderSpread?: (number|null);
+
+            /** PunishmentConfig maxDifficultyOvershoot */
+            maxDifficultyOvershoot?: (number|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
         /** Shape of a PunishmentConfig. */
         type $Shape = game.PunishmentConfig.$Properties;
+    }
+
+    /**
+     * Properties of a PunishmentTagConfig.
+     * @deprecated Use game.PunishmentTagConfig.$Properties instead.
+     */
+    interface IPunishmentTagConfig extends game.PunishmentTagConfig.$Properties {
+    }
+
+    /** Represents a PunishmentTagConfig. */
+    class PunishmentTagConfig {
+
+        /**
+         * Constructs a new PunishmentTagConfig.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: game.PunishmentTagConfig.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** PunishmentTagConfig id. */
+        id: string;
+
+        /** PunishmentTagConfig name. */
+        name: string;
+
+        /** PunishmentTagConfig roomNamePool. */
+        roomNamePool?: (game.RoomNamePool.$Properties|null);
+
+        /** PunishmentTagConfig roomBackgroundImages. */
+        roomBackgroundImages: string[];
+
+        /**
+         * Creates a new PunishmentTagConfig instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PunishmentTagConfig instance
+         */
+        static create(properties: game.PunishmentTagConfig.$Shape): game.PunishmentTagConfig & game.PunishmentTagConfig.$Shape;
+        static create(properties?: game.PunishmentTagConfig.$Properties): game.PunishmentTagConfig;
+
+        /**
+         * Encodes the specified PunishmentTagConfig message. Does not implicitly {@link game.PunishmentTagConfig.verify|verify} messages.
+         * @param message PunishmentTagConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: game.PunishmentTagConfig.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PunishmentTagConfig message, length delimited. Does not implicitly {@link game.PunishmentTagConfig.verify|verify} messages.
+         * @param message PunishmentTagConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: game.PunishmentTagConfig.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PunishmentTagConfig message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {game.PunishmentTagConfig & game.PunishmentTagConfig.$Shape} PunishmentTagConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.PunishmentTagConfig & game.PunishmentTagConfig.$Shape;
+
+        /**
+         * Decodes a PunishmentTagConfig message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {game.PunishmentTagConfig & game.PunishmentTagConfig.$Shape} PunishmentTagConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.PunishmentTagConfig & game.PunishmentTagConfig.$Shape;
+
+        /**
+         * Verifies a PunishmentTagConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PunishmentTagConfig message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PunishmentTagConfig
+         */
+        static fromObject(object: { [k: string]: any }): game.PunishmentTagConfig;
+
+        /**
+         * Creates a plain object from a PunishmentTagConfig message. Also converts values to other types if specified.
+         * @param message PunishmentTagConfig
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: game.PunishmentTagConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PunishmentTagConfig to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for PunishmentTagConfig
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace PunishmentTagConfig {
+
+        /** Properties of a PunishmentTagConfig. */
+        interface $Properties {
+
+            /** PunishmentTagConfig id */
+            id?: (string|null);
+
+            /** PunishmentTagConfig name */
+            name?: (string|null);
+
+            /** PunishmentTagConfig roomNamePool */
+            roomNamePool?: (game.RoomNamePool.$Properties|null);
+
+            /** PunishmentTagConfig roomBackgroundImages */
+            roomBackgroundImages?: (string[]|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a PunishmentTagConfig. */
+        type $Shape = game.PunishmentTagConfig.$Properties;
+    }
+
+    /**
+     * Properties of a PunishmentRandomSettings.
+     * @deprecated Use game.PunishmentRandomSettings.$Properties instead.
+     */
+    interface IPunishmentRandomSettings extends game.PunishmentRandomSettings.$Properties {
+    }
+
+    /** Represents a PunishmentRandomSettings. */
+    class PunishmentRandomSettings {
+
+        /**
+         * Constructs a new PunishmentRandomSettings.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: game.PunishmentRandomSettings.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** PunishmentRandomSettings orderStep. */
+        orderStep: number;
+
+        /** PunishmentRandomSettings orderSpread. */
+        orderSpread: number;
+
+        /** PunishmentRandomSettings maxDifficultyOvershoot. */
+        maxDifficultyOvershoot: number;
+
+        /**
+         * Creates a new PunishmentRandomSettings instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PunishmentRandomSettings instance
+         */
+        static create(properties: game.PunishmentRandomSettings.$Shape): game.PunishmentRandomSettings & game.PunishmentRandomSettings.$Shape;
+        static create(properties?: game.PunishmentRandomSettings.$Properties): game.PunishmentRandomSettings;
+
+        /**
+         * Encodes the specified PunishmentRandomSettings message. Does not implicitly {@link game.PunishmentRandomSettings.verify|verify} messages.
+         * @param message PunishmentRandomSettings message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: game.PunishmentRandomSettings.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PunishmentRandomSettings message, length delimited. Does not implicitly {@link game.PunishmentRandomSettings.verify|verify} messages.
+         * @param message PunishmentRandomSettings message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: game.PunishmentRandomSettings.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PunishmentRandomSettings message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {game.PunishmentRandomSettings & game.PunishmentRandomSettings.$Shape} PunishmentRandomSettings
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.PunishmentRandomSettings & game.PunishmentRandomSettings.$Shape;
+
+        /**
+         * Decodes a PunishmentRandomSettings message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {game.PunishmentRandomSettings & game.PunishmentRandomSettings.$Shape} PunishmentRandomSettings
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.PunishmentRandomSettings & game.PunishmentRandomSettings.$Shape;
+
+        /**
+         * Verifies a PunishmentRandomSettings message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PunishmentRandomSettings message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PunishmentRandomSettings
+         */
+        static fromObject(object: { [k: string]: any }): game.PunishmentRandomSettings;
+
+        /**
+         * Creates a plain object from a PunishmentRandomSettings message. Also converts values to other types if specified.
+         * @param message PunishmentRandomSettings
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: game.PunishmentRandomSettings, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PunishmentRandomSettings to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for PunishmentRandomSettings
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace PunishmentRandomSettings {
+
+        /** Properties of a PunishmentRandomSettings. */
+        interface $Properties {
+
+            /** PunishmentRandomSettings orderStep */
+            orderStep?: (number|null);
+
+            /** PunishmentRandomSettings orderSpread */
+            orderSpread?: (number|null);
+
+            /** PunishmentRandomSettings maxDifficultyOvershoot */
+            maxDifficultyOvershoot?: (number|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a PunishmentRandomSettings. */
+        type $Shape = game.PunishmentRandomSettings.$Properties;
+    }
+
+    /**
+     * Properties of a PunishmentSubtaskVariant.
+     * @deprecated Use game.PunishmentSubtaskVariant.$Properties instead.
+     */
+    interface IPunishmentSubtaskVariant extends game.PunishmentSubtaskVariant.$Properties {
+    }
+
+    /** Represents a PunishmentSubtaskVariant. */
+    class PunishmentSubtaskVariant {
+
+        /**
+         * Constructs a new PunishmentSubtaskVariant.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: game.PunishmentSubtaskVariant.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** PunishmentSubtaskVariant factionIds. */
+        factionIds: string[];
+
+        /** PunishmentSubtaskVariant text. */
+        text: string;
+
+        /** PunishmentSubtaskVariant backgroundImages. */
+        backgroundImages: string[];
+
+        /** PunishmentSubtaskVariant backgroundOpacity. */
+        backgroundOpacity: number;
+
+        /**
+         * Creates a new PunishmentSubtaskVariant instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PunishmentSubtaskVariant instance
+         */
+        static create(properties: game.PunishmentSubtaskVariant.$Shape): game.PunishmentSubtaskVariant & game.PunishmentSubtaskVariant.$Shape;
+        static create(properties?: game.PunishmentSubtaskVariant.$Properties): game.PunishmentSubtaskVariant;
+
+        /**
+         * Encodes the specified PunishmentSubtaskVariant message. Does not implicitly {@link game.PunishmentSubtaskVariant.verify|verify} messages.
+         * @param message PunishmentSubtaskVariant message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: game.PunishmentSubtaskVariant.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PunishmentSubtaskVariant message, length delimited. Does not implicitly {@link game.PunishmentSubtaskVariant.verify|verify} messages.
+         * @param message PunishmentSubtaskVariant message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: game.PunishmentSubtaskVariant.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PunishmentSubtaskVariant message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {game.PunishmentSubtaskVariant & game.PunishmentSubtaskVariant.$Shape} PunishmentSubtaskVariant
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.PunishmentSubtaskVariant & game.PunishmentSubtaskVariant.$Shape;
+
+        /**
+         * Decodes a PunishmentSubtaskVariant message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {game.PunishmentSubtaskVariant & game.PunishmentSubtaskVariant.$Shape} PunishmentSubtaskVariant
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.PunishmentSubtaskVariant & game.PunishmentSubtaskVariant.$Shape;
+
+        /**
+         * Verifies a PunishmentSubtaskVariant message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PunishmentSubtaskVariant message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PunishmentSubtaskVariant
+         */
+        static fromObject(object: { [k: string]: any }): game.PunishmentSubtaskVariant;
+
+        /**
+         * Creates a plain object from a PunishmentSubtaskVariant message. Also converts values to other types if specified.
+         * @param message PunishmentSubtaskVariant
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: game.PunishmentSubtaskVariant, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PunishmentSubtaskVariant to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for PunishmentSubtaskVariant
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace PunishmentSubtaskVariant {
+
+        /** Properties of a PunishmentSubtaskVariant. */
+        interface $Properties {
+
+            /** PunishmentSubtaskVariant factionIds */
+            factionIds?: (string[]|null);
+
+            /** PunishmentSubtaskVariant text */
+            text?: (string|null);
+
+            /** PunishmentSubtaskVariant backgroundImages */
+            backgroundImages?: (string[]|null);
+
+            /** PunishmentSubtaskVariant backgroundOpacity */
+            backgroundOpacity?: (number|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a PunishmentSubtaskVariant. */
+        type $Shape = game.PunishmentSubtaskVariant.$Properties;
+    }
+
+    /**
+     * Properties of a PunishmentSubtask.
+     * @deprecated Use game.PunishmentSubtask.$Properties instead.
+     */
+    interface IPunishmentSubtask extends game.PunishmentSubtask.$Properties {
+    }
+
+    /** Represents a PunishmentSubtask. */
+    class PunishmentSubtask {
+
+        /**
+         * Constructs a new PunishmentSubtask.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: game.PunishmentSubtask.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** PunishmentSubtask variants. */
+        variants: game.PunishmentSubtaskVariant.$Properties[];
+
+        /**
+         * Creates a new PunishmentSubtask instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PunishmentSubtask instance
+         */
+        static create(properties: game.PunishmentSubtask.$Shape): game.PunishmentSubtask & game.PunishmentSubtask.$Shape;
+        static create(properties?: game.PunishmentSubtask.$Properties): game.PunishmentSubtask;
+
+        /**
+         * Encodes the specified PunishmentSubtask message. Does not implicitly {@link game.PunishmentSubtask.verify|verify} messages.
+         * @param message PunishmentSubtask message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: game.PunishmentSubtask.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PunishmentSubtask message, length delimited. Does not implicitly {@link game.PunishmentSubtask.verify|verify} messages.
+         * @param message PunishmentSubtask message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: game.PunishmentSubtask.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PunishmentSubtask message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {game.PunishmentSubtask & game.PunishmentSubtask.$Shape} PunishmentSubtask
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.PunishmentSubtask & game.PunishmentSubtask.$Shape;
+
+        /**
+         * Decodes a PunishmentSubtask message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {game.PunishmentSubtask & game.PunishmentSubtask.$Shape} PunishmentSubtask
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.PunishmentSubtask & game.PunishmentSubtask.$Shape;
+
+        /**
+         * Verifies a PunishmentSubtask message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PunishmentSubtask message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PunishmentSubtask
+         */
+        static fromObject(object: { [k: string]: any }): game.PunishmentSubtask;
+
+        /**
+         * Creates a plain object from a PunishmentSubtask message. Also converts values to other types if specified.
+         * @param message PunishmentSubtask
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: game.PunishmentSubtask, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PunishmentSubtask to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for PunishmentSubtask
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace PunishmentSubtask {
+
+        /** Properties of a PunishmentSubtask. */
+        interface $Properties {
+
+            /** PunishmentSubtask variants */
+            variants?: (game.PunishmentSubtaskVariant.$Properties[]|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a PunishmentSubtask. */
+        type $Shape = game.PunishmentSubtask.$Properties;
+    }
+
+    /**
+     * Properties of a PunishmentSeriesTaskConfig.
+     * @deprecated Use game.PunishmentSeriesTaskConfig.$Properties instead.
+     */
+    interface IPunishmentSeriesTaskConfig extends game.PunishmentSeriesTaskConfig.$Properties {
+    }
+
+    /** Represents a PunishmentSeriesTaskConfig. */
+    class PunishmentSeriesTaskConfig {
+
+        /**
+         * Constructs a new PunishmentSeriesTaskConfig.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: game.PunishmentSeriesTaskConfig.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** PunishmentSeriesTaskConfig id. */
+        id: string;
+
+        /** PunishmentSeriesTaskConfig name. */
+        name: string;
+
+        /** PunishmentSeriesTaskConfig roomNamePool. */
+        roomNamePool?: (game.RoomNamePool.$Properties|null);
+
+        /** PunishmentSeriesTaskConfig roomBackgroundImages. */
+        roomBackgroundImages: string[];
+
+        /** PunishmentSeriesTaskConfig subtasks. */
+        subtasks: game.PunishmentSubtask.$Properties[];
+
+        /**
+         * Creates a new PunishmentSeriesTaskConfig instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PunishmentSeriesTaskConfig instance
+         */
+        static create(properties: game.PunishmentSeriesTaskConfig.$Shape): game.PunishmentSeriesTaskConfig & game.PunishmentSeriesTaskConfig.$Shape;
+        static create(properties?: game.PunishmentSeriesTaskConfig.$Properties): game.PunishmentSeriesTaskConfig;
+
+        /**
+         * Encodes the specified PunishmentSeriesTaskConfig message. Does not implicitly {@link game.PunishmentSeriesTaskConfig.verify|verify} messages.
+         * @param message PunishmentSeriesTaskConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: game.PunishmentSeriesTaskConfig.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PunishmentSeriesTaskConfig message, length delimited. Does not implicitly {@link game.PunishmentSeriesTaskConfig.verify|verify} messages.
+         * @param message PunishmentSeriesTaskConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: game.PunishmentSeriesTaskConfig.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PunishmentSeriesTaskConfig message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {game.PunishmentSeriesTaskConfig & game.PunishmentSeriesTaskConfig.$Shape} PunishmentSeriesTaskConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.PunishmentSeriesTaskConfig & game.PunishmentSeriesTaskConfig.$Shape;
+
+        /**
+         * Decodes a PunishmentSeriesTaskConfig message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {game.PunishmentSeriesTaskConfig & game.PunishmentSeriesTaskConfig.$Shape} PunishmentSeriesTaskConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.PunishmentSeriesTaskConfig & game.PunishmentSeriesTaskConfig.$Shape;
+
+        /**
+         * Verifies a PunishmentSeriesTaskConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PunishmentSeriesTaskConfig message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PunishmentSeriesTaskConfig
+         */
+        static fromObject(object: { [k: string]: any }): game.PunishmentSeriesTaskConfig;
+
+        /**
+         * Creates a plain object from a PunishmentSeriesTaskConfig message. Also converts values to other types if specified.
+         * @param message PunishmentSeriesTaskConfig
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: game.PunishmentSeriesTaskConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PunishmentSeriesTaskConfig to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for PunishmentSeriesTaskConfig
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace PunishmentSeriesTaskConfig {
+
+        /** Properties of a PunishmentSeriesTaskConfig. */
+        interface $Properties {
+
+            /** PunishmentSeriesTaskConfig id */
+            id?: (string|null);
+
+            /** PunishmentSeriesTaskConfig name */
+            name?: (string|null);
+
+            /** PunishmentSeriesTaskConfig roomNamePool */
+            roomNamePool?: (game.RoomNamePool.$Properties|null);
+
+            /** PunishmentSeriesTaskConfig roomBackgroundImages */
+            roomBackgroundImages?: (string[]|null);
+
+            /** PunishmentSeriesTaskConfig subtasks */
+            subtasks?: (game.PunishmentSubtask.$Properties[]|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a PunishmentSeriesTaskConfig. */
+        type $Shape = game.PunishmentSeriesTaskConfig.$Properties;
+    }
+
+    /**
+     * Properties of a PunishmentSeriesSummary.
+     * @deprecated Use game.PunishmentSeriesSummary.$Properties instead.
+     */
+    interface IPunishmentSeriesSummary extends game.PunishmentSeriesSummary.$Properties {
+    }
+
+    /** Represents a PunishmentSeriesSummary. */
+    class PunishmentSeriesSummary {
+
+        /**
+         * Constructs a new PunishmentSeriesSummary.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: game.PunishmentSeriesSummary.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** PunishmentSeriesSummary id. */
+        id: string;
+
+        /** PunishmentSeriesSummary name. */
+        name: string;
+
+        /** PunishmentSeriesSummary roomNamePool. */
+        roomNamePool?: (game.RoomNamePool.$Properties|null);
+
+        /** PunishmentSeriesSummary roomBackgroundImages. */
+        roomBackgroundImages: string[];
+
+        /** PunishmentSeriesSummary stepCount. */
+        stepCount: number;
+
+        /**
+         * Creates a new PunishmentSeriesSummary instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PunishmentSeriesSummary instance
+         */
+        static create(properties: game.PunishmentSeriesSummary.$Shape): game.PunishmentSeriesSummary & game.PunishmentSeriesSummary.$Shape;
+        static create(properties?: game.PunishmentSeriesSummary.$Properties): game.PunishmentSeriesSummary;
+
+        /**
+         * Encodes the specified PunishmentSeriesSummary message. Does not implicitly {@link game.PunishmentSeriesSummary.verify|verify} messages.
+         * @param message PunishmentSeriesSummary message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: game.PunishmentSeriesSummary.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PunishmentSeriesSummary message, length delimited. Does not implicitly {@link game.PunishmentSeriesSummary.verify|verify} messages.
+         * @param message PunishmentSeriesSummary message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: game.PunishmentSeriesSummary.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PunishmentSeriesSummary message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {game.PunishmentSeriesSummary & game.PunishmentSeriesSummary.$Shape} PunishmentSeriesSummary
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.PunishmentSeriesSummary & game.PunishmentSeriesSummary.$Shape;
+
+        /**
+         * Decodes a PunishmentSeriesSummary message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {game.PunishmentSeriesSummary & game.PunishmentSeriesSummary.$Shape} PunishmentSeriesSummary
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.PunishmentSeriesSummary & game.PunishmentSeriesSummary.$Shape;
+
+        /**
+         * Verifies a PunishmentSeriesSummary message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PunishmentSeriesSummary message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PunishmentSeriesSummary
+         */
+        static fromObject(object: { [k: string]: any }): game.PunishmentSeriesSummary;
+
+        /**
+         * Creates a plain object from a PunishmentSeriesSummary message. Also converts values to other types if specified.
+         * @param message PunishmentSeriesSummary
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: game.PunishmentSeriesSummary, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PunishmentSeriesSummary to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for PunishmentSeriesSummary
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace PunishmentSeriesSummary {
+
+        /** Properties of a PunishmentSeriesSummary. */
+        interface $Properties {
+
+            /** PunishmentSeriesSummary id */
+            id?: (string|null);
+
+            /** PunishmentSeriesSummary name */
+            name?: (string|null);
+
+            /** PunishmentSeriesSummary roomNamePool */
+            roomNamePool?: (game.RoomNamePool.$Properties|null);
+
+            /** PunishmentSeriesSummary roomBackgroundImages */
+            roomBackgroundImages?: (string[]|null);
+
+            /** PunishmentSeriesSummary stepCount */
+            stepCount?: (number|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a PunishmentSeriesSummary. */
+        type $Shape = game.PunishmentSeriesSummary.$Properties;
     }
 
     /**
@@ -11434,6 +12322,21 @@ export namespace game {
         /** AppConfig titleTagStyles. */
         titleTagStyles: game.TitleTagStyleEntry.$Properties[];
 
+        /** AppConfig punishmentTags. */
+        punishmentTags: game.PunishmentTagConfig.$Properties[];
+
+        /** AppConfig punishmentTasks. */
+        punishmentTasks: game.PunishmentTaskConfig.$Properties[];
+
+        /** AppConfig punishmentSeriesTasks. */
+        punishmentSeriesTasks: game.PunishmentSeriesTaskConfig.$Properties[];
+
+        /** AppConfig punishmentRandomSettings. */
+        punishmentRandomSettings?: (game.PunishmentRandomSettings.$Properties|null);
+
+        /** AppConfig punishmentSeriesSummaries. */
+        punishmentSeriesSummaries: game.PunishmentSeriesSummary.$Properties[];
+
         /**
          * Creates a new AppConfig instance using the specified properties.
          * @param [properties] Properties to set
@@ -11574,6 +12477,21 @@ export namespace game {
 
             /** AppConfig titleTagStyles */
             titleTagStyles?: (game.TitleTagStyleEntry.$Properties[]|null);
+
+            /** AppConfig punishmentTags */
+            punishmentTags?: (game.PunishmentTagConfig.$Properties[]|null);
+
+            /** AppConfig punishmentTasks */
+            punishmentTasks?: (game.PunishmentTaskConfig.$Properties[]|null);
+
+            /** AppConfig punishmentSeriesTasks */
+            punishmentSeriesTasks?: (game.PunishmentSeriesTaskConfig.$Properties[]|null);
+
+            /** AppConfig punishmentRandomSettings */
+            punishmentRandomSettings?: (game.PunishmentRandomSettings.$Properties|null);
+
+            /** AppConfig punishmentSeriesSummaries */
+            punishmentSeriesSummaries?: (game.PunishmentSeriesSummary.$Properties[]|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

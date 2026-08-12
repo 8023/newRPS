@@ -54,6 +54,11 @@ func TestDomainWireFieldParity(t *testing.T) {
 			msg:    &wire.RoomSettings{},
 		},
 		{
+			name:   "LobbyRoomInfo",
+			domain: types.LobbyRoomInfo{},
+			msg:    &wire.LobbyRoomInfo{},
+		},
+		{
 			name:   "GiveawayConfig",
 			domain: types.AppConfig{}.Giveaway,
 			msg:    &wire.GiveawayConfig{},
@@ -99,6 +104,44 @@ func TestDomainWireFieldParity(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPunishmentWireFieldNumbersRemainCompatible(t *testing.T) {
+	taskFields := (&wire.PunishmentTaskConfig{}).ProtoReflect().Descriptor().Fields()
+	wantTask := map[protoreflect.Name]protoreflect.FieldNumber{
+		"variants":           3,
+		"background_images":  4,
+		"background_opacity": 5,
+		"text":               6,
+		"faction_ids":        7,
+		"order":              8,
+		"tag_ids":            9,
+	}
+	for name, number := range wantTask {
+		field := taskFields.ByName(name)
+		if field == nil || field.Number() != number {
+			t.Errorf("PunishmentTaskConfig.%s field number = %v, want %d", name, fieldNumber(field), number)
+		}
+	}
+
+	configFields := (&wire.PunishmentConfig{}).ProtoReflect().Descriptor().Fields()
+	for name, number := range map[protoreflect.Name]protoreflect.FieldNumber{
+		"description": 3,
+		"variants":    4,
+		"tasks":       5,
+	} {
+		field := configFields.ByName(name)
+		if field == nil || field.Number() != number {
+			t.Errorf("PunishmentConfig.%s field number = %v, want %d", name, fieldNumber(field), number)
+		}
+	}
+}
+
+func fieldNumber(field protoreflect.FieldDescriptor) protoreflect.FieldNumber {
+	if field == nil {
+		return 0
+	}
+	return field.Number()
 }
 
 func jsonFieldNames(t reflect.Type) []string {

@@ -3,7 +3,7 @@
  * - 服务端 jsonsafe 已保证出站 slice/map 非 null。
  * - 此处负责：DELTA 合并后的薄兜底、lobby chat 本地保留、history 按 id 合并、配置缺字段补全。
  */
-import type { AppConfig, LobbySnapshot, PublicPlayer, RoomSnapshot, SeatKey } from "../shared/types";
+import type { AppConfig, LobbySnapshot, PublicPlayer, PunishmentSeriesTaskConfig, PunishmentTaskConfig, RoomSnapshot, SeatKey } from "../shared/types";
 
 export function playerSyncKey(player: PublicPlayer) {
   return [
@@ -310,6 +310,10 @@ export function normalizeLobbySnapshot(snapshot: LobbySnapshot, old?: LobbySnaps
   const players = coerceLobbyPlayers(snapshot.players as any).map(normalizePublicPlayer);
   const rooms = coerceLobbyRooms(snapshot.rooms as any).map((room) => ({
     ...room,
+    punishmentSource: room.punishmentSource === "system" ? "random" : (room.punishmentSource || "random"),
+    punishmentTagsIncluded: room.punishmentTagsIncluded || [],
+    punishmentTagsExcluded: room.punishmentTagsExcluded || [],
+    punishmentSeriesId: room.punishmentSeriesId || "",
     versus: {
       A: room.versus?.A?.player
         ? { player: normalizePublicPlayer(room.versus.A.player) }
@@ -466,7 +470,13 @@ export function normalizeRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
     settings: {
       ...room.settings,
       tags: room.settings?.tags || [],
-      punishmentIds: room.settings?.punishmentIds || []
+      punishmentIds: room.settings?.punishmentIds || [],
+      punishmentTagsIncluded: room.settings?.punishmentTagsIncluded || [],
+      punishmentTagsExcluded: room.settings?.punishmentTagsExcluded || [],
+      punishmentSeriesId: room.settings?.punishmentSeriesId || "",
+      punishmentSource: room.settings?.punishmentSource === "system"
+        ? "random"
+        : (room.settings?.punishmentSource || "random")
     },
     spectators: room.spectators || [],
     punishedPlayerIds: room.punishedPlayerIds || [],
@@ -607,16 +617,20 @@ export function normalizeConfig(config: AppConfig): AppConfig {
       names: segment.names || [],
       factionNames: segment.factionNames || {}
     })),
-    punishments: (config.punishments || []).map((punishment) => ({
-      ...punishment,
-      variants: punishment.variants || {},
-      roomBackgroundImages: punishment.roomBackgroundImages || [],
-      tasks: (punishment.tasks || []).map((task) => ({
-        ...task,
-        variants: task.variants || {},
-        backgroundImages: task.backgroundImages || []
-      }))
+    punishments: [],
+    punishmentTags: (config.punishmentTags || []).map((tag) => ({
+      ...tag,
+      roomBackgroundImages: tag.roomBackgroundImages || []
     })),
+    punishmentSeriesSummaries: (config.punishmentSeriesSummaries || []).map((series) => ({
+      ...series,
+      roomBackgroundImages: series.roomBackgroundImages || [],
+      stepCount: series.stepCount ?? 0
+    })),
+    punishmentRandomSettings: {
+      orderStep: config.punishmentRandomSettings?.orderStep ?? 2,
+      maxDifficultyOvershoot: config.punishmentRandomSettings?.maxDifficultyOvershoot ?? 5
+    },
     roomTags: config.roomTags || [],
     roomInfoTags: config.roomInfoTags || {},
     titleTagStyles: config.titleTagStyles || {},
@@ -639,4 +653,32 @@ export function normalizeConfig(config: AppConfig): AppConfig {
     },
     rankedScore: withRankedScoreDefaults(config.rankedScore)
   };
+}
+
+/** 任务池草稿规范化（admin 任务池 tab 本地 state）。 */
+export function normalizePunishmentTasks(tasks: PunishmentTaskConfig[] | undefined | null): PunishmentTaskConfig[] {
+  return (tasks || []).map((task) => ({
+    ...task,
+    id: task.id || "",
+    name: task.name || "",
+    text: task.text || "",
+    tagIds: task.tagIds || [],
+    factionIds: task.factionIds || [],
+    order: task.order ?? 50,
+    backgroundImages: task.backgroundImages || [],
+    backgroundOpacity: task.backgroundOpacity ?? 0.22
+  }));
+}
+
+/** 系列任务草稿规范化（admin 系列任务 tab 本地 state）。 */
+export function normalizePunishmentSeries(series: PunishmentSeriesTaskConfig[] | undefined | null): PunishmentSeriesTaskConfig[] {
+  return (series || []).map((s) => ({
+    ...s,
+    id: s.id || "",
+    name: s.name || "",
+    roomBackgroundImages: s.roomBackgroundImages || [],
+    steps: (s.steps || []).map((step) => ({
+      taskIds: step.taskIds || []
+    }))
+  }));
 }

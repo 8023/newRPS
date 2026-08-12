@@ -172,6 +172,8 @@ func (s *Server) maybeStartChoosing(room *RoomState) {
 	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
 		return
 	}
+	// 已在出拳阶段且双方都未出拳时只是幂等刷新，不重复记开局。
+	freshStart := room.Phase != types.PhaseChoosing
 	room.Phase = types.PhaseChoosing
 	room.Status = "playing"
 	room.Choices = map[types.SeatKey]types.Move{}
@@ -182,6 +184,9 @@ func (s *Server) maybeStartChoosing(room *RoomState) {
 	room.ResultText = ""
 	room.Proofs = []types.PunishmentProof{}
 	room.PunishedPlayerIDs = []string{}
+	if freshStart {
+		s.logGameStart(room)
+	}
 }
 
 func (s *Server) prepareNextChoice(room *RoomState) {
@@ -225,6 +230,7 @@ func (s *Server) prepareNextChoice(room *RoomState) {
 	room.ResultText = ""
 	room.Proofs = []types.PunishmentProof{}
 	room.PunishedPlayerIDs = []string{}
+	s.logGameStart(room)
 }
 
 // forceEndRpsRound 管理员强制判定当前 RPS 出拳阶段的胜负；仅在 PhaseChoosing 时允许，
@@ -310,8 +316,7 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 	for _, p := range punishedPlayers {
 		punishedNames = append(punishedNames, playerShortName(p))
 	}
-	punishment := s.currentPunishment(room)
-	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, result, punishment)
+	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, result)
 	room.Phase = types.PhaseResult
 	room.RevealedChoices = finalChoices
 
@@ -436,10 +441,7 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 		item.EffectiveStake = &es
 	}
 	if len(punishedNames) > 0 {
-		item.PunishmentName = s.punishmentNameForRoom(room, punishment)
-		if room.Settings.PunishmentSource != "player" && punishment != nil {
-			item.PunishmentDescription = punishment.Description
-		}
+		item.PunishmentName = s.punishmentRoundLabel(room, punishmentTasks)
 	}
 	s.addRoundHistory(room, item)
 	s.setupPunishmentOrNext(room, result)

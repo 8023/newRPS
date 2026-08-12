@@ -463,6 +463,8 @@ func lobbyRoomToProto(r types.LobbyRoomInfo) (*wire.LobbyRoomInfo, error) {
 		HasPassword: r.HasPassword, Players: int32(r.Players), Spectators: int32(r.Spectators),
 		Status: r.Status, RoomBackgroundImage: r.RoomBackgroundImage,
 		EnablePunishment: r.EnablePunishment, PunishmentIds: r.PunishmentIDs, PunishmentId: r.PunishmentID,
+		PunishmentSource: r.PunishmentSource, PunishmentTagsIncluded: r.PunishmentTagsIncluded,
+		PunishmentTagsExcluded: r.PunishmentTagsExcluded, PunishmentSeriesId: r.PunishmentSeriesID,
 		TieDoublePunish: r.TieDoublePunish, RequireOpponentConfirm: r.RequireOpponentConfirm,
 		EnableRanked: r.EnableRanked, Stake: int32(r.Stake),
 		EnableRankMultiplier: r.EnableRankMultiplier, RankMultiplier: int32(r.RankMultiplier),
@@ -967,32 +969,34 @@ func ConfigToProto(cfg types.AppConfig) (*wire.AppConfig, error) {
 				}
 				tm["factionNames"] = arr
 			}
-			// variants on punishments handled separately
 		}
 	}
-	if puns, ok := generic["punishments"].([]any); ok {
-		for _, p := range puns {
+	// Legacy punishment maps use StringPair fields in protobuf. Current config
+	// files no longer contain them, but preserve the conversion for legacy config
+	// snapshots and stored protocol payloads.
+	if punishments, ok := generic["punishments"].([]any); ok {
+		for _, p := range punishments {
 			pm, ok := p.(map[string]any)
 			if !ok {
 				continue
 			}
-			if v, ok := pm["variants"].(map[string]any); ok {
-				arr := make([]any, 0, len(v))
-				for k, val := range v {
-					arr = append(arr, map[string]any{"key": k, "value": fmt.Sprint(val)})
+			if variants, ok := pm["variants"].(map[string]any); ok {
+				arr := make([]any, 0, len(variants))
+				for k, value := range variants {
+					arr = append(arr, map[string]any{"key": k, "value": fmt.Sprint(value)})
 				}
 				pm["variants"] = arr
 			}
 			if tasks, ok := pm["tasks"].([]any); ok {
-				for _, t := range tasks {
-					tm, ok := t.(map[string]any)
+				for _, task := range tasks {
+					tm, ok := task.(map[string]any)
 					if !ok {
 						continue
 					}
-					if v, ok := tm["variants"].(map[string]any); ok {
-						arr := make([]any, 0, len(v))
-						for k, val := range v {
-							arr = append(arr, map[string]any{"key": k, "value": fmt.Sprint(val)})
+					if variants, ok := tm["variants"].(map[string]any); ok {
+						arr := make([]any, 0, len(variants))
+						for k, value := range variants {
+							arr = append(arr, map[string]any{"key": k, "value": fmt.Sprint(value)})
 						}
 						tm["variants"] = arr
 					}
@@ -1263,6 +1267,15 @@ func expandLobbyRoom(r any) any {
 			}
 		}
 		rm["versus"] = obj
+	}
+	if _, ok := rm["punishmentSource"]; !ok {
+		rm["punishmentSource"] = "random"
+	}
+	if _, ok := rm["punishmentTagsIncluded"]; !ok {
+		rm["punishmentTagsIncluded"] = []any{}
+	}
+	if _, ok := rm["punishmentTagsExcluded"]; !ok {
+		rm["punishmentTagsExcluded"] = []any{}
 	}
 	return rm
 }
@@ -1594,6 +1607,28 @@ func ConfigProtoToFront(pb *wire.AppConfig) (map[string]any, error) {
 		return map[string]any{}, nil
 	}
 	fixConfigMaps(m)
+	if punishments, ok := m["punishments"].([]any); ok {
+		for _, p := range punishments {
+			pm, ok := p.(map[string]any)
+			if !ok {
+				continue
+			}
+			if _, exists := pm["variants"]; exists {
+				pm["variants"] = pairsToStringMap(pm["variants"])
+			}
+			if tasks, ok := pm["tasks"].([]any); ok {
+				for _, task := range tasks {
+					tm, ok := task.(map[string]any)
+					if !ok {
+						continue
+					}
+					if _, exists := tm["variants"]; exists {
+						tm["variants"] = pairsToStringMap(tm["variants"])
+					}
+				}
+			}
+		}
+	}
 	// titles factionNames
 	if titles, ok := m["titles"].([]any); ok {
 		for _, t := range titles {
@@ -1612,24 +1647,6 @@ func ConfigProtoToFront(pb *wire.AppConfig) (map[string]any, error) {
 					obj[fid] = em["names"]
 				}
 				tm["factionNames"] = obj
-			}
-		}
-	}
-	if puns, ok := m["punishments"].([]any); ok {
-		for _, p := range puns {
-			pm, ok := p.(map[string]any)
-			if !ok {
-				continue
-			}
-			pm["variants"] = pairsToStringMap(pm["variants"])
-			if tasks, ok := pm["tasks"].([]any); ok {
-				for _, t := range tasks {
-					tm, ok := t.(map[string]any)
-					if !ok {
-						continue
-					}
-					tm["variants"] = pairsToStringMap(tm["variants"])
-				}
 			}
 		}
 	}

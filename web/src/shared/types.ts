@@ -132,12 +132,56 @@ export type RoomInfoTagStyle = GenderColors & {
   label: string;
 };
 
+// PunishmentTaskConfig：拍平的任务池任务。tagIds 可选 0/1/多个，留空则该任务永远不会被
+// 随机模式抽到（仍可被系列任务引用）；factionIds 为空时永不匹配任何阵营；order 合法取值仅 -1 或
+// 1-99：-1 是另一种"不参与随机抽取"的显式标记（与 tagIds 留空等效，仍可被系列任务按 ID
+// 引用），1-99 为难度档位。
 export type PunishmentTaskConfig = {
   id: string;
   name: string;
-  variants: Record<string, string>;
+  text: string;
+  tagIds: string[];
+  factionIds: string[];
+  order: number;
   backgroundImages?: string[];
   backgroundOpacity?: number;
+  /** @deprecated 仅用于旧单体配置迁移。 */
+  variants?: Record<string, string>;
+};
+
+export type PunishmentTagConfig = {
+  id: string;
+  name: string;
+  roomNamePool?: RoomNamePool;
+  roomBackgroundImages?: string[];
+};
+
+export type PunishmentRandomSettings = {
+  orderStep: number;
+  maxDifficultyOvershoot: number;
+};
+
+/** 系列任务一步：有序引用任务池任务 ID。 */
+export type PunishmentSeriesStep = {
+  taskIds: string[];
+};
+
+/** 系列任务管理详情（admin:action，不进 AppConfig）。 */
+export type PunishmentSeriesTaskConfig = {
+  id: string;
+  name: string;
+  roomNamePool?: RoomNamePool;
+  roomBackgroundImages?: string[];
+  steps: PunishmentSeriesStep[];
+};
+
+/** 建房面板公开用的系列目录摘要（随 config 广播，无任务文案）。 */
+export type PunishmentSeriesSummary = {
+  id: string;
+  name: string;
+  roomNamePool?: RoomNamePool;
+  roomBackgroundImages?: string[];
+  stepCount: number;
 };
 
 export type PublicStats = {
@@ -381,9 +425,15 @@ export type RoomSettings = {
   password?: string;
   gameId: GameId;
   enablePunishment: boolean;
-  punishmentSource?: "system" | "player";
+  /** random=随机任务（原 system）| series=系列任务 | player=玩家发布 */
+  punishmentSource?: "random" | "series" | "player" | "system";
+  /** @deprecated 旧任务类型多选 */
   punishmentId?: string;
+  /** @deprecated 旧任务类型多选 */
   punishmentIds?: string[];
+  punishmentTagsIncluded?: string[];
+  punishmentTagsExcluded?: string[];
+  punishmentSeriesId?: string;
   roomBackgroundImage?: string;
   enableTags?: boolean;
   tags?: string[];
@@ -489,7 +539,6 @@ export type RoundHistoryItem = {
   effectiveStake?: number;
   extremeRanked?: boolean;
   punishmentName?: string;
-  punishmentDescription?: string;
   punishmentTasks: Array<{
     playerId: string;
     playerName: string;
@@ -500,6 +549,7 @@ export type RoundHistoryItem = {
     backgroundOpacity?: number;
     assignedBy?: string;
     assignedByName?: string;
+    typeName?: string;
   }>;
   punishedNames: string[];
   proofs: Array<{
@@ -580,6 +630,10 @@ export type LobbySnapshot = {
     enablePunishment: boolean;
     punishmentIds?: string[];
     punishmentId?: string;
+    punishmentSource?: RoomSettings["punishmentSource"];
+    punishmentTagsIncluded?: string[];
+    punishmentTagsExcluded?: string[];
+    punishmentSeriesId?: string;
     tieDoublePunish: boolean;
     requireOpponentConfirm: boolean;
     enableRanked: boolean;
@@ -629,17 +683,24 @@ export type AppConfig = {
     names: string[];
     factionNames?: Record<string, string[]>;
   }>;
-  punishments: Array<{
+  /** @deprecated 旧任务类型容器；新结构用 punishmentTags/Tasks/SeriesTasks。 */
+  punishments?: Array<{
     id: string;
     name: string;
-    description: string;
+    description?: string;
     variants?: Record<string, string>;
     tasks?: PunishmentTaskConfig[];
     cardImageUrl?: string;
     cardImageOpacity?: number;
     roomBackgroundImages?: string[];
     roomNamePool?: RoomNamePool;
+    orderStep?: number;
+    maxDifficultyOvershoot?: number;
   }>;
+  punishmentTags: PunishmentTagConfig[];
+  /** 建房选系列用的公开目录；任务池/系列详情走 admin:action。 */
+  punishmentSeriesSummaries?: PunishmentSeriesSummary[];
+  punishmentRandomSettings: PunishmentRandomSettings;
   playerPunishmentRoomNamePool?: RoomNamePool;
   roomTags: string[];
   roomInfoTags: Record<string, RoomInfoTagStyle>;
@@ -744,6 +805,7 @@ export type AnalyticsSessionBrief = {
   pageviews: number;
 };
 
+/** 用户留存：cohort = 当日新建 playerId；matrix 为留存率 0–100。跨设备合并到同一用户。 */
 export type AnalyticsRetention = {
   offsets: number[];
   cohorts: string[];
@@ -809,12 +871,21 @@ export type AnalyticsRangeView = {
   profileChanges: AnalyticsNamedSeries[];
   /** 名争·白给：开启名争、开启白给、白给留言板、名争改名。 */
   nameWarGiveaway: AnalyticsNamedSeries[];
-  /** 新老用户：按账号（playerId）维度，区别于 newVsReturning 的设备维度。 */
+  /** 新老用户：按用户（playerId）维度，区别于 newVsReturning 的设备维度。 */
   newOldUsers: { new: number[]; oldLogin: number[] };
   petBond: { total: number[]; new: number[] };
-  chat: { lobby: number[]; room: number[]; speakers: number[] };
+  chat: {
+    lobby: number[];
+    room: number[];
+    /** 大厅发言去重人数 */
+    speakers: number[];
+    /** 房间发言去重人数（跨房间合并） */
+    speakersRoom: number[];
+  };
+  /** 单房对局：当日有对局的房间上的 max / 均值 */
+  roomRounds: { max: number[]; avg: number[] };
   funnel: AnalyticsBucket[];
   retention: AnalyticsRetention;
-  /** 新访客 vs 回访：按设备指纹维度，区别于 newOldUsers 的账号维度。 */
+  /** 新访客 vs 回访：按设备指纹维度，区别于 newOldUsers 的用户维度。 */
   newVsReturning: { new: number[]; returning: number[] };
 };

@@ -122,7 +122,7 @@ docker compose logs -f gamehouse
 | `config/json/*.json` | 后台改过的运行时配置（按功能拆分） | **整目录备份**；升级勿用空包覆盖已改配置 |
 | `config/xdb/ip2region_v4.xdb` | IPv4 归属地离线库（用户分析） | **本版本起必需**（除非 `ANALYTICS_GEO_ENABLED=0`）；见下方一次性升级步骤 |
 | `config/xdb/ip2region_v6.xdb` | IPv6 归属地离线库（用户分析） | 可选；缺失只是 IPv6 来源访客解析不到归属地，不影响启动 |
-| `work/analytics.salt` | 分析访客二次哈希盐 | 丢了则访客身份全部重置（DAU/留存断档），不影响登录 |
+| `work/analytics.salt` | 分析访客二次哈希盐 | 丢了则设备访客身份全部重置（设备 DAU/渠道断档），用户留存按 playerId 不受影响 |
 | `.env` | `SESSION_SECRET`、`ADMIN_PASSWORD` 等 | **`SESSION_SECRET` 不要换**，否则等同全员掉登录 |
 
 可用新版本覆盖的：`bin/`（含 `dist/`）、`docker-compose.yml`。配置仅在确认需要重置时再覆盖 `config/`。
@@ -207,7 +207,7 @@ curl -fsS http://127.0.0.1:${HOST_PORT:-9988}/api/push/vapid-key
 |------|------|------|
 | POST | `/api/session` | 签发会话 token |
 | POST | `/api/proof-image` | 证明图：仅 webp，≤2MB |
-| POST | `/api/admin-image` | 后台图：jpg/png/webp |
+| POST | `/api/admin-image` | 后台图：客户端统一压缩为 WebP，≤2MB |
 | GET | `/api/config/export` | 导出配置（需管理员口令） |
 | GET | `/ws` | WebSocket |
 | GET | `/uploads/*` | 上传文件 |
@@ -279,7 +279,7 @@ curl -fsS http://127.0.0.1:${HOST_PORT:-9988}/api/push/vapid-key
 | `gender-factions.json` | 阵营（配色、`taskGroup`），不再嵌套性别列表 |
 | `genders.json` | 性别预设扁平列表，每项通过 `factionId` 归属某个阵营 |
 | `titles.json` | 称号段 |
-| `punishments.json` | 系统惩罚池 |
+| `punishments.json` | 惩罚配置：`tags`（标签，含房名词库/背景图库）+ 全局 `orderStep`/`maxDifficultyOvershoot`。任务池与系列任务详情已迁到 SQLite（`punishment_tasks` / `punishment_series`），后台用 `admin:action` 独立读写；旧文件里的 `tasks`/`seriesTasks` 启动时一次性导入后不再读写 |
 | `player-punishment-room-name-pool.json` | 玩家发布任务房名词库 |
 | `room-tags.json` / `room-info-tags.json` | 房间 Tag 与信息标签样式 |
 | `title-tag-styles.json` | 称号标签按赋予来源（系统默认/自定义/主人赋予/管理员赋予）的配色 |
@@ -295,7 +295,7 @@ curl -fsS http://127.0.0.1:${HOST_PORT:-9988}/api/push/vapid-key
 
 ## 用户分析
 
-后台「数据分析」分区展示访问/留存、设备渠道、游戏与站点玩法趋势。架构三层解耦，**RPC 路径上一句 SQL 都没有**：
+后台「数据分析」分区展示访问、**用户留存**（按 `playerId` 首次注册日 cohort，跨设备合并）、设备渠道、游戏与站点玩法趋势；设备→注册→进房等转化看「转化漏斗」。架构三层解耦，**RPC 路径上一句 SQL 都没有**：
 
 1. **独立只读连接**（`mode=ro`，WAL 下读不阻塞写）跑聚合查询；
 2. **后台协程 + `analytics_daily` 日聚合表**（已封板的日子永不重算，每分钟只重算今天/昨天）；
@@ -361,8 +361,9 @@ npm run test           # go test + 前端 build
 
 ## 最近更新记录
 
-- **用户分析 + 后台图表面板**：前端埋点与审计表聚合、ip2region 归属地（`config/xdb/ip2region_v4.xdb` 必需 + 可选 `ip2region_v6.xdb`）、日聚合三层架构、`/admin`「数据分析」分区（recharts）。升级须一次性放置 xdb 或设 `ANALYTICS_GEO_ENABLED=0`。
+- **惩罚任务系统重做**：`punishmentSource` 三态改为 `random`（原 `system`）/ `series`/`player`；随机任务改标签化三态筛选 + 按房间走的倒伽马难度加权，新增按玩家个人进度推进的系列任务模式。任务池/系列详情迁出 `AppConfig` 落 SQLite（`punishment_tasks` / `punishment_series`，schema v22–v26），`punishments.json` 只保留 `tags` + 全局难度；建房选系列用公开摘要 `punishmentSeriesSummaries`；后台重排为「惩罚配置 / 系列任务 / 任务池」三个 tab。
+- **前后端版本一致性提示**：后端 `-ldflags` 注入 git 短哈希、前端 `vite.config.ts` 同步注入，连接建立与心跳 ping 携带构建版本，前端检测到与后端不一致时展示横幅提示手动刷新（不自动强刷）。
+- **用户分析 + 后台图表面板**：前端埋点与审计表聚合、ip2region 归属地（`config/xdb/ip2region_v4.xdb` 必需 + 可选 `ip2region_v6.xdb`）、日聚合三层架构、`/admin`「数据分析」分区（recharts）；转化漏斗重定义、新增用户留存矩阵与单房对局统计。升级须一次性放置 xdb 或设 `ANALYTICS_GEO_ENABLED=0`。
 
 详见 [CHANGELOG.md](./CHANGELOG.md)。
-
 

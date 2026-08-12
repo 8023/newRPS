@@ -62,6 +62,90 @@ func (s *Server) startTurnBasedPlaying(room *RoomState) {
 	room.RevealedChoices = nil
 	room.DisconnectForfeits = map[string]DisconnectForfeit{}
 	room.Ready = map[types.SeatKey]bool{types.SeatA: false, types.SeatB: false}
+	s.logGameStart(room)
+}
+
+// roomHumanPlayerIDs 当前对局相关的人类玩家 ID（座位制取 A/B；大话骰取参战名单）。
+func roomHumanPlayerIDs(room *RoomState) []string {
+	if room == nil {
+		return nil
+	}
+	if room.Settings.GameID == types.GameLiarsDice && room.LiarsDice != nil {
+		out := make([]string, 0, len(room.LiarsDice.ParticipantIDs))
+		seen := map[string]struct{}{}
+		for _, id := range room.LiarsDice.ParticipantIDs {
+			if id == "" {
+				continue
+			}
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			out = append(out, id)
+		}
+		return out
+	}
+	var out []string
+	for _, seat := range []types.SeatKey{types.SeatA, types.SeatB} {
+		if occ := room.Seats[seat]; occ != nil {
+			if id := occ.GetID(); id != "" {
+				out = append(out, id)
+			}
+		}
+	}
+	return out
+}
+
+// logGameStart 为每位参战玩家记一条开局事件（供漏斗按 player→visitor 折设备 UV）。
+func (s *Server) logGameStart(room *RoomState) {
+	if room == nil {
+		return
+	}
+	gameID := room.Settings.GameID
+	if gameID == "" {
+		gameID = types.GameRPS
+	}
+	ids := roomHumanPlayerIDs(room)
+	if len(ids) == 0 {
+		s.logAnalyticsServerEvent("game_start", string(gameID), 1, "", room.ID)
+		return
+	}
+	for _, pid := range ids {
+		s.logAnalyticsServerEvent("game_start", string(gameID), 1, pid, room.ID)
+	}
+}
+
+// logGameRoundForPlayers 对局结算埋点：每位参战玩家一条。
+// value=1 仅写在第一条（对局计数/结果分布/单房局数仍按「一局一次」）；其余 value=0 只参与漏斗设备 UV 映射。
+func (s *Server) logGameRoundForPlayers(room *RoomState, detail string, playerIDs []string) {
+	if room == nil {
+		return
+	}
+	if len(playerIDs) == 0 {
+		s.logAnalyticsServerEvent("game_round", detail, 1, "", room.ID)
+		return
+	}
+	seen := map[string]struct{}{}
+	first := true
+	for _, pid := range playerIDs {
+		if pid == "" {
+			continue
+		}
+		if _, ok := seen[pid]; ok {
+			continue
+		}
+		seen[pid] = struct{}{}
+		val := int64(0)
+		if first {
+			val = 1
+			first = false
+		}
+		s.logAnalyticsServerEvent("game_round", detail, val, pid, room.ID)
+	}
+	if first {
+		// 全是空 id
+		s.logAnalyticsServerEvent("game_round", detail, 1, "", room.ID)
+	}
 }
 
 // applySeatOutcome 按 result 更新人类玩家分游戏战绩、座位分与 seatStats；不处理排位分。
@@ -82,13 +166,14 @@ func (s *Server) applySeatOutcome(room *RoomState, result types.RoundResult) (pl
 	case types.ResultA, types.ResultB:
 		detail = string(gameID) + ":win"
 	}
-	pid := ""
+	var pids []string
 	if playerA != nil {
-		pid = playerA.ID
-	} else if playerB != nil {
-		pid = playerB.ID
+		pids = append(pids, playerA.ID)
 	}
-	s.logAnalyticsServerEvent("game_round", detail, 1, pid)
+	if playerB != nil {
+		pids = append(pids, playerB.ID)
+	}
+	s.logGameRoundForPlayers(room, detail, pids)
 
 	if result == types.ResultDraw {
 		s.recordGameOutcome(playerA, gameID, "draw")
@@ -139,8 +224,7 @@ func (s *Server) buildMatchHistoryShell(room *RoomState, result types.RoundResul
 	for i, p := range punishedPlayers {
 		punishedNames[i] = playerShortName(p)
 	}
-	punishment := s.currentPunishment(room)
-	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, result, punishment)
+	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, result)
 	item := types.RoundHistoryItem{
 		ID:              randomID(),
 		Round:           len(room.RoundHistory) + 1,
@@ -165,10 +249,7 @@ func (s *Server) buildMatchHistoryShell(room *RoomState, result types.RoundResul
 		item.RankMultiplier = &rm
 	}
 	if len(punishedNames) > 0 {
-		item.PunishmentName = s.punishmentNameForRoom(room, punishment)
-		if room.Settings.PunishmentSource != "player" && punishment != nil {
-			item.PunishmentDescription = punishment.Description
-		}
+		item.PunishmentName = s.punishmentRoundLabel(room, punishmentTasks)
 	}
 	return item
 }

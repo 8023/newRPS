@@ -318,8 +318,15 @@ function fillRoomSettingsDefaults(settings: any): any {
   // gomokuUndoLimit 同理：建房时已校验为 0/1/3/10 之一，键缺失只可能是真值 0（禁止悔棋）
   // 被 defaults:false 连 key 一起丢掉，缺省按 0 补齐即可无损还原。计时设置四个字段同理，
   // 0 就是"不限时"的合法值。
+  let source = settings.punishmentSource || "random";
+  if (source === "system") source = "random";
   return {
     ...settings,
+    punishmentSource: source,
+    punishmentIds: Array.isArray(settings.punishmentIds) ? settings.punishmentIds : [],
+    punishmentTagsIncluded: Array.isArray(settings.punishmentTagsIncluded) ? settings.punishmentTagsIncluded : [],
+    punishmentTagsExcluded: Array.isArray(settings.punishmentTagsExcluded) ? settings.punishmentTagsExcluded : [],
+    punishmentSeriesId: typeof settings.punishmentSeriesId === "string" ? settings.punishmentSeriesId : "",
     allowProofImage: settings.allowProofImage ?? false,
     gomokuUndoLimit: numOr(settings.gomokuUndoLimit, 0),
     othelloMoveSeconds: numOr(settings.othelloMoveSeconds, 0),
@@ -460,6 +467,10 @@ function materializeLobbyRoom(room: any): any {
   const r = { ...room };
   r.players = numOr(r.players, 0);
   r.spectators = numOr(r.spectators, 0);
+  r.punishmentSource = r.punishmentSource === "system" ? "random" : (r.punishmentSource || "random");
+  r.punishmentTagsIncluded = Array.isArray(r.punishmentTagsIncluded) ? r.punishmentTagsIncluded : [];
+  r.punishmentTagsExcluded = Array.isArray(r.punishmentTagsExcluded) ? r.punishmentTagsExcluded : [];
+  r.punishmentSeriesId = typeof r.punishmentSeriesId === "string" ? r.punishmentSeriesId : "";
   const versus: any = { A: null, B: null };
   for (const item of r.versus || []) {
     const key = item.key;
@@ -683,28 +694,19 @@ function materializeConfig(cfg: any): any {
     };
   }
   if (!c.accessControl || typeof c.accessControl !== "object") c.accessControl = {};
-  if (Array.isArray(c.punishments)) {
-    for (const p of c.punishments) {
-      if (Array.isArray(p.variants)) {
-        const obj: any = {};
-        for (const item of p.variants) {
-          if (item?.key != null) obj[item.key] = item.value;
-        }
-        p.variants = obj;
-      }
-      if (Array.isArray(p.tasks)) {
-        for (const t of p.tasks) {
-          if (Array.isArray(t.variants)) {
-            const obj: any = {};
-            for (const item of t.variants) {
-              if (item?.key != null) obj[item.key] = item.value;
-            }
-            t.variants = obj;
-          }
-        }
-      }
-    }
+  c.punishmentTags = Array.isArray(c.punishmentTags) ? c.punishmentTags : [];
+  c.punishmentSeriesSummaries = Array.isArray(c.punishmentSeriesSummaries) ? c.punishmentSeriesSummaries : [];
+  if (!c.punishmentRandomSettings || typeof c.punishmentRandomSettings !== "object") {
+    c.punishmentRandomSettings = { orderStep: 2, maxDifficultyOvershoot: 5 };
+  } else {
+    c.punishmentRandomSettings = {
+      orderStep: numOr(c.punishmentRandomSettings.orderStep, 2),
+      maxDifficultyOvershoot: numOr(c.punishmentRandomSettings.maxDifficultyOvershoot, 5)
+    };
   }
+  // 旧版 punishments 字段只保留安全解码默认值；任务池/系列详情已迁 SQLite，
+  // 不再重建旧前端所需的完整目录（前后端需同步发布并刷新缓存）。
+  if (!Array.isArray(c.punishments)) c.punishments = [];
   return c;
 }
 

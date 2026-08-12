@@ -1,170 +1,293 @@
-[
-  {
-    "id": "truth",
-    "name": "真心话",
-    "description": "输家回答胜者提出的一个真心话问题。",
-    "variants": {
-      "default": "回答一个脑洞一点的真心话。",
-      "female": "回答一个关于心情或偏好的真心话。",
-      "male": "回答一个关于勇气或选择的真心话。"
-    },
-    "tasks": [
-      {
-        "id": "task1",
-        "name": "默认任务",
-        "variants": {
-          "default": "回答一个脑洞一点的真心话。",
-          "female": "回答一个关于心情或偏好的真心话。",
-          "male": "回答一个关于勇气或选择的真心话。"
-        },
-        "backgroundOpacity": 0.22
+{
+  "tags": [
+    {
+      "id": "truth",
+      "name": "真心话",
+      "roomNamePool": {
+        "adjectives": [
+          "坦白",
+          "柔软",
+          "秘密",
+          "粉蓝"
+        ],
+        "subjects": [
+          "真心话",
+          "心声",
+          "秘密",
+          "提问"
+        ],
+        "roomWords": [
+          "小屋",
+          "茶会",
+          "房间",
+          "角落"
+        ]
       }
-    ],
-    "roomNamePool": {
-      "adjectives": [
-        "坦白",
-        "柔软",
-        "秘密",
-        "粉蓝"
-      ],
-      "subjects": [
-        "真心话",
-        "心声",
-        "秘密",
-        "提问"
-      ],
-      "roomWords": [
-        "小屋",
-        "茶会",
-        "房间",
-        "角落"
+    },
+    {
+      "id": "challenge",
+      "name": "大冒险",
+      "roomNamePool": {
+        "adjectives": [
+          "勇敢",
+          "闪亮",
+          "刺激",
+          "奇妙"
+        ],
+        "subjects": [
+          "冒险",
+          "挑战",
+          "任务",
+          "闯关"
+        ],
+        "roomWords": [
+          "擂台",
+          "房间",
+          "剧场",
+          "基地"
+        ]
+      }
+    },
+    {
+      "id": "sing",
+      "name": "唱一句歌",
+      "roomNamePool": {
+        "adjectives": [
+          "旋律",
+          "轻快",
+          "甜甜",
+          "夜间"
+        ],
+        "subjects": [
+          "唱歌",
+          "音符",
+          "麦克风",
+          "歌声"
+        ],
+        "roomWords": [
+          "舞台",
+          "小屋",
+          "练习室",
+          "房间"
+        ]
+      }
+    },
+    {
+      "id": "water",
+      "name": "喝水提醒",
+      "roomNamePool": {
+        "adjectives": [
+          "清爽",
+          "健康",
+          "透明",
+          "温柔"
+        ],
+        "subjects": [
+          "喝水",
+          "水杯",
+          "补水",
+          "咕嘟"
+        ],
+        "roomWords": [
+          "小站",
+          "房间",
+          "茶水间",
+          "角落"
+        ]
+      }
+    },
+    {
+      "id": "tag1",
+      "name": "新标签",
+      "roomNamePool": {
+        "adjectives": [
+          "粉蓝",
+          "闪亮",
+          "神秘"
+        ],
+        "subjects": [
+          "任务",
+          "挑战",
+          "惩罚"
+        ],
+        "roomWords": [
+          "小屋",
+          "房间",
+          "擂台"
+        ]
+      },
+      "roomBackgroundImages": [
+        "/uploads/admin/1786532447365-VrvH8Bop.webp"
       ]
     }
-  },
-  {
-    "id": "challenge",
-    "name": "大冒险",
-    "description": "输家完成一个双方认可的小挑战。",
-    "variants": {
-      "default": "完成一个脑洞挑战并提交证明。",
-      "female": "完成一个轻松可爱的挑战并提交证明。",
-      "male": "完成一个简单动作挑战并提交证明。"
+  ],
+  "orderStep": 2,
+  "maxDifficultyOvershoot": 5,
+  "tasks": [
+    {
+      "id": "truth_task1_default",
+      "name": "默认任务",
+      "text": "回答一个脑洞一点的真心话。",
+      "tagIds": [
+        "truth"
+      ],
+      "factionIds": [
+        "other_faction"
+      ],
+      "order": 50,
+      "backgroundOpacity": 0.22
     },
-    "tasks": [
-      {
-        "id": "task1",
-        "name": "默认任务",
-        "variants": {
-          "default": "完成一个脑洞挑战并提交证明。",
-          "female": "完成一个轻松可爱的挑战并提交证明。",
-          "male": "完成一个简单动作挑战并提交证明。"
-        },
-        "backgroundOpacity": 0.22
-      }
-    ],
-    "roomNamePool": {
-      "adjectives": [
-        "勇敢",
-        "闪亮",
-        "刺激",
-        "奇妙"
+    {
+      "id": "truth_task1_male",
+      "name": "默认任务",
+      "text": "回答一个关于勇气或选择的真心话。",
+      "tagIds": [
+        "truth"
       ],
-      "subjects": [
-        "冒险",
-        "挑战",
-        "任务",
-        "闯关"
+      "factionIds": [
+        "male_faction",
+        "femboy_faction"
       ],
-      "roomWords": [
-        "擂台",
-        "房间",
-        "剧场",
-        "基地"
-      ]
-    }
-  },
-  {
-    "id": "sing",
-    "name": "唱一句歌",
-    "description": "输家唱一句歌并提交证明。",
-    "variants": {
-      "default": "用奇怪但合法的方式唱一句歌并提交证明。",
-      "female": "唱一句甜一点的歌并提交证明。",
-      "male": "唱一句有气势的歌并提交证明。"
+      "order": 50,
+      "backgroundOpacity": 0.22
     },
-    "tasks": [
-      {
-        "id": "task1",
-        "name": "默认任务",
-        "variants": {
-          "default": "用奇怪但合法的方式唱一句歌并提交证明。",
-          "female": "唱一句甜一点的歌并提交证明。",
-          "male": "唱一句有气势的歌并提交证明。"
-        },
-        "backgroundOpacity": 0.22
-      }
-    ],
-    "roomNamePool": {
-      "adjectives": [
-        "旋律",
-        "轻快",
-        "甜甜",
-        "夜间"
+    {
+      "id": "truth_task1_female",
+      "name": "默认任务",
+      "text": "回答一个关于心情或偏好的真心话。",
+      "tagIds": [
+        "truth"
       ],
-      "subjects": [
-        "唱歌",
-        "音符",
-        "麦克风",
-        "歌声"
+      "factionIds": [
+        "female_faction",
+        "trans_male_faction"
       ],
-      "roomWords": [
-        "舞台",
-        "小屋",
-        "练习室",
-        "房间"
-      ]
-    }
-  },
-  {
-    "id": "water",
-    "name": "喝水提醒",
-    "description": "输家喝一杯水，健康一点也不错。",
-    "variants": {
-      "default": "喝一杯水并用阵营风格发言。",
-      "female": "喝一杯水并说一句今日心情。",
-      "male": "喝一杯水并说一句今日宣言。"
+      "order": 50,
+      "backgroundOpacity": 0.22
     },
-    "tasks": [
-      {
-        "id": "task1",
-        "name": "默认任务",
-        "variants": {
-          "default": "喝一杯水并用阵营风格发言。",
-          "female": "喝一杯水并说一句今日心情。",
-          "male": "喝一杯水并说一句今日宣言。"
-        },
-        "backgroundOpacity": 0.22
-      }
-    ],
-    "roomNamePool": {
-      "adjectives": [
-        "清爽",
-        "健康",
-        "透明",
-        "温柔"
+    {
+      "id": "challenge_task1_default",
+      "name": "默认任务",
+      "text": "完成一个脑洞挑战并提交证明。",
+      "tagIds": [
+        "challenge"
       ],
-      "subjects": [
-        "喝水",
-        "水杯",
-        "补水",
-        "咕嘟"
+      "factionIds": [
+        "other_faction"
       ],
-      "roomWords": [
-        "小站",
-        "房间",
-        "茶水间",
-        "角落"
-      ]
+      "order": 50,
+      "backgroundOpacity": 0.22
+    },
+    {
+      "id": "challenge_task1_male",
+      "name": "默认任务",
+      "text": "完成一个简单动作挑战并提交证明。",
+      "tagIds": [
+        "challenge"
+      ],
+      "factionIds": [
+        "male_faction",
+        "femboy_faction"
+      ],
+      "order": 50,
+      "backgroundOpacity": 0.22
+    },
+    {
+      "id": "challenge_task1_female",
+      "name": "默认任务",
+      "text": "完成一个轻松可爱的挑战并提交证明。",
+      "tagIds": [
+        "challenge"
+      ],
+      "factionIds": [
+        "female_faction",
+        "trans_male_faction"
+      ],
+      "order": 50,
+      "backgroundOpacity": 0.22
+    },
+    {
+      "id": "sing_task1_default",
+      "name": "默认任务",
+      "text": "用奇怪但合法的方式唱一句歌并提交证明。",
+      "tagIds": [
+        "sing"
+      ],
+      "factionIds": [
+        "other_faction"
+      ],
+      "order": 50,
+      "backgroundOpacity": 0.22
+    },
+    {
+      "id": "sing_task1_male",
+      "name": "默认任务",
+      "text": "唱一句有气势的歌并提交证明。",
+      "tagIds": [
+        "sing"
+      ],
+      "factionIds": [
+        "male_faction",
+        "femboy_faction"
+      ],
+      "order": 50,
+      "backgroundOpacity": 0.22
+    },
+    {
+      "id": "sing_task1_female",
+      "name": "默认任务",
+      "text": "唱一句甜一点的歌并提交证明。",
+      "tagIds": [
+        "sing"
+      ],
+      "factionIds": [
+        "female_faction",
+        "trans_male_faction"
+      ],
+      "order": 50,
+      "backgroundOpacity": 0.22
+    },
+    {
+      "id": "water_task1_default",
+      "name": "默认任务",
+      "text": "喝一杯水并用阵营风格发言。",
+      "tagIds": [
+        "water"
+      ],
+      "factionIds": [
+        "other_faction"
+      ],
+      "order": 50,
+      "backgroundOpacity": 0.22
+    },
+    {
+      "id": "water_task1_male",
+      "name": "默认任务",
+      "text": "喝一杯水并说一句今日宣言。",
+      "tagIds": [
+        "water"
+      ],
+      "factionIds": [
+        "male_faction",
+        "femboy_faction"
+      ],
+      "order": 50,
+      "backgroundOpacity": 0.22
+    },
+    {
+      "id": "water_task1_female",
+      "name": "默认任务",
+      "text": "喝一杯水并说一句今日心情。",
+      "tagIds": [
+        "water"
+      ],
+      "factionIds": [
+        "female_faction",
+        "trans_male_faction"
+      ],
+      "order": 50,
+      "backgroundOpacity": 0.22
     }
-  }
-]
+  ],
+  "seriesTasks": []
+}

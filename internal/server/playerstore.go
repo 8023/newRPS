@@ -3,6 +3,7 @@ package server
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/doumiao/newRPS/internal/types"
@@ -95,6 +96,22 @@ CREATE TABLE IF NOT EXISTS player_secrets (
 	FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_player_secrets_player ON player_secrets(player_id);
+CREATE TABLE IF NOT EXISTS player_punishment_tag_prefs (
+	player_id TEXT NOT NULL,
+	tag_id    TEXT NOT NULL,
+	state     TEXT NOT NULL,
+	PRIMARY KEY (player_id, tag_id),
+	FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_player_punishment_tag_prefs_player ON player_punishment_tag_prefs(player_id);
+CREATE TABLE IF NOT EXISTS player_punishment_series_progress (
+	player_id  TEXT NOT NULL,
+	series_id  TEXT NOT NULL,
+	next_index INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (player_id, series_id),
+	FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_player_punishment_series_progress_player ON player_punishment_series_progress(player_id);
 `
 
 func newPlayerStore(db *sql.DB) *playerStore {
@@ -226,10 +243,19 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 	if err != nil {
 		return nil, err
 	}
+	tagPrefsByPlayer, err := ps.loadAllTagPrefsLocked()
+	if err != nil {
+		return nil, err
+	}
 	out := make([]playerRow, 0, len(items))
 	for _, item := range items {
 		secrets := secretsByPlayer[item.ID]
 		item.PlayerSecrets = secrets
+		if prefs := tagPrefsByPlayer[item.ID]; prefs != nil {
+			item.PunishmentTagPrefs = prefs
+		} else {
+			item.PunishmentTagPrefs = map[string]string{}
+		}
 		out = append(out, playerRow{item: item, secrets: secrets})
 	}
 	return out, nil
@@ -253,6 +279,86 @@ func (ps *playerStore) loadAllSecretsLocked() (map[string][]string, error) {
 		out[pid] = append(out[pid], secret)
 	}
 	return out, rows.Err()
+}
+
+func (ps *playerStore) loadAllTagPrefsLocked() (map[string]map[string]string, error) {
+	rows, err := ps.db.Query(`SELECT player_id, tag_id, state FROM player_punishment_tag_prefs`)
+	if err != nil {
+		// 迁移尚未跑到 v25 时表不存在，启动加载不应硬失败。
+		if strings.Contains(err.Error(), "no such table") {
+			return map[string]map[string]string{}, nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]map[string]string{}
+	for rows.Next() {
+		var pid, tagID, state string
+		if err := rows.Scan(&pid, &tagID, &state); err != nil {
+			return nil, err
+		}
+		if tagID == "" || (state != "include" && state != "exclude") {
+			continue
+		}
+		if out[pid] == nil {
+			out[pid] = map[string]string{}
+		}
+		out[pid][tagID] = state
+	}
+	return out, rows.Err()
+}
+
+// getSeriesProgress 读取 (player_id, series_id) 的 next_index；无记录返回 0。
+func (ps *playerStore) getSeriesProgress(playerID, seriesID string) (int, error) {
+	if ps == nil || ps.db == nil || playerID == "" || seriesID == "" {
+		return 0, nil
+	}
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	var next int
+	err := ps.db.QueryRow(
+		`SELECT next_index FROM player_punishment_series_progress WHERE player_id = ? AND series_id = ?`,
+		playerID, seriesID,
+	).Scan(&next)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	if err != nil {
+		if strings.Contains(err.Error(), "no such table") {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return next, nil
+}
+
+// setSeriesProgress UPSERT 系列进度。
+func (ps *playerStore) setSeriesProgress(playerID, seriesID string, nextIndex int) error {
+	if ps == nil || ps.db == nil || playerID == "" || seriesID == "" {
+		return nil
+	}
+	if nextIndex < 0 {
+		nextIndex = 0
+	}
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	_, err := ps.db.Exec(`
+INSERT INTO player_punishment_series_progress (player_id, series_id, next_index)
+VALUES (?, ?, ?)
+ON CONFLICT(player_id, series_id) DO UPDATE SET next_index = excluded.next_index
+`, playerID, seriesID, nextIndex)
+	return err
+}
+
+// resetSeriesProgress 删空某系列下所有玩家的进度（后台「重置所有人进度」）。
+func (ps *playerStore) resetSeriesProgress(seriesID string) error {
+	if ps == nil || ps.db == nil || seriesID == "" {
+		return nil
+	}
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	_, err := ps.db.Exec(`DELETE FROM player_punishment_series_progress WHERE series_id = ?`, seriesID)
+	return err
 }
 
 // upsert 写入/更新一名玩家及其全部设备密钥（事务内替换 secrets）。
@@ -418,6 +524,24 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 		}
 		if _, err := tx.Exec(`INSERT OR IGNORE INTO player_secrets (player_id, secret) VALUES (?, ?)`, item.ID, secret); err != nil {
 			return err
+		}
+	}
+	if _, err := tx.Exec(`DELETE FROM player_punishment_tag_prefs WHERE player_id = ?`, item.ID); err != nil {
+		// 表可能尚未创建（极旧库首次启动路径）；忽略 no such table。
+		if !strings.Contains(err.Error(), "no such table") {
+			return err
+		}
+	} else {
+		for tagID, state := range item.PunishmentTagPrefs {
+			if tagID == "" || (state != "include" && state != "exclude") {
+				continue
+			}
+			if _, err := tx.Exec(
+				`INSERT OR IGNORE INTO player_punishment_tag_prefs (player_id, tag_id, state) VALUES (?, ?, ?)`,
+				item.ID, tagID, state,
+			); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

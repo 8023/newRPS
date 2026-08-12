@@ -9747,6 +9747,9 @@ export const game = $root.game = (() => {
          * @property {string|null} [jungleBoardTheme] RoomSettings jungleBoardTheme
          * @property {number|null} [jungleMoveSeconds] RoomSettings jungleMoveSeconds
          * @property {number|null} [jungleGameMinutes] RoomSettings jungleGameMinutes
+         * @property {Array.<string>|null} [punishmentTagsIncluded] RoomSettings punishmentTagsIncluded
+         * @property {Array.<string>|null} [punishmentTagsExcluded] RoomSettings punishmentTagsExcluded
+         * @property {string|null} [punishmentSeriesId] RoomSettings punishmentSeriesId
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -9774,6 +9777,8 @@ export const game = $root.game = (() => {
         const RoomSettings = function (properties) {
             this.punishmentIds = [];
             this.tags = [];
+            this.punishmentTagsIncluded = [];
+            this.punishmentTagsExcluded = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -10029,6 +10034,30 @@ export const game = $root.game = (() => {
         RoomSettings.prototype.jungleGameMinutes = 0;
 
         /**
+         * RoomSettings punishmentTagsIncluded.
+         * @member {Array.<string>} punishmentTagsIncluded
+         * @memberof game.RoomSettings
+         * @instance
+         */
+        RoomSettings.prototype.punishmentTagsIncluded = $util.emptyArray;
+
+        /**
+         * RoomSettings punishmentTagsExcluded.
+         * @member {Array.<string>} punishmentTagsExcluded
+         * @memberof game.RoomSettings
+         * @instance
+         */
+        RoomSettings.prototype.punishmentTagsExcluded = $util.emptyArray;
+
+        /**
+         * RoomSettings punishmentSeriesId.
+         * @member {string} punishmentSeriesId
+         * @memberof game.RoomSettings
+         * @instance
+         */
+        RoomSettings.prototype.punishmentSeriesId = "";
+
+        /**
          * Creates a new RoomSettings instance using the specified properties.
          * @function create
          * @memberof game.RoomSettings
@@ -10124,6 +10153,14 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 33, wireType 0 =*/264).int32(message.jungleMoveSeconds);
             if (message.jungleGameMinutes != null && $Object.hasOwnProperty.call(message, "jungleGameMinutes") && message.jungleGameMinutes !== 0)
                 writer.uint32(/* id 34, wireType 0 =*/272).int32(message.jungleGameMinutes);
+            if (message.punishmentTagsIncluded != null && message.punishmentTagsIncluded.length)
+                for (let i = 0; i < message.punishmentTagsIncluded.length; ++i)
+                    writer.uint32(/* id 35, wireType 2 =*/282).string(message.punishmentTagsIncluded[i]);
+            if (message.punishmentTagsExcluded != null && message.punishmentTagsExcluded.length)
+                for (let i = 0; i < message.punishmentTagsExcluded.length; ++i)
+                    writer.uint32(/* id 36, wireType 2 =*/290).string(message.punishmentTagsExcluded[i]);
+            if (message.punishmentSeriesId != null && $Object.hasOwnProperty.call(message, "punishmentSeriesId") && message.punishmentSeriesId !== "")
+                writer.uint32(/* id 37, wireType 2 =*/298).string(message.punishmentSeriesId);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -10448,6 +10485,31 @@ export const game = $root.game = (() => {
                             delete message.jungleGameMinutes;
                         continue;
                     }
+                case 35: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.punishmentTagsIncluded && message.punishmentTagsIncluded.length))
+                            message.punishmentTagsIncluded = [];
+                        message.punishmentTagsIncluded.push(reader.stringVerify());
+                        continue;
+                    }
+                case 36: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.punishmentTagsExcluded && message.punishmentTagsExcluded.length))
+                            message.punishmentTagsExcluded = [];
+                        message.punishmentTagsExcluded.push(reader.stringVerify());
+                        continue;
+                    }
+                case 37: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.punishmentSeriesId = value;
+                        else
+                            delete message.punishmentSeriesId;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -10592,6 +10654,23 @@ export const game = $root.game = (() => {
             if (message.jungleGameMinutes != null && $Object.hasOwnProperty.call(message, "jungleGameMinutes"))
                 if (!$util.isInteger(message.jungleGameMinutes))
                     return "jungleGameMinutes: integer expected";
+            if (message.punishmentTagsIncluded != null && $Object.hasOwnProperty.call(message, "punishmentTagsIncluded")) {
+                if (!$Array.isArray(message.punishmentTagsIncluded))
+                    return "punishmentTagsIncluded: array expected";
+                for (let i = 0; i < message.punishmentTagsIncluded.length; ++i)
+                    if (!$util.isString(message.punishmentTagsIncluded[i]))
+                        return "punishmentTagsIncluded: string[] expected";
+            }
+            if (message.punishmentTagsExcluded != null && $Object.hasOwnProperty.call(message, "punishmentTagsExcluded")) {
+                if (!$Array.isArray(message.punishmentTagsExcluded))
+                    return "punishmentTagsExcluded: array expected";
+                for (let i = 0; i < message.punishmentTagsExcluded.length; ++i)
+                    if (!$util.isString(message.punishmentTagsExcluded[i]))
+                        return "punishmentTagsExcluded: string[] expected";
+            }
+            if (message.punishmentSeriesId != null && $Object.hasOwnProperty.call(message, "punishmentSeriesId"))
+                if (!$util.isString(message.punishmentSeriesId))
+                    return "punishmentSeriesId: string expected";
             return null;
         };
 
@@ -10714,6 +10793,23 @@ export const game = $root.game = (() => {
             if (object.jungleGameMinutes != null)
                 if ($Number(object.jungleGameMinutes) !== 0)
                     message.jungleGameMinutes = object.jungleGameMinutes | 0;
+            if (object.punishmentTagsIncluded) {
+                if (!$Array.isArray(object.punishmentTagsIncluded))
+                    throw $TypeError(".game.RoomSettings.punishmentTagsIncluded: array expected");
+                message.punishmentTagsIncluded = $Array(object.punishmentTagsIncluded.length);
+                for (let i = 0; i < object.punishmentTagsIncluded.length; ++i)
+                    message.punishmentTagsIncluded[i] = $String(object.punishmentTagsIncluded[i]);
+            }
+            if (object.punishmentTagsExcluded) {
+                if (!$Array.isArray(object.punishmentTagsExcluded))
+                    throw $TypeError(".game.RoomSettings.punishmentTagsExcluded: array expected");
+                message.punishmentTagsExcluded = $Array(object.punishmentTagsExcluded.length);
+                for (let i = 0; i < object.punishmentTagsExcluded.length; ++i)
+                    message.punishmentTagsExcluded[i] = $String(object.punishmentTagsExcluded[i]);
+            }
+            if (object.punishmentSeriesId != null)
+                if (typeof object.punishmentSeriesId !== "string" || object.punishmentSeriesId.length)
+                    message.punishmentSeriesId = $String(object.punishmentSeriesId);
             return message;
         };
 
@@ -10737,6 +10833,8 @@ export const game = $root.game = (() => {
             if (options.arrays || options.defaults) {
                 object.punishmentIds = [];
                 object.tags = [];
+                object.punishmentTagsIncluded = [];
+                object.punishmentTagsExcluded = [];
             }
             if (options.defaults) {
                 object.name = "";
@@ -10768,6 +10866,7 @@ export const game = $root.game = (() => {
                 object.jungleBoardTheme = "";
                 object.jungleMoveSeconds = 0;
                 object.jungleGameMinutes = 0;
+                object.punishmentSeriesId = "";
             }
             if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
                 object.name = message.name;
@@ -10837,6 +10936,18 @@ export const game = $root.game = (() => {
                 object.jungleMoveSeconds = message.jungleMoveSeconds;
             if (message.jungleGameMinutes != null && $Object.hasOwnProperty.call(message, "jungleGameMinutes"))
                 object.jungleGameMinutes = message.jungleGameMinutes;
+            if (message.punishmentTagsIncluded && message.punishmentTagsIncluded.length) {
+                object.punishmentTagsIncluded = $Array(message.punishmentTagsIncluded.length);
+                for (let j = 0; j < message.punishmentTagsIncluded.length; ++j)
+                    object.punishmentTagsIncluded[j] = message.punishmentTagsIncluded[j];
+            }
+            if (message.punishmentTagsExcluded && message.punishmentTagsExcluded.length) {
+                object.punishmentTagsExcluded = $Array(message.punishmentTagsExcluded.length);
+                for (let j = 0; j < message.punishmentTagsExcluded.length; ++j)
+                    object.punishmentTagsExcluded[j] = message.punishmentTagsExcluded[j];
+            }
+            if (message.punishmentSeriesId != null && $Object.hasOwnProperty.call(message, "punishmentSeriesId"))
+                object.punishmentSeriesId = message.punishmentSeriesId;
             return object;
         };
 
@@ -14684,6 +14795,7 @@ export const game = $root.game = (() => {
          * @property {number|null} [backgroundOpacity] PunishmentTask backgroundOpacity
          * @property {string|null} [assignedBy] PunishmentTask assignedBy
          * @property {string|null} [assignedByName] PunishmentTask assignedByName
+         * @property {string|null} [typeName] PunishmentTask typeName
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -14788,6 +14900,14 @@ export const game = $root.game = (() => {
         PunishmentTask.prototype.assignedByName = "";
 
         /**
+         * PunishmentTask typeName.
+         * @member {string} typeName
+         * @memberof game.PunishmentTask
+         * @instance
+         */
+        PunishmentTask.prototype.typeName = "";
+
+        /**
          * Creates a new PunishmentTask instance using the specified properties.
          * @function create
          * @memberof game.PunishmentTask
@@ -14837,6 +14957,8 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 9, wireType 2 =*/74).string(message.assignedBy);
             if (message.assignedByName != null && $Object.hasOwnProperty.call(message, "assignedByName") && message.assignedByName !== "")
                 writer.uint32(/* id 10, wireType 2 =*/82).string(message.assignedByName);
+            if (message.typeName != null && $Object.hasOwnProperty.call(message, "typeName") && message.typeName !== "")
+                writer.uint32(/* id 11, wireType 2 =*/90).string(message.typeName);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -14965,6 +15087,15 @@ export const game = $root.game = (() => {
                             delete message.assignedByName;
                         continue;
                     }
+                case 11: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.typeName = value;
+                        else
+                            delete message.typeName;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -15035,6 +15166,9 @@ export const game = $root.game = (() => {
             if (message.assignedByName != null && $Object.hasOwnProperty.call(message, "assignedByName"))
                 if (!$util.isString(message.assignedByName))
                     return "assignedByName: string expected";
+            if (message.typeName != null && $Object.hasOwnProperty.call(message, "typeName"))
+                if (!$util.isString(message.typeName))
+                    return "typeName: string expected";
             return null;
         };
 
@@ -15083,6 +15217,9 @@ export const game = $root.game = (() => {
             if (object.assignedByName != null)
                 if (typeof object.assignedByName !== "string" || object.assignedByName.length)
                     message.assignedByName = $String(object.assignedByName);
+            if (object.typeName != null)
+                if (typeof object.typeName !== "string" || object.typeName.length)
+                    message.typeName = $String(object.typeName);
             return message;
         };
 
@@ -15113,6 +15250,7 @@ export const game = $root.game = (() => {
                 object.backgroundOpacity = 0;
                 object.assignedBy = "";
                 object.assignedByName = "";
+                object.typeName = "";
             }
             if (message.playerId != null && $Object.hasOwnProperty.call(message, "playerId"))
                 object.playerId = message.playerId;
@@ -15132,6 +15270,8 @@ export const game = $root.game = (() => {
                 object.assignedBy = message.assignedBy;
             if (message.assignedByName != null && $Object.hasOwnProperty.call(message, "assignedByName"))
                 object.assignedByName = message.assignedByName;
+            if (message.typeName != null && $Object.hasOwnProperty.call(message, "typeName"))
+                object.typeName = message.typeName;
             return object;
         };
 
@@ -25545,6 +25685,10 @@ export const game = $root.game = (() => {
          * @property {number|null} [gomokuUndoLimit] LobbyRoomInfo gomokuUndoLimit
          * @property {number|null} [jungleMoveSeconds] LobbyRoomInfo jungleMoveSeconds
          * @property {number|null} [jungleGameMinutes] LobbyRoomInfo jungleGameMinutes
+         * @property {string|null} [punishmentSource] LobbyRoomInfo punishmentSource
+         * @property {Array.<string>|null} [punishmentTagsIncluded] LobbyRoomInfo punishmentTagsIncluded
+         * @property {Array.<string>|null} [punishmentTagsExcluded] LobbyRoomInfo punishmentTagsExcluded
+         * @property {string|null} [punishmentSeriesId] LobbyRoomInfo punishmentSeriesId
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -25573,6 +25717,8 @@ export const game = $root.game = (() => {
             this.versus = [];
             this.punishmentIds = [];
             this.tags = [];
+            this.punishmentTagsIncluded = [];
+            this.punishmentTagsExcluded = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -25812,6 +25958,38 @@ export const game = $root.game = (() => {
         LobbyRoomInfo.prototype.jungleGameMinutes = 0;
 
         /**
+         * LobbyRoomInfo punishmentSource.
+         * @member {string} punishmentSource
+         * @memberof game.LobbyRoomInfo
+         * @instance
+         */
+        LobbyRoomInfo.prototype.punishmentSource = "";
+
+        /**
+         * LobbyRoomInfo punishmentTagsIncluded.
+         * @member {Array.<string>} punishmentTagsIncluded
+         * @memberof game.LobbyRoomInfo
+         * @instance
+         */
+        LobbyRoomInfo.prototype.punishmentTagsIncluded = $util.emptyArray;
+
+        /**
+         * LobbyRoomInfo punishmentTagsExcluded.
+         * @member {Array.<string>} punishmentTagsExcluded
+         * @memberof game.LobbyRoomInfo
+         * @instance
+         */
+        LobbyRoomInfo.prototype.punishmentTagsExcluded = $util.emptyArray;
+
+        /**
+         * LobbyRoomInfo punishmentSeriesId.
+         * @member {string} punishmentSeriesId
+         * @memberof game.LobbyRoomInfo
+         * @instance
+         */
+        LobbyRoomInfo.prototype.punishmentSeriesId = "";
+
+        /**
          * Creates a new LobbyRoomInfo instance using the specified properties.
          * @function create
          * @memberof game.LobbyRoomInfo
@@ -25904,6 +26082,16 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 31, wireType 0 =*/248).int32(message.jungleMoveSeconds);
             if (message.jungleGameMinutes != null && $Object.hasOwnProperty.call(message, "jungleGameMinutes") && message.jungleGameMinutes !== 0)
                 writer.uint32(/* id 32, wireType 0 =*/256).int32(message.jungleGameMinutes);
+            if (message.punishmentSource != null && $Object.hasOwnProperty.call(message, "punishmentSource") && message.punishmentSource !== "")
+                writer.uint32(/* id 33, wireType 2 =*/266).string(message.punishmentSource);
+            if (message.punishmentTagsIncluded != null && message.punishmentTagsIncluded.length)
+                for (let i = 0; i < message.punishmentTagsIncluded.length; ++i)
+                    writer.uint32(/* id 34, wireType 2 =*/274).string(message.punishmentTagsIncluded[i]);
+            if (message.punishmentTagsExcluded != null && message.punishmentTagsExcluded.length)
+                for (let i = 0; i < message.punishmentTagsExcluded.length; ++i)
+                    writer.uint32(/* id 35, wireType 2 =*/282).string(message.punishmentTagsExcluded[i]);
+            if (message.punishmentSeriesId != null && $Object.hasOwnProperty.call(message, "punishmentSeriesId") && message.punishmentSeriesId !== "")
+                writer.uint32(/* id 36, wireType 2 =*/290).string(message.punishmentSeriesId);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -26209,6 +26397,40 @@ export const game = $root.game = (() => {
                             delete message.jungleGameMinutes;
                         continue;
                     }
+                case 33: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.punishmentSource = value;
+                        else
+                            delete message.punishmentSource;
+                        continue;
+                    }
+                case 34: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.punishmentTagsIncluded && message.punishmentTagsIncluded.length))
+                            message.punishmentTagsIncluded = [];
+                        message.punishmentTagsIncluded.push(reader.stringVerify());
+                        continue;
+                    }
+                case 35: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.punishmentTagsExcluded && message.punishmentTagsExcluded.length))
+                            message.punishmentTagsExcluded = [];
+                        message.punishmentTagsExcluded.push(reader.stringVerify());
+                        continue;
+                    }
+                case 36: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.punishmentSeriesId = value;
+                        else
+                            delete message.punishmentSeriesId;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -26353,6 +26575,26 @@ export const game = $root.game = (() => {
             if (message.jungleGameMinutes != null && $Object.hasOwnProperty.call(message, "jungleGameMinutes"))
                 if (!$util.isInteger(message.jungleGameMinutes))
                     return "jungleGameMinutes: integer expected";
+            if (message.punishmentSource != null && $Object.hasOwnProperty.call(message, "punishmentSource"))
+                if (!$util.isString(message.punishmentSource))
+                    return "punishmentSource: string expected";
+            if (message.punishmentTagsIncluded != null && $Object.hasOwnProperty.call(message, "punishmentTagsIncluded")) {
+                if (!$Array.isArray(message.punishmentTagsIncluded))
+                    return "punishmentTagsIncluded: array expected";
+                for (let i = 0; i < message.punishmentTagsIncluded.length; ++i)
+                    if (!$util.isString(message.punishmentTagsIncluded[i]))
+                        return "punishmentTagsIncluded: string[] expected";
+            }
+            if (message.punishmentTagsExcluded != null && $Object.hasOwnProperty.call(message, "punishmentTagsExcluded")) {
+                if (!$Array.isArray(message.punishmentTagsExcluded))
+                    return "punishmentTagsExcluded: array expected";
+                for (let i = 0; i < message.punishmentTagsExcluded.length; ++i)
+                    if (!$util.isString(message.punishmentTagsExcluded[i]))
+                        return "punishmentTagsExcluded: string[] expected";
+            }
+            if (message.punishmentSeriesId != null && $Object.hasOwnProperty.call(message, "punishmentSeriesId"))
+                if (!$util.isString(message.punishmentSeriesId))
+                    return "punishmentSeriesId: string expected";
             return null;
         };
 
@@ -26476,6 +26718,26 @@ export const game = $root.game = (() => {
             if (object.jungleGameMinutes != null)
                 if ($Number(object.jungleGameMinutes) !== 0)
                     message.jungleGameMinutes = object.jungleGameMinutes | 0;
+            if (object.punishmentSource != null)
+                if (typeof object.punishmentSource !== "string" || object.punishmentSource.length)
+                    message.punishmentSource = $String(object.punishmentSource);
+            if (object.punishmentTagsIncluded) {
+                if (!$Array.isArray(object.punishmentTagsIncluded))
+                    throw $TypeError(".game.LobbyRoomInfo.punishmentTagsIncluded: array expected");
+                message.punishmentTagsIncluded = $Array(object.punishmentTagsIncluded.length);
+                for (let i = 0; i < object.punishmentTagsIncluded.length; ++i)
+                    message.punishmentTagsIncluded[i] = $String(object.punishmentTagsIncluded[i]);
+            }
+            if (object.punishmentTagsExcluded) {
+                if (!$Array.isArray(object.punishmentTagsExcluded))
+                    throw $TypeError(".game.LobbyRoomInfo.punishmentTagsExcluded: array expected");
+                message.punishmentTagsExcluded = $Array(object.punishmentTagsExcluded.length);
+                for (let i = 0; i < object.punishmentTagsExcluded.length; ++i)
+                    message.punishmentTagsExcluded[i] = $String(object.punishmentTagsExcluded[i]);
+            }
+            if (object.punishmentSeriesId != null)
+                if (typeof object.punishmentSeriesId !== "string" || object.punishmentSeriesId.length)
+                    message.punishmentSeriesId = $String(object.punishmentSeriesId);
             return message;
         };
 
@@ -26500,6 +26762,8 @@ export const game = $root.game = (() => {
                 object.versus = [];
                 object.punishmentIds = [];
                 object.tags = [];
+                object.punishmentTagsIncluded = [];
+                object.punishmentTagsExcluded = [];
             }
             if (options.defaults) {
                 object.id = "";
@@ -26528,6 +26792,8 @@ export const game = $root.game = (() => {
                 object.gomokuUndoLimit = 0;
                 object.jungleMoveSeconds = 0;
                 object.jungleGameMinutes = 0;
+                object.punishmentSource = "";
+                object.punishmentSeriesId = "";
             }
             if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
                 object.id = message.id;
@@ -26596,6 +26862,20 @@ export const game = $root.game = (() => {
                 object.jungleMoveSeconds = message.jungleMoveSeconds;
             if (message.jungleGameMinutes != null && $Object.hasOwnProperty.call(message, "jungleGameMinutes"))
                 object.jungleGameMinutes = message.jungleGameMinutes;
+            if (message.punishmentSource != null && $Object.hasOwnProperty.call(message, "punishmentSource"))
+                object.punishmentSource = message.punishmentSource;
+            if (message.punishmentTagsIncluded && message.punishmentTagsIncluded.length) {
+                object.punishmentTagsIncluded = $Array(message.punishmentTagsIncluded.length);
+                for (let j = 0; j < message.punishmentTagsIncluded.length; ++j)
+                    object.punishmentTagsIncluded[j] = message.punishmentTagsIncluded[j];
+            }
+            if (message.punishmentTagsExcluded && message.punishmentTagsExcluded.length) {
+                object.punishmentTagsExcluded = $Array(message.punishmentTagsExcluded.length);
+                for (let j = 0; j < message.punishmentTagsExcluded.length; ++j)
+                    object.punishmentTagsExcluded[j] = message.punishmentTagsExcluded[j];
+            }
+            if (message.punishmentSeriesId != null && $Object.hasOwnProperty.call(message, "punishmentSeriesId"))
+                object.punishmentSeriesId = message.punishmentSeriesId;
             return object;
         };
 
@@ -29468,6 +29748,10 @@ export const game = $root.game = (() => {
          * @property {Array.<game.StringPair.$Properties>|null} [variants] PunishmentTaskConfig variants
          * @property {Array.<string>|null} [backgroundImages] PunishmentTaskConfig backgroundImages
          * @property {number|null} [backgroundOpacity] PunishmentTaskConfig backgroundOpacity
+         * @property {string|null} [text] PunishmentTaskConfig text
+         * @property {Array.<string>|null} [factionIds] PunishmentTaskConfig factionIds
+         * @property {number|null} [order] PunishmentTaskConfig order
+         * @property {Array.<string>|null} [tagIds] PunishmentTaskConfig tagIds
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -29495,6 +29779,8 @@ export const game = $root.game = (() => {
         const PunishmentTaskConfig = function (properties) {
             this.variants = [];
             this.backgroundImages = [];
+            this.factionIds = [];
+            this.tagIds = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -29542,6 +29828,38 @@ export const game = $root.game = (() => {
         PunishmentTaskConfig.prototype.backgroundOpacity = 0;
 
         /**
+         * PunishmentTaskConfig text.
+         * @member {string} text
+         * @memberof game.PunishmentTaskConfig
+         * @instance
+         */
+        PunishmentTaskConfig.prototype.text = "";
+
+        /**
+         * PunishmentTaskConfig factionIds.
+         * @member {Array.<string>} factionIds
+         * @memberof game.PunishmentTaskConfig
+         * @instance
+         */
+        PunishmentTaskConfig.prototype.factionIds = $util.emptyArray;
+
+        /**
+         * PunishmentTaskConfig order.
+         * @member {number} order
+         * @memberof game.PunishmentTaskConfig
+         * @instance
+         */
+        PunishmentTaskConfig.prototype.order = 0;
+
+        /**
+         * PunishmentTaskConfig tagIds.
+         * @member {Array.<string>} tagIds
+         * @memberof game.PunishmentTaskConfig
+         * @instance
+         */
+        PunishmentTaskConfig.prototype.tagIds = $util.emptyArray;
+
+        /**
          * Creates a new PunishmentTaskConfig instance using the specified properties.
          * @function create
          * @memberof game.PunishmentTaskConfig
@@ -29585,6 +29903,16 @@ export const game = $root.game = (() => {
                     writer.uint32(/* id 4, wireType 2 =*/34).string(message.backgroundImages[i]);
             if (message.backgroundOpacity != null && $Object.hasOwnProperty.call(message, "backgroundOpacity") && !$Object.is(message.backgroundOpacity, 0))
                 writer.uint32(/* id 5, wireType 1 =*/41).double(message.backgroundOpacity);
+            if (message.text != null && $Object.hasOwnProperty.call(message, "text") && message.text !== "")
+                writer.uint32(/* id 6, wireType 2 =*/50).string(message.text);
+            if (message.factionIds != null && message.factionIds.length)
+                for (let i = 0; i < message.factionIds.length; ++i)
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.factionIds[i]);
+            if (message.order != null && $Object.hasOwnProperty.call(message, "order") && message.order !== 0)
+                writer.uint32(/* id 8, wireType 0 =*/64).int32(message.order);
+            if (message.tagIds != null && message.tagIds.length)
+                for (let i = 0; i < message.tagIds.length; ++i)
+                    writer.uint32(/* id 9, wireType 2 =*/74).string(message.tagIds[i]);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -29675,6 +30003,40 @@ export const game = $root.game = (() => {
                             delete message.backgroundOpacity;
                         continue;
                     }
+                case 6: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.text = value;
+                        else
+                            delete message.text;
+                        continue;
+                    }
+                case 7: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.factionIds && message.factionIds.length))
+                            message.factionIds = [];
+                        message.factionIds.push(reader.stringVerify());
+                        continue;
+                    }
+                case 8: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.order = value;
+                        else
+                            delete message.order;
+                        continue;
+                    }
+                case 9: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.tagIds && message.tagIds.length))
+                            message.tagIds = [];
+                        message.tagIds.push(reader.stringVerify());
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -29743,6 +30105,26 @@ export const game = $root.game = (() => {
             if (message.backgroundOpacity != null && $Object.hasOwnProperty.call(message, "backgroundOpacity"))
                 if (typeof message.backgroundOpacity !== "number")
                     return "backgroundOpacity: number expected";
+            if (message.text != null && $Object.hasOwnProperty.call(message, "text"))
+                if (!$util.isString(message.text))
+                    return "text: string expected";
+            if (message.factionIds != null && $Object.hasOwnProperty.call(message, "factionIds")) {
+                if (!$Array.isArray(message.factionIds))
+                    return "factionIds: array expected";
+                for (let i = 0; i < message.factionIds.length; ++i)
+                    if (!$util.isString(message.factionIds[i]))
+                        return "factionIds: string[] expected";
+            }
+            if (message.order != null && $Object.hasOwnProperty.call(message, "order"))
+                if (!$util.isInteger(message.order))
+                    return "order: integer expected";
+            if (message.tagIds != null && $Object.hasOwnProperty.call(message, "tagIds")) {
+                if (!$Array.isArray(message.tagIds))
+                    return "tagIds: array expected";
+                for (let i = 0; i < message.tagIds.length; ++i)
+                    if (!$util.isString(message.tagIds[i]))
+                        return "tagIds: string[] expected";
+            }
             return null;
         };
 
@@ -29790,6 +30172,26 @@ export const game = $root.game = (() => {
             if (object.backgroundOpacity != null)
                 if (!$Object.is($Number(object.backgroundOpacity), 0))
                     message.backgroundOpacity = $Number(object.backgroundOpacity);
+            if (object.text != null)
+                if (typeof object.text !== "string" || object.text.length)
+                    message.text = $String(object.text);
+            if (object.factionIds) {
+                if (!$Array.isArray(object.factionIds))
+                    throw $TypeError(".game.PunishmentTaskConfig.factionIds: array expected");
+                message.factionIds = $Array(object.factionIds.length);
+                for (let i = 0; i < object.factionIds.length; ++i)
+                    message.factionIds[i] = $String(object.factionIds[i]);
+            }
+            if (object.order != null)
+                if ($Number(object.order) !== 0)
+                    message.order = object.order | 0;
+            if (object.tagIds) {
+                if (!$Array.isArray(object.tagIds))
+                    throw $TypeError(".game.PunishmentTaskConfig.tagIds: array expected");
+                message.tagIds = $Array(object.tagIds.length);
+                for (let i = 0; i < object.tagIds.length; ++i)
+                    message.tagIds[i] = $String(object.tagIds[i]);
+            }
             return message;
         };
 
@@ -29813,11 +30215,15 @@ export const game = $root.game = (() => {
             if (options.arrays || options.defaults) {
                 object.variants = [];
                 object.backgroundImages = [];
+                object.factionIds = [];
+                object.tagIds = [];
             }
             if (options.defaults) {
                 object.id = "";
                 object.name = "";
                 object.backgroundOpacity = 0;
+                object.text = "";
+                object.order = 0;
             }
             if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
                 object.id = message.id;
@@ -29835,6 +30241,20 @@ export const game = $root.game = (() => {
             }
             if (message.backgroundOpacity != null && $Object.hasOwnProperty.call(message, "backgroundOpacity"))
                 object.backgroundOpacity = options.json && !$isFinite(message.backgroundOpacity) ? $String(message.backgroundOpacity) : message.backgroundOpacity;
+            if (message.text != null && $Object.hasOwnProperty.call(message, "text"))
+                object.text = message.text;
+            if (message.factionIds && message.factionIds.length) {
+                object.factionIds = $Array(message.factionIds.length);
+                for (let j = 0; j < message.factionIds.length; ++j)
+                    object.factionIds[j] = message.factionIds[j];
+            }
+            if (message.order != null && $Object.hasOwnProperty.call(message, "order"))
+                object.order = message.order;
+            if (message.tagIds && message.tagIds.length) {
+                object.tagIds = $Array(message.tagIds.length);
+                for (let j = 0; j < message.tagIds.length; ++j)
+                    object.tagIds[j] = message.tagIds[j];
+            }
             return object;
         };
 
@@ -30590,6 +31010,9 @@ export const game = $root.game = (() => {
          * @property {number|null} [cardImageOpacity] PunishmentConfig cardImageOpacity
          * @property {Array.<string>|null} [roomBackgroundImages] PunishmentConfig roomBackgroundImages
          * @property {game.RoomNamePool.$Properties|null} [roomNamePool] PunishmentConfig roomNamePool
+         * @property {number|null} [orderStep] PunishmentConfig orderStep
+         * @property {number|null} [orderSpread] PunishmentConfig orderSpread
+         * @property {number|null} [maxDifficultyOvershoot] PunishmentConfig maxDifficultyOvershoot
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -30697,6 +31120,30 @@ export const game = $root.game = (() => {
         PunishmentConfig.prototype.roomNamePool = null;
 
         /**
+         * PunishmentConfig orderStep.
+         * @member {number} orderStep
+         * @memberof game.PunishmentConfig
+         * @instance
+         */
+        PunishmentConfig.prototype.orderStep = 0;
+
+        /**
+         * PunishmentConfig orderSpread.
+         * @member {number} orderSpread
+         * @memberof game.PunishmentConfig
+         * @instance
+         */
+        PunishmentConfig.prototype.orderSpread = 0;
+
+        /**
+         * PunishmentConfig maxDifficultyOvershoot.
+         * @member {number} maxDifficultyOvershoot
+         * @memberof game.PunishmentConfig
+         * @instance
+         */
+        PunishmentConfig.prototype.maxDifficultyOvershoot = 0;
+
+        /**
          * Creates a new PunishmentConfig instance using the specified properties.
          * @function create
          * @memberof game.PunishmentConfig
@@ -30749,6 +31196,12 @@ export const game = $root.game = (() => {
                     writer.uint32(/* id 8, wireType 2 =*/66).string(message.roomBackgroundImages[i]);
             if (message.roomNamePool != null && $Object.hasOwnProperty.call(message, "roomNamePool"))
                 $root.game.RoomNamePool.encode(message.roomNamePool, writer.uint32(/* id 9, wireType 2 =*/74).fork(), _depth + 1).ldelim();
+            if (message.orderStep != null && $Object.hasOwnProperty.call(message, "orderStep") && !$Object.is(message.orderStep, 0))
+                writer.uint32(/* id 10, wireType 1 =*/81).double(message.orderStep);
+            if (message.orderSpread != null && $Object.hasOwnProperty.call(message, "orderSpread") && !$Object.is(message.orderSpread, 0))
+                writer.uint32(/* id 11, wireType 1 =*/89).double(message.orderSpread);
+            if (message.maxDifficultyOvershoot != null && $Object.hasOwnProperty.call(message, "maxDifficultyOvershoot") && !$Object.is(message.maxDifficultyOvershoot, 0))
+                writer.uint32(/* id 12, wireType 1 =*/97).double(message.maxDifficultyOvershoot);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -30871,6 +31324,33 @@ export const game = $root.game = (() => {
                         message.roomNamePool = $root.game.RoomNamePool.decode(reader, reader.uint32(), $undefined, _depth + 1, message.roomNamePool);
                         continue;
                     }
+                case 10: {
+                        if (wireType !== 1)
+                            break;
+                        if (!$Object.is(value = reader.double(), 0))
+                            message.orderStep = value;
+                        else
+                            delete message.orderStep;
+                        continue;
+                    }
+                case 11: {
+                        if (wireType !== 1)
+                            break;
+                        if (!$Object.is(value = reader.double(), 0))
+                            message.orderSpread = value;
+                        else
+                            delete message.orderSpread;
+                        continue;
+                    }
+                case 12: {
+                        if (wireType !== 1)
+                            break;
+                        if (!$Object.is(value = reader.double(), 0))
+                            message.maxDifficultyOvershoot = value;
+                        else
+                            delete message.maxDifficultyOvershoot;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -30959,6 +31439,15 @@ export const game = $root.game = (() => {
                 if (error)
                     return "roomNamePool." + error;
             }
+            if (message.orderStep != null && $Object.hasOwnProperty.call(message, "orderStep"))
+                if (typeof message.orderStep !== "number")
+                    return "orderStep: number expected";
+            if (message.orderSpread != null && $Object.hasOwnProperty.call(message, "orderSpread"))
+                if (typeof message.orderSpread !== "number")
+                    return "orderSpread: number expected";
+            if (message.maxDifficultyOvershoot != null && $Object.hasOwnProperty.call(message, "maxDifficultyOvershoot"))
+                if (typeof message.maxDifficultyOvershoot !== "number")
+                    return "maxDifficultyOvershoot: number expected";
             return null;
         };
 
@@ -31027,6 +31516,15 @@ export const game = $root.game = (() => {
                     throw $TypeError(".game.PunishmentConfig.roomNamePool: object expected");
                 message.roomNamePool = $root.game.RoomNamePool.fromObject(object.roomNamePool, _depth + 1);
             }
+            if (object.orderStep != null)
+                if (!$Object.is($Number(object.orderStep), 0))
+                    message.orderStep = $Number(object.orderStep);
+            if (object.orderSpread != null)
+                if (!$Object.is($Number(object.orderSpread), 0))
+                    message.orderSpread = $Number(object.orderSpread);
+            if (object.maxDifficultyOvershoot != null)
+                if (!$Object.is($Number(object.maxDifficultyOvershoot), 0))
+                    message.maxDifficultyOvershoot = $Number(object.maxDifficultyOvershoot);
             return message;
         };
 
@@ -31059,6 +31557,9 @@ export const game = $root.game = (() => {
                 object.cardImageUrl = "";
                 object.cardImageOpacity = 0;
                 object.roomNamePool = null;
+                object.orderStep = 0;
+                object.orderSpread = 0;
+                object.maxDifficultyOvershoot = 0;
             }
             if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
                 object.id = message.id;
@@ -31087,6 +31588,12 @@ export const game = $root.game = (() => {
             }
             if (message.roomNamePool != null && $Object.hasOwnProperty.call(message, "roomNamePool"))
                 object.roomNamePool = $root.game.RoomNamePool.toObject(message.roomNamePool, options, _depth + 1);
+            if (message.orderStep != null && $Object.hasOwnProperty.call(message, "orderStep"))
+                object.orderStep = options.json && !$isFinite(message.orderStep) ? $String(message.orderStep) : message.orderStep;
+            if (message.orderSpread != null && $Object.hasOwnProperty.call(message, "orderSpread"))
+                object.orderSpread = options.json && !$isFinite(message.orderSpread) ? $String(message.orderSpread) : message.orderSpread;
+            if (message.maxDifficultyOvershoot != null && $Object.hasOwnProperty.call(message, "maxDifficultyOvershoot"))
+                object.maxDifficultyOvershoot = options.json && !$isFinite(message.maxDifficultyOvershoot) ? $String(message.maxDifficultyOvershoot) : message.maxDifficultyOvershoot;
             return object;
         };
 
@@ -31116,6 +31623,2138 @@ export const game = $root.game = (() => {
         };
 
         return PunishmentConfig;
+    })();
+
+    game.PunishmentTagConfig = (function() {
+
+        /**
+         * Properties of a PunishmentTagConfig.
+         * @typedef {Object} game.PunishmentTagConfig.$Properties
+         * @property {string|null} [id] PunishmentTagConfig id
+         * @property {string|null} [name] PunishmentTagConfig name
+         * @property {game.RoomNamePool.$Properties|null} [roomNamePool] PunishmentTagConfig roomNamePool
+         * @property {Array.<string>|null} [roomBackgroundImages] PunishmentTagConfig roomBackgroundImages
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a PunishmentTagConfig.
+         * @memberof game
+         * @interface IPunishmentTagConfig
+         * @augments game.PunishmentTagConfig.$Properties
+         * @deprecated Use game.PunishmentTagConfig.$Properties instead.
+         */
+
+        /**
+         * Shape of a PunishmentTagConfig.
+         * @typedef {game.PunishmentTagConfig.$Properties} game.PunishmentTagConfig.$Shape
+         */
+
+        /**
+         * Constructs a new PunishmentTagConfig.
+         * @memberof game
+         * @classdesc Represents a PunishmentTagConfig.
+         * @constructor
+         * @param {game.PunishmentTagConfig.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const PunishmentTagConfig = function (properties) {
+            this.roomBackgroundImages = [];
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * PunishmentTagConfig id.
+         * @member {string} id
+         * @memberof game.PunishmentTagConfig
+         * @instance
+         */
+        PunishmentTagConfig.prototype.id = "";
+
+        /**
+         * PunishmentTagConfig name.
+         * @member {string} name
+         * @memberof game.PunishmentTagConfig
+         * @instance
+         */
+        PunishmentTagConfig.prototype.name = "";
+
+        /**
+         * PunishmentTagConfig roomNamePool.
+         * @member {game.RoomNamePool.$Properties|null|undefined} roomNamePool
+         * @memberof game.PunishmentTagConfig
+         * @instance
+         */
+        PunishmentTagConfig.prototype.roomNamePool = null;
+
+        /**
+         * PunishmentTagConfig roomBackgroundImages.
+         * @member {Array.<string>} roomBackgroundImages
+         * @memberof game.PunishmentTagConfig
+         * @instance
+         */
+        PunishmentTagConfig.prototype.roomBackgroundImages = $util.emptyArray;
+
+        /**
+         * Creates a new PunishmentTagConfig instance using the specified properties.
+         * @function create
+         * @memberof game.PunishmentTagConfig
+         * @static
+         * @param {game.PunishmentTagConfig.$Properties=} [properties] Properties to set
+         * @returns {game.PunishmentTagConfig} PunishmentTagConfig instance
+         * @type {{
+         *   (properties: game.PunishmentTagConfig.$Shape): game.PunishmentTagConfig & game.PunishmentTagConfig.$Shape;
+         *   (properties?: game.PunishmentTagConfig.$Properties): game.PunishmentTagConfig;
+         * }}
+         */
+        PunishmentTagConfig.create = function(properties) {
+            return new PunishmentTagConfig(properties);
+        };
+
+        /**
+         * Encodes the specified PunishmentTagConfig message. Does not implicitly {@link game.PunishmentTagConfig.verify|verify} messages.
+         * @function encode
+         * @memberof game.PunishmentTagConfig
+         * @static
+         * @param {game.PunishmentTagConfig.$Properties} message PunishmentTagConfig message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PunishmentTagConfig.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id") && message.id !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.id);
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
+            if (message.roomNamePool != null && $Object.hasOwnProperty.call(message, "roomNamePool"))
+                $root.game.RoomNamePool.encode(message.roomNamePool, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
+            if (message.roomBackgroundImages != null && message.roomBackgroundImages.length)
+                for (let i = 0; i < message.roomBackgroundImages.length; ++i)
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.roomBackgroundImages[i]);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified PunishmentTagConfig message, length delimited. Does not implicitly {@link game.PunishmentTagConfig.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.PunishmentTagConfig
+         * @static
+         * @param {game.PunishmentTagConfig.$Properties} message PunishmentTagConfig message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PunishmentTagConfig.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a PunishmentTagConfig message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.PunishmentTagConfig
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.PunishmentTagConfig & game.PunishmentTagConfig.$Shape} PunishmentTagConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PunishmentTagConfig.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.PunishmentTagConfig(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.id = value;
+                        else
+                            delete message.id;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.name = value;
+                        else
+                            delete message.name;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        message.roomNamePool = $root.game.RoomNamePool.decode(reader, reader.uint32(), $undefined, _depth + 1, message.roomNamePool);
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.roomBackgroundImages && message.roomBackgroundImages.length))
+                            message.roomBackgroundImages = [];
+                        message.roomBackgroundImages.push(reader.stringVerify());
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a PunishmentTagConfig message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.PunishmentTagConfig
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.PunishmentTagConfig & game.PunishmentTagConfig.$Shape} PunishmentTagConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PunishmentTagConfig.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PunishmentTagConfig message.
+         * @function verify
+         * @memberof game.PunishmentTagConfig
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PunishmentTagConfig.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.roomNamePool != null && $Object.hasOwnProperty.call(message, "roomNamePool")) {
+                let error = $root.game.RoomNamePool.verify(message.roomNamePool, _depth + 1);
+                if (error)
+                    return "roomNamePool." + error;
+            }
+            if (message.roomBackgroundImages != null && $Object.hasOwnProperty.call(message, "roomBackgroundImages")) {
+                if (!$Array.isArray(message.roomBackgroundImages))
+                    return "roomBackgroundImages: array expected";
+                for (let i = 0; i < message.roomBackgroundImages.length; ++i)
+                    if (!$util.isString(message.roomBackgroundImages[i]))
+                        return "roomBackgroundImages: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a PunishmentTagConfig message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.PunishmentTagConfig
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.PunishmentTagConfig} PunishmentTagConfig
+         */
+        PunishmentTagConfig.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.PunishmentTagConfig)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.PunishmentTagConfig: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.PunishmentTagConfig();
+            if (object.id != null)
+                if (typeof object.id !== "string" || object.id.length)
+                    message.id = $String(object.id);
+            if (object.name != null)
+                if (typeof object.name !== "string" || object.name.length)
+                    message.name = $String(object.name);
+            if (object.roomNamePool != null) {
+                if (!$util.isObject(object.roomNamePool))
+                    throw $TypeError(".game.PunishmentTagConfig.roomNamePool: object expected");
+                message.roomNamePool = $root.game.RoomNamePool.fromObject(object.roomNamePool, _depth + 1);
+            }
+            if (object.roomBackgroundImages) {
+                if (!$Array.isArray(object.roomBackgroundImages))
+                    throw $TypeError(".game.PunishmentTagConfig.roomBackgroundImages: array expected");
+                message.roomBackgroundImages = $Array(object.roomBackgroundImages.length);
+                for (let i = 0; i < object.roomBackgroundImages.length; ++i)
+                    message.roomBackgroundImages[i] = $String(object.roomBackgroundImages[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a PunishmentTagConfig message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.PunishmentTagConfig
+         * @static
+         * @param {game.PunishmentTagConfig} message PunishmentTagConfig
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        PunishmentTagConfig.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.arrays || options.defaults)
+                object.roomBackgroundImages = [];
+            if (options.defaults) {
+                object.id = "";
+                object.name = "";
+                object.roomNamePool = null;
+            }
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                object.id = message.id;
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                object.name = message.name;
+            if (message.roomNamePool != null && $Object.hasOwnProperty.call(message, "roomNamePool"))
+                object.roomNamePool = $root.game.RoomNamePool.toObject(message.roomNamePool, options, _depth + 1);
+            if (message.roomBackgroundImages && message.roomBackgroundImages.length) {
+                object.roomBackgroundImages = $Array(message.roomBackgroundImages.length);
+                for (let j = 0; j < message.roomBackgroundImages.length; ++j)
+                    object.roomBackgroundImages[j] = message.roomBackgroundImages[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this PunishmentTagConfig to JSON.
+         * @function toJSON
+         * @memberof game.PunishmentTagConfig
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        PunishmentTagConfig.prototype.toJSON = function() {
+            return PunishmentTagConfig.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for PunishmentTagConfig
+         * @function getTypeUrl
+         * @memberof game.PunishmentTagConfig
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        PunishmentTagConfig.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.PunishmentTagConfig";
+        };
+
+        return PunishmentTagConfig;
+    })();
+
+    game.PunishmentRandomSettings = (function() {
+
+        /**
+         * Properties of a PunishmentRandomSettings.
+         * @typedef {Object} game.PunishmentRandomSettings.$Properties
+         * @property {number|null} [orderStep] PunishmentRandomSettings orderStep
+         * @property {number|null} [orderSpread] PunishmentRandomSettings orderSpread
+         * @property {number|null} [maxDifficultyOvershoot] PunishmentRandomSettings maxDifficultyOvershoot
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a PunishmentRandomSettings.
+         * @memberof game
+         * @interface IPunishmentRandomSettings
+         * @augments game.PunishmentRandomSettings.$Properties
+         * @deprecated Use game.PunishmentRandomSettings.$Properties instead.
+         */
+
+        /**
+         * Shape of a PunishmentRandomSettings.
+         * @typedef {game.PunishmentRandomSettings.$Properties} game.PunishmentRandomSettings.$Shape
+         */
+
+        /**
+         * Constructs a new PunishmentRandomSettings.
+         * @memberof game
+         * @classdesc Represents a PunishmentRandomSettings.
+         * @constructor
+         * @param {game.PunishmentRandomSettings.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const PunishmentRandomSettings = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * PunishmentRandomSettings orderStep.
+         * @member {number} orderStep
+         * @memberof game.PunishmentRandomSettings
+         * @instance
+         */
+        PunishmentRandomSettings.prototype.orderStep = 0;
+
+        /**
+         * PunishmentRandomSettings orderSpread.
+         * @member {number} orderSpread
+         * @memberof game.PunishmentRandomSettings
+         * @instance
+         */
+        PunishmentRandomSettings.prototype.orderSpread = 0;
+
+        /**
+         * PunishmentRandomSettings maxDifficultyOvershoot.
+         * @member {number} maxDifficultyOvershoot
+         * @memberof game.PunishmentRandomSettings
+         * @instance
+         */
+        PunishmentRandomSettings.prototype.maxDifficultyOvershoot = 0;
+
+        /**
+         * Creates a new PunishmentRandomSettings instance using the specified properties.
+         * @function create
+         * @memberof game.PunishmentRandomSettings
+         * @static
+         * @param {game.PunishmentRandomSettings.$Properties=} [properties] Properties to set
+         * @returns {game.PunishmentRandomSettings} PunishmentRandomSettings instance
+         * @type {{
+         *   (properties: game.PunishmentRandomSettings.$Shape): game.PunishmentRandomSettings & game.PunishmentRandomSettings.$Shape;
+         *   (properties?: game.PunishmentRandomSettings.$Properties): game.PunishmentRandomSettings;
+         * }}
+         */
+        PunishmentRandomSettings.create = function(properties) {
+            return new PunishmentRandomSettings(properties);
+        };
+
+        /**
+         * Encodes the specified PunishmentRandomSettings message. Does not implicitly {@link game.PunishmentRandomSettings.verify|verify} messages.
+         * @function encode
+         * @memberof game.PunishmentRandomSettings
+         * @static
+         * @param {game.PunishmentRandomSettings.$Properties} message PunishmentRandomSettings message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PunishmentRandomSettings.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.orderStep != null && $Object.hasOwnProperty.call(message, "orderStep") && !$Object.is(message.orderStep, 0))
+                writer.uint32(/* id 1, wireType 1 =*/9).double(message.orderStep);
+            if (message.orderSpread != null && $Object.hasOwnProperty.call(message, "orderSpread") && !$Object.is(message.orderSpread, 0))
+                writer.uint32(/* id 2, wireType 1 =*/17).double(message.orderSpread);
+            if (message.maxDifficultyOvershoot != null && $Object.hasOwnProperty.call(message, "maxDifficultyOvershoot") && !$Object.is(message.maxDifficultyOvershoot, 0))
+                writer.uint32(/* id 3, wireType 1 =*/25).double(message.maxDifficultyOvershoot);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified PunishmentRandomSettings message, length delimited. Does not implicitly {@link game.PunishmentRandomSettings.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.PunishmentRandomSettings
+         * @static
+         * @param {game.PunishmentRandomSettings.$Properties} message PunishmentRandomSettings message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PunishmentRandomSettings.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a PunishmentRandomSettings message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.PunishmentRandomSettings
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.PunishmentRandomSettings & game.PunishmentRandomSettings.$Shape} PunishmentRandomSettings
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PunishmentRandomSettings.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.PunishmentRandomSettings(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 1)
+                            break;
+                        if (!$Object.is(value = reader.double(), 0))
+                            message.orderStep = value;
+                        else
+                            delete message.orderStep;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 1)
+                            break;
+                        if (!$Object.is(value = reader.double(), 0))
+                            message.orderSpread = value;
+                        else
+                            delete message.orderSpread;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 1)
+                            break;
+                        if (!$Object.is(value = reader.double(), 0))
+                            message.maxDifficultyOvershoot = value;
+                        else
+                            delete message.maxDifficultyOvershoot;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a PunishmentRandomSettings message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.PunishmentRandomSettings
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.PunishmentRandomSettings & game.PunishmentRandomSettings.$Shape} PunishmentRandomSettings
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PunishmentRandomSettings.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PunishmentRandomSettings message.
+         * @function verify
+         * @memberof game.PunishmentRandomSettings
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PunishmentRandomSettings.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.orderStep != null && $Object.hasOwnProperty.call(message, "orderStep"))
+                if (typeof message.orderStep !== "number")
+                    return "orderStep: number expected";
+            if (message.orderSpread != null && $Object.hasOwnProperty.call(message, "orderSpread"))
+                if (typeof message.orderSpread !== "number")
+                    return "orderSpread: number expected";
+            if (message.maxDifficultyOvershoot != null && $Object.hasOwnProperty.call(message, "maxDifficultyOvershoot"))
+                if (typeof message.maxDifficultyOvershoot !== "number")
+                    return "maxDifficultyOvershoot: number expected";
+            return null;
+        };
+
+        /**
+         * Creates a PunishmentRandomSettings message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.PunishmentRandomSettings
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.PunishmentRandomSettings} PunishmentRandomSettings
+         */
+        PunishmentRandomSettings.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.PunishmentRandomSettings)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.PunishmentRandomSettings: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.PunishmentRandomSettings();
+            if (object.orderStep != null)
+                if (!$Object.is($Number(object.orderStep), 0))
+                    message.orderStep = $Number(object.orderStep);
+            if (object.orderSpread != null)
+                if (!$Object.is($Number(object.orderSpread), 0))
+                    message.orderSpread = $Number(object.orderSpread);
+            if (object.maxDifficultyOvershoot != null)
+                if (!$Object.is($Number(object.maxDifficultyOvershoot), 0))
+                    message.maxDifficultyOvershoot = $Number(object.maxDifficultyOvershoot);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a PunishmentRandomSettings message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.PunishmentRandomSettings
+         * @static
+         * @param {game.PunishmentRandomSettings} message PunishmentRandomSettings
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        PunishmentRandomSettings.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.orderStep = 0;
+                object.orderSpread = 0;
+                object.maxDifficultyOvershoot = 0;
+            }
+            if (message.orderStep != null && $Object.hasOwnProperty.call(message, "orderStep"))
+                object.orderStep = options.json && !$isFinite(message.orderStep) ? $String(message.orderStep) : message.orderStep;
+            if (message.orderSpread != null && $Object.hasOwnProperty.call(message, "orderSpread"))
+                object.orderSpread = options.json && !$isFinite(message.orderSpread) ? $String(message.orderSpread) : message.orderSpread;
+            if (message.maxDifficultyOvershoot != null && $Object.hasOwnProperty.call(message, "maxDifficultyOvershoot"))
+                object.maxDifficultyOvershoot = options.json && !$isFinite(message.maxDifficultyOvershoot) ? $String(message.maxDifficultyOvershoot) : message.maxDifficultyOvershoot;
+            return object;
+        };
+
+        /**
+         * Converts this PunishmentRandomSettings to JSON.
+         * @function toJSON
+         * @memberof game.PunishmentRandomSettings
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        PunishmentRandomSettings.prototype.toJSON = function() {
+            return PunishmentRandomSettings.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for PunishmentRandomSettings
+         * @function getTypeUrl
+         * @memberof game.PunishmentRandomSettings
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        PunishmentRandomSettings.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.PunishmentRandomSettings";
+        };
+
+        return PunishmentRandomSettings;
+    })();
+
+    game.PunishmentSubtaskVariant = (function() {
+
+        /**
+         * Properties of a PunishmentSubtaskVariant.
+         * @typedef {Object} game.PunishmentSubtaskVariant.$Properties
+         * @property {Array.<string>|null} [factionIds] PunishmentSubtaskVariant factionIds
+         * @property {string|null} [text] PunishmentSubtaskVariant text
+         * @property {Array.<string>|null} [backgroundImages] PunishmentSubtaskVariant backgroundImages
+         * @property {number|null} [backgroundOpacity] PunishmentSubtaskVariant backgroundOpacity
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a PunishmentSubtaskVariant.
+         * @memberof game
+         * @interface IPunishmentSubtaskVariant
+         * @augments game.PunishmentSubtaskVariant.$Properties
+         * @deprecated Use game.PunishmentSubtaskVariant.$Properties instead.
+         */
+
+        /**
+         * Shape of a PunishmentSubtaskVariant.
+         * @typedef {game.PunishmentSubtaskVariant.$Properties} game.PunishmentSubtaskVariant.$Shape
+         */
+
+        /**
+         * Constructs a new PunishmentSubtaskVariant.
+         * @memberof game
+         * @classdesc Represents a PunishmentSubtaskVariant.
+         * @constructor
+         * @param {game.PunishmentSubtaskVariant.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const PunishmentSubtaskVariant = function (properties) {
+            this.factionIds = [];
+            this.backgroundImages = [];
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * PunishmentSubtaskVariant factionIds.
+         * @member {Array.<string>} factionIds
+         * @memberof game.PunishmentSubtaskVariant
+         * @instance
+         */
+        PunishmentSubtaskVariant.prototype.factionIds = $util.emptyArray;
+
+        /**
+         * PunishmentSubtaskVariant text.
+         * @member {string} text
+         * @memberof game.PunishmentSubtaskVariant
+         * @instance
+         */
+        PunishmentSubtaskVariant.prototype.text = "";
+
+        /**
+         * PunishmentSubtaskVariant backgroundImages.
+         * @member {Array.<string>} backgroundImages
+         * @memberof game.PunishmentSubtaskVariant
+         * @instance
+         */
+        PunishmentSubtaskVariant.prototype.backgroundImages = $util.emptyArray;
+
+        /**
+         * PunishmentSubtaskVariant backgroundOpacity.
+         * @member {number} backgroundOpacity
+         * @memberof game.PunishmentSubtaskVariant
+         * @instance
+         */
+        PunishmentSubtaskVariant.prototype.backgroundOpacity = 0;
+
+        /**
+         * Creates a new PunishmentSubtaskVariant instance using the specified properties.
+         * @function create
+         * @memberof game.PunishmentSubtaskVariant
+         * @static
+         * @param {game.PunishmentSubtaskVariant.$Properties=} [properties] Properties to set
+         * @returns {game.PunishmentSubtaskVariant} PunishmentSubtaskVariant instance
+         * @type {{
+         *   (properties: game.PunishmentSubtaskVariant.$Shape): game.PunishmentSubtaskVariant & game.PunishmentSubtaskVariant.$Shape;
+         *   (properties?: game.PunishmentSubtaskVariant.$Properties): game.PunishmentSubtaskVariant;
+         * }}
+         */
+        PunishmentSubtaskVariant.create = function(properties) {
+            return new PunishmentSubtaskVariant(properties);
+        };
+
+        /**
+         * Encodes the specified PunishmentSubtaskVariant message. Does not implicitly {@link game.PunishmentSubtaskVariant.verify|verify} messages.
+         * @function encode
+         * @memberof game.PunishmentSubtaskVariant
+         * @static
+         * @param {game.PunishmentSubtaskVariant.$Properties} message PunishmentSubtaskVariant message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PunishmentSubtaskVariant.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.factionIds != null && message.factionIds.length)
+                for (let i = 0; i < message.factionIds.length; ++i)
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.factionIds[i]);
+            if (message.text != null && $Object.hasOwnProperty.call(message, "text") && message.text !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.text);
+            if (message.backgroundImages != null && message.backgroundImages.length)
+                for (let i = 0; i < message.backgroundImages.length; ++i)
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.backgroundImages[i]);
+            if (message.backgroundOpacity != null && $Object.hasOwnProperty.call(message, "backgroundOpacity") && !$Object.is(message.backgroundOpacity, 0))
+                writer.uint32(/* id 4, wireType 1 =*/33).double(message.backgroundOpacity);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified PunishmentSubtaskVariant message, length delimited. Does not implicitly {@link game.PunishmentSubtaskVariant.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.PunishmentSubtaskVariant
+         * @static
+         * @param {game.PunishmentSubtaskVariant.$Properties} message PunishmentSubtaskVariant message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PunishmentSubtaskVariant.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a PunishmentSubtaskVariant message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.PunishmentSubtaskVariant
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.PunishmentSubtaskVariant & game.PunishmentSubtaskVariant.$Shape} PunishmentSubtaskVariant
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PunishmentSubtaskVariant.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.PunishmentSubtaskVariant(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.factionIds && message.factionIds.length))
+                            message.factionIds = [];
+                        message.factionIds.push(reader.stringVerify());
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.text = value;
+                        else
+                            delete message.text;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.backgroundImages && message.backgroundImages.length))
+                            message.backgroundImages = [];
+                        message.backgroundImages.push(reader.stringVerify());
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 1)
+                            break;
+                        if (!$Object.is(value = reader.double(), 0))
+                            message.backgroundOpacity = value;
+                        else
+                            delete message.backgroundOpacity;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a PunishmentSubtaskVariant message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.PunishmentSubtaskVariant
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.PunishmentSubtaskVariant & game.PunishmentSubtaskVariant.$Shape} PunishmentSubtaskVariant
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PunishmentSubtaskVariant.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PunishmentSubtaskVariant message.
+         * @function verify
+         * @memberof game.PunishmentSubtaskVariant
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PunishmentSubtaskVariant.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.factionIds != null && $Object.hasOwnProperty.call(message, "factionIds")) {
+                if (!$Array.isArray(message.factionIds))
+                    return "factionIds: array expected";
+                for (let i = 0; i < message.factionIds.length; ++i)
+                    if (!$util.isString(message.factionIds[i]))
+                        return "factionIds: string[] expected";
+            }
+            if (message.text != null && $Object.hasOwnProperty.call(message, "text"))
+                if (!$util.isString(message.text))
+                    return "text: string expected";
+            if (message.backgroundImages != null && $Object.hasOwnProperty.call(message, "backgroundImages")) {
+                if (!$Array.isArray(message.backgroundImages))
+                    return "backgroundImages: array expected";
+                for (let i = 0; i < message.backgroundImages.length; ++i)
+                    if (!$util.isString(message.backgroundImages[i]))
+                        return "backgroundImages: string[] expected";
+            }
+            if (message.backgroundOpacity != null && $Object.hasOwnProperty.call(message, "backgroundOpacity"))
+                if (typeof message.backgroundOpacity !== "number")
+                    return "backgroundOpacity: number expected";
+            return null;
+        };
+
+        /**
+         * Creates a PunishmentSubtaskVariant message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.PunishmentSubtaskVariant
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.PunishmentSubtaskVariant} PunishmentSubtaskVariant
+         */
+        PunishmentSubtaskVariant.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.PunishmentSubtaskVariant)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.PunishmentSubtaskVariant: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.PunishmentSubtaskVariant();
+            if (object.factionIds) {
+                if (!$Array.isArray(object.factionIds))
+                    throw $TypeError(".game.PunishmentSubtaskVariant.factionIds: array expected");
+                message.factionIds = $Array(object.factionIds.length);
+                for (let i = 0; i < object.factionIds.length; ++i)
+                    message.factionIds[i] = $String(object.factionIds[i]);
+            }
+            if (object.text != null)
+                if (typeof object.text !== "string" || object.text.length)
+                    message.text = $String(object.text);
+            if (object.backgroundImages) {
+                if (!$Array.isArray(object.backgroundImages))
+                    throw $TypeError(".game.PunishmentSubtaskVariant.backgroundImages: array expected");
+                message.backgroundImages = $Array(object.backgroundImages.length);
+                for (let i = 0; i < object.backgroundImages.length; ++i)
+                    message.backgroundImages[i] = $String(object.backgroundImages[i]);
+            }
+            if (object.backgroundOpacity != null)
+                if (!$Object.is($Number(object.backgroundOpacity), 0))
+                    message.backgroundOpacity = $Number(object.backgroundOpacity);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a PunishmentSubtaskVariant message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.PunishmentSubtaskVariant
+         * @static
+         * @param {game.PunishmentSubtaskVariant} message PunishmentSubtaskVariant
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        PunishmentSubtaskVariant.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.arrays || options.defaults) {
+                object.factionIds = [];
+                object.backgroundImages = [];
+            }
+            if (options.defaults) {
+                object.text = "";
+                object.backgroundOpacity = 0;
+            }
+            if (message.factionIds && message.factionIds.length) {
+                object.factionIds = $Array(message.factionIds.length);
+                for (let j = 0; j < message.factionIds.length; ++j)
+                    object.factionIds[j] = message.factionIds[j];
+            }
+            if (message.text != null && $Object.hasOwnProperty.call(message, "text"))
+                object.text = message.text;
+            if (message.backgroundImages && message.backgroundImages.length) {
+                object.backgroundImages = $Array(message.backgroundImages.length);
+                for (let j = 0; j < message.backgroundImages.length; ++j)
+                    object.backgroundImages[j] = message.backgroundImages[j];
+            }
+            if (message.backgroundOpacity != null && $Object.hasOwnProperty.call(message, "backgroundOpacity"))
+                object.backgroundOpacity = options.json && !$isFinite(message.backgroundOpacity) ? $String(message.backgroundOpacity) : message.backgroundOpacity;
+            return object;
+        };
+
+        /**
+         * Converts this PunishmentSubtaskVariant to JSON.
+         * @function toJSON
+         * @memberof game.PunishmentSubtaskVariant
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        PunishmentSubtaskVariant.prototype.toJSON = function() {
+            return PunishmentSubtaskVariant.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for PunishmentSubtaskVariant
+         * @function getTypeUrl
+         * @memberof game.PunishmentSubtaskVariant
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        PunishmentSubtaskVariant.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.PunishmentSubtaskVariant";
+        };
+
+        return PunishmentSubtaskVariant;
+    })();
+
+    game.PunishmentSubtask = (function() {
+
+        /**
+         * Properties of a PunishmentSubtask.
+         * @typedef {Object} game.PunishmentSubtask.$Properties
+         * @property {Array.<game.PunishmentSubtaskVariant.$Properties>|null} [variants] PunishmentSubtask variants
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a PunishmentSubtask.
+         * @memberof game
+         * @interface IPunishmentSubtask
+         * @augments game.PunishmentSubtask.$Properties
+         * @deprecated Use game.PunishmentSubtask.$Properties instead.
+         */
+
+        /**
+         * Shape of a PunishmentSubtask.
+         * @typedef {game.PunishmentSubtask.$Properties} game.PunishmentSubtask.$Shape
+         */
+
+        /**
+         * Constructs a new PunishmentSubtask.
+         * @memberof game
+         * @classdesc Represents a PunishmentSubtask.
+         * @constructor
+         * @param {game.PunishmentSubtask.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const PunishmentSubtask = function (properties) {
+            this.variants = [];
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * PunishmentSubtask variants.
+         * @member {Array.<game.PunishmentSubtaskVariant.$Properties>} variants
+         * @memberof game.PunishmentSubtask
+         * @instance
+         */
+        PunishmentSubtask.prototype.variants = $util.emptyArray;
+
+        /**
+         * Creates a new PunishmentSubtask instance using the specified properties.
+         * @function create
+         * @memberof game.PunishmentSubtask
+         * @static
+         * @param {game.PunishmentSubtask.$Properties=} [properties] Properties to set
+         * @returns {game.PunishmentSubtask} PunishmentSubtask instance
+         * @type {{
+         *   (properties: game.PunishmentSubtask.$Shape): game.PunishmentSubtask & game.PunishmentSubtask.$Shape;
+         *   (properties?: game.PunishmentSubtask.$Properties): game.PunishmentSubtask;
+         * }}
+         */
+        PunishmentSubtask.create = function(properties) {
+            return new PunishmentSubtask(properties);
+        };
+
+        /**
+         * Encodes the specified PunishmentSubtask message. Does not implicitly {@link game.PunishmentSubtask.verify|verify} messages.
+         * @function encode
+         * @memberof game.PunishmentSubtask
+         * @static
+         * @param {game.PunishmentSubtask.$Properties} message PunishmentSubtask message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PunishmentSubtask.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.variants != null && message.variants.length)
+                for (let i = 0; i < message.variants.length; ++i)
+                    $root.game.PunishmentSubtaskVariant.encode(message.variants[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified PunishmentSubtask message, length delimited. Does not implicitly {@link game.PunishmentSubtask.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.PunishmentSubtask
+         * @static
+         * @param {game.PunishmentSubtask.$Properties} message PunishmentSubtask message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PunishmentSubtask.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a PunishmentSubtask message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.PunishmentSubtask
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.PunishmentSubtask & game.PunishmentSubtask.$Shape} PunishmentSubtask
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PunishmentSubtask.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.PunishmentSubtask();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.variants && message.variants.length))
+                            message.variants = [];
+                        message.variants.push($root.game.PunishmentSubtaskVariant.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a PunishmentSubtask message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.PunishmentSubtask
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.PunishmentSubtask & game.PunishmentSubtask.$Shape} PunishmentSubtask
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PunishmentSubtask.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PunishmentSubtask message.
+         * @function verify
+         * @memberof game.PunishmentSubtask
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PunishmentSubtask.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.variants != null && $Object.hasOwnProperty.call(message, "variants")) {
+                if (!$Array.isArray(message.variants))
+                    return "variants: array expected";
+                for (let i = 0; i < message.variants.length; ++i) {
+                    let error = $root.game.PunishmentSubtaskVariant.verify(message.variants[i], _depth + 1);
+                    if (error)
+                        return "variants." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a PunishmentSubtask message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.PunishmentSubtask
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.PunishmentSubtask} PunishmentSubtask
+         */
+        PunishmentSubtask.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.PunishmentSubtask)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.PunishmentSubtask: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.PunishmentSubtask();
+            if (object.variants) {
+                if (!$Array.isArray(object.variants))
+                    throw $TypeError(".game.PunishmentSubtask.variants: array expected");
+                message.variants = $Array(object.variants.length);
+                for (let i = 0; i < object.variants.length; ++i) {
+                    if (!$util.isObject(object.variants[i]))
+                        throw $TypeError(".game.PunishmentSubtask.variants: object expected");
+                    message.variants[i] = $root.game.PunishmentSubtaskVariant.fromObject(object.variants[i], _depth + 1);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a PunishmentSubtask message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.PunishmentSubtask
+         * @static
+         * @param {game.PunishmentSubtask} message PunishmentSubtask
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        PunishmentSubtask.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.arrays || options.defaults)
+                object.variants = [];
+            if (message.variants && message.variants.length) {
+                object.variants = $Array(message.variants.length);
+                for (let j = 0; j < message.variants.length; ++j)
+                    object.variants[j] = $root.game.PunishmentSubtaskVariant.toObject(message.variants[j], options, _depth + 1);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this PunishmentSubtask to JSON.
+         * @function toJSON
+         * @memberof game.PunishmentSubtask
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        PunishmentSubtask.prototype.toJSON = function() {
+            return PunishmentSubtask.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for PunishmentSubtask
+         * @function getTypeUrl
+         * @memberof game.PunishmentSubtask
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        PunishmentSubtask.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.PunishmentSubtask";
+        };
+
+        return PunishmentSubtask;
+    })();
+
+    game.PunishmentSeriesTaskConfig = (function() {
+
+        /**
+         * Properties of a PunishmentSeriesTaskConfig.
+         * @typedef {Object} game.PunishmentSeriesTaskConfig.$Properties
+         * @property {string|null} [id] PunishmentSeriesTaskConfig id
+         * @property {string|null} [name] PunishmentSeriesTaskConfig name
+         * @property {game.RoomNamePool.$Properties|null} [roomNamePool] PunishmentSeriesTaskConfig roomNamePool
+         * @property {Array.<string>|null} [roomBackgroundImages] PunishmentSeriesTaskConfig roomBackgroundImages
+         * @property {Array.<game.PunishmentSubtask.$Properties>|null} [subtasks] PunishmentSeriesTaskConfig subtasks
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a PunishmentSeriesTaskConfig.
+         * @memberof game
+         * @interface IPunishmentSeriesTaskConfig
+         * @augments game.PunishmentSeriesTaskConfig.$Properties
+         * @deprecated Use game.PunishmentSeriesTaskConfig.$Properties instead.
+         */
+
+        /**
+         * Shape of a PunishmentSeriesTaskConfig.
+         * @typedef {game.PunishmentSeriesTaskConfig.$Properties} game.PunishmentSeriesTaskConfig.$Shape
+         */
+
+        /**
+         * Constructs a new PunishmentSeriesTaskConfig.
+         * @memberof game
+         * @classdesc Represents a PunishmentSeriesTaskConfig.
+         * @constructor
+         * @param {game.PunishmentSeriesTaskConfig.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const PunishmentSeriesTaskConfig = function (properties) {
+            this.roomBackgroundImages = [];
+            this.subtasks = [];
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * PunishmentSeriesTaskConfig id.
+         * @member {string} id
+         * @memberof game.PunishmentSeriesTaskConfig
+         * @instance
+         */
+        PunishmentSeriesTaskConfig.prototype.id = "";
+
+        /**
+         * PunishmentSeriesTaskConfig name.
+         * @member {string} name
+         * @memberof game.PunishmentSeriesTaskConfig
+         * @instance
+         */
+        PunishmentSeriesTaskConfig.prototype.name = "";
+
+        /**
+         * PunishmentSeriesTaskConfig roomNamePool.
+         * @member {game.RoomNamePool.$Properties|null|undefined} roomNamePool
+         * @memberof game.PunishmentSeriesTaskConfig
+         * @instance
+         */
+        PunishmentSeriesTaskConfig.prototype.roomNamePool = null;
+
+        /**
+         * PunishmentSeriesTaskConfig roomBackgroundImages.
+         * @member {Array.<string>} roomBackgroundImages
+         * @memberof game.PunishmentSeriesTaskConfig
+         * @instance
+         */
+        PunishmentSeriesTaskConfig.prototype.roomBackgroundImages = $util.emptyArray;
+
+        /**
+         * PunishmentSeriesTaskConfig subtasks.
+         * @member {Array.<game.PunishmentSubtask.$Properties>} subtasks
+         * @memberof game.PunishmentSeriesTaskConfig
+         * @instance
+         */
+        PunishmentSeriesTaskConfig.prototype.subtasks = $util.emptyArray;
+
+        /**
+         * Creates a new PunishmentSeriesTaskConfig instance using the specified properties.
+         * @function create
+         * @memberof game.PunishmentSeriesTaskConfig
+         * @static
+         * @param {game.PunishmentSeriesTaskConfig.$Properties=} [properties] Properties to set
+         * @returns {game.PunishmentSeriesTaskConfig} PunishmentSeriesTaskConfig instance
+         * @type {{
+         *   (properties: game.PunishmentSeriesTaskConfig.$Shape): game.PunishmentSeriesTaskConfig & game.PunishmentSeriesTaskConfig.$Shape;
+         *   (properties?: game.PunishmentSeriesTaskConfig.$Properties): game.PunishmentSeriesTaskConfig;
+         * }}
+         */
+        PunishmentSeriesTaskConfig.create = function(properties) {
+            return new PunishmentSeriesTaskConfig(properties);
+        };
+
+        /**
+         * Encodes the specified PunishmentSeriesTaskConfig message. Does not implicitly {@link game.PunishmentSeriesTaskConfig.verify|verify} messages.
+         * @function encode
+         * @memberof game.PunishmentSeriesTaskConfig
+         * @static
+         * @param {game.PunishmentSeriesTaskConfig.$Properties} message PunishmentSeriesTaskConfig message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PunishmentSeriesTaskConfig.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id") && message.id !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.id);
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
+            if (message.roomNamePool != null && $Object.hasOwnProperty.call(message, "roomNamePool"))
+                $root.game.RoomNamePool.encode(message.roomNamePool, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
+            if (message.roomBackgroundImages != null && message.roomBackgroundImages.length)
+                for (let i = 0; i < message.roomBackgroundImages.length; ++i)
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.roomBackgroundImages[i]);
+            if (message.subtasks != null && message.subtasks.length)
+                for (let i = 0; i < message.subtasks.length; ++i)
+                    $root.game.PunishmentSubtask.encode(message.subtasks[i], writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified PunishmentSeriesTaskConfig message, length delimited. Does not implicitly {@link game.PunishmentSeriesTaskConfig.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.PunishmentSeriesTaskConfig
+         * @static
+         * @param {game.PunishmentSeriesTaskConfig.$Properties} message PunishmentSeriesTaskConfig message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PunishmentSeriesTaskConfig.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a PunishmentSeriesTaskConfig message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.PunishmentSeriesTaskConfig
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.PunishmentSeriesTaskConfig & game.PunishmentSeriesTaskConfig.$Shape} PunishmentSeriesTaskConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PunishmentSeriesTaskConfig.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.PunishmentSeriesTaskConfig(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.id = value;
+                        else
+                            delete message.id;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.name = value;
+                        else
+                            delete message.name;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        message.roomNamePool = $root.game.RoomNamePool.decode(reader, reader.uint32(), $undefined, _depth + 1, message.roomNamePool);
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.roomBackgroundImages && message.roomBackgroundImages.length))
+                            message.roomBackgroundImages = [];
+                        message.roomBackgroundImages.push(reader.stringVerify());
+                        continue;
+                    }
+                case 5: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.subtasks && message.subtasks.length))
+                            message.subtasks = [];
+                        message.subtasks.push($root.game.PunishmentSubtask.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a PunishmentSeriesTaskConfig message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.PunishmentSeriesTaskConfig
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.PunishmentSeriesTaskConfig & game.PunishmentSeriesTaskConfig.$Shape} PunishmentSeriesTaskConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PunishmentSeriesTaskConfig.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PunishmentSeriesTaskConfig message.
+         * @function verify
+         * @memberof game.PunishmentSeriesTaskConfig
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PunishmentSeriesTaskConfig.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.roomNamePool != null && $Object.hasOwnProperty.call(message, "roomNamePool")) {
+                let error = $root.game.RoomNamePool.verify(message.roomNamePool, _depth + 1);
+                if (error)
+                    return "roomNamePool." + error;
+            }
+            if (message.roomBackgroundImages != null && $Object.hasOwnProperty.call(message, "roomBackgroundImages")) {
+                if (!$Array.isArray(message.roomBackgroundImages))
+                    return "roomBackgroundImages: array expected";
+                for (let i = 0; i < message.roomBackgroundImages.length; ++i)
+                    if (!$util.isString(message.roomBackgroundImages[i]))
+                        return "roomBackgroundImages: string[] expected";
+            }
+            if (message.subtasks != null && $Object.hasOwnProperty.call(message, "subtasks")) {
+                if (!$Array.isArray(message.subtasks))
+                    return "subtasks: array expected";
+                for (let i = 0; i < message.subtasks.length; ++i) {
+                    let error = $root.game.PunishmentSubtask.verify(message.subtasks[i], _depth + 1);
+                    if (error)
+                        return "subtasks." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a PunishmentSeriesTaskConfig message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.PunishmentSeriesTaskConfig
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.PunishmentSeriesTaskConfig} PunishmentSeriesTaskConfig
+         */
+        PunishmentSeriesTaskConfig.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.PunishmentSeriesTaskConfig)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.PunishmentSeriesTaskConfig: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.PunishmentSeriesTaskConfig();
+            if (object.id != null)
+                if (typeof object.id !== "string" || object.id.length)
+                    message.id = $String(object.id);
+            if (object.name != null)
+                if (typeof object.name !== "string" || object.name.length)
+                    message.name = $String(object.name);
+            if (object.roomNamePool != null) {
+                if (!$util.isObject(object.roomNamePool))
+                    throw $TypeError(".game.PunishmentSeriesTaskConfig.roomNamePool: object expected");
+                message.roomNamePool = $root.game.RoomNamePool.fromObject(object.roomNamePool, _depth + 1);
+            }
+            if (object.roomBackgroundImages) {
+                if (!$Array.isArray(object.roomBackgroundImages))
+                    throw $TypeError(".game.PunishmentSeriesTaskConfig.roomBackgroundImages: array expected");
+                message.roomBackgroundImages = $Array(object.roomBackgroundImages.length);
+                for (let i = 0; i < object.roomBackgroundImages.length; ++i)
+                    message.roomBackgroundImages[i] = $String(object.roomBackgroundImages[i]);
+            }
+            if (object.subtasks) {
+                if (!$Array.isArray(object.subtasks))
+                    throw $TypeError(".game.PunishmentSeriesTaskConfig.subtasks: array expected");
+                message.subtasks = $Array(object.subtasks.length);
+                for (let i = 0; i < object.subtasks.length; ++i) {
+                    if (!$util.isObject(object.subtasks[i]))
+                        throw $TypeError(".game.PunishmentSeriesTaskConfig.subtasks: object expected");
+                    message.subtasks[i] = $root.game.PunishmentSubtask.fromObject(object.subtasks[i], _depth + 1);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a PunishmentSeriesTaskConfig message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.PunishmentSeriesTaskConfig
+         * @static
+         * @param {game.PunishmentSeriesTaskConfig} message PunishmentSeriesTaskConfig
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        PunishmentSeriesTaskConfig.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.arrays || options.defaults) {
+                object.roomBackgroundImages = [];
+                object.subtasks = [];
+            }
+            if (options.defaults) {
+                object.id = "";
+                object.name = "";
+                object.roomNamePool = null;
+            }
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                object.id = message.id;
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                object.name = message.name;
+            if (message.roomNamePool != null && $Object.hasOwnProperty.call(message, "roomNamePool"))
+                object.roomNamePool = $root.game.RoomNamePool.toObject(message.roomNamePool, options, _depth + 1);
+            if (message.roomBackgroundImages && message.roomBackgroundImages.length) {
+                object.roomBackgroundImages = $Array(message.roomBackgroundImages.length);
+                for (let j = 0; j < message.roomBackgroundImages.length; ++j)
+                    object.roomBackgroundImages[j] = message.roomBackgroundImages[j];
+            }
+            if (message.subtasks && message.subtasks.length) {
+                object.subtasks = $Array(message.subtasks.length);
+                for (let j = 0; j < message.subtasks.length; ++j)
+                    object.subtasks[j] = $root.game.PunishmentSubtask.toObject(message.subtasks[j], options, _depth + 1);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this PunishmentSeriesTaskConfig to JSON.
+         * @function toJSON
+         * @memberof game.PunishmentSeriesTaskConfig
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        PunishmentSeriesTaskConfig.prototype.toJSON = function() {
+            return PunishmentSeriesTaskConfig.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for PunishmentSeriesTaskConfig
+         * @function getTypeUrl
+         * @memberof game.PunishmentSeriesTaskConfig
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        PunishmentSeriesTaskConfig.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.PunishmentSeriesTaskConfig";
+        };
+
+        return PunishmentSeriesTaskConfig;
+    })();
+
+    game.PunishmentSeriesSummary = (function() {
+
+        /**
+         * Properties of a PunishmentSeriesSummary.
+         * @typedef {Object} game.PunishmentSeriesSummary.$Properties
+         * @property {string|null} [id] PunishmentSeriesSummary id
+         * @property {string|null} [name] PunishmentSeriesSummary name
+         * @property {game.RoomNamePool.$Properties|null} [roomNamePool] PunishmentSeriesSummary roomNamePool
+         * @property {Array.<string>|null} [roomBackgroundImages] PunishmentSeriesSummary roomBackgroundImages
+         * @property {number|null} [stepCount] PunishmentSeriesSummary stepCount
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a PunishmentSeriesSummary.
+         * @memberof game
+         * @interface IPunishmentSeriesSummary
+         * @augments game.PunishmentSeriesSummary.$Properties
+         * @deprecated Use game.PunishmentSeriesSummary.$Properties instead.
+         */
+
+        /**
+         * Shape of a PunishmentSeriesSummary.
+         * @typedef {game.PunishmentSeriesSummary.$Properties} game.PunishmentSeriesSummary.$Shape
+         */
+
+        /**
+         * Constructs a new PunishmentSeriesSummary.
+         * @memberof game
+         * @classdesc Represents a PunishmentSeriesSummary.
+         * @constructor
+         * @param {game.PunishmentSeriesSummary.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const PunishmentSeriesSummary = function (properties) {
+            this.roomBackgroundImages = [];
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * PunishmentSeriesSummary id.
+         * @member {string} id
+         * @memberof game.PunishmentSeriesSummary
+         * @instance
+         */
+        PunishmentSeriesSummary.prototype.id = "";
+
+        /**
+         * PunishmentSeriesSummary name.
+         * @member {string} name
+         * @memberof game.PunishmentSeriesSummary
+         * @instance
+         */
+        PunishmentSeriesSummary.prototype.name = "";
+
+        /**
+         * PunishmentSeriesSummary roomNamePool.
+         * @member {game.RoomNamePool.$Properties|null|undefined} roomNamePool
+         * @memberof game.PunishmentSeriesSummary
+         * @instance
+         */
+        PunishmentSeriesSummary.prototype.roomNamePool = null;
+
+        /**
+         * PunishmentSeriesSummary roomBackgroundImages.
+         * @member {Array.<string>} roomBackgroundImages
+         * @memberof game.PunishmentSeriesSummary
+         * @instance
+         */
+        PunishmentSeriesSummary.prototype.roomBackgroundImages = $util.emptyArray;
+
+        /**
+         * PunishmentSeriesSummary stepCount.
+         * @member {number} stepCount
+         * @memberof game.PunishmentSeriesSummary
+         * @instance
+         */
+        PunishmentSeriesSummary.prototype.stepCount = 0;
+
+        /**
+         * Creates a new PunishmentSeriesSummary instance using the specified properties.
+         * @function create
+         * @memberof game.PunishmentSeriesSummary
+         * @static
+         * @param {game.PunishmentSeriesSummary.$Properties=} [properties] Properties to set
+         * @returns {game.PunishmentSeriesSummary} PunishmentSeriesSummary instance
+         * @type {{
+         *   (properties: game.PunishmentSeriesSummary.$Shape): game.PunishmentSeriesSummary & game.PunishmentSeriesSummary.$Shape;
+         *   (properties?: game.PunishmentSeriesSummary.$Properties): game.PunishmentSeriesSummary;
+         * }}
+         */
+        PunishmentSeriesSummary.create = function(properties) {
+            return new PunishmentSeriesSummary(properties);
+        };
+
+        /**
+         * Encodes the specified PunishmentSeriesSummary message. Does not implicitly {@link game.PunishmentSeriesSummary.verify|verify} messages.
+         * @function encode
+         * @memberof game.PunishmentSeriesSummary
+         * @static
+         * @param {game.PunishmentSeriesSummary.$Properties} message PunishmentSeriesSummary message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PunishmentSeriesSummary.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id") && message.id !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.id);
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
+            if (message.roomNamePool != null && $Object.hasOwnProperty.call(message, "roomNamePool"))
+                $root.game.RoomNamePool.encode(message.roomNamePool, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
+            if (message.roomBackgroundImages != null && message.roomBackgroundImages.length)
+                for (let i = 0; i < message.roomBackgroundImages.length; ++i)
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.roomBackgroundImages[i]);
+            if (message.stepCount != null && $Object.hasOwnProperty.call(message, "stepCount") && message.stepCount !== 0)
+                writer.uint32(/* id 5, wireType 0 =*/40).int32(message.stepCount);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified PunishmentSeriesSummary message, length delimited. Does not implicitly {@link game.PunishmentSeriesSummary.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.PunishmentSeriesSummary
+         * @static
+         * @param {game.PunishmentSeriesSummary.$Properties} message PunishmentSeriesSummary message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PunishmentSeriesSummary.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a PunishmentSeriesSummary message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.PunishmentSeriesSummary
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.PunishmentSeriesSummary & game.PunishmentSeriesSummary.$Shape} PunishmentSeriesSummary
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PunishmentSeriesSummary.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.PunishmentSeriesSummary(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.id = value;
+                        else
+                            delete message.id;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.name = value;
+                        else
+                            delete message.name;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        message.roomNamePool = $root.game.RoomNamePool.decode(reader, reader.uint32(), $undefined, _depth + 1, message.roomNamePool);
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.roomBackgroundImages && message.roomBackgroundImages.length))
+                            message.roomBackgroundImages = [];
+                        message.roomBackgroundImages.push(reader.stringVerify());
+                        continue;
+                    }
+                case 5: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.stepCount = value;
+                        else
+                            delete message.stepCount;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a PunishmentSeriesSummary message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.PunishmentSeriesSummary
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.PunishmentSeriesSummary & game.PunishmentSeriesSummary.$Shape} PunishmentSeriesSummary
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PunishmentSeriesSummary.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PunishmentSeriesSummary message.
+         * @function verify
+         * @memberof game.PunishmentSeriesSummary
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PunishmentSeriesSummary.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                if (!$util.isString(message.id))
+                    return "id: string expected";
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.roomNamePool != null && $Object.hasOwnProperty.call(message, "roomNamePool")) {
+                let error = $root.game.RoomNamePool.verify(message.roomNamePool, _depth + 1);
+                if (error)
+                    return "roomNamePool." + error;
+            }
+            if (message.roomBackgroundImages != null && $Object.hasOwnProperty.call(message, "roomBackgroundImages")) {
+                if (!$Array.isArray(message.roomBackgroundImages))
+                    return "roomBackgroundImages: array expected";
+                for (let i = 0; i < message.roomBackgroundImages.length; ++i)
+                    if (!$util.isString(message.roomBackgroundImages[i]))
+                        return "roomBackgroundImages: string[] expected";
+            }
+            if (message.stepCount != null && $Object.hasOwnProperty.call(message, "stepCount"))
+                if (!$util.isInteger(message.stepCount))
+                    return "stepCount: integer expected";
+            return null;
+        };
+
+        /**
+         * Creates a PunishmentSeriesSummary message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.PunishmentSeriesSummary
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.PunishmentSeriesSummary} PunishmentSeriesSummary
+         */
+        PunishmentSeriesSummary.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.PunishmentSeriesSummary)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.PunishmentSeriesSummary: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.PunishmentSeriesSummary();
+            if (object.id != null)
+                if (typeof object.id !== "string" || object.id.length)
+                    message.id = $String(object.id);
+            if (object.name != null)
+                if (typeof object.name !== "string" || object.name.length)
+                    message.name = $String(object.name);
+            if (object.roomNamePool != null) {
+                if (!$util.isObject(object.roomNamePool))
+                    throw $TypeError(".game.PunishmentSeriesSummary.roomNamePool: object expected");
+                message.roomNamePool = $root.game.RoomNamePool.fromObject(object.roomNamePool, _depth + 1);
+            }
+            if (object.roomBackgroundImages) {
+                if (!$Array.isArray(object.roomBackgroundImages))
+                    throw $TypeError(".game.PunishmentSeriesSummary.roomBackgroundImages: array expected");
+                message.roomBackgroundImages = $Array(object.roomBackgroundImages.length);
+                for (let i = 0; i < object.roomBackgroundImages.length; ++i)
+                    message.roomBackgroundImages[i] = $String(object.roomBackgroundImages[i]);
+            }
+            if (object.stepCount != null)
+                if ($Number(object.stepCount) !== 0)
+                    message.stepCount = object.stepCount | 0;
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a PunishmentSeriesSummary message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.PunishmentSeriesSummary
+         * @static
+         * @param {game.PunishmentSeriesSummary} message PunishmentSeriesSummary
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        PunishmentSeriesSummary.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.arrays || options.defaults)
+                object.roomBackgroundImages = [];
+            if (options.defaults) {
+                object.id = "";
+                object.name = "";
+                object.roomNamePool = null;
+                object.stepCount = 0;
+            }
+            if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
+                object.id = message.id;
+            if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
+                object.name = message.name;
+            if (message.roomNamePool != null && $Object.hasOwnProperty.call(message, "roomNamePool"))
+                object.roomNamePool = $root.game.RoomNamePool.toObject(message.roomNamePool, options, _depth + 1);
+            if (message.roomBackgroundImages && message.roomBackgroundImages.length) {
+                object.roomBackgroundImages = $Array(message.roomBackgroundImages.length);
+                for (let j = 0; j < message.roomBackgroundImages.length; ++j)
+                    object.roomBackgroundImages[j] = message.roomBackgroundImages[j];
+            }
+            if (message.stepCount != null && $Object.hasOwnProperty.call(message, "stepCount"))
+                object.stepCount = message.stepCount;
+            return object;
+        };
+
+        /**
+         * Converts this PunishmentSeriesSummary to JSON.
+         * @function toJSON
+         * @memberof game.PunishmentSeriesSummary
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        PunishmentSeriesSummary.prototype.toJSON = function() {
+            return PunishmentSeriesSummary.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for PunishmentSeriesSummary
+         * @function getTypeUrl
+         * @memberof game.PunishmentSeriesSummary
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        PunishmentSeriesSummary.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.PunishmentSeriesSummary";
+        };
+
+        return PunishmentSeriesSummary;
     })();
 
     game.GameConfig = (function() {
@@ -35370,6 +38009,11 @@ export const game = $root.game = (() => {
          * @property {game.RankedScoreConfig.$Properties|null} [rankedScore] AppConfig rankedScore
          * @property {game.PetBondConfig.$Properties|null} [petBond] AppConfig petBond
          * @property {Array.<game.TitleTagStyleEntry.$Properties>|null} [titleTagStyles] AppConfig titleTagStyles
+         * @property {Array.<game.PunishmentTagConfig.$Properties>|null} [punishmentTags] AppConfig punishmentTags
+         * @property {Array.<game.PunishmentTaskConfig.$Properties>|null} [punishmentTasks] AppConfig punishmentTasks
+         * @property {Array.<game.PunishmentSeriesTaskConfig.$Properties>|null} [punishmentSeriesTasks] AppConfig punishmentSeriesTasks
+         * @property {game.PunishmentRandomSettings.$Properties|null} [punishmentRandomSettings] AppConfig punishmentRandomSettings
+         * @property {Array.<game.PunishmentSeriesSummary.$Properties>|null} [punishmentSeriesSummaries] AppConfig punishmentSeriesSummaries
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -35404,6 +38048,10 @@ export const game = $root.game = (() => {
             this.games = [];
             this.messages = [];
             this.titleTagStyles = [];
+            this.punishmentTags = [];
+            this.punishmentTasks = [];
+            this.punishmentSeriesTasks = [];
+            this.punishmentSeriesSummaries = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -35563,6 +38211,46 @@ export const game = $root.game = (() => {
         AppConfig.prototype.titleTagStyles = $util.emptyArray;
 
         /**
+         * AppConfig punishmentTags.
+         * @member {Array.<game.PunishmentTagConfig.$Properties>} punishmentTags
+         * @memberof game.AppConfig
+         * @instance
+         */
+        AppConfig.prototype.punishmentTags = $util.emptyArray;
+
+        /**
+         * AppConfig punishmentTasks.
+         * @member {Array.<game.PunishmentTaskConfig.$Properties>} punishmentTasks
+         * @memberof game.AppConfig
+         * @instance
+         */
+        AppConfig.prototype.punishmentTasks = $util.emptyArray;
+
+        /**
+         * AppConfig punishmentSeriesTasks.
+         * @member {Array.<game.PunishmentSeriesTaskConfig.$Properties>} punishmentSeriesTasks
+         * @memberof game.AppConfig
+         * @instance
+         */
+        AppConfig.prototype.punishmentSeriesTasks = $util.emptyArray;
+
+        /**
+         * AppConfig punishmentRandomSettings.
+         * @member {game.PunishmentRandomSettings.$Properties|null|undefined} punishmentRandomSettings
+         * @memberof game.AppConfig
+         * @instance
+         */
+        AppConfig.prototype.punishmentRandomSettings = null;
+
+        /**
+         * AppConfig punishmentSeriesSummaries.
+         * @member {Array.<game.PunishmentSeriesSummary.$Properties>} punishmentSeriesSummaries
+         * @memberof game.AppConfig
+         * @instance
+         */
+        AppConfig.prototype.punishmentSeriesSummaries = $util.emptyArray;
+
+        /**
          * Creates a new AppConfig instance using the specified properties.
          * @function create
          * @memberof game.AppConfig
@@ -35641,6 +38329,20 @@ export const game = $root.game = (() => {
             if (message.titleTagStyles != null && message.titleTagStyles.length)
                 for (let i = 0; i < message.titleTagStyles.length; ++i)
                     $root.game.TitleTagStyleEntry.encode(message.titleTagStyles[i], writer.uint32(/* id 20, wireType 2 =*/162).fork(), _depth + 1).ldelim();
+            if (message.punishmentTags != null && message.punishmentTags.length)
+                for (let i = 0; i < message.punishmentTags.length; ++i)
+                    $root.game.PunishmentTagConfig.encode(message.punishmentTags[i], writer.uint32(/* id 21, wireType 2 =*/170).fork(), _depth + 1).ldelim();
+            if (message.punishmentTasks != null && message.punishmentTasks.length)
+                for (let i = 0; i < message.punishmentTasks.length; ++i)
+                    $root.game.PunishmentTaskConfig.encode(message.punishmentTasks[i], writer.uint32(/* id 22, wireType 2 =*/178).fork(), _depth + 1).ldelim();
+            if (message.punishmentSeriesTasks != null && message.punishmentSeriesTasks.length)
+                for (let i = 0; i < message.punishmentSeriesTasks.length; ++i)
+                    $root.game.PunishmentSeriesTaskConfig.encode(message.punishmentSeriesTasks[i], writer.uint32(/* id 23, wireType 2 =*/186).fork(), _depth + 1).ldelim();
+            if (message.punishmentRandomSettings != null && $Object.hasOwnProperty.call(message, "punishmentRandomSettings"))
+                $root.game.PunishmentRandomSettings.encode(message.punishmentRandomSettings, writer.uint32(/* id 24, wireType 2 =*/194).fork(), _depth + 1).ldelim();
+            if (message.punishmentSeriesSummaries != null && message.punishmentSeriesSummaries.length)
+                for (let i = 0; i < message.punishmentSeriesSummaries.length; ++i)
+                    $root.game.PunishmentSeriesSummary.encode(message.punishmentSeriesSummaries[i], writer.uint32(/* id 25, wireType 2 =*/202).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -35820,6 +38522,44 @@ export const game = $root.game = (() => {
                         message.titleTagStyles.push($root.game.TitleTagStyleEntry.decode(reader, reader.uint32(), $undefined, _depth + 1));
                         continue;
                     }
+                case 21: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.punishmentTags && message.punishmentTags.length))
+                            message.punishmentTags = [];
+                        message.punishmentTags.push($root.game.PunishmentTagConfig.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 22: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.punishmentTasks && message.punishmentTasks.length))
+                            message.punishmentTasks = [];
+                        message.punishmentTasks.push($root.game.PunishmentTaskConfig.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 23: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.punishmentSeriesTasks && message.punishmentSeriesTasks.length))
+                            message.punishmentSeriesTasks = [];
+                        message.punishmentSeriesTasks.push($root.game.PunishmentSeriesTaskConfig.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 24: {
+                        if (wireType !== 2)
+                            break;
+                        message.punishmentRandomSettings = $root.game.PunishmentRandomSettings.decode(reader, reader.uint32(), $undefined, _depth + 1, message.punishmentRandomSettings);
+                        continue;
+                    }
+                case 25: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.punishmentSeriesSummaries && message.punishmentSeriesSummaries.length))
+                            message.punishmentSeriesSummaries = [];
+                        message.punishmentSeriesSummaries.push($root.game.PunishmentSeriesSummary.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -35992,6 +38732,47 @@ export const game = $root.game = (() => {
                         return "titleTagStyles." + error;
                 }
             }
+            if (message.punishmentTags != null && $Object.hasOwnProperty.call(message, "punishmentTags")) {
+                if (!$Array.isArray(message.punishmentTags))
+                    return "punishmentTags: array expected";
+                for (let i = 0; i < message.punishmentTags.length; ++i) {
+                    let error = $root.game.PunishmentTagConfig.verify(message.punishmentTags[i], _depth + 1);
+                    if (error)
+                        return "punishmentTags." + error;
+                }
+            }
+            if (message.punishmentTasks != null && $Object.hasOwnProperty.call(message, "punishmentTasks")) {
+                if (!$Array.isArray(message.punishmentTasks))
+                    return "punishmentTasks: array expected";
+                for (let i = 0; i < message.punishmentTasks.length; ++i) {
+                    let error = $root.game.PunishmentTaskConfig.verify(message.punishmentTasks[i], _depth + 1);
+                    if (error)
+                        return "punishmentTasks." + error;
+                }
+            }
+            if (message.punishmentSeriesTasks != null && $Object.hasOwnProperty.call(message, "punishmentSeriesTasks")) {
+                if (!$Array.isArray(message.punishmentSeriesTasks))
+                    return "punishmentSeriesTasks: array expected";
+                for (let i = 0; i < message.punishmentSeriesTasks.length; ++i) {
+                    let error = $root.game.PunishmentSeriesTaskConfig.verify(message.punishmentSeriesTasks[i], _depth + 1);
+                    if (error)
+                        return "punishmentSeriesTasks." + error;
+                }
+            }
+            if (message.punishmentRandomSettings != null && $Object.hasOwnProperty.call(message, "punishmentRandomSettings")) {
+                let error = $root.game.PunishmentRandomSettings.verify(message.punishmentRandomSettings, _depth + 1);
+                if (error)
+                    return "punishmentRandomSettings." + error;
+            }
+            if (message.punishmentSeriesSummaries != null && $Object.hasOwnProperty.call(message, "punishmentSeriesSummaries")) {
+                if (!$Array.isArray(message.punishmentSeriesSummaries))
+                    return "punishmentSeriesSummaries: array expected";
+                for (let i = 0; i < message.punishmentSeriesSummaries.length; ++i) {
+                    let error = $root.game.PunishmentSeriesSummary.verify(message.punishmentSeriesSummaries[i], _depth + 1);
+                    if (error)
+                        return "punishmentSeriesSummaries." + error;
+                }
+            }
             return null;
         };
 
@@ -36150,6 +38931,51 @@ export const game = $root.game = (() => {
                     message.titleTagStyles[i] = $root.game.TitleTagStyleEntry.fromObject(object.titleTagStyles[i], _depth + 1);
                 }
             }
+            if (object.punishmentTags) {
+                if (!$Array.isArray(object.punishmentTags))
+                    throw $TypeError(".game.AppConfig.punishmentTags: array expected");
+                message.punishmentTags = $Array(object.punishmentTags.length);
+                for (let i = 0; i < object.punishmentTags.length; ++i) {
+                    if (!$util.isObject(object.punishmentTags[i]))
+                        throw $TypeError(".game.AppConfig.punishmentTags: object expected");
+                    message.punishmentTags[i] = $root.game.PunishmentTagConfig.fromObject(object.punishmentTags[i], _depth + 1);
+                }
+            }
+            if (object.punishmentTasks) {
+                if (!$Array.isArray(object.punishmentTasks))
+                    throw $TypeError(".game.AppConfig.punishmentTasks: array expected");
+                message.punishmentTasks = $Array(object.punishmentTasks.length);
+                for (let i = 0; i < object.punishmentTasks.length; ++i) {
+                    if (!$util.isObject(object.punishmentTasks[i]))
+                        throw $TypeError(".game.AppConfig.punishmentTasks: object expected");
+                    message.punishmentTasks[i] = $root.game.PunishmentTaskConfig.fromObject(object.punishmentTasks[i], _depth + 1);
+                }
+            }
+            if (object.punishmentSeriesTasks) {
+                if (!$Array.isArray(object.punishmentSeriesTasks))
+                    throw $TypeError(".game.AppConfig.punishmentSeriesTasks: array expected");
+                message.punishmentSeriesTasks = $Array(object.punishmentSeriesTasks.length);
+                for (let i = 0; i < object.punishmentSeriesTasks.length; ++i) {
+                    if (!$util.isObject(object.punishmentSeriesTasks[i]))
+                        throw $TypeError(".game.AppConfig.punishmentSeriesTasks: object expected");
+                    message.punishmentSeriesTasks[i] = $root.game.PunishmentSeriesTaskConfig.fromObject(object.punishmentSeriesTasks[i], _depth + 1);
+                }
+            }
+            if (object.punishmentRandomSettings != null) {
+                if (!$util.isObject(object.punishmentRandomSettings))
+                    throw $TypeError(".game.AppConfig.punishmentRandomSettings: object expected");
+                message.punishmentRandomSettings = $root.game.PunishmentRandomSettings.fromObject(object.punishmentRandomSettings, _depth + 1);
+            }
+            if (object.punishmentSeriesSummaries) {
+                if (!$Array.isArray(object.punishmentSeriesSummaries))
+                    throw $TypeError(".game.AppConfig.punishmentSeriesSummaries: array expected");
+                message.punishmentSeriesSummaries = $Array(object.punishmentSeriesSummaries.length);
+                for (let i = 0; i < object.punishmentSeriesSummaries.length; ++i) {
+                    if (!$util.isObject(object.punishmentSeriesSummaries[i]))
+                        throw $TypeError(".game.AppConfig.punishmentSeriesSummaries: object expected");
+                    message.punishmentSeriesSummaries[i] = $root.game.PunishmentSeriesSummary.fromObject(object.punishmentSeriesSummaries[i], _depth + 1);
+                }
+            }
             return message;
         };
 
@@ -36180,6 +39006,10 @@ export const game = $root.game = (() => {
                 object.games = [];
                 object.messages = [];
                 object.titleTagStyles = [];
+                object.punishmentTags = [];
+                object.punishmentTasks = [];
+                object.punishmentSeriesTasks = [];
+                object.punishmentSeriesSummaries = [];
             }
             if (options.defaults) {
                 object.site = null;
@@ -36192,6 +39022,7 @@ export const game = $root.game = (() => {
                 object.securityDisclaimer = null;
                 object.rankedScore = null;
                 object.petBond = null;
+                object.punishmentRandomSettings = null;
             }
             if (message.site != null && $Object.hasOwnProperty.call(message, "site"))
                 object.site = $root.game.SiteConfig.toObject(message.site, options, _depth + 1);
@@ -36257,6 +39088,28 @@ export const game = $root.game = (() => {
                 object.titleTagStyles = $Array(message.titleTagStyles.length);
                 for (let j = 0; j < message.titleTagStyles.length; ++j)
                     object.titleTagStyles[j] = $root.game.TitleTagStyleEntry.toObject(message.titleTagStyles[j], options, _depth + 1);
+            }
+            if (message.punishmentTags && message.punishmentTags.length) {
+                object.punishmentTags = $Array(message.punishmentTags.length);
+                for (let j = 0; j < message.punishmentTags.length; ++j)
+                    object.punishmentTags[j] = $root.game.PunishmentTagConfig.toObject(message.punishmentTags[j], options, _depth + 1);
+            }
+            if (message.punishmentTasks && message.punishmentTasks.length) {
+                object.punishmentTasks = $Array(message.punishmentTasks.length);
+                for (let j = 0; j < message.punishmentTasks.length; ++j)
+                    object.punishmentTasks[j] = $root.game.PunishmentTaskConfig.toObject(message.punishmentTasks[j], options, _depth + 1);
+            }
+            if (message.punishmentSeriesTasks && message.punishmentSeriesTasks.length) {
+                object.punishmentSeriesTasks = $Array(message.punishmentSeriesTasks.length);
+                for (let j = 0; j < message.punishmentSeriesTasks.length; ++j)
+                    object.punishmentSeriesTasks[j] = $root.game.PunishmentSeriesTaskConfig.toObject(message.punishmentSeriesTasks[j], options, _depth + 1);
+            }
+            if (message.punishmentRandomSettings != null && $Object.hasOwnProperty.call(message, "punishmentRandomSettings"))
+                object.punishmentRandomSettings = $root.game.PunishmentRandomSettings.toObject(message.punishmentRandomSettings, options, _depth + 1);
+            if (message.punishmentSeriesSummaries && message.punishmentSeriesSummaries.length) {
+                object.punishmentSeriesSummaries = $Array(message.punishmentSeriesSummaries.length);
+                for (let j = 0; j < message.punishmentSeriesSummaries.length; ++j)
+                    object.punishmentSeriesSummaries[j] = $root.game.PunishmentSeriesSummary.toObject(message.punishmentSeriesSummaries[j], options, _depth + 1);
             }
             return object;
         };

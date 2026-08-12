@@ -35,9 +35,7 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	if settings.AllowProofImage == nil {
 		settings.AllowProofImage = boolPtr(true)
 	}
-	if settings.PunishmentSource == "" {
-		settings.PunishmentSource = "system"
-	}
+	settings.PunishmentSource = normalizePunishmentSource(settings.PunishmentSource)
 	settings.EnableRankMultiplier = settings.EnableRanked && settings.EnableRankMultiplier
 	if settings.EnableRankMultiplier {
 		switch settings.RankMultiplier {
@@ -132,15 +130,45 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		settings.EnableRankMultiplier = false
 		settings.RankMultiplier = 1
 	}
-	if settings.EnablePunishment && settings.PunishmentSource != "player" {
-		settings.PunishmentIDs = s.selectedPunishmentIDs(settings)
-		if len(settings.PunishmentIDs) > 0 {
-			settings.PunishmentID = settings.PunishmentIDs[len(settings.PunishmentIDs)-1]
+	// 废弃的旧任务类型字段清空；按来源校验并归一新字段。
+	settings.PunishmentIDs = []string{}
+	settings.PunishmentID = ""
+	if settings.EnablePunishment {
+		switch settings.PunishmentSource {
+		case "player":
+			settings.PunishmentTagsIncluded = []string{}
+			settings.PunishmentTagsExcluded = []string{}
+			settings.PunishmentSeriesID = ""
+		case "series":
+			settings.PunishmentTagsIncluded = []string{}
+			settings.PunishmentTagsExcluded = []string{}
+			if s.findSeriesByID(settings.PunishmentSeriesID) == nil {
+				client.reply(env.ID, nil, "请选择一个有效的系列任务")
+				return
+			}
+		default: // random
+			settings.PunishmentSeriesID = ""
+			settings.PunishmentTagsIncluded = s.filterValidTagIDs(settings.PunishmentTagsIncluded)
+			settings.PunishmentTagsExcluded = s.filterValidTagIDs(settings.PunishmentTagsExcluded)
+			// 同一标签不能既选中又拒绝；拒绝优先剔除。
+			if len(settings.PunishmentTagsExcluded) > 0 {
+				excl := map[string]struct{}{}
+				for _, id := range settings.PunishmentTagsExcluded {
+					excl[id] = struct{}{}
+				}
+				var incl []string
+				for _, id := range settings.PunishmentTagsIncluded {
+					if _, bad := excl[id]; !bad {
+						incl = append(incl, id)
+					}
+				}
+				settings.PunishmentTagsIncluded = incl
+			}
 		}
-	}
-	if settings.PunishmentSource == "player" {
-		settings.PunishmentIDs = []string{}
-		settings.PunishmentID = ""
+	} else {
+		settings.PunishmentTagsIncluded = []string{}
+		settings.PunishmentTagsExcluded = []string{}
+		settings.PunishmentSeriesID = ""
 	}
 	settings.Tags = s.normalizeRoomTags(settings)
 	settings.EnableTags = len(settings.Tags) > 0
@@ -184,6 +212,7 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		SeatStats:    map[types.SeatKey]types.SeatStats{types.SeatA: emptySeatStats(), types.SeatB: emptySeatStats()},
 		RoundHistory: []types.RoundHistoryItem{}, LockedSeatIDs: map[string]struct{}{},
 		DisconnectForfeits: map[string]DisconnectForfeit{}, CreatedAt: nowMs(),
+		// PunishmentTaskProgress 零值即为 0，随房间存活期累积，销毁即释放。
 	}
 	if isLiarsDice {
 		minP, maxP := liarsDiceRosterBounds(settings)
@@ -197,6 +226,18 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	}
 	s.rooms[roomID] = room
 	player.RoomID = roomID
+	// 随机任务模式下，建房成功后把本次标签三态偏好落进玩家档案（跨设备预填用）。
+	if settings.EnablePunishment && settings.PunishmentSource == "random" {
+		prefs := map[string]string{}
+		for _, id := range settings.PunishmentTagsIncluded {
+			prefs[id] = "include"
+		}
+		for _, id := range settings.PunishmentTagsExcluded {
+			prefs[id] = "exclude"
+		}
+		player.PunishmentTagPrefs = prefs
+		s.markPlayerDirty(player)
+	}
 	s.clientLeaveRoom(client, lobbyChannel)
 	s.clientJoinRoom(client, roomID)
 	if s.eventDB != nil {
@@ -1792,17 +1833,20 @@ func (s *Server) chatAuthorsFor(messages []types.ChatMessage) map[string]types.P
 
 func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 	var p struct {
-		Action             string            `json:"action"`
-		RoomID             string            `json:"roomId"`
-		PlayerID           string            `json:"playerId"`
-		Name               string            `json:"name"`
-		RankedPoints       *float64          `json:"rankedPoints"`
-		Title              *string           `json:"title"`
-		GenderID           *string           `json:"genderId"`
-		GiveawayValueInput *string           `json:"giveawayValueInput"`
-		Message            string            `json:"message"`
-		DurationSeconds    *float64          `json:"durationSeconds"`
-		Result             types.RoundResult `json:"result"`
+		Action             string                             `json:"action"`
+		RoomID             string                             `json:"roomId"`
+		PlayerID           string                             `json:"playerId"`
+		Name               string                             `json:"name"`
+		RankedPoints       *float64                           `json:"rankedPoints"`
+		Title              *string                            `json:"title"`
+		GenderID           *string                            `json:"genderId"`
+		GiveawayValueInput *string                            `json:"giveawayValueInput"`
+		Message            string                             `json:"message"`
+		DurationSeconds    *float64                           `json:"durationSeconds"`
+		Result             types.RoundResult                  `json:"result"`
+		SeriesID           string                             `json:"seriesId"`
+		Tasks              []types.PunishmentTaskConfig       `json:"tasks"`
+		Series             []types.PunishmentSeriesTaskConfig `json:"series"`
 	}
 	_ = decodeD(env, &p)
 	admin := s.getPlayerByClient(client)
@@ -1810,6 +1854,53 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 	// 只认本 socket 的 admin:login 会话，不认粘滞的 player.IsAdmin。
 	if !isAdminSocket {
 		client.reply(env.ID, nil, "需要管理员权限")
+		return
+	}
+	if p.Action == "punishmentTasksGet" {
+		client.reply(env.ID, map[string]any{"tasks": sanitizePunishmentTasks(s.punishmentTasksCache)}, "")
+		return
+	}
+	if p.Action == "punishmentTasksSave" {
+		if err := s.savePunishmentTasks(p.Tasks); err != nil {
+			client.reply(env.ID, nil, err.Error())
+			return
+		}
+		client.reply(env.ID, map[string]any{"tasks": sanitizePunishmentTasks(s.punishmentTasksCache)}, "")
+		// 任务增删或阵营调整会改变系列步骤的可用性；同步刷新建房面板的系列摘要。
+		s.emitConfigUpdate()
+		return
+	}
+	if p.Action == "punishmentSeriesGet" {
+		client.reply(env.ID, map[string]any{"series": sanitizePunishmentSeries(s.punishmentSeriesCache)}, "")
+		return
+	}
+	if p.Action == "punishmentSeriesSave" {
+		if err := s.savePunishmentSeries(p.Series); err != nil {
+			client.reply(env.ID, nil, err.Error())
+			return
+		}
+		client.reply(env.ID, map[string]any{"series": sanitizePunishmentSeries(s.punishmentSeriesCache)}, "")
+		s.emitConfigUpdate() // 摘要变化同步给建房面板
+		return
+	}
+	if p.Action == "resetPunishmentSeriesProgress" {
+		seriesID := strings.TrimSpace(p.SeriesID)
+		if seriesID == "" {
+			client.reply(env.ID, nil, "缺少系列任务 ID")
+			return
+		}
+		if s.findSeriesByID(seriesID) == nil {
+			client.reply(env.ID, nil, "系列任务不存在")
+			return
+		}
+		if s.playerDB != nil {
+			if err := s.playerDB.resetSeriesProgress(seriesID); err != nil {
+				s.errorLog("series_progress_reset_failed", err.Error())
+				client.reply(env.ID, nil, "重置进度失败")
+				return
+			}
+		}
+		client.reply(env.ID, map[string]any{"ok": true}, "")
 		return
 	}
 	roomDeleted := false

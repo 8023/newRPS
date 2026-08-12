@@ -19,7 +19,7 @@ import (
 //
 // 是 var 不是 const，只是为了让测试能临时替换掉去验证迁移机制本身；正常代码路径里
 // 把它当常量对待，不要在业务逻辑里修改它。
-var currentSchemaVersion = 21
+var currentSchemaVersion = 26
 
 // schemaVersionSchema：只有一行的版本表，openDatabase 每次启动都会先确保它存在。
 const schemaVersionSchema = `
@@ -250,6 +250,80 @@ var migrations = []schemaMigration{
 	{version: 21, migrate: func(db sqlExecer) error {
 		return addColumnIfMissing(db, "players", "push_bond_enabled", "INTEGER")
 	}},
+	// v22：analytics 惩罚「完成」曾按 status='done' 聚合，而 eventstore 审核通过写的是
+	// approved，导致 analytics_daily 里 punish_done / funnel.punish_done 恒为 0。
+	// 已 sealed 的历史日不会被每分钟 rebuild 覆盖，backfill 也只补「完全没有该 day」的日子，
+	// 所以在迁移里从 punishment_events 源表按本地日重算写回（与 v20 清错误 geo 同类：
+	// 一次性数据纠正，靠 schema_version 保证只跑一次）。
+	{version: 22, migrate: func(db sqlExecer) error {
+		return fixAnalyticsPunishmentDoneMetric(db)
+	}},
+	// v23：转化漏斗键重定义（visit/lobby/room/round/finish），废弃 login/punish_done。
+	// sealed 历史日不会被聚合器重算，在此一次性按源表重写 funnel 行。
+	{version: 23, migrate: func(db sqlExecer) error {
+		return recomputeAnalyticsFunnelMetrics(db)
+	}},
+	// v24：漏斗五层统一为设备 UV（player_id→visitor 映射）；v23 曾对后三层写事件次数/玩家 UV。
+	{version: 24, migrate: func(db sqlExecer) error {
+		return recomputeAnalyticsFunnelMetrics(db)
+	}},
+	// v25：惩罚标签偏好 + 系列任务进度两张规范化表（见 playerstore）。
+	{version: 25, migrate: func(db sqlExecer) error {
+		if _, err := db.Exec(`
+CREATE TABLE IF NOT EXISTS player_punishment_tag_prefs (
+	player_id TEXT NOT NULL,
+	tag_id    TEXT NOT NULL,
+	state     TEXT NOT NULL,
+	PRIMARY KEY (player_id, tag_id)
+)`); err != nil {
+			return err
+		}
+		if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_player_punishment_tag_prefs_player ON player_punishment_tag_prefs(player_id)`); err != nil {
+			return err
+		}
+		if _, err := db.Exec(`
+CREATE TABLE IF NOT EXISTS player_punishment_series_progress (
+	player_id  TEXT NOT NULL,
+	series_id  TEXT NOT NULL,
+	next_index INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (player_id, series_id)
+)`); err != nil {
+			return err
+		}
+		if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_player_punishment_series_progress_player ON player_punishment_series_progress(player_id)`); err != nil {
+			return err
+		}
+		return nil
+	}},
+	// v26：任务池 + 系列任务改为 SQLite 规范化存储（原 punishments.json 的 tasks/seriesTasks 字段废弃）。
+	{version: 26, migrate: func(db sqlExecer) error {
+		if _, err := db.Exec(`
+CREATE TABLE IF NOT EXISTS punishment_tasks (
+	id                 TEXT PRIMARY KEY,
+	name               TEXT NOT NULL DEFAULT '',
+	text               TEXT NOT NULL DEFAULT '',
+	tag_ids            TEXT NOT NULL DEFAULT '[]',
+	faction_ids        TEXT NOT NULL DEFAULT '[]',
+	difficulty_order   INTEGER NOT NULL DEFAULT 50,
+	background_images  TEXT NOT NULL DEFAULT '[]',
+	background_opacity REAL NOT NULL DEFAULT 0.22,
+	sort_index         INTEGER NOT NULL DEFAULT 0
+)`); err != nil {
+			return err
+		}
+		if _, err := db.Exec(`
+CREATE TABLE IF NOT EXISTS punishment_series (
+	id                     TEXT PRIMARY KEY,
+	name                   TEXT NOT NULL DEFAULT '',
+	room_name_pool         TEXT NOT NULL DEFAULT '{}',
+	room_background_images TEXT NOT NULL DEFAULT '[]',
+	steps                  TEXT NOT NULL DEFAULT '[]',
+	sort_index             INTEGER NOT NULL DEFAULT 0
+)`); err != nil {
+			return err
+		}
+		return nil
+	}},
 }
 
 // backfillConnectionEventsGeo 用 connection_events.ip 批量解析归属地，回填同一行的
@@ -376,6 +450,165 @@ func clearWrongAnalyticsGeo(db sqlExecer) error {
 		if _, err := db.Exec(`DELETE FROM analytics_daily WHERE metric IN ('province', 'city', 'isp')`); err != nil {
 			return fmt.Errorf("clear analytics_daily geo aggregates: %w", err)
 		}
+	}
+	return nil
+}
+
+// recomputeAnalyticsFunnelMetrics 按「五层设备 UV」重写 analytics_daily 的 funnel 键。
+// 删除旧 login/punish_done 等废弃键；对已有 daily 覆盖的每一天写入
+// visit/lobby/room/round/finish。后三层经当日 player_id→visitor 映射折算。
+// 历史无 game_start 时，round 用 finish 的设备 UV 近似，避免 sealed 日「开局」全 0。
+func recomputeAnalyticsFunnelMetrics(db sqlExecer) error {
+	dailyOK, err := tableExists(db, "analytics_daily")
+	if err != nil || !dailyOK {
+		return err
+	}
+	if _, err := db.Exec(`DELETE FROM analytics_daily WHERE metric = ?`, metricFunnel); err != nil {
+		return fmt.Errorf("delete old funnel rows: %w", err)
+	}
+
+	offsetMs := int64(envIntDefault("ANALYTICS_TZ_OFFSET_MIN", 480)) * 60_000
+
+	dayRows, err := db.Query(`SELECT DISTINCT day FROM analytics_daily ORDER BY day`)
+	if err != nil {
+		return fmt.Errorf("list analytics days: %w", err)
+	}
+	var days []int64
+	for dayRows.Next() {
+		var d int64
+		if err := dayRows.Scan(&d); err != nil {
+			dayRows.Close()
+			return err
+		}
+		days = append(days, d)
+	}
+	if err := dayRows.Close(); err != nil {
+		return err
+	}
+	if len(days) == 0 {
+		return nil
+	}
+
+	hasSessions, _ := tableExists(db, "analytics_sessions")
+	hasEvents, _ := tableExists(db, "analytics_events")
+	hasRooms, _ := tableExists(db, "room_events")
+
+	insert := func(day int64, key string, value int64) error {
+		_, err := db.Exec(
+			`INSERT INTO analytics_daily (day, metric, key, value, sealed)
+			 VALUES (?, ?, ?, ?, 1)
+			 ON CONFLICT(day, metric, key) DO UPDATE SET value = excluded.value`,
+			day, metricFunnel, key, value,
+		)
+		return err
+	}
+	countDistinct := func(q string, args ...any) int64 {
+		var n sql.NullInt64
+		_ = db.QueryRow(q, args...).Scan(&n)
+		return n.Int64
+	}
+
+	const pvMap = `
+		SELECT player_id, visitor FROM analytics_sessions
+		WHERE day = ? AND player_id <> '' AND visitor <> ''
+		UNION
+		SELECT player_id, visitor FROM analytics_events
+		WHERE day = ? AND player_id <> '' AND visitor <> ''`
+
+	for _, day := range days {
+		dayStart := day*86_400_000 - offsetMs
+		dayEnd := dayStart + 86_400_000
+
+		var visit, lobby, roomUV, startUV, finishUV int64
+		if hasSessions {
+			visit = countDistinct(`SELECT COUNT(DISTINCT visitor) FROM analytics_sessions WHERE day = ?`, day)
+		}
+		if hasEvents {
+			lobby = countDistinct(`
+				SELECT COUNT(DISTINCT visitor) FROM analytics_events
+				WHERE day=? AND name='pageview' AND view='lobby' AND visitor<>''`, day)
+			if hasSessions || hasEvents {
+				startUV = countDistinct(`
+					SELECT COUNT(DISTINCT pv.visitor) FROM (`+pvMap+`) pv
+					INNER JOIN analytics_events e ON e.player_id = pv.player_id
+					WHERE e.day=? AND e.source=1 AND e.name='game_start' AND e.player_id<>''`,
+					day, day, day)
+				finishUV = countDistinct(`
+					SELECT COUNT(DISTINCT pv.visitor) FROM (`+pvMap+`) pv
+					INNER JOIN analytics_events e ON e.player_id = pv.player_id
+					WHERE e.day=? AND e.source=1 AND e.name='game_round' AND e.player_id<>''`,
+					day, day, day)
+			}
+		}
+		if hasRooms && (hasSessions || hasEvents) {
+			roomUV = countDistinct(`
+				SELECT COUNT(DISTINCT pv.visitor) FROM (`+pvMap+`) pv
+				INNER JOIN room_events r ON r.user_id = pv.player_id
+				WHERE r.action IN ('create','join') AND r.user_id<>'' AND r.at >= ? AND r.at < ?`,
+				day, day, dayStart, dayEnd)
+		}
+		// 升级前无 game_start：用完成对局设备 UV 近似开局
+		if startUV == 0 && finishUV > 0 {
+			startUV = finishUV
+		}
+		for _, kv := range []struct {
+			key string
+			val int64
+		}{
+			{"visit", visit},
+			{"lobby", lobby},
+			{"room", roomUV},
+			{"round", startUV},
+			{"finish", finishUV},
+		} {
+			if err := insert(day, kv.key, kv.val); err != nil {
+				return fmt.Errorf("insert funnel %s day=%d: %w", kv.key, day, err)
+			}
+		}
+	}
+	return nil
+}
+
+// fixAnalyticsPunishmentDoneMetric 把 analytics_daily 里错误恒 0 的 punish_done /
+// funnel.punish_done 按 punishment_events.status='approved' 重算写回。
+// 只 UPDATE 已有 daily 行，不 INSERT 新 day——避免 backfill 因「该日已有任意 metric」
+// 而跳过全量 rebuild，留下只有惩罚指标的空壳日。
+// 日界与聚合器一致：day = (task_at + ANALYTICS_TZ_OFFSET_MIN*60_000) / 86400000，
+// 默认 UTC+8（480）。
+func fixAnalyticsPunishmentDoneMetric(db sqlExecer) error {
+	dailyOK, err := tableExists(db, "analytics_daily")
+	if err != nil || !dailyOK {
+		return err
+	}
+	peOK, err := tableExists(db, "punishment_events")
+	if err != nil || !peOK {
+		return err
+	}
+	// 旧隔离表/极简测试夹具可能没有 status 列，跳过以免迁移失败。
+	hasStatus, err := tableHasColumn(db, "punishment_events", "status")
+	if err != nil || !hasStatus {
+		return err
+	}
+	hasTaskAt, err := tableHasColumn(db, "punishment_events", "task_at")
+	if err != nil || !hasTaskAt {
+		return err
+	}
+
+	offsetMs := int64(envIntDefault("ANALYTICS_TZ_OFFSET_MIN", 480)) * 60_000
+	// 相关子查询：无匹配行时 SUM 为 NULL → COALESCE 成 0（该日无 approved 即完成 0）。
+	const recompute = `
+		UPDATE analytics_daily
+		SET value = COALESCE((
+			SELECT SUM(CASE WHEN pe.status = 'approved' THEN 1 ELSE 0 END)
+			FROM punishment_events pe
+			WHERE ((pe.task_at + ?) / 86400000) = analytics_daily.day
+		), 0)
+		WHERE metric = ? AND key = ?`
+	if _, err := db.Exec(recompute, offsetMs, metricPunishDone, ""); err != nil {
+		return fmt.Errorf("recompute punish_done: %w", err)
+	}
+	if _, err := db.Exec(recompute, offsetMs, metricFunnel, "punish_done"); err != nil {
+		return fmt.Errorf("recompute funnel.punish_done: %w", err)
 	}
 	return nil
 }

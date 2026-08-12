@@ -441,8 +441,7 @@ func (s *Server) applyTicTacToeDisconnectForfeit(room *RoomState, forfeit Discon
 	for i, p := range punishedPlayers {
 		punishedNames[i] = playerShortName(p)
 	}
-	punishment := s.currentPunishment(room)
-	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, types.RoundResult(forfeit.WinnerSeat), punishment)
+	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, types.RoundResult(forfeit.WinnerSeat))
 	if winner != nil {
 		s.refreshPlayerSnapshots(winner)
 	}
@@ -477,10 +476,7 @@ func (s *Server) applyTicTacToeDisconnectForfeit(room *RoomState, forfeit Discon
 		item.EffectiveStake = &es
 	}
 	if len(punishedNames) > 0 {
-		item.PunishmentName = s.punishmentNameForRoom(room, punishment)
-		if room.Settings.PunishmentSource != "player" && punishment != nil {
-			item.PunishmentDescription = punishment.Description
-		}
+		item.PunishmentName = s.punishmentRoundLabel(room, punishmentTasks)
 	}
 	s.addRoundHistory(room, item)
 	s.roomNotice(room, room.ResultText)

@@ -336,6 +336,12 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	if lobbyErr == nil {
 		s.emitWireClient(client, lobbyEnv)
 	}
+	// server:hello：连接建立即推送当前后端构建版本，供前端与自身构建版本比对、
+	// 提示"内容已更新，请刷新"。buildRawEnvelope 是纯函数，不读共享状态，无需持锁；
+	// 纯提示性质，不影响鉴权/限流，客户端无法伪造或放大这条消息。
+	if helloEnv, err := s.buildRawEnvelope("server:hello", 0, map[string]any{"buildId": BuildID}, ""); err == nil {
+		s.emitWireClient(client, helloEnv)
+	}
 
 	// 服务端主动 Ping：穿透反向代理空闲超时，并保活 iOS Safari 后台/锁屏场景。
 	pingCtx, cancelPing := context.WithCancel(context.Background())
@@ -355,7 +361,9 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		// 应用层心跳：客户端周期性 ping，带 id 则 RPC 应答
 		if wenv.Event == "ping" {
 			if wenv.Id != 0 {
-				client.reply(wenv.Id, map[string]any{"t": nowMs()}, "")
+				// 心跳应答顺带带上 buildId：兜底覆盖"WS 连接在后端重启后未断开"
+				// 的边缘场景（反代/负载策略下偶发），无需额外定时器或轮询。
+				client.reply(wenv.Id, map[string]any{"t": nowMs(), "buildId": BuildID}, "")
 			}
 			continue
 		}

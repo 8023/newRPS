@@ -178,6 +178,7 @@ func (s *Server) startLiarsDiceRound(room *RoomState) {
 	room.PunishedPlayerIDs = []string{}
 	room.DisconnectForfeits = map[string]DisconnectForfeit{}
 	room.LiarsDiceDisconnectForfeits = map[string]LiarsDiceDisconnectForfeit{}
+	s.logGameStart(room)
 	for _, id := range participants {
 		if player := s.players[id]; player != nil {
 			s.emitToClient(player.SocketID, "liarsdice:hand", map[string]any{
@@ -433,7 +434,7 @@ func (s *Server) resolveLiarsDiceChallenge(room *RoomState, challengerID string)
 			s.recordGameOutcome(p, types.GameLiarsDice, "draw")
 		}
 	}
-	s.logAnalyticsServerEvent("game_round", string(types.GameLiarsDice)+":win", 1, winnerID)
+	s.logGameRoundForPlayers(room, string(types.GameLiarsDice)+":win", roomHumanPlayerIDs(room))
 	s.applyGiveawayWinPenalty(winner)
 	if room.Settings.EnableRanked {
 		wD, lD := s.applyRankedStake(winner, loser, effectiveRankedStake(room.Settings))
@@ -453,14 +454,13 @@ func (s *Server) resolveLiarsDiceChallenge(room *RoomState, challengerID string)
 		}
 	}
 
-	punishment := s.currentPunishment(room)
 	var punishedPlayers []*PlayerState
 	var punishedNames []string
 	if room.Settings.EnablePunishment && loser != nil {
 		punishedPlayers = []*PlayerState{loser}
 		punishedNames = []string{names[loserID]}
 	}
-	punishmentTasks := s.buildLiarsDicePunishmentTasks(room, punishedPlayers, winner, punishment)
+	punishmentTasks := s.buildLiarsDicePunishmentTasks(room, punishedPlayers, winner)
 
 	handOrder := append([]string{}, room.LiarsDice.ParticipantIDs...)
 	item := types.RoundHistoryItem{
@@ -483,10 +483,7 @@ func (s *Server) resolveLiarsDiceChallenge(room *RoomState, challengerID string)
 		item.EffectiveStake = &es
 	}
 	if len(punishedNames) > 0 {
-		item.PunishmentName = s.punishmentNameForRoom(room, punishment)
-		if room.Settings.PunishmentSource != "player" && punishment != nil {
-			item.PunishmentDescription = punishment.Description
-		}
+		item.PunishmentName = s.punishmentRoundLabel(room, punishmentTasks)
 	}
 	s.roomNotice(room, room.ResultText)
 	s.addRoundHistory(room, item)
@@ -501,21 +498,33 @@ func punishedIDs(players []*PlayerState) []string {
 	return out
 }
 
-// buildLiarsDicePunishmentTasks：与 buildPunishmentTasks 同构，但赢家/受罚者都是
-// 直接传入的 playerID（不走 Seat 反查），复用 punishmentTaskForPlayer 的系统任务生成逻辑。
-func (s *Server) buildLiarsDicePunishmentTasks(room *RoomState, punishedPlayers []*PlayerState, winner *PlayerState, punishment *types.PunishmentConfig) []types.PunishmentTask {
+// buildLiarsDicePunishmentTasks：与 buildPunishmentTasksWithWinnerName 同构，但赢家/受罚者都是
+// 直接传入的 *PlayerState（不走 RoundHistory[0] 反查）——此时本局 item 尚未写入
+// room.RoundHistory，liarsDicePunishmentReviewer 那套按历史反查赢家的逻辑在这里还用不了。
+func (s *Server) buildLiarsDicePunishmentTasks(room *RoomState, punishedPlayers []*PlayerState, winner *PlayerState) []types.PunishmentTask {
 	out := make([]types.PunishmentTask, 0, len(punishedPlayers))
 	winnerName := ""
 	if winner != nil {
 		winnerName = playerShortName(winner)
 	}
+	// 房间级难度进度整局只 +1，与 buildPunishmentTasksWithWinnerName 同构（大话骰目前每局只罚一名
+	// 叫点失败者，但仍走同一套累加规则，避免将来受罚人数变化时又出现整局重复推进的问题）。
+	baseCount := room.PunishmentTaskProgress
+	advancedRound := false
 	for _, player := range punishedPlayers {
 		var assigner *PlayerState
 		var systemTask *punishmentTaskResult
-		if room.Settings.PunishmentSource == "player" {
+		src := normalizePunishmentSource(room.Settings.PunishmentSource)
+		if src == "player" {
 			assigner = winner
+		} else if src == "series" {
+			systemTask = s.pickSeriesTaskForPlayer(room, player, room.Settings.PunishmentSeriesID, winnerName)
 		} else {
-			systemTask = s.punishmentTaskForPlayer(room, player, winnerName, punishment)
+			var advanced bool
+			systemTask, advanced = s.pickSystemTaskForPlayer(room, player, winnerName, baseCount)
+			if advanced {
+				advancedRound = true
+			}
 		}
 		task := types.PunishmentTask{
 			PlayerID: player.ID, PlayerName: playerShortName(player),
@@ -523,6 +532,7 @@ func (s *Server) buildLiarsDicePunishmentTasks(room *RoomState, punishedPlayers 
 		}
 		if systemTask != nil {
 			task.TaskText = systemTask.TaskText
+			task.TypeName = systemTask.TypeName
 			task.BackgroundImage = systemTask.BackgroundImage
 			if systemTask.BackgroundOpacity != nil {
 				task.BackgroundOpacity = systemTask.BackgroundOpacity
@@ -539,6 +549,9 @@ func (s *Server) buildLiarsDicePunishmentTasks(room *RoomState, punishedPlayers 
 			task.AssignedByName = assigner.Name
 		}
 		out = append(out, task)
+	}
+	if advancedRound {
+		room.PunishmentTaskProgress = baseCount + 1
 	}
 	return out
 }
@@ -681,6 +694,7 @@ func (s *Server) applyLiarsDiceDisconnectForfeit(room *RoomState, player *Player
 			}
 		}
 	}
+	s.logGameRoundForPlayers(room, string(types.GameLiarsDice)+":win", roomHumanPlayerIDs(room))
 	s.applyGiveawayWinPenalty(winner)
 	if room.Settings.EnableRanked {
 		wD, lD := s.applyRankedStake(winner, loser, forfeit.Stake)
@@ -716,8 +730,7 @@ func (s *Server) applyLiarsDiceDisconnectForfeit(room *RoomState, player *Player
 		punishedPlayers = []*PlayerState{loser}
 		punishedNames = []string{forfeit.LoserName}
 	}
-	punishment := s.currentPunishment(room)
-	punishmentTasks := s.buildLiarsDicePunishmentTasks(room, punishedPlayers, winner, punishment)
+	punishmentTasks := s.buildLiarsDicePunishmentTasks(room, punishedPlayers, winner)
 	baseStake := forfeit.BaseStake
 	rm := forfeit.RankMultiplier
 	es := forfeit.Stake
@@ -736,10 +749,7 @@ func (s *Server) applyLiarsDiceDisconnectForfeit(room *RoomState, player *Player
 		item.EffectiveStake = &es
 	}
 	if len(punishedNames) > 0 {
-		item.PunishmentName = s.punishmentNameForRoom(room, punishment)
-		if room.Settings.PunishmentSource != "player" && punishment != nil {
-			item.PunishmentDescription = punishment.Description
-		}
+		item.PunishmentName = s.punishmentRoundLabel(room, punishmentTasks)
 	}
 	s.roomNotice(room, room.ResultText)
 	s.addRoundHistory(room, item)

@@ -435,9 +435,10 @@ func (s *Server) handleAdminImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 8*1024*1024+1024)
-	if err := r.ParseMultipartForm(8 * 1024 * 1024); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片上传失败，请确认格式为 jpg/png/webp 且小于 8MB"})
+	// 与证明图一致：仅接受前端已压好的 WebP，且不超过 2MB
+	r.Body = http.MaxBytesReader(w, r.Body, 2*1024*1024+1024)
+	if err := r.ParseMultipartForm(2 * 1024 * 1024); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片过大或格式错误，仅支持 webp 且不超过 2MB"})
 		return
 	}
 	password := r.FormValue("password")
@@ -454,23 +455,28 @@ func (s *Server) handleAdminImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
+	filename := strings.ToLower(header.Filename)
+	if !strings.HasSuffix(filename, ".webp") {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "仅支持 webp 格式，请使用前端压缩后的图片"})
+		return
+	}
 	buf, err := io.ReadAll(file)
 	if err != nil || len(buf) == 0 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片格式不支持或图片为空"})
 		return
 	}
-	ct := header.Header.Get("Content-Type")
-	mime, _, okKind := imageKind(buf)
-	if !okKind || (mime != "image/jpeg" && mime != "image/png" && mime != "image/webp") {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片真实格式不正确，请上传 jpg/png/webp"})
+	if len(buf) > 2*1024*1024 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片不能超过 2MB，请压缩后再上传"})
 		return
 	}
-	if ct != mime {
-		ct = mime
+	mime, _, okKind := imageKind(buf)
+	if !okKind || mime != "image/webp" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片内容不是有效的 webp，请重新选择图片"})
+		return
 	}
-	url, err := s.saveVerifiedImage(buf, ct, "admin")
+	url, err := s.saveVerifiedImage(buf, "image/webp", "admin")
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片真实格式不正确，请上传 jpg/png/webp"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片真实格式不正确，请上传 webp"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"imageUrl": url})
