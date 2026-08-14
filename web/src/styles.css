@@ -5253,9 +5253,76 @@ main {
   gap: 8px;
 }
 
-/* 房间管理内仅「房间 / 聊天管理」两个子页签 */
-.admin-action-tabs.admin-room-tabs {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+/* 「用户与房间」的二级管理入口独立于内容卡片，避免形成卡片内嵌页签的错觉。 */
+.admin-management-nav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.admin-management-nav button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--panel-solid) 82%, transparent);
+  text-align: left;
+}
+
+.admin-management-nav button > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.admin-management-nav strong {
+  color: var(--page-text);
+  font-size: 14px;
+}
+
+.admin-management-nav small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-management-nav em {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  padding: 5px 7px;
+  white-space: nowrap;
+}
+
+.admin-management-nav button.active {
+  border-color: var(--blue-border);
+  background: color-mix(in srgb, var(--primary) 14%, var(--panel-solid));
+  box-shadow: inset 3px 0 0 var(--primary), 0 0 0 3px rgba(116, 199, 255, 0.12);
+}
+
+.admin-management-nav button.active em {
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--border));
+  background: color-mix(in srgb, var(--primary) 16%, var(--panel-solid));
+  color: var(--page-text);
+}
+
+.admin-management-content {
+  min-width: 0;
+}
+
+.admin-tab-content {
+  display: grid;
+  gap: 10px;
 }
 
 /* 用户管理过滤器：启用=主色蓝（同「保存玩家资料」），禁用=降饱和灰蓝 */
@@ -5784,8 +5851,14 @@ main {
   padding: 12px;
 }
 
+/* 此开关启用会阻断所有新玩家进入，必须压过公告卡默认颜色给出醒目警告。 */
+.admin-announcement-card.admin-preview-card-warning {
+  background: var(--notice-bg);
+  border-color: var(--notice-border);
+}
+
 .admin-announcement-card textarea {
-  min-height: 76px;
+  min-height: 6em;
 }
 
 .admin-announcement-actions {
@@ -5794,6 +5867,45 @@ main {
   gap: 10px;
   align-items: end;
   justify-content: start;
+}
+
+.admin-settings-groups {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-settings-group {
+  display: grid;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-solid) 76%, transparent);
+  padding: 12px;
+}
+
+.admin-message-field {
+  align-content: start;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-solid) 76%, transparent);
+  padding: 10px;
+}
+
+.field-label .admin-message-label {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-message-label strong {
+  color: var(--page-text);
+  font-size: 13px;
+}
+
+.admin-message-label small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
 }
 
 .admin-list-section {
@@ -6579,6 +6691,14 @@ main {
 
   .admin-action-tabs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-management-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-management-nav small {
+    white-space: normal;
   }
 
   .admin-sidebar {

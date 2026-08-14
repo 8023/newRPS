@@ -271,7 +271,7 @@ curl -fsS http://127.0.0.1:${HOST_PORT:-9988}/api/push/vapid-key
   - `accessControl.maxCreatesPer10Min` → **同指纹 10 分钟内新建玩家上限**
 - 上报路径：`POST /api/session`（Header/Body）、WebSocket 握手的 `Sec-WebSocket-Protocol` 头（`fp.<base64url 指纹>`，与 `auth.<token>` 一起传递，不再拼进 `/ws` 查询串——反向代理访问日志会记录完整请求 URL，会话 token 出现在其中就等于把凭据写进了日志）、`player:join.fingerprint`
 
-**纯 IP 兜底（防批量脚本攻击）**：`fingerprint` 是客户端上报的字符串，服务端不校验真实性——攻击脚本只要每次请求都随机换一个指纹，就能让上面按 `deviceKey` 计算的限制失效；`sid` 同理，每调一次 `/api/session` 就能免费换发一个新的，导致所有按 `event:ip:sid` 维度的 WS 事件限流也能被"换 sid"重置。因此在按指纹/按会话限流之外，又加了一层完全不看指纹、只看出口 IP 的兜底限制（同样可在 `/admin` → 防多开页面调整）：
+**纯 IP 兜底（防批量脚本攻击）**：`fingerprint` 是客户端上报的字符串，服务端不校验真实性——攻击脚本只要每次请求都随机换一个指纹，就能让上面按 `deviceKey` 计算的限制失效；`sid` 同理，每调一次 `/api/session` 就能免费换发一个新的，导致所有按 `event:ip:sid` 维度的 WS 事件限流也能被"换 sid"重置。因此在按指纹/按会话限流之外，又加了一层完全不看指纹、只看出口 IP 的兜底限制（同样可在 `/admin` → 网站管理 → 限流策略调整）：
 
 - `accessControl.ipBackstopMultiplier` / `ipBackstopMinLimit` —— 每个 WS 事件（`room:create`、`room:move`、`punishment:submit` 等）除了原有的 `event:ip:sid` 限流桶，还并行检查一个 `event:ip` 粗粒度桶，阈值为 `max(该事件 per-sid 阈值 × 倍数, 最低下限)`；不管客户端怎么换 sid，同一 IP 在同一窗口内的总请求量都会被这层桶钉住
 - `accessControl.maxSessionIssuePerIp` —— `POST /api/session` 纯 IP 维度的 10 分钟签发上限（在原有按 `devKey` 的限流之外并行生效）
@@ -281,7 +281,7 @@ curl -fsS http://127.0.0.1:${HOST_PORT:-9988}/api/push/vapid-key
 
 以上这层"纯 IP"防护的前提是 `TRUSTED_PROXY_COUNT` 与实际部署拓扑一致——直连公网必须设为 `0`，否则 `X-Forwarded-For` 可被伪造，所有基于 IP 的限制都形同虚设。
 
-**一键止血开关**：`accessControl.registrationDisabled`（`/admin` → 防多开 → 「新用户注册开关」）勾选后，`player:join` 里 `player == nil`（即将新建身份）的分支会直接拒绝，提示"当前暂停新用户注册，请使用已有账号登录"；已持有 `playerId`+`playerSecret` 的老用户走的是 `player != nil` 分支，不受影响，仍可正常登录游玩。用于遭遇批量注册攻击时先整体止血，再人工排查、用后台单独封禁具体的恶意老账号。
+**一键止血开关**：`accessControl.registrationDisabled`（`/admin` → 网站管理 → 提示公告 → 「新用户注册开关」）勾选后，`player:join` 里 `player == nil`（即将新建身份）的分支会直接拒绝，提示"当前暂停新用户注册，请使用已有账号登录"；已持有 `playerId`+`playerSecret` 的老用户走的是 `player != nil` 分支，不受影响，仍可正常登录游玩。用于遭遇批量注册攻击时先整体止血，再人工排查、用后台单独封禁具体的恶意老账号。
 
 ## 后台与配置文件
 
@@ -300,7 +300,7 @@ curl -fsS http://127.0.0.1:${HOST_PORT:-9988}/api/push/vapid-key
 | `player-punishment-room-name-pool.json` | 玩家发布任务房名词库 |
 | `room-tags.json` / `room-info-tags.json` | 房间 Tag 与信息标签样式 |
 | `title-tag-styles.json` | 称号标签按赋予来源（系统默认/自定义/主人赋予/管理员赋予）的配色 |
-| `access-control.json` | 防多开 |
+| `access-control.json` | 多开与限流策略（后台：网站管理 → 限流策略） |
 | `name-war.json` / `giveaway.json` / `extreme-mode.json` | 名争 / 白给 / 极限模式文案与参数 |
 | `ranked-score.json` | 排位分「展示」上下限（含名字争夺战下限）与每日衰减比例；存储分数本身不设上下限，仅展示时封顶，详见「排位积分」章节 |
 | `pet-bond.json` | 宠物乐园（认主/认宠）面板标题、主人/宠物数量上限与称号长度 |
@@ -378,6 +378,9 @@ npm run test           # go test + 前端 build
 
 ## 最近更新记录
 
+- **后台配置重组**：原「防多开」一级菜单并入「网站管理」——「限流策略」按设备指纹、IP、房间与证明图片分组展示，「提示语」独立为单独区块并使用易读的中文名称；「禁止新用户注册」开关移至「提示公告」下；新增服务器「运行状态」卡片；用户管理并入「用户与房间」。「防多开」一级菜单删除。
+- **用户分析「对局时长」改均值口径**：删除「对局结果」统计；原「每局时长」「房间时长」两张总时长图合并为一张「对局时长」均值图——按游戏拆分的单局均值分钟数（总耗时 ÷ 总局数，保留 1 位小数，避免 RPS 这类单局 <1 分钟的游戏被取整拍成 0）左轴堆叠柱 + 全站单房均值分钟数（房间存活总时长 ÷ 开房总数）右轴折线；图表横轴日期刻度省略年份只显示 mm/dd。
+- **斗兽棋初始布局对称修正**：双方棋子改为按各自视角 180° 旋转对称摆放（修正此前后排象/狮左右不一致）；规则说明补充「敌兽进入己方陷阱，可被任意己方兽吃掉」。
 - **后台聊天管理**：新增 `admin:chatSearch` 历史检索与单条/批量软删除、恢复（schema v28）；房间聊天落盘时保存发送时刻的房间名快照，房间改名/关闭后仍可按当时的房间名检索。
 - **用户管理**：玩家列表新增昵称筛选；新增同设备关联账号（小号）BFS 查询（独立只读连接 + `connection_events(device)` 索引）。
 - **上传文件访问控制**：`GET /uploads/*` 新增 Referer 校验（缺失/跨站一律 404，与 Origin 校验同一套白名单逻辑）；`Cache-Control` `max-age` 由 30 天收窄到 6 小时；证明图随所属房间销毁而失效（房间清空/管理员关房/进程重启后一律 404）。仍非强鉴权，详见「证明图」小节。
@@ -389,4 +392,3 @@ npm run test           # go test + 前端 build
 - **用户分析 + 后台图表面板**：前端埋点与审计表聚合、ip2region 归属地（`config/xdb/ip2region_v4.xdb` 必需 + 可选 `ip2region_v6.xdb`）、日聚合三层架构、`/admin`「数据分析」分区（recharts）；转化漏斗重定义、新增用户留存矩阵与单房对局统计。升级须一次性放置 xdb 或设 `ANALYTICS_GEO_ENABLED=0`。
 
 详见 [CHANGELOG.md](./CHANGELOG.md)。
-

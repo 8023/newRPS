@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
-  Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart,
+  Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, LineChart,
   Pie, PieChart, Rectangle, ResponsiveContainer, Tooltip, XAxis, YAxis
 } from "recharts";
 import type {
@@ -44,11 +44,6 @@ function labelFor(labels: Record<string, string> | undefined, key: string): stri
 // 其它 HBarCard 用途的 key 本就该原样展示（浏览器名、系统名等），不套这张表。
 const DEVICE_LABELS: Record<string, string> = { mobile: "手机", tablet: "平板", desktop: "电脑" };
 
-// data.gameResults 的 key 是后端拼出的 "gameId:result"（见 internal/server/game_common.go
-// logRoundOutcome 的 detail 拼接、game_liarsdice.go 的 ":win"），result 只会是
-// win/draw/doubleLoss 三种之一，同样是英文标识符拼接，不能直接展示。
-const RESULT_LABELS: Record<string, string> = { win: "分胜负", draw: "平局", doubleloss: "双输" };
-
 function relabelBuckets(rows: AnalyticsBucket[], labels: Record<string, string>): AnalyticsBucket[] {
   return rows.map((r) => ({ ...r, key: labelFor(labels, r.key) }));
 }
@@ -70,17 +65,6 @@ function mergeTagCompareBuckets(
   bump(include, "include");
   bump(exclude, "exclude");
   return Array.from(map.values()).sort((a, b) => (b.include + b.exclude) - (a.include + a.exclude));
-}
-
-// data.gameResults 的 key 形如 "othello:draw"：先按 ":" 拆开游戏名/结果分别查表翻译，
-// 查不到时保底显示原始片段，不整体丢弃。
-function relabelGameResultBuckets(rows: AnalyticsBucket[]): AnalyticsBucket[] {
-  return rows.map((r) => {
-    const [gameID, result] = r.key.split(":");
-    const gameLabel = labelFor(GAME_LABELS, gameID || r.key);
-    const key = result ? `${gameLabel}·${labelFor(RESULT_LABELS, result)}` : gameLabel;
-    return { ...r, key };
-  });
 }
 
 // data.viewPv 的 key 是前端路由/弹窗名（见 web/src/App.tsx 的 trackPageview 调用），
@@ -110,18 +94,29 @@ function formatDelta(d: number): string {
   return pct > 0 ? `↑${pct}%` : `↓${Math.abs(pct)}%`;
 }
 
-function AnalyticsTooltip({ active, payload, label, showTotal, showPercent, percentTotal }: {
+// 图表横轴的日期刻度省略年份只显示 mm/dd；气泡提示（AnalyticsTooltip 的 label）与
+// 明细表格仍展示完整 yyyy-mm-dd，不套用这个格式化。
+function formatDayTick(v: string): string {
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(v);
+  return m ? `${m[1]}/${m[2]}` : v;
+}
+
+function AnalyticsTooltip({ active, payload, label, showTotal, showPercent, percentTotal, formatValue }: {
   active?: boolean;
   payload?: Array<{ name?: string; value?: number; color?: string }>;
   label?: string;
-  /** 堆叠图（对局数/开房数/每局时长/房间时长）悬停时附带当日各系列之和 */
+  /** 堆叠图（对局数/开房数/对局时长）悬停时附带当日各系列之和 */
   showTotal?: boolean;
   /** 每行附带占比：分母默认取当前悬停项各系列之和，也可用 percentTotal 指定外部分母
    * （如饼图/单系列柱状图，需要占「全部类目合计」而非「当前这一根柱子」的比例）。 */
   showPercent?: boolean;
   percentTotal?: number;
+  /** 数值格式化，默认 formatNum（四舍五入取整）；均值类图表（如「对局时长」的分钟数，
+   * 常见 <1 的小数）需要保留小数位，改传自定义格式化函数。 */
+  formatValue?: (n: number) => string;
 }) {
   if (!active || !payload?.length) return null;
+  const fmt = formatValue || formatNum;
   const localTotal = payload.reduce((sum, p) => sum + (Number(p.value) || 0), 0);
   const percentDenom = percentTotal != null ? percentTotal : localTotal;
   return (
@@ -135,7 +130,7 @@ function AnalyticsTooltip({ active, payload, label, showTotal, showPercent, perc
             <span className="analytics-tooltip-swatch" style={{ background: p.color }} />
             <span>{p.name}</span>
             <strong>
-              {formatNum(val)}
+              {fmt(val)}
               {pct != null && <span className="analytics-tooltip-pct"> ({pct})</span>}
             </strong>
           </div>
@@ -145,7 +140,7 @@ function AnalyticsTooltip({ active, payload, label, showTotal, showPercent, perc
         <div className="analytics-tooltip-row analytics-tooltip-total">
           <span className="analytics-tooltip-swatch analytics-tooltip-swatch-total" />
           <span>总计</span>
-          <strong>{formatNum(localTotal)}</strong>
+          <strong>{fmt(localTotal)}</strong>
         </div>
       )}
     </div>
@@ -486,7 +481,7 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
               <ResponsiveContainer width="100%" height={240}>
                 <LineChart data={trends} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
-                  <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <Tooltip content={<AnalyticsTooltip />} />
                   <Legend />
@@ -509,7 +504,7 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
               <ResponsiveContainer width="100%" height={240}>
                 <LineChart data={trends} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
-                  <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <Tooltip content={<AnalyticsTooltip />} />
                   <Line type="monotone" dataKey="pageviews" name="页面浏览" stroke="var(--chart-1)" strokeWidth={2} dot={false}
@@ -533,7 +528,7 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={trends} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
-                  <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <Tooltip content={<AnalyticsTooltip showPercent />} />
                   <Legend />
@@ -558,7 +553,7 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={trends} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
-                  <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <Tooltip content={<AnalyticsTooltip showPercent />} />
                   <Legend />
@@ -592,7 +587,24 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
           </div>
 
           <div className="analytics-row-2">
-            <HBarCard title="对局结果" rows={relabelGameResultBuckets(data.gameResults || [])} />
+            <ChartCard
+              title="对局时长"
+              table={
+                <RoundDurationTable
+                  days={data.series.days}
+                  gameSeries={data.gameRoundAvgMinutes || []}
+                  roomAvg={data.roomAvgMinutes || []}
+                  labels={GAME_LABELS}
+                />
+              }
+            >
+              <RoundDurationChart
+                days={data.series.days}
+                gameSeries={data.gameRoundAvgMinutes || []}
+                roomAvg={data.roomAvgMinutes || []}
+                labels={GAME_LABELS}
+              />
+            </ChartCard>
             <ChartCard title="惩罚任务" table={
               <table className="analytics-data-table">
                 <thead><tr><th>日期</th><th>发布</th><th>完成</th><th>驳回</th></tr></thead>
@@ -622,7 +634,7 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
                   reject: data.punishment?.reject?.[i] || 0
                 }))}>
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
-                  <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <Tooltip content={<AnalyticsTooltip showPercent />} />
                   <Legend />
@@ -662,20 +674,6 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
             </ChartCard>
           </div>
 
-          <div className="analytics-row-2">
-            <ChartCard
-              title="每局时长（分钟）"
-              table={<SeriesTable days={data.series.days} series={data.gameRoundDuration || []} labels={GAME_LABELS} />}
-            >
-              <StackedGameChart days={data.series.days} series={data.gameRoundDuration || []} labels={GAME_LABELS} showPercent />
-            </ChartCard>
-            <ChartCard
-              title="房间时长（分钟）"
-              table={<SeriesTable days={data.series.days} series={data.roomDuration || []} labels={GAME_LABELS} />}
-            >
-              <StackedGameChart days={data.series.days} series={data.roomDuration || []} labels={GAME_LABELS} showPercent />
-            </ChartCard>
-          </div>
 
           <div className="analytics-row-2">
             <ChartCard title="会话时长分布" table={<BucketTable rows={data.sessionBuckets || []} />}>
@@ -740,7 +738,7 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
                   margin={{ left: 4, right: 4 }}
                 >
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
-                  <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <YAxis
                     yAxisId="left"
                     tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }}
@@ -793,7 +791,7 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
                   margin={{ left: 4, right: 4 }}
                 >
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
-                  <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <YAxis
                     yAxisId="left"
                     tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }}
@@ -842,7 +840,7 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
                   margin={{ left: 4, right: 4 }}
                 >
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
-                  <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <YAxis
                     yAxisId="left"
                     tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }}
@@ -885,7 +883,7 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
                   room: data.chat?.speakersRoom?.[i] || 0
                 }))}>
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
-                  <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <Tooltip content={<AnalyticsTooltip />} />
                   <Legend />
@@ -1143,7 +1141,7 @@ function StackedGameChart({
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={rows}>
           <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
-          <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+          <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
           <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
           <Tooltip content={<AnalyticsTooltip />} />
           <Legend />
@@ -1155,14 +1153,14 @@ function StackedGameChart({
       </ResponsiveContainer>
     );
   }
-  // 对局数 / 开房数 / 每局时长 / 房间时长：气泡里附带当日各游戏之和；showPercent 时每个
-  // 游戏数值旁再附带其占当日合计（即 AnalyticsTooltip 默认的 localTotal）的百分比，
-  // 不外传 percentTotal——分母跟着悬停的那一天走，不是整个选定区间的合计。
+  // 对局数 / 开房数：气泡里附带当日各游戏之和；showPercent 时每个游戏数值旁再附带其占
+  // 当日合计（即 AnalyticsTooltip 默认的 localTotal）的百分比，不外传 percentTotal——
+  // 分母跟着悬停的那一天走，不是整个选定区间的合计。
   return (
     <ResponsiveContainer width="100%" height={240}>
       <BarChart data={rows}>
         <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
-        <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+        <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
         <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
         <Tooltip content={<AnalyticsTooltip showTotal showPercent={showPercent} />} />
         <Legend />
@@ -1174,5 +1172,74 @@ function StackedGameChart({
         ))}
       </BarChart>
     </ResponsiveContainer>
+  );
+}
+
+// 「对局时长」：左轴堆叠柱是各游戏当天的单局均值分钟数（data.gameRoundAvgMinutes，
+// 总耗时/该游戏当天总局数），右轴折线是全站不拆分游戏的单房均值分钟数（data.roomAvgMinutes，
+// 总房间存活时长/当天开房总数）——两者量级、口径都不同，共享 X 轴（日期）但各自独立缩放，
+// 与「单房对局」图的左右双轴写法一致（见下方 max/avg 折线）。均值常见 <1 分钟的小数，
+// 悬停气泡与表格都保留 1 位小数，不能套用 formatNum 的整数取整。
+function RoundDurationChart({ days, gameSeries: rawSeries, roomAvg, labels }: {
+  days: string[]; gameSeries: AnalyticsNamedSeries[]; roomAvg: number[]; labels?: Record<string, string>;
+}) {
+  const series = orderSeriesStably(rawSeries, labels);
+  if (!series.length) return <p className="empty">暂无数据</p>;
+  const rows = days.map((day, i) => {
+    const row: Record<string, string | number> = { day, roomAvg: roomAvg[i] || 0 };
+    for (const s of series) row[s.key] = s.values[i] || 0;
+    return row;
+  });
+  const fmtMinutes = (n: number) => `${n.toFixed(1)} 分钟`;
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <ComposedChart data={rows}>
+        <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
+        <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+        <YAxis yAxisId="left" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" width={40} />
+        <YAxis yAxisId="right" orientation="right" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" width={40} />
+        {/* 柱（各游戏单局均值）与折线（全站单房均值）单位不同、不能相加，故不传 showTotal/
+            showPercent，避免 AnalyticsTooltip 默认把两者混算出一个没有意义的“总计”。 */}
+        <Tooltip content={<AnalyticsTooltip formatValue={fmtMinutes} />} />
+        <Legend />
+        {series.map((s, i) => (
+          <Bar key={s.key} yAxisId="left" dataKey={s.key} name={labelFor(labels, s.key)} stackId="a"
+            fill={CHART_COLORS[i % CHART_COLORS.length]} maxBarSize={24}
+            shape={(p: any) => <StackedSegment {...p} dataKey={s.key} seriesKeys={series.map((x) => x.key)} />}
+            isAnimationActive={false} />
+        ))}
+        <Line yAxisId="right" type="monotone" dataKey="roomAvg" name="房间均值"
+          stroke="var(--chart-critical)" strokeWidth={2} dot={false} isAnimationActive={false} />
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
+function RoundDurationTable({ days, gameSeries: rawSeries, roomAvg, labels }: {
+  days: string[]; gameSeries: AnalyticsNamedSeries[]; roomAvg: number[]; labels?: Record<string, string>;
+}) {
+  const series = orderSeriesStably(rawSeries, labels);
+  if (!series.length) return <p className="empty">暂无数据</p>;
+  return (
+    <div className="analytics-table-scroll">
+      <table className="analytics-data-table">
+        <thead>
+          <tr>
+            <th>日期</th>
+            {series.map((s) => <th key={s.key}>{labelFor(labels, s.key)}</th>)}
+            <th>房间均值</th>
+          </tr>
+        </thead>
+        <tbody>
+          {days.map((d, i) => (
+            <tr key={d}>
+              <td>{d}</td>
+              {series.map((s) => <td key={s.key}>{(s.values[i] || 0).toFixed(1)}</td>)}
+              <td>{(roomAvg[i] || 0).toFixed(1)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

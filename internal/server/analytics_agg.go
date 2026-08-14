@@ -3,6 +3,7 @@ package server
 import (
 	"database/sql"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -33,7 +34,6 @@ const (
 	metricRoomCreate         = "room_create"
 	metricRoomJoin           = "room_join"
 	metricGameRound          = "game_round"
-	metricGameResult         = "game_result"
 	// metricGameRoundDurationMs「每局时长」：round 结算(game_round.at)减同房间内最近一次
 	// game_start.at 的毫秒数，按 gameId 累加、按结算日归属——与 metricGameRound 同口径，
 	// 只是把「次」换成「累计耗时」。值以毫秒存库，forRange 输出前换算为分钟。
@@ -125,12 +125,15 @@ type analyticsRangeView struct {
 
 	// 游戏
 	GameRounds  []analyticsNamedSeries `json:"gameRounds"`
-	GameResults []analyticsBucket      `json:"gameResults"`
 	RoomCreates []analyticsNamedSeries `json:"roomCreates"`
-	// GameRoundDuration「每局时长」/RoomDuration「房间时长」：与 GameRounds/RoomCreates
-	// 同口径（按天/游戏），单位从「次」换成「分钟」。
-	GameRoundDuration []analyticsNamedSeries `json:"gameRoundDuration"`
-	RoomDuration      []analyticsNamedSeries `json:"roomDuration"`
+	// GameRoundAvgMinutes「对局时长·每局」：按 gameId 分维度，当天该游戏 metricGameRoundDurationMs
+	// （出拳/落子开始到结算，不含惩罚流程）总耗时(ms) 除以当天该游戏 metricGameRound 总局数，
+	// 得到单局均值分钟数（保留 1 位小数）。
+	// RoomAvgMinutes「对局时长·房间」：不分游戏，当天全部房间 metricRoomDurationMs（创建到
+	// 销毁）总耗时(ms) 除以当天 metricRoomCreate 开房总数，得到单房均值分钟数。两者画在同一张
+	// 「对局时长」图里：前者左轴堆叠柱（按游戏拆分），后者右轴折线（全站合计，不拆分游戏）。
+	GameRoundAvgMinutes []analyticsNamedSeriesFloat `json:"gameRoundAvgMinutes"`
+	RoomAvgMinutes      []float64                   `json:"roomAvgMinutes"`
 
 	// 玩法
 	Punishment analyticsPunishmentBlock `json:"punishment"`
@@ -199,6 +202,14 @@ type analyticsBucket struct {
 type analyticsNamedSeries struct {
 	Key    string  `json:"key"`
 	Values []int64 `json:"values"`
+}
+
+// analyticsNamedSeriesFloat 与 analyticsNamedSeries 同构，仅把 Values 换成 float64——
+// 用于均值类指标（如 GameRoundAvgMinutes），避免四舍五入到整数分钟时把 RPS 这类单局常
+// <1 分钟的游戏全部拍成 0。
+type analyticsNamedSeriesFloat struct {
+	Key    string    `json:"key"`
+	Values []float64 `json:"values"`
 }
 
 type analyticsPunishmentBlock struct {
@@ -420,10 +431,9 @@ func (snap *analyticsSnapshot) forRange(days int) *analyticsRangeView {
 		SessionBuckets: orderedBuckets(sumByKey(snap, metricSessionBucket, start, n), []string{"10s", "1min", "2min", "5min", "10min", "30min", "60min", "60min+"}),
 		ViewPV:         sumByKey(snap, metricViewPV, start, n),
 		GameRounds:        namedSeries(snap, metricGameRound, start, n, dayLabels),
-		GameResults:       sumByKey(snap, metricGameResult, start, n),
 		RoomCreates:       namedSeries(snap, metricRoomCreate, start, n, dayLabels),
-		GameRoundDuration: namedSeriesMinutes(snap, metricGameRoundDurationMs, start, n, dayLabels),
-		RoomDuration:      namedSeriesMinutes(snap, metricRoomDurationMs, start, n, dayLabels),
+		GameRoundAvgMinutes: namedSeriesAvgMinutes(snap, metricGameRoundDurationMs, metricGameRound, start, n),
+		RoomAvgMinutes:      dailyAvgMinutesAll(snap, metricRoomDurationMs, metricRoomCreate, start, n),
 		Punishment: analyticsPunishmentBlock{
 			Publish: slice(snap.PunishPublish), Done: slice(snap.PunishDone), Reject: slice(snap.PunishReject),
 			DoneRate: rate(sum(slice(snap.PunishDone)), sum(slice(snap.PunishPublish))),
@@ -576,18 +586,60 @@ func namedSeries(snap *analyticsSnapshot, metric string, start, n int, _ []strin
 	return out
 }
 
-// namedSeriesMinutes 复用 namedSeries 按总量取 top key 的逻辑，把累加的毫秒值换算成
-// 分钟（四舍五入）。metricGameRoundDurationMs/metricRoomDurationMs 库里存的是毫秒，
-// 避免按天独立取整后再求和造成的精度损失（例如 RPS 单局常 <1 分钟，逐日取整会一直是 0）。
-func namedSeriesMinutes(snap *analyticsSnapshot, metric string, start, n int, dayLabels []string) []analyticsNamedSeries {
-	series := namedSeries(snap, metric, start, n, dayLabels)
-	out := make([]analyticsNamedSeries, len(series))
-	for i, s := range series {
-		vals := make([]int64, len(s.Values))
-		for j, v := range s.Values {
-			vals[j] = (v + 30_000) / 60_000
+func roundTo1(v float64) float64 {
+	return math.Round(v*10) / 10
+}
+
+// sumAllKeysByDay 把某个 metric 下所有 key（如全部 gameId）按天求和，折叠成一条不分维度
+// 的序列——用于「房间时长」这类需要跨游戏合计成单一均值的场景。
+func sumAllKeysByDay(snap *analyticsSnapshot, metric string, start, n int) []int64 {
+	out := make([]int64, n)
+	for _, series := range snap.ByKey[metric] {
+		s := series
+		if len(s) < n {
+			padded := make([]int64, n)
+			copy(padded[n-len(s):], s)
+			s = padded
 		}
-		out[i] = analyticsNamedSeries{Key: s.Key, Values: vals}
+		for i, v := range s[start:] {
+			out[i] += v
+		}
+	}
+	return out
+}
+
+// dailyAvgMinutesAll 逐日用「总耗时(ms) metric」除以「总次数 metric」得到均值分钟数（保留 1
+// 位小数），两个 metric 先各自跨 key（跨游戏）合计成单一序列再相除——用于「房间时长」这种
+// 不分游戏、只看当天全站均值的单折线场景。当天次数为 0 时该日输出 0，不做除零。
+func dailyAvgMinutesAll(snap *analyticsSnapshot, sumMetric, countMetric string, start, n int) []float64 {
+	sumMs := sumAllKeysByDay(snap, sumMetric, start, n)
+	count := sumAllKeysByDay(snap, countMetric, start, n)
+	out := make([]float64, n)
+	for i := 0; i < n; i++ {
+		if count[i] <= 0 {
+			continue
+		}
+		out[i] = roundTo1(float64(sumMs[i]) / float64(count[i]) / 60_000)
+	}
+	return out
+}
+
+// namedSeriesAvgMinutes 按 sumMetric（总耗时 ms，按 gameId 分维度）取总量 top key（复用
+// namedSeries 的选取规则），逐日用 countMetric 里对应 gameId 当天的总次数相除，得到该游戏
+// 当天的单局均值分钟数（保留 1 位小数）。两个 metric 必须共用同一批 key（gameId）与同一天
+// 粒度，否则分子/分母对不上。次数为 0 的日子输出 0，不做除零。
+func namedSeriesAvgMinutes(snap *analyticsSnapshot, sumMetric, countMetric string, start, n int) []analyticsNamedSeriesFloat {
+	sumSeries := namedSeries(snap, sumMetric, start, n, nil)
+	out := make([]analyticsNamedSeriesFloat, 0, len(sumSeries))
+	for _, s := range sumSeries {
+		count := keySeries(snap, countMetric, s.Key, start, n)
+		vals := make([]float64, len(s.Values))
+		for i, v := range s.Values {
+			if i < len(count) && count[i] > 0 {
+				vals[i] = roundTo1(float64(v) / float64(count[i]) / 60_000)
+			}
+		}
+		out = append(out, analyticsNamedSeriesFloat{Key: s.Key, Values: vals})
 	}
 	return out
 }
@@ -848,12 +900,6 @@ func (s *Server) rebuildDay(day int64, tz int) ([]analyticsDailyRow, error) {
 		            THEN substr(detail, 1, instr(detail, ':') - 1)
 		            ELSE detail END, COUNT(*) FROM analytics_events
 		WHERE day=? AND source=1 AND name='game_round' AND value>0 AND detail<>'' GROUP BY 1`, day, metricGameRound, &rows); err != nil {
-		return nil, err
-	}
-	// game_result：detail 已是 gameId:result
-	if err := s.queryKeyCounts(db, `
-		SELECT detail, COUNT(*) FROM analytics_events
-		WHERE day=? AND source=1 AND name='game_round' AND value>0 AND detail LIKE '%:%' GROUP BY 1`, day, metricGameResult, &rows); err != nil {
 		return nil, err
 	}
 

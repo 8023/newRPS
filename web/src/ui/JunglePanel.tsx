@@ -352,6 +352,7 @@ export function JunglePanel({ room, me, onError }: { room: RoomSnapshot; me: Pub
         </p>
         <p>
           🐀 可吃 🐘（不能从水中上岸吃），🐘 不能吃 🐀；仅 🐀 可入水；🦁🐅 可跳河（河中有 🐀 则不能跳）；先入对方兽穴或令对方无子可走者胜。
+          敌兽进入己方陷阱，可被任意己方兽吃掉。
         </p>
       </div>
     </div>

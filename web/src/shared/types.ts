@@ -856,11 +856,12 @@ export type AnalyticsRangeView = {
   sessionBuckets: AnalyticsBucket[];
   viewPv: AnalyticsBucket[];
   gameRounds: AnalyticsNamedSeries[];
-  gameResults: AnalyticsBucket[];
   roomCreates: AnalyticsNamedSeries[];
-  /** 与 gameRounds/roomCreates 同口径（按天/游戏），只是把「次」换成「分钟」。 */
-  gameRoundDuration: AnalyticsNamedSeries[];
-  roomDuration: AnalyticsNamedSeries[];
+  /** 「对局时长」图数据源：gameRoundAvgMinutes 按游戏拆分单局均值分钟数（总耗时/该游戏
+   * 当天总局数，与 gameRounds 同口径），roomAvgMinutes 是全站不拆分游戏的单房均值分钟数
+   * （总房间存活时长/当天开房总数，与 roomCreates 同口径）。 */
+  gameRoundAvgMinutes: AnalyticsNamedSeries[];
+  roomAvgMinutes: number[];
   punishment: {
     publish: number[];
     done: number[];

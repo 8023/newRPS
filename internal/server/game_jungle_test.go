@@ -8,15 +8,32 @@ import (
 
 func TestJungleInitialSetup(t *testing.T) {
 	board := initialJungleBoard()
-	// A rat bottom-left area, B elephant top-left facing it
-	if board[6][0] == nil || *board[6][0] != jungleCellOf(types.SeatA, types.JungleRat) {
-		t.Fatalf("A rat expected at 6,0 got %v", board[6][0])
+	expected := []struct {
+		row, col int
+		side     types.SeatKey
+		animal   types.JungleAnimal
+	}{
+		{0, 0, types.SeatB, types.JungleLion},
+		{0, 6, types.SeatB, types.JungleTiger},
+		{1, 1, types.SeatB, types.JungleDog},
+		{1, 5, types.SeatB, types.JungleCat},
+		{2, 0, types.SeatB, types.JungleRat},
+		{2, 2, types.SeatB, types.JungleLeopard},
+		{2, 4, types.SeatB, types.JungleWolf},
+		{2, 6, types.SeatB, types.JungleElephant},
+		{6, 0, types.SeatA, types.JungleElephant},
+		{6, 2, types.SeatA, types.JungleWolf},
+		{6, 4, types.SeatA, types.JungleLeopard},
+		{6, 6, types.SeatA, types.JungleRat},
+		{7, 1, types.SeatA, types.JungleCat},
+		{7, 5, types.SeatA, types.JungleDog},
+		{8, 0, types.SeatA, types.JungleTiger},
+		{8, 6, types.SeatA, types.JungleLion},
 	}
-	if board[2][0] == nil || *board[2][0] != jungleCellOf(types.SeatB, types.JungleElephant) {
-		t.Fatalf("B elephant expected at 2,0")
-	}
-	if board[8][6] == nil || *board[8][6] != jungleCellOf(types.SeatA, types.JungleLion) {
-		t.Fatalf("A lion expected at 8,6 (right hand)")
+	for _, want := range expected {
+		if board[want.row][want.col] == nil || *board[want.row][want.col] != jungleCellOf(want.side, want.animal) {
+			t.Fatalf("%s %s expected at %d,%d, got %v", want.side, want.animal, want.row, want.col, board[want.row][want.col])
+		}
 	}
 	if !jungleIsWater(3, 1) || jungleIsWater(3, 3) {
 		t.Fatalf("water layout wrong")

@@ -823,7 +823,7 @@ func TestRebuildDayRoomDuration(t *testing.T) {
 	}
 }
 
-func TestForRangeGameRoundDurationMinutes(t *testing.T) {
+func TestForRangeGameRoundAvgMinutes(t *testing.T) {
 	dir := t.TempDir()
 	db, err := openDatabase(dir)
 	if err != nil {
@@ -832,9 +832,10 @@ func TestForRangeGameRoundDurationMinutes(t *testing.T) {
 	defer db.Close()
 	store := newAnalyticsStore(db)
 	day := analyticsDay(nowMs(), 480)
-	// 150_000ms = 2.5min，四舍五入应为 3 分钟。
+	// 150_000ms 总耗时 / 2 局 = 75_000ms = 1.25min，四舍五入到 1 位小数应为 1.3 分钟。
 	if err := store.upsertDaily([]analyticsDailyRow{
 		{Day: day, Metric: metricGameRoundDurationMs, Key: "rps", Value: 150_000},
+		{Day: day, Metric: metricGameRound, Key: "rps", Value: 2},
 	}); err != nil {
 		t.Fatalf("upsert daily: %v", err)
 	}
@@ -849,11 +850,46 @@ func TestForRangeGameRoundDurationMinutes(t *testing.T) {
 		t.Fatalf("buildSnapshot: %v", err)
 	}
 	view := snap.forRange(7)
-	if len(view.GameRoundDuration) != 1 || view.GameRoundDuration[0].Key != "rps" {
-		t.Fatalf("game round duration = %+v", view.GameRoundDuration)
+	if len(view.GameRoundAvgMinutes) != 1 || view.GameRoundAvgMinutes[0].Key != "rps" {
+		t.Fatalf("game round avg minutes = %+v", view.GameRoundAvgMinutes)
 	}
-	if len(view.GameRoundDuration[0].Values) != 1 || view.GameRoundDuration[0].Values[0] != 3 {
-		t.Fatalf("game round duration minutes = %+v, want [3]", view.GameRoundDuration[0].Values)
+	if len(view.GameRoundAvgMinutes[0].Values) != 1 || view.GameRoundAvgMinutes[0].Values[0] != 1.3 {
+		t.Fatalf("game round avg minutes = %+v, want [1.3]", view.GameRoundAvgMinutes[0].Values)
+	}
+}
+
+func TestForRangeRoomAvgMinutes(t *testing.T) {
+	dir := t.TempDir()
+	db, err := openDatabase(dir)
+	if err != nil {
+		t.Fatalf("openDatabase: %v", err)
+	}
+	defer db.Close()
+	store := newAnalyticsStore(db)
+	day := analyticsDay(nowMs(), 480)
+	// 跨游戏合计：rps 10 分钟(1 房) + othello 20 分钟(1 房) = 30 分钟 / 2 房 = 15 分钟均值，
+	// 不拆分游戏，只输出一条全站合计序列。
+	if err := store.upsertDaily([]analyticsDailyRow{
+		{Day: day, Metric: metricRoomDurationMs, Key: "rps", Value: 10 * 60_000},
+		{Day: day, Metric: metricRoomDurationMs, Key: "othello", Value: 20 * 60_000},
+		{Day: day, Metric: metricRoomCreate, Key: "rps", Value: 1},
+		{Day: day, Metric: metricRoomCreate, Key: "othello", Value: 1},
+	}); err != nil {
+		t.Fatalf("upsert daily: %v", err)
+	}
+	ro, err := openAnalyticsReadOnlyDB(dir)
+	if err != nil {
+		t.Fatalf("openAnalyticsReadOnlyDB: %v", err)
+	}
+	defer ro.Close()
+
+	snap, err := (&Server{analyticsRO: ro}).buildSnapshot(480, 0, 0, 0)
+	if err != nil {
+		t.Fatalf("buildSnapshot: %v", err)
+	}
+	view := snap.forRange(7)
+	if len(view.RoomAvgMinutes) != 1 || view.RoomAvgMinutes[0] != 15 {
+		t.Fatalf("room avg minutes = %+v, want [15]", view.RoomAvgMinutes)
 	}
 }
 

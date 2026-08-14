@@ -17,10 +17,10 @@ import {
 // 这里再嵌一层让图表库单独成块，连管理员改配置时都不会加载。
 const AnalyticsPanel = lazy(() => import("./AnalyticsPanel").then((m) => ({ default: m.AnalyticsPanel })));
 
-export type AdminSection = "site" | "analytics" | "factions" | "titles" | "punishments" | "roomTags" | "nameWar" | "giveaway" | "petBond" | "accessControl" | "users" | "rooms";
+export type AdminSection = "site" | "analytics" | "factions" | "titles" | "punishments" | "roomTags" | "nameWar" | "giveaway" | "petBond" | "rooms";
 
-const SECTIONS_WITHOUT_SAVE = new Set<AdminSection>(["users", "rooms", "analytics"]);
-export type AdminRoomTab = "rooms" | "announcement";
+const SECTIONS_WITHOUT_SAVE = new Set<AdminSection>(["rooms", "analytics"]);
+export type AdminRoomTab = "rooms" | "announcement" | "users";
 
 /** 用户管理的筛选/排序开关（与后端 admin:listPlayers 字段对应）。 */
 export type AdminPlayerFilters = {
@@ -53,6 +53,15 @@ const ADMIN_PLAYER_FILTER_BUTTONS: { key: keyof AdminPlayerFilters; label: strin
   { key: "recentLogin7d", label: "7天内登录" },
   { key: "rankedNonZero", label: "积分不为0" }
 ];
+
+const ADMIN_MESSAGE_META: Record<string, { label: string; detail: string }> = {
+  configInvalid: { label: "配置格式错误", detail: "提交的后台配置无法解析时显示" },
+  configSaved: { label: "配置保存成功", detail: "后台配置成功保存后显示" },
+  nameRequired: { label: "名字校验失败", detail: "玩家名字为空或长度不符合要求时显示" },
+  passwordWrong: { label: "房间密码错误", detail: "玩家输入错误的房间密码时显示" },
+  proofRequired: { label: "缺少惩罚证明", detail: "玩家未提交所需证明时显示" },
+  roomCreated: { label: "房间创建成功", detail: "玩家成功创建房间后显示" }
+};
 
 // 任务分组固定三选一：决定系统任务/称号按哪份文案分发，与阵营是多对一关系
 // （比如“顺性别男”“男跨女”都属于 male，写系统任务时只需要写一份 male 文案）。
@@ -299,7 +308,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
   }
 
   async function loadAdminPlayers(filters: AdminPlayerFilters = playerFilters) {
-    if (!logged || activeSection !== "users") return;
+    if (!logged || activeSection !== "rooms" || activeRoomTab !== "users") return;
     const gen = ++adminPlayersRequestGen.current;
     setAdminPlayersLoading(true);
     try {
@@ -338,11 +347,11 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
   }
 
   useEffect(() => {
-    if (!logged || activeSection !== "users") return;
+    if (!logged || activeSection !== "rooms" || activeRoomTab !== "users") return;
     void loadAdminPlayers(playerFilters);
-    // 仅在进入用户管理分区时拉取；过滤器切换由 togglePlayerFilter 负责。
+    // 仅在切到「用户与房间」的用户管理页时拉取；过滤器切换由 togglePlayerFilter 负责。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [logged, activeSection]);
+  }, [logged, activeSection, activeRoomTab]);
 
   async function sendAnnouncement() {
     try {
@@ -384,9 +393,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
     { id: "nameWar", label: "名争 / 极限", detail: `${draft.nameWar.penaltyPrefix} · ${draft.extremeMode.emoji} ${draft.extremeMode.label}` },
     { id: "giveaway", label: "白给模式", detail: draft.giveaway.panelTitle },
     { id: "petBond", label: "宠物乐园", detail: draft.petBond?.panelTitle || "宠物乐园" },
-    { id: "accessControl", label: "防多开", detail: (() => { const ac = withAccessControlDefaults(draft.accessControl); return ac.registrationDisabled ? "已禁止新用户注册" : `同指纹 ${ac.maxOnlinePerIp} 在线 / ${ac.maxCreatesPer10Min} 新建`; })() },
-    { id: "users", label: "用户管理", detail: playerFilters.online ? `在线筛选 · ${adminPlayersTotal} 人` : `${adminPlayersTotal} 人` },
-    { id: "rooms", label: "房间管理", detail: `${lobby.rooms.length} 房间 · 在线 ${lobby.onlineCount}` }
+    { id: "rooms", label: "用户与房间", detail: `${lobby.onlineCount} 人在线 · ${lobby.rooms.length} 个房间` }
   ];
 
   const currentNav = navItems.find((item) => item.id === activeSection) || navItems[0];
@@ -404,10 +411,24 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
       );
     }
     if (activeSection === "site") {
+      const patchAccessControl = (next: Partial<AppConfig["accessControl"]>) =>
+        patch({ accessControl: withAccessControlDefaults({ ...draft.accessControl, ...next }) });
+      const stats = lobby.serverStats;
       return (
         <>
           <div className="config-section admin-section-card">
-            <AdminSectionHeader title="提示公告" subtitle="修改公告板、密码错误、名字校验、保存提示等系统文案。" />
+            <AdminSectionHeader title="运行状态" subtitle="当前服务器与大厅的运行情况。" />
+            <div className="admin-preview-card">
+              <p>在线 {lobby.onlineCount} 人 · 房间 {lobby.rooms.length} 个 · 运行 {formatDuration(Date.now() - stats.startedAt)}</p>
+              <p>房间广播 {stats.roomBroadcasts} 次 · 大厅广播 {stats.lobbyBroadcasts} 次</p>
+              <p>最近 1 分钟：房间 {stats.recentRoomBroadcasts} 次 · 大厅 {stats.recentLobbyBroadcasts} 次</p>
+              <p>断线 {stats.disconnects} 次 · 重连 {stats.reconnects} 次</p>
+              <p>最近房间快照 {formatBytes(stats.lastRoomSnapshotBytes)} · 最近大厅快照 {formatBytes(stats.lastLobbySnapshotBytes)}</p>
+              <p>平均快照：房间 {formatBytes(stats.averageRoomSnapshotBytes)} · 大厅 {formatBytes(stats.averageLobbySnapshotBytes)}</p>
+            </div>
+          </div>
+          <div className="config-section admin-section-card">
+            <AdminSectionHeader title="提示公告" subtitle="发送全服公告、开关公告板与安全声明。" />
             <div className="admin-announcement-card">
               <div className="admin-card-title">
                 <strong>发送全服公告</strong>
@@ -457,13 +478,16 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                 onChange={(enabled) => patch({ securityDisclaimer: { enabled } })}
               />
             </div>
-            <div className="config-row">
-              {Object.entries(draft.messages).map(([key, value]) => (
-                <label className="field-label" key={key}>
-                  <span>{key}</span>
-                  <input value={value} onChange={(event) => patch({ messages: { ...draft.messages, [key]: event.target.value } })} />
-                </label>
-              ))}
+            <div className={draft.accessControl?.registrationDisabled ? "admin-announcement-card admin-preview-card-warning" : "admin-announcement-card"}>
+              <div className="admin-card-title">
+                <strong>新用户注册开关</strong>
+                <small>禁止新用户注册，防止批量注册攻击</small>
+              </div>
+              <Toggle
+                label="禁止新用户注册"
+                value={!!draft.accessControl?.registrationDisabled}
+                onChange={(value) => patchAccessControl({ registrationDisabled: value })}
+              />
             </div>
           </div>
           <div className="config-section admin-section-card">
@@ -476,6 +500,149 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
             <label className="field-label"><span>网站名称</span><input value={draft.site.name} onChange={(event) => patch({ site: { ...draft.site, name: event.target.value } })} placeholder="网站名称" /></label>
             <label className="field-label"><span>网站说明</span><textarea value={draft.site.description} onChange={(event) => patch({ site: { ...draft.site, description: event.target.value } })} placeholder="网站说明" /></label>
             <label className="field-label"><span>管理员口令</span><input type="password" value={draft.site.adminPassword} onChange={(event) => patch({ site: { ...draft.site, adminPassword: event.target.value } })} placeholder="管理员口令" /></label>
+          </div>
+          <div className="config-section admin-section-card">
+            <AdminSectionHeader title="限流策略" subtitle="按设备、IP 与资源占用范围集中管理访问限制。" />
+            <div className="admin-settings-groups">
+              <section className="admin-settings-group" aria-labelledby="admin-device-limits-title">
+                <div className="admin-card-title">
+                  <strong id="admin-device-limits-title">设备指纹限制</strong>
+                  <small>按「出口 IP + 浏览器指纹」识别同一设备，限制用户自己多开</small>
+                </div>
+                <div className="config-row">
+                  <label className="field-label">
+                    <span>同指纹同时在线人数上限</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={draft.accessControl?.maxOnlinePerIp ?? ""}
+                      onChange={(event) => patchAccessControl({ maxOnlinePerIp: Number(event.target.value) || 1 })}
+                    />
+                  </label>
+                  <label className="field-label">
+                    <span>同指纹 10 分钟内新建玩家上限</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={200}
+                      value={draft.accessControl?.maxCreatesPer10Min ?? ""}
+                      onChange={(event) => patchAccessControl({ maxCreatesPer10Min: Number(event.target.value) || 1 })}
+                    />
+                  </label>
+                </div>
+                <p className="hint">指纹由 FingerprintJS 在浏览器生成，与 IP 一起哈希为设备键。</p>
+              </section>
+
+              <section className="admin-settings-group" aria-labelledby="admin-ip-limits-title">
+                <div className="admin-card-title">
+                  <strong id="admin-ip-limits-title">IP 限制</strong>
+                  <small>不依赖浏览器指纹，阻断通过伪造指纹或反复换会话发起的批量请求</small>
+                </div>
+                <div className="config-row">
+                  <label className="field-label">
+                    <span>同 IP 同时在线人数上限</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={500}
+                      value={draft.accessControl?.maxOnlinePerIpTotal ?? ""}
+                      onChange={(event) => patchAccessControl({ maxOnlinePerIpTotal: Number(event.target.value) || 1 })}
+                    />
+                  </label>
+                  <label className="field-label">
+                    <span>同 IP 10 分钟内新建玩家上限</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={500}
+                      value={draft.accessControl?.maxCreatesPerIp ?? ""}
+                      onChange={(event) => patchAccessControl({ maxCreatesPerIp: Number(event.target.value) || 1 })}
+                    />
+                  </label>
+                  <label className="field-label">
+                    <span>同 IP 10 分钟内签发会话上限</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={500}
+                      value={draft.accessControl?.maxSessionIssuePerIp ?? ""}
+                      onChange={(event) => patchAccessControl({ maxSessionIssuePerIp: Number(event.target.value) || 1 })}
+                    />
+                  </label>
+                </div>
+                <div className="config-row">
+                  <label className="field-label">
+                    <span>单个操作的 IP 兜底倍数</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={draft.accessControl?.ipBackstopMultiplier ?? ""}
+                      onChange={(event) => patchAccessControl({ ipBackstopMultiplier: Number(event.target.value) || 1 })}
+                    />
+                  </label>
+                  <label className="field-label">
+                    <span>IP 兜底最低下限（次/窗口）</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={1000}
+                      value={draft.accessControl?.ipBackstopMinLimit ?? ""}
+                      onChange={(event) => patchAccessControl({ ipBackstopMinLimit: Number(event.target.value) || 1 })}
+                    />
+                  </label>
+                </div>
+                <p className="hint">建房、出招、提交惩罚证明等操作会同时检查同一 IP 的总请求量；即使脚本不断换会话或指纹，也会被这层限制拦截。</p>
+              </section>
+
+              <section className="admin-settings-group" aria-labelledby="admin-resource-limits-title">
+                <div className="admin-card-title">
+                  <strong id="admin-resource-limits-title">房间与证明图片</strong>
+                  <small>限制单个玩家占用的房间数量与证明图片上传频率</small>
+                </div>
+                <div className="config-row">
+                  <label className="field-label">
+                    <span>单玩家同时开房数量上限</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={draft.accessControl?.maxActiveRoomsPerOwner ?? ""}
+                      onChange={(event) => patchAccessControl({ maxActiveRoomsPerOwner: Number(event.target.value) || 1 })}
+                    />
+                  </label>
+                  <label className="field-label">
+                    <span>单玩家 10 分钟内证明图上传上限</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={200}
+                      value={draft.accessControl?.maxProofUploadsPerPlayer ?? ""}
+                      onChange={(event) => patchAccessControl({ maxProofUploadsPerPlayer: Number(event.target.value) || 1 })}
+                    />
+                  </label>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <div className="config-section admin-section-card">
+            <AdminSectionHeader title="提示语" subtitle="编辑玩家操作过程中显示的系统反馈文案。" />
+            <div className="config-row admin-message-grid">
+              {Object.entries(draft.messages).map(([key, value]) => {
+                const meta = ADMIN_MESSAGE_META[key];
+                return (
+                  <label className="field-label admin-message-field" key={key}>
+                    <span className="admin-message-label">
+                      <strong>{meta?.label || key}</strong>
+                      <small>{meta?.detail || `自定义提示语 · 配置键 ${key}`}</small>
+                    </span>
+                    <input value={value} onChange={(event) => patch({ messages: { ...draft.messages, [key]: event.target.value } })} />
+                  </label>
+                );
+              })}
+            </div>
           </div>
         </>
       );
@@ -636,7 +803,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
       const selectedIndex = Math.max(0, draft.titles.findIndex((segment) => segment.id === activeTitleId));
       const segment = draft.titles[selectedIndex];
       const taskGroups = taskGroupsFromFactions(draft.genderFactions);
-      // 与防多开 accessControl 相同：缺对象时用默认合并，避免 draft.rankedScore 为 undefined 时白屏。
+      // 与 accessControl 相同：缺对象时用默认合并，避免 draft.rankedScore 为 undefined 时白屏。
       const rankedScore = withRankedScoreDefaults(draft.rankedScore);
       const patchRankedScore = (next: Partial<AppConfig["rankedScore"]>) =>
         patch({ rankedScore: withRankedScoreDefaults({ ...rankedScore, ...next }) });
@@ -1382,128 +1549,6 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
       );
     }
 
-    if (activeSection === "accessControl") {
-      const patchAccessControl = (next: Partial<AppConfig["accessControl"]>) =>
-        patch({ accessControl: withAccessControlDefaults({ ...draft.accessControl, ...next }) });
-      return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="新用户注册开关" subtitle="禁止新用户注册，防止批量注册攻击" />
-          <div className={draft.accessControl?.registrationDisabled ? "admin-preview-card admin-preview-card-warning" : "admin-preview-card"}>
-            <Toggle
-              label="禁止新用户注册"
-              value={!!draft.accessControl?.registrationDisabled}
-              onChange={(value) => patchAccessControl({ registrationDisabled: value })}
-            />
-            {draft.accessControl?.registrationDisabled ? <p>当前已禁止新用户注册，新玩家会看到「暂停新用户注册」提示，无法进入游戏。</p> : null}
-          </div>
-          <AdminSectionHeader title="指纹 + IP 限制策略" subtitle="按「出口 IP + 浏览器指纹」组合限流，仅用于防止用户自己多开。" />
-          <div className="config-row">
-            <label className="field-label">
-              <span>同指纹同时在线人数上限</span>
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={draft.accessControl?.maxOnlinePerIp ?? ""}
-                onChange={(event) => patchAccessControl({ maxOnlinePerIp: Number(event.target.value) || 1 })}
-              />
-            </label>
-            <label className="field-label">
-              <span>同指纹 10 分钟内新建玩家上限</span>
-              <input
-                type="number"
-                min={1}
-                max={200}
-                value={draft.accessControl?.maxCreatesPer10Min ?? ""}
-                onChange={(event) => patchAccessControl({ maxCreatesPer10Min: Number(event.target.value) || 1 })}
-              />
-            </label>
-          </div>
-          <p className="hint">指纹由 FingerprintJS 在浏览器生成，与 IP 一起哈希为设备键。</p>
-          <AdminSectionHeader title="IP 限制策略" subtitle="按请求者 IP 限流，用于防止攻击者伪造浏览器指纹批量攻击。" />
-          <div className="config-row">
-            <label className="field-label">
-              <span>同 IP 同时在线人数上限</span>
-              <input
-                type="number"
-                min={1}
-                max={500}
-                value={draft.accessControl?.maxOnlinePerIpTotal ?? ""}
-                onChange={(event) => patchAccessControl({ maxOnlinePerIpTotal: Number(event.target.value) || 1 })}
-              />
-            </label>
-            <label className="field-label">
-              <span>同 IP 10 分钟内新建玩家上限</span>
-              <input
-                type="number"
-                min={1}
-                max={500}
-                value={draft.accessControl?.maxCreatesPerIp ?? ""}
-                onChange={(event) => patchAccessControl({ maxCreatesPerIp: Number(event.target.value) || 1 })}
-              />
-            </label>
-            <label className="field-label">
-              <span>同 IP 10 分钟内签发会话上限</span>
-              <input
-                type="number"
-                min={1}
-                max={500}
-                value={draft.accessControl?.maxSessionIssuePerIp ?? ""}
-                onChange={(event) => patchAccessControl({ maxSessionIssuePerIp: Number(event.target.value) || 1 })}
-              />
-            </label>
-          </div>
-          <div className="config-row">
-            <label className="field-label">
-              <span>单个操作的 IP 兜底倍数</span>
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={draft.accessControl?.ipBackstopMultiplier ?? ""}
-                onChange={(event) => patchAccessControl({ ipBackstopMultiplier: Number(event.target.value) || 1 })}
-              />
-            </label>
-            <label className="field-label">
-              <span>IP 兜底最低下限（次/窗口）</span>
-              <input
-                type="number"
-                min={1}
-                max={1000}
-                value={draft.accessControl?.ipBackstopMinLimit ?? ""}
-                onChange={(event) => patchAccessControl({ ipBackstopMinLimit: Number(event.target.value) || 1 })}
-              />
-            </label>
-          </div>
-          <p className="hint">建房、出招、提交惩罚证明等每种操作各自的频率上限，会按这个倍数换算出一个「同一 IP 总量」上限（不管换了多少个会话/指纹），并保证不低于最低下限——这样即使脚本不断重新登录换身份，同一出口 IP 的总请求量仍会被卡住。</p>
-
-          <AdminSectionHeader title="房间与证明图片" subtitle="限制单个玩家同时占用房间数量、上传证明图片速率，防止恶意消耗服务器资源。" />
-          <div className="config-row">
-            <label className="field-label">
-              <span>单玩家同时开房数量上限</span>
-              <input
-                type="number"
-                min={1}
-                max={50}
-                value={draft.accessControl?.maxActiveRoomsPerOwner ?? ""}
-                onChange={(event) => patchAccessControl({ maxActiveRoomsPerOwner: Number(event.target.value) || 1 })}
-              />
-            </label>
-            <label className="field-label">
-              <span>单玩家 10 分钟内证明图上传上限</span>
-              <input
-                type="number"
-                min={1}
-                max={200}
-                value={draft.accessControl?.maxProofUploadsPerPlayer ?? ""}
-                onChange={(event) => patchAccessControl({ maxProofUploadsPerPlayer: Number(event.target.value) || 1 })}
-              />
-            </label>
-          </div>
-        </div>
-      );
-    }
-
     if (activeSection === "roomTags") {
       return (
         <>
@@ -1553,15 +1598,14 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
       );
     }
 
-    if (activeSection === "users") {
+    function renderUserManagement() {
       const listHint = `匹配过滤器 · 在线 ${adminFilterOnlineCount} / 离线 ${adminFilterOfflineCount}`;
       const nameKeyword = playerNameSearch.trim().toLowerCase();
       const visiblePlayers = nameKeyword
         ? adminPlayers.filter((player) => (player.name || "").toLowerCase().includes(nameKeyword))
         : adminPlayers;
       return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="用户管理" subtitle="按过滤器查询玩家档案，协助改资料、踢出与找回认领密钥。" />
+        <div className="admin-tab-content">
           <div className="admin-player-filters" role="group" aria-label="用户列表过滤器">
             <input
               className="admin-player-name-search"
@@ -1622,69 +1666,74 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
     }
 
     if (activeSection === "rooms") {
-      const stats = lobby.serverStats;
+      const managementTabs: Array<{
+        id: AdminRoomTab;
+        label: string;
+        detail: string;
+        meta: string;
+      }> = [
+        { id: "users", label: "用户管理", detail: "查询资料、踢出用户与找回密钥", meta: `${lobby.onlineCount} 人在线` },
+        { id: "rooms", label: "房间管理", detail: "查看房间状态并处理当前对局", meta: `${lobby.rooms.length} 个房间` },
+        { id: "announcement", label: "聊天管理", detail: "检索、删除或恢复历史消息", meta: "历史消息" }
+      ];
+      const currentManagementTab = managementTabs.find((tab) => tab.id === activeRoomTab) || managementTabs[0];
       return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="房间管理" subtitle="查看运行状态，管理房间与聊天（用户管理已独立到左侧「用户管理」）。" />
-          <div className="admin-preview-card">
-            <span>运行状态</span>
-            <p>在线 {lobby.onlineCount} 人 · 房间 {lobby.rooms.length} 个 · 运行 {formatDuration(Date.now() - stats.startedAt)}</p>
-            <p>房间广播 {stats.roomBroadcasts} 次 · 大厅广播 {stats.lobbyBroadcasts} 次</p>
-            <p>最近 1 分钟：房间 {stats.recentRoomBroadcasts} 次 · 大厅 {stats.recentLobbyBroadcasts} 次</p>
-            <p>断线 {stats.disconnects} 次 · 重连 {stats.reconnects} 次</p>
-            <p>最近房间快照 {formatBytes(stats.lastRoomSnapshotBytes)} · 最近大厅快照 {formatBytes(stats.lastLobbySnapshotBytes)}</p>
-            <p>平均快照：房间 {formatBytes(stats.averageRoomSnapshotBytes)} · 大厅 {formatBytes(stats.averageLobbySnapshotBytes)}</p>
-          </div>
-          <div className="admin-action-tabs admin-room-tabs">
-            {[
-              { id: "rooms" as const, label: "房间", count: lobby.rooms.length },
-              { id: "announcement" as const, label: "聊天管理", count: 0 }
-            ].map((tab) => (
+        <>
+          <nav className="admin-management-nav" aria-label="用户与房间管理分类">
+            {managementTabs.map((tab) => (
               <button
                 type="button"
                 className={activeRoomTab === tab.id ? "active" : ""}
                 key={tab.id}
                 onClick={() => setActiveRoomTab(tab.id)}
+                aria-current={activeRoomTab === tab.id ? "page" : undefined}
               >
-                <span>{tab.label}</span>
-                {tab.count > 0 && <em>{tab.count}</em>}
+                <span>
+                  <strong>{tab.label}</strong>
+                  <small>{tab.detail}</small>
+                </span>
+                <em>{tab.meta}</em>
               </button>
             ))}
-          </div>
-          {activeRoomTab === "announcement" && <AdminChatManager onError={onError} action={action} />}
-          {activeRoomTab === "rooms" && (
-            <div className="admin-list-section">
-              <div className="admin-list-heading">
-                <h3>房间列表</h3>
-                <span>{lobby.rooms.length} 间</span>
+          </nav>
+          <div className="config-section admin-section-card admin-management-content">
+            <AdminSectionHeader title={currentManagementTab.label} subtitle={currentManagementTab.detail} />
+            {activeRoomTab === "announcement" && <AdminChatManager onError={onError} action={action} />}
+            {activeRoomTab === "users" && renderUserManagement()}
+            {activeRoomTab === "rooms" && (
+              <div className="admin-list-section">
+                <div className="admin-list-heading">
+                  <h3>房间列表</h3>
+                  <span>{lobby.rooms.length} 间</span>
+                </div>
+                {lobby.rooms.map((room) => {
+                  const canForceSeatOutcome = room.status === "playing" && room.gameId !== "liarsdice"
+                    && room.versus.A != null && room.versus.B != null;
+                  const seatALabel = room.versus.A?.player?.name || "A方";
+                  const seatBLabel = room.versus.B?.player?.name || "B方";
+                  return (
+                    <div className="admin-room" key={room.id}>
+                      <div className="admin-card-title">
+                        <strong>{room.name}</strong>
+                        <small>{room.id} · {roomStatusText(room.status)} · {room.players}/2 战斗席 · {room.spectators} 观战</small>
+                      </div>
+                      {room.tags?.length ? <RoomTagList tags={room.tags} /> : null}
+                      <RoomInfoTagList tags={lobbyRoomInfoTags(config, room)} />
+                      <div className="admin-action-row othello-admin-actions">
+                        <button className="danger-button" onClick={() => action("closeRoom", { roomId: room.id })}>关闭房间</button>
+                        <button onClick={() => action("forceNext", { roomId: room.id })}>重开</button>
+                        <button onClick={() => action("forceSeatOutcome", { roomId: room.id, result: "A" })} disabled={!canForceSeatOutcome}>判 {seatALabel} 胜</button>
+                        <button onClick={() => action("forceSeatOutcome", { roomId: room.id, result: "B" })} disabled={!canForceSeatOutcome}>判 {seatBLabel} 胜</button>
+                        <button onClick={() => action("forceSeatOutcome", { roomId: room.id, result: "draw" })} disabled={!canForceSeatOutcome}>判平</button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {lobby.rooms.length === 0 && <p className="empty">暂无房间</p>}
               </div>
-              {lobby.rooms.map((room) => {
-                const canForceSeatOutcome = room.status === "playing" && room.gameId !== "liarsdice"
-                  && room.versus.A != null && room.versus.B != null;
-                const seatALabel = room.versus.A?.player?.name || "A方";
-                const seatBLabel = room.versus.B?.player?.name || "B方";
-                return (
-                  <div className="admin-room" key={room.id}>
-                    <div className="admin-card-title">
-                      <strong>{room.name}</strong>
-                      <small>{room.id} · {roomStatusText(room.status)} · {room.players}/2 战斗席 · {room.spectators} 观战</small>
-                    </div>
-                    {room.tags?.length ? <RoomTagList tags={room.tags} /> : null}
-                    <RoomInfoTagList tags={lobbyRoomInfoTags(config, room)} />
-                    <div className="admin-action-row othello-admin-actions">
-                      <button className="danger-button" onClick={() => action("closeRoom", { roomId: room.id })}>关闭房间</button>
-                      <button onClick={() => action("forceNext", { roomId: room.id })}>重开</button>
-                      <button onClick={() => action("forceSeatOutcome", { roomId: room.id, result: "A" })} disabled={!canForceSeatOutcome}>判 {seatALabel} 胜</button>
-                      <button onClick={() => action("forceSeatOutcome", { roomId: room.id, result: "B" })} disabled={!canForceSeatOutcome}>判 {seatBLabel} 胜</button>
-                      <button onClick={() => action("forceSeatOutcome", { roomId: room.id, result: "draw" })} disabled={!canForceSeatOutcome}>判平</button>
-                    </div>
-                  </div>
-                );
-              })}
-              {lobby.rooms.length === 0 && <p className="empty">暂无房间</p>}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </>
       );
     }
 
@@ -1971,9 +2020,9 @@ function AdminChatManager({ onError, action }: {
     ? "检索中…"
     : searchError
       ? "检索失败"
-    : hasMore
-      ? `已显示 ${messages.length} 条 · 还有更多`
-      : `${messages.length} 条`;
+      : hasMore
+        ? `已显示 ${messages.length} 条 · 还有更多`
+        : `${messages.length} 条`;
 
   return (
     <div className="admin-chat-manager">
