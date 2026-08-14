@@ -474,6 +474,120 @@ func TestRebuildDayFunnelMetrics(t *testing.T) {
 	}
 }
 
+// TestRebuildDayFunnelBackfillsShallowStages 漏斗必须逐级单调：走到更深一层的设备，
+// 即便浅层埋点没记上（game_start 比 game_round 晚上线的那半天、跨零点结算、中途换座
+// 顶替），也要被回填进前面每一层，不能出现「完成对局 > 开局」这种倒挂。
+func TestRebuildDayFunnelBackfillsShallowStages(t *testing.T) {
+	dir := t.TempDir()
+	db, err := openDatabase(dir)
+	if err != nil {
+		t.Fatalf("openDatabase: %v", err)
+	}
+	defer db.Close()
+
+	store := newAnalyticsStore(db)
+	events := newEventStore(db)
+	tz := 480
+	day := analyticsDay(nowMs(), tz)
+	offsetMs := int64(tz) * 60_000
+	at := day*86_400_000 - offsetMs + 12*3_600_000
+
+	// dev1/p1 全程有埋点；dev2/p2 只有会话，进大厅/进房/开局三层的埋点全部缺失，
+	// 只赶上了结算（game_round）——即 game_start 上线当天的真实形态。
+	for _, row := range []struct {
+		vis, sid, pid, view string
+	}{
+		{"dev1", "s1", "p1", "lobby"},
+		{"dev2", "s2", "p2", "login"},
+	} {
+		if err := store.writeBatch(
+			analyticsVisitorRow{Visitor: row.vis, FirstAt: at, LastAt: at, FirstDay: day, SessionsDelta: 1},
+			true,
+			analyticsSessionRow{
+				ID: row.sid, Visitor: row.vis, StartedAt: at, LastAt: at, Day: day,
+				PlayerID: row.pid, PageviewsDelta: 1, EventsDelta: 1,
+			},
+			[]analyticsEventRow{
+				{At: at, Day: day, Source: 0, SessionID: row.sid, Visitor: row.vis, PlayerID: row.pid, Name: "pageview", View: row.view},
+			},
+		); err != nil {
+			t.Fatalf("session %s: %v", row.sid, err)
+		}
+	}
+	if err := events.insertRoomEvent(roomEventInput{
+		At: at, RoomID: "r1", RoomName: "房", GameID: "rps",
+		UserID: "p1", UserName: "甲", Action: "create",
+	}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if err := store.insertEvents([]analyticsEventRow{
+		{At: at, Day: day, Source: 1, Name: "game_start", Detail: "rps", Value: 1, View: "r1", PlayerID: "p1"},
+		{At: at + 2, Day: day, Source: 1, Name: "game_round", Detail: "rps:win", Value: 1, View: "r1", PlayerID: "p1"},
+		{At: at + 2, Day: day, Source: 1, Name: "game_round", Detail: "rps:win", Value: 0, View: "r1", PlayerID: "p2"},
+	}); err != nil {
+		t.Fatalf("game events: %v", err)
+	}
+
+	ro, err := openAnalyticsReadOnlyDB(dir)
+	if err != nil {
+		t.Fatalf("ro: %v", err)
+	}
+	defer ro.Close()
+
+	s := &Server{
+		db: db, analyticsDB: store, analyticsRO: ro,
+		analyticsTZOffsetMin: tz, analyticsEnabled: true,
+		analyticsSalt: []byte("x"),
+	}
+	rows, err := s.rebuildDay(day, tz)
+	if err != nil {
+		t.Fatalf("rebuildDay: %v", err)
+	}
+	got := map[string]int64{}
+	for _, r := range rows {
+		if r.Metric == metricFunnel {
+			got[r.Key] = r.Value
+		}
+	}
+	// dev2 只有 game_round，仍要被回填进 round / room / lobby / visit 四层。
+	for _, key := range funnelStageKeys {
+		if got[key] != 2 {
+			t.Fatalf("funnel[%s] = %d, want 2 device UV (dev2 应被深层回填)", key, got[key])
+		}
+	}
+	// 单调性是这套口径的硬保证，逐对校验，任何一层倒挂都是回归。
+	for i := 1; i < len(funnelStageKeys); i++ {
+		prev, cur := funnelStageKeys[i-1], funnelStageKeys[i]
+		if got[cur] > got[prev] {
+			t.Fatalf("漏斗倒挂：%s(%d) > %s(%d)", cur, got[cur], prev, got[prev])
+		}
+	}
+}
+
+func TestRecomputeAnalyticsFunnelKeepsDayWithOnlyFunnelRows(t *testing.T) {
+	dir := t.TempDir()
+	db, err := openDatabase(dir)
+	if err != nil {
+		t.Fatalf("openDatabase: %v", err)
+	}
+	defer db.Close()
+
+	const day int64 = 20_000
+	if _, err := db.Exec(`INSERT INTO analytics_daily (day, metric, key, value, sealed) VALUES (?, ?, 'visit', 7, 1)`, day, metricFunnel); err != nil {
+		t.Fatalf("seed funnel: %v", err)
+	}
+	if err := recomputeAnalyticsFunnelMetrics(db); err != nil {
+		t.Fatalf("recomputeAnalyticsFunnelMetrics: %v", err)
+	}
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM analytics_daily WHERE day=? AND metric=?`, day, metricFunnel).Scan(&count); err != nil {
+		t.Fatalf("count funnel rows: %v", err)
+	}
+	if count != len(funnelStageKeys) {
+		t.Fatalf("funnel rows after recompute = %d, want %d（仅有漏斗行的日期不能被迁移漏掉）", count, len(funnelStageKeys))
+	}
+}
+
 func TestBuildSnapshotGameRoundByKey(t *testing.T) {
 	dir := t.TempDir()
 	db, err := openDatabase(dir)
@@ -599,6 +713,147 @@ func TestRebuildDayRoomRoundsAndChatSpeakers(t *testing.T) {
 	}
 	if got[metricChatRoomSpeakers] != 3 {
 		t.Fatalf("chat_room_speakers = %d, want 3", got[metricChatRoomSpeakers])
+	}
+}
+
+func TestRebuildDayGameRoundDuration(t *testing.T) {
+	dir := t.TempDir()
+	db, err := openDatabase(dir)
+	if err != nil {
+		t.Fatalf("openDatabase: %v", err)
+	}
+	defer db.Close()
+
+	store := newAnalyticsStore(db)
+	tz := 480
+	now := nowMs()
+	day := analyticsDay(now, tz)
+	// roomA：rps 一局，开局到结算 2 分钟；roomB：gomoku 一局，5 分钟。
+	// 额外一条无 room_id 的历史脏数据（view=""）配不出开局时间，不应计入累加。
+	_ = store.insertEvents([]analyticsEventRow{
+		{At: now - 2*60_000, Day: day, Source: 1, Name: "game_start", Detail: "rps", View: "roomA", Value: 1, PlayerID: "p1"},
+		{At: now - 2*60_000, Day: day, Source: 1, Name: "game_start", Detail: "rps", View: "roomA", Value: 1, PlayerID: "p2"},
+		{At: now, Day: day, Source: 1, Name: "game_round", Detail: "rps:win", View: "roomA", Value: 1},
+		{At: now - 5*60_000, Day: day, Source: 1, Name: "game_start", Detail: "gomoku", View: "roomB", Value: 1, PlayerID: "p3"},
+		{At: now, Day: day, Source: 1, Name: "game_round", Detail: "gomoku:win", View: "roomB", Value: 1},
+		{At: now, Day: day, Source: 1, Name: "game_round", Detail: "rps:win", View: "", Value: 1},
+	})
+
+	ro, err := openAnalyticsReadOnlyDB(dir)
+	if err != nil {
+		t.Fatalf("ro: %v", err)
+	}
+	defer ro.Close()
+
+	s := &Server{
+		db: db, analyticsDB: store, analyticsRO: ro,
+		analyticsTZOffsetMin: tz, analyticsEnabled: true,
+		analyticsSalt: []byte("x"),
+	}
+	rows, err := s.rebuildDay(day, tz)
+	if err != nil {
+		t.Fatalf("rebuildDay: %v", err)
+	}
+	got := map[string]int64{}
+	for _, r := range rows {
+		if r.Metric == metricGameRoundDurationMs {
+			got[r.Key] = r.Value
+		}
+	}
+	if got["rps"] != 2*60_000 {
+		t.Fatalf("rps duration = %d, want %d", got["rps"], 2*60_000)
+	}
+	if got["gomoku"] != 5*60_000 {
+		t.Fatalf("gomoku duration = %d, want %d", got["gomoku"], 5*60_000)
+	}
+}
+
+func TestRebuildDayRoomDuration(t *testing.T) {
+	dir := t.TempDir()
+	db, err := openDatabase(dir)
+	if err != nil {
+		t.Fatalf("openDatabase: %v", err)
+	}
+	defer db.Close()
+
+	store := newAnalyticsStore(db)
+	events := newEventStore(db)
+	tz := 480
+	day := analyticsDay(nowMs(), tz)
+	offsetMs := int64(tz) * 60_000
+	at := day*86_400_000 - offsetMs + 12*3_600_000
+
+	// roomA：rps，10 分钟后关闭。roomB：othello，创建但当天未关闭，不应计入累加。
+	if err := events.insertRoomEvent(roomEventInput{At: at, RoomID: "roomA", GameID: "rps", Action: "create"}); err != nil {
+		t.Fatalf("create roomA: %v", err)
+	}
+	if err := events.insertRoomEvent(roomEventInput{At: at + 10*60_000, RoomID: "roomA", GameID: "rps", Action: "close", Reason: "empty_cleanup"}); err != nil {
+		t.Fatalf("close roomA: %v", err)
+	}
+	if err := events.insertRoomEvent(roomEventInput{At: at, RoomID: "roomB", GameID: "othello", Action: "create"}); err != nil {
+		t.Fatalf("create roomB: %v", err)
+	}
+
+	ro, err := openAnalyticsReadOnlyDB(dir)
+	if err != nil {
+		t.Fatalf("ro: %v", err)
+	}
+	defer ro.Close()
+
+	s := &Server{
+		db: db, analyticsDB: store, analyticsRO: ro,
+		analyticsTZOffsetMin: tz, analyticsEnabled: true,
+		analyticsSalt: []byte("x"),
+	}
+	rows, err := s.rebuildDay(day, tz)
+	if err != nil {
+		t.Fatalf("rebuildDay: %v", err)
+	}
+	got := map[string]int64{}
+	for _, r := range rows {
+		if r.Metric == metricRoomDurationMs {
+			got[r.Key] = r.Value
+		}
+	}
+	if got["rps"] != 10*60_000 {
+		t.Fatalf("rps room duration = %d, want %d", got["rps"], 10*60_000)
+	}
+	if v, ok := got["othello"]; ok {
+		t.Fatalf("unclosed room should not be counted, got othello=%d", v)
+	}
+}
+
+func TestForRangeGameRoundDurationMinutes(t *testing.T) {
+	dir := t.TempDir()
+	db, err := openDatabase(dir)
+	if err != nil {
+		t.Fatalf("openDatabase: %v", err)
+	}
+	defer db.Close()
+	store := newAnalyticsStore(db)
+	day := analyticsDay(nowMs(), 480)
+	// 150_000ms = 2.5min，四舍五入应为 3 分钟。
+	if err := store.upsertDaily([]analyticsDailyRow{
+		{Day: day, Metric: metricGameRoundDurationMs, Key: "rps", Value: 150_000},
+	}); err != nil {
+		t.Fatalf("upsert daily: %v", err)
+	}
+	ro, err := openAnalyticsReadOnlyDB(dir)
+	if err != nil {
+		t.Fatalf("openAnalyticsReadOnlyDB: %v", err)
+	}
+	defer ro.Close()
+
+	snap, err := (&Server{analyticsRO: ro}).buildSnapshot(480, 0, 0, 0)
+	if err != nil {
+		t.Fatalf("buildSnapshot: %v", err)
+	}
+	view := snap.forRange(7)
+	if len(view.GameRoundDuration) != 1 || view.GameRoundDuration[0].Key != "rps" {
+		t.Fatalf("game round duration = %+v", view.GameRoundDuration)
+	}
+	if len(view.GameRoundDuration[0].Values) != 1 || view.GameRoundDuration[0].Values[0] != 3 {
+		t.Fatalf("game round duration minutes = %+v, want [3]", view.GameRoundDuration[0].Values)
 	}
 }
 

@@ -123,7 +123,7 @@ func (s *Server) roundResultLabel(room *RoomState, result types.RoundResult) str
 		}
 		return "平局"
 	}
-	return occupantName(room.Seats[types.SeatKey(result)]) + "胜利"
+	return seatWinLabel(room, types.SeatKey(result))
 }
 
 func (s *Server) maybeStartChoosing(room *RoomState) {
@@ -444,6 +444,10 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 		item.PunishmentName = s.punishmentRoundLabel(room, punishmentTasks)
 	}
 	s.addRoundHistory(room, item)
+	// 与其它四个回合制游戏的结算函数保持一致：把 ResultText 作为房间通知推送一次，
+	// 前端才有机会在实时提示里看到白给/命运干预/排位加减分这些说明（历史记录卡片
+	// 里的 resultText 字段本身已经在 item 里，这里只是补上"当下"这一份主动推送）。
+	s.roomNotice(room, room.ResultText)
 	s.setupPunishmentOrNext(room, result)
 }
 
@@ -521,7 +525,7 @@ func (s *Server) applyDisconnectForfeit(room *RoomState, player *PlayerState) bo
 		ID: randomID(), Round: len(room.RoundHistory) + 1, At: nowMs(),
 		PlayerA: playerAName, PlayerB: playerBName,
 		MoveA: moveA, MoveB: moveB, Result: types.RoundResult(forfeit.WinnerSeat),
-		ResultLabel: forfeit.WinnerName + "胜利", ResultText: room.ResultText,
+		ResultLabel: seatWinLabel(room, forfeit.WinnerSeat), ResultText: room.ResultText,
 		Ranked: true, Stake: &baseStake, RankMultiplier: &rm, EffectiveStake: &es,
 		ExtremeRanked:   room.Settings.EnableExtremeRanked,
 		PunishmentTasks: []types.PunishmentTask{}, PunishedNames: []string{}, Proofs: []types.HistoryProof{},

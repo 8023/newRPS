@@ -15,6 +15,9 @@ var (
 		"pageview": {}, "session_ping": {}, "login_success": {}, "theme_toggle": {},
 		// game_start：对局进入 playing/出拳/行棋；game_round：对局结算（一局一次）。
 		"game_start": {}, "game_round": {}, "other": {},
+		// punish_tag_include/exclude：建房选随机惩罚任务时勾选/排除的标签（detail=tagId）。
+		// punish_series_select：建房选系列惩罚任务时选中的系列（detail=seriesId）。
+		"punish_tag_include": {}, "punish_tag_exclude": {}, "punish_series_select": {},
 	}
 	analyticsViewKeys = map[string]struct{}{
 		"login": {}, "lobby": {}, "room": {}, "admin": {},

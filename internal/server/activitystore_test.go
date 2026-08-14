@@ -37,6 +37,50 @@ func TestInsertConnectionEventOneShot(t *testing.T) {
 	}
 }
 
+func TestAltAccountPlayerIDs(t *testing.T) {
+	dir := t.TempDir()
+	db, err := openDatabase(dir)
+	if err != nil {
+		t.Fatalf("openDatabase: %v", err)
+	}
+	defer db.Close()
+	store := newActivityStore(db)
+
+	// p1、p2 共用过 devA；p3 从没共用过设备；p4 干脆没有 connection_events 记录。
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("insertConnectionEvent: %v", err)
+		}
+	}
+	must(store.insertConnectionEvent("s1", 1000, 2000, "sid1", "1.1.1.1", "devA", "fpA", "ua", "ctx", "p1", "disconnect", "", ""))
+	must(store.insertConnectionEvent("s2", 3000, 4000, "sid2", "2.2.2.2", "devA", "fpA", "ua", "ctx", "p2", "disconnect", "", ""))
+	must(store.insertConnectionEvent("s3", 5000, 6000, "sid3", "3.3.3.3", "devB", "fpB", "ua", "ctx", "p3", "disconnect", "", ""))
+
+	ids, err := altAccountPlayerIDs(db, "p1")
+	if err != nil {
+		t.Fatalf("altAccountPlayerIDs: %v", err)
+	}
+	if len(ids) != 1 || ids[0] != "p2" {
+		t.Fatalf("altAccountPlayerIDs(p1) = %v, want [p2]", ids)
+	}
+
+	if ids, err := altAccountPlayerIDs(db, "p3"); err != nil || len(ids) != 0 {
+		t.Fatalf("altAccountPlayerIDs(p3) = %v, err=%v, want empty", ids, err)
+	}
+	if ids, err := altAccountPlayerIDs(db, "p4"); err != nil || len(ids) != 0 {
+		t.Fatalf("altAccountPlayerIDs(p4) = %v, err=%v, want empty", ids, err)
+	}
+
+	var indexed int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_connection_events_device'`).Scan(&indexed); err != nil {
+		t.Fatalf("check index: %v", err)
+	}
+	if indexed != 1 {
+		t.Fatalf("idx_connection_events_device missing")
+	}
+}
+
 func newActivityTestServer(t *testing.T) *Server {
 	t.Helper()
 	dir := t.TempDir()

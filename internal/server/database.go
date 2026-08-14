@@ -57,10 +57,11 @@ var allSchemas = []string{
 	chatSchema, roomEventLogSchema, punishmentEventSchema, pushSubscriptionSchema, playerSchema, activityEventSchema, petBondSchema, analyticsSchema, punishmentPoolSchema,
 }
 
-// openAnalyticsReadOnlyDB 为分析聚合单独开一个只读连接池。
+// openAnalyticsReadOnlyDB 开一个独立的只读连接池，供分析聚合（s.analyticsRO）以及后台
+// 小号/聊天检索等运营查询（s.activityRO，共享池）使用。
 // 主连接 SetMaxOpenConns(1) 是为了迎合 SQLite 单写者模型，代价是任何长查询都会把写入
-// 一起堵死。WAL 模式下读者与写者互不阻塞，所以聚合走一个独立的 mode=ro 句柄：
-// 即便某次全表扫描跑了几百毫秒，游戏主流程的写入也完全不受影响。
+// 一起堵死。WAL 模式下读者与写者互不阻塞，所以这类只读场景走独立的 mode=ro 句柄：
+// 即便某次查询跑了几百毫秒甚至全表扫描，游戏主流程的写入也完全不受影响。
 //
 // 必须在 openDatabase 之后调用——只读连接无法创建 -wal/-shm 边车文件，
 // 库还没被以读写方式初始化过 WAL 时，用 mode=ro 打开会直接失败。

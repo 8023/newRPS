@@ -52,6 +52,32 @@ func occupantName(occupant SeatOccupant) string {
 	return occupant.(*HumanSeat).Player.DisplayName
 }
 
+// occupantShortName 返回座位玩家的短名（不含性别/称号，名争惩罚态下为惩罚名），
+// 与 playerShortName 对 *PlayerState 的口径一致——供不应嵌入称号的场合使用
+// （如 seatWinLabel 的「玩家A/B「昵称」胜利」）；occupantName 仍保留完整的
+// 性别-称号-昵称，供 resultText 等既有场合使用。
+func occupantShortName(occupant SeatOccupant) string {
+	if occupant == nil {
+		return "空位"
+	}
+	p := occupant.(*HumanSeat).Player
+	if ptrBool(p.NameWarPunished) && p.NameWarPenaltyName != "" {
+		return p.NameWarPenaltyName
+	}
+	return p.Name
+}
+
+// seatWinLabel 组装「玩家A/B「昵称」胜利」格式的简讯，五个双座位游戏
+// （RPS/黑白棋/井字棋/五子棋/斗兽棋）的 resultLabel 共用——刻意不含性别/称号，
+// 那些完整信息留给 resultText。
+func seatWinLabel(room *RoomState, winnerSeat types.SeatKey) string {
+	seatText := "玩家A"
+	if winnerSeat == types.SeatB {
+		seatText = "玩家B"
+	}
+	return fmt.Sprintf("%s「%s」胜利", seatText, occupantShortName(room.Seats[winnerSeat]))
+}
+
 func (s *Server) shouldCloseRoom(room *RoomState) bool {
 	if room.Settings.GameID == types.GameLiarsDice {
 		return len(room.SpectatorIDs) == 0 && (room.LiarsDice == nil || len(room.LiarsDice.ParticipantIDs) == 0)
@@ -59,6 +85,18 @@ func (s *Server) shouldCloseRoom(room *RoomState) bool {
 	return room.Seats[types.SeatA] == nil &&
 		room.Seats[types.SeatB] == nil &&
 		len(room.SpectatorIDs) == 0
+}
+
+// dropProofImageRoomEntries 清掉 s.proofImageRooms 里指向这个房间的表项。不清也不影响
+// 正确性（serveStatic 靠 s.rooms[roomID] != nil 判活，房间一删这些表项自然就会判定为
+// "房间已销毁"），纯粹是防止这张表随房间生命周期只增不减、长期运行下无限膨胀。调用方必须
+// 已持有 s.mu。
+func (s *Server) dropProofImageRoomEntries(roomID string) {
+	for filename, rid := range s.proofImageRooms {
+		if rid == roomID {
+			delete(s.proofImageRooms, filename)
+		}
+	}
 }
 
 func (s *Server) cleanupRoomIfEmpty(room *RoomState) bool {
@@ -75,6 +113,7 @@ func (s *Server) cleanupRoomIfEmpty(room *RoomState) bool {
 	s.clearRoomBroadcastTimer(room.ID)
 	s.dropSyncChannel(channelRoom(room.ID))
 	delete(s.rooms, room.ID)
+	s.dropProofImageRoomEntries(room.ID)
 	if s.eventDB != nil {
 		if err := s.eventDB.insertRoomEvent(roomEventInput{
 			At: nowMs(), RoomID: room.ID, RoomName: room.Settings.Name, GameID: string(room.Settings.GameID),
@@ -692,7 +731,7 @@ func (s *Server) createDisconnectForfeit(room *RoomState, player *PlayerState) {
 	room.DisconnectForfeits[player.ID] = DisconnectForfeit{
 		LoserID:        player.ID,
 		LoserSeat:      loserSeat,
-		LoserName:      playerShortName(player),
+		LoserName:      occupantName(room.Seats[loserSeat]),
 		WinnerID:       winner.GetID(),
 		WinnerSeat:     winnerSeat,
 		WinnerName:     occupantName(winner),

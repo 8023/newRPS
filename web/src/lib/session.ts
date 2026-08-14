@@ -1,5 +1,5 @@
 import { getBrowserFingerprint } from "../fingerprint";
-import { playerIdKey, playerSecretKey, tokenKey } from "./constants";
+import { playerIdKey, playerSecretKey, punishmentTagPrefsKey, tokenKey } from "./constants";
 import { socket } from "../ws";
 import { ask } from "./rpc";
 
@@ -57,6 +57,29 @@ export function cacheJoinProfile(player: { name: string; genderId?: string | nul
   localStorage.setItem("rps-online-name", player.name || "");
   localStorage.setItem("rps-online-gender", genderId);
   localStorage.setItem("rps-online-faction", player.factionId || "");
+}
+
+/**
+ * 随机任务开房「标签三态偏好」（tagId -> include|exclude）：纯本地浏览器偏好，仅用于
+ * 开房面板预填，不再随玩家档案落库/跨设备同步——同一浏览器下次开房记得住就够了。
+ */
+export function readPunishmentTagPrefs(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(punishmentTagPrefsKey);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed as Record<string, string> : {};
+  } catch {
+    return {};
+  }
+}
+
+export function writePunishmentTagPrefs(prefs: Record<string, string>) {
+  try {
+    localStorage.setItem(punishmentTagPrefsKey, JSON.stringify(prefs));
+  } catch {
+    // 本地存储写入失败（隐私模式/容量满）不影响本次开房，只是下次预填不到。
+  }
 }
 
 export async function ensureSessionToken(forceNew = false) {

@@ -452,6 +452,7 @@ func (s *Server) onPetBondSetTitle(client *Client, env wsEnvelope) {
 	b.TitleUpdatedAt = nowMs()
 	s.persistBond(b)
 	if pet := s.players[petID]; pet != nil {
+		pet.DisplayName = s.formatDisplayName(pet)
 		s.refreshPlayerSnapshots(pet)
 	}
 	s.notifyAllOnlinePetBondStates()

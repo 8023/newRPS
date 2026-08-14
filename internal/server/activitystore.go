@@ -2,6 +2,7 @@ package server
 
 import (
 	"database/sql"
+	"sort"
 	"sync"
 )
 
@@ -60,6 +61,7 @@ CREATE TABLE IF NOT EXISTS connection_events (
 );
 CREATE INDEX IF NOT EXISTS idx_connection_events_player ON connection_events(player_id, connected_at);
 CREATE INDEX IF NOT EXISTS idx_connection_events_at ON connection_events(connected_at);
+CREATE INDEX IF NOT EXISTS idx_connection_events_device ON connection_events(device);
 `
 
 type activityStore struct {
@@ -103,4 +105,68 @@ func (a *activityStore) insertConnectionEvent(socketID string, connectedAt, disc
 		socketID, connectedAt, sessionSID, ip, device, fingerprint, userAgent, compression, playerID, disconnectedAt, closeReason, province, isp,
 	)
 	return err
+}
+
+// altAccountPlayerIDs 返回与 playerID 曾共用过同一 deviceKey（connection_events.device，
+// 即 sha256(ip||fingerprint)）的其它玩家 ID。用一条子查询把"查该玩家用过哪些设备→反查这些
+// 设备还登录过谁"合成一次往返，配合 idx_connection_events_device 索引，即使 connection_events
+// 增长到几十万行也是毫秒级查找而不是全表扫描。
+//
+// db 由调用方传入而不是固定用 a.db：这条查询只读、可能扫描较多行，后台"小号查询"会优先传
+// 只读连接（见 admin_altaccounts.go 的 s.activityRO），避免占用主写连接（SetMaxOpenConns(1)）
+// 堵塞其它落库操作；本函数不持有连接、不受 ANALYTICS_ENABLED 开关影响。
+func altAccountLinks(db *sql.DB, playerID string) ([]string, []string, error) {
+	if db == nil || playerID == "" {
+		return nil, nil, nil
+	}
+	rows, err := db.Query(
+		`WITH linked_devices(device) AS (
+			SELECT DISTINCT device FROM connection_events WHERE player_id = ? AND device != ''
+			)
+		SELECT DISTINCT linked_devices.device, COALESCE(connection_events.player_id, '')
+		FROM linked_devices
+		LEFT JOIN connection_events
+		  ON connection_events.device = linked_devices.device
+		 AND connection_events.player_id != ''
+		 AND connection_events.player_id != ?
+		ORDER BY 1, 2`,
+		playerID, playerID,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	idsSeen := map[string]struct{}{}
+	devicesSeen := map[string]struct{}{}
+	for rows.Next() {
+		var device, id string
+		if err := rows.Scan(&device, &id); err != nil {
+			return nil, nil, err
+		}
+		if device != "" {
+			devicesSeen[device] = struct{}{}
+		}
+		if id != "" {
+			idsSeen[id] = struct{}{}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	ids := make([]string, 0, len(idsSeen))
+	for id := range idsSeen {
+		ids = append(ids, id)
+	}
+	devices := make([]string, 0, len(devicesSeen))
+	for device := range devicesSeen {
+		devices = append(devices, device)
+	}
+	sort.Strings(ids)
+	sort.Strings(devices)
+	return ids, devices, nil
+}
+
+func altAccountPlayerIDs(db *sql.DB, playerID string) ([]string, error) {
+	ids, _, err := altAccountLinks(db, playerID)
+	return ids, err
 }

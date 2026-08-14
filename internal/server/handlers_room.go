@@ -2,6 +2,7 @@ package server
 
 import (
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -226,17 +227,17 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	}
 	s.rooms[roomID] = room
 	player.RoomID = roomID
-	// 随机任务模式下，建房成功后把本次标签三态偏好落进玩家档案（跨设备预填用）。
+	// 随机任务模式下，建房成功后给数据分析记一笔标签选中/排除（标签三态偏好本身现在
+	// 只存浏览器本地，不再落玩家档案）；系列任务模式记一笔系列选中。
 	if settings.EnablePunishment && settings.PunishmentSource == "random" {
-		prefs := map[string]string{}
 		for _, id := range settings.PunishmentTagsIncluded {
-			prefs[id] = "include"
+			s.logAnalyticsServerEvent("punish_tag_include", id, 1, player.ID, roomID)
 		}
 		for _, id := range settings.PunishmentTagsExcluded {
-			prefs[id] = "exclude"
+			s.logAnalyticsServerEvent("punish_tag_exclude", id, 1, player.ID, roomID)
 		}
-		player.PunishmentTagPrefs = prefs
-		s.markPlayerDirty(player)
+	} else if settings.EnablePunishment && settings.PunishmentSource == "series" && settings.PunishmentSeriesID != "" {
+		s.logAnalyticsServerEvent("punish_series_select", settings.PunishmentSeriesID, 1, player.ID, roomID)
 	}
 	s.clientLeaveRoom(client, lobbyChannel)
 	s.clientJoinRoom(client, roomID)
@@ -1847,6 +1848,7 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 		SeriesID           string                             `json:"seriesId"`
 		Tasks              []types.PunishmentTaskConfig       `json:"tasks"`
 		Series             []types.PunishmentSeriesTaskConfig `json:"series"`
+		Refs               []chatMessageRef                   `json:"refs"`
 	}
 	_ = decodeD(env, &p)
 	admin := s.getPlayerByClient(client)
@@ -1903,17 +1905,41 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 		client.reply(env.ID, map[string]any{"ok": true}, "")
 		return
 	}
+	// 聊天管理走软删除，不再有"一键清空大厅/房间聊天"——只能针对检索出的具体消息
+	// （见 admin:chatSearch）单条/批量删除或恢复。删除即时持久化（面向普通玩家的
+	// recent/older 从此过滤掉这些行，新老访客都读不到）并推送 chat:deleted 通知在线
+	// 客户端摘除本地视图；恢复只影响持久化状态，不主动推回（客户端本就已看不到该
+	// 消息，管理员刷新检索列表即可核实）。这两个分支各自 reply 后直接 return，跳过
+	// 函数末尾统一的房间广播——聊天删除与房间/玩家结构状态无关。
+	if p.Action == "chatSoftDelete" || p.Action == "chatRestore" {
+		refs := normalizeChatMessageRefs(p.Refs)
+		if len(refs) == 0 {
+			client.reply(env.ID, nil, "未选择聊天消息")
+			return
+		}
+		if len(refs) > chatBulkMaxRefs {
+			client.reply(env.ID, nil, fmt.Sprintf("单次最多操作 %d 条聊天消息", chatBulkMaxRefs))
+			return
+		}
+		if s.chatDB == nil {
+			client.reply(env.ID, nil, "聊天存储不可用")
+			return
+		}
+		deleted := p.Action == "chatSoftDelete"
+		n, err := s.setAdminChatDeletedWithoutServerLock(refs, deleted, nowMs())
+		if err != nil {
+			s.errorLog("chat_set_deleted_failed", err.Error())
+			client.reply(env.ID, nil, "操作失败")
+			return
+		}
+		if deleted {
+			s.broadcastChatDeleted(refs)
+		}
+		client.reply(env.ID, map[string]any{"ok": true, "affected": n}, "")
+		return
+	}
 	roomDeleted := false
 	changedPlayerRoomID := ""
-	if p.Action == "clearLobbyChat" {
-		if s.chatDB != nil {
-			if err := s.chatDB.clearLobby(); err != nil {
-				s.errorLog("chat_clear_failed", err.Error())
-			}
-		}
-		// 通知所有在大厅聊天频道的客户端清空本地视图
-		s.emitToRoom(lobbySuggestionChannel, "chat:cleared", map[string]any{"roomId": ""})
-	}
 	if p.Action == "broadcastAnnouncement" {
 		cleanMessage := cleanText(p.Message, 200)
 		if cleanMessage == "" {
@@ -1953,6 +1979,7 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 			s.clearRoomBroadcastTimer(p.RoomID)
 			s.dropSyncChannel(channelRoom(p.RoomID))
 			delete(s.rooms, p.RoomID)
+			s.dropProofImageRoomEntries(p.RoomID)
 			if s.eventDB != nil {
 				closerID, closerName := "", "管理员"
 				if admin != nil {
@@ -1966,16 +1993,6 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 				}
 			}
 			roomDeleted = true
-		}
-	}
-	if p.Action == "clearRoomChat" && p.RoomID != "" {
-		if room := s.rooms[p.RoomID]; room != nil {
-			if s.chatDB != nil {
-				if err := s.chatDB.clearRoom(p.RoomID); err != nil {
-					s.errorLog("chat_clear_failed", err.Error())
-				}
-			}
-			s.emitToRoom(p.RoomID, "chat:cleared", map[string]any{"roomId": p.RoomID})
 		}
 	}
 	if p.Action == "forceNext" && p.RoomID != "" {
@@ -2036,6 +2053,30 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 			client.reply(env.ID, nil, "当前游戏不支持强制判定胜负")
 			return
 		}
+	}
+	if p.Action == "altAccounts" && p.PlayerID != "" {
+		// "小号查询"：BFS 传递展开同设备关联账号，见 altAccountCandidates 顶部注释
+		// （含防死循环、遍历上限说明）。
+		if s.players[p.PlayerID] == nil {
+			client.reply(env.ID, nil, "玩家不存在")
+			return
+		}
+		accounts, truncated, err := s.altAccountCandidatesForAdmin(p.PlayerID)
+		if _, stillAdmin := s.adminClientIDs[client.id]; !stillAdmin {
+			client.reply(env.ID, nil, "需要管理员权限")
+			return
+		}
+		if err != nil {
+			if errors.Is(err, errAltAccountsStoreUnavailable) {
+				client.reply(env.ID, nil, err.Error())
+				return
+			}
+			s.errorLog("alt_accounts_query_failed", err.Error())
+			client.reply(env.ID, nil, "查询失败")
+			return
+		}
+		client.reply(env.ID, map[string]any{"players": accounts, "truncated": truncated}, "")
+		return
 	}
 	if p.Action == "showClaimKey" && p.PlayerID != "" {
 		// 管理员协助玩家找回账号：返回与个人资料「显示认领密钥」相同的 playerId.claimKey。
@@ -2148,7 +2189,7 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 				pl.GiveawayBoardExpiresAt = nil
 			}
 		}
-		pl.DisplayName = formatDisplayName(pl)
+		pl.DisplayName = s.formatDisplayName(pl)
 		s.refreshPlayerSnapshots(pl)
 		changedPlayerRoomID = pl.RoomID
 	}

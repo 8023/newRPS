@@ -858,6 +858,9 @@ export type AnalyticsRangeView = {
   gameRounds: AnalyticsNamedSeries[];
   gameResults: AnalyticsBucket[];
   roomCreates: AnalyticsNamedSeries[];
+  /** 与 gameRounds/roomCreates 同口径（按天/游戏），只是把「次」换成「分钟」。 */
+  gameRoundDuration: AnalyticsNamedSeries[];
+  roomDuration: AnalyticsNamedSeries[];
   punishment: {
     publish: number[];
     done: number[];
@@ -865,6 +868,11 @@ export type AnalyticsRangeView = {
     doneRate: number;
     proofMs: AnalyticsBucket[];
   };
+  /** 建房选随机惩罚任务时勾选/排除的标签分布（key=tagId）。 */
+  punishTagInclude: AnalyticsBucket[];
+  punishTagExclude: AnalyticsBucket[];
+  /** 建房选系列惩罚任务时选中的系列分布（key=seriesId）。 */
+  punishSeriesSelect: AnalyticsBucket[];
   /** 旧版分析面板使用的完整玩家活动序列，保留用于接口兼容。 */
   activity: AnalyticsNamedSeries[];
   /** 用户信息变更：性别/阵营变更、改名、更换头像、自定义称号。 */

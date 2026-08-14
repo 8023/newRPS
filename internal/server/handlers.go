@@ -194,6 +194,8 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{30, 60_000, 60_000}, s.onAdminAction
 	case "admin:listPlayers":
 		return RateLimitOptions{30, 60_000, 15_000}, s.onAdminListPlayers
+	case "admin:chatSearch":
+		return RateLimitOptions{30, 60_000, 15_000}, s.onAdminChatSearch
 	case "admin:petBondGraph":
 		return RateLimitOptions{30, 60_000, 15_000}, s.onAdminPetBondGraph
 	case "admin:petBondAdd":
@@ -409,18 +411,11 @@ func (s *Server) onPlayerJoin(client *Client, env wsEnvelope) {
 			roomSnap = s.roomSnapshot(room, true, true)
 		}
 	}
-	punishmentTagPrefs := player.PunishmentTagPrefs
-	if punishmentTagPrefs == nil {
-		punishmentTagPrefs = map[string]string{}
-	}
 	joinReply := map[string]any{
 		"player": s.publicPlayer(player),
 		"token":  sessionToken,
 		"roomId": player.RoomID,
 		"room":   roomSnap,
-		// punishmentTagPrefs：仅本人可见的开房标签偏好，不放进 PublicPlayer（会被广播给其他
-		// 玩家），单独作为应答的兄弟字段下发，见 state.go PlayerState.PunishmentTagPrefs 注释。
-		"punishmentTagPrefs": punishmentTagPrefs,
 	}
 	if reissuedSecret != "" {
 		joinReply["reissuedSecret"] = reissuedSecret
@@ -686,7 +681,7 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 	if nameChanged {
 		player.ProfileUpdatedAt = int64Ptr(now)
 	}
-	player.DisplayName = formatDisplayName(player)
+	player.DisplayName = s.formatDisplayName(player)
 	s.refreshPlayerSnapshots(player)
 	s.broadcastPlayerUpdate(player)
 	if bondChanged {
@@ -919,7 +914,7 @@ func (s *Server) onExtremeForceClose(client *Client, env wsEnvelope) {
 	player.ExtremeWinStreak = intPtr(0)
 	player.ExtremeForceClosed = boolPtr(true)
 	player.ExtremeForceClosedAt = int64Ptr(now)
-	player.DisplayName = formatDisplayName(player)
+	player.DisplayName = s.formatDisplayName(player)
 	s.refreshPlayerSnapshots(player)
 	s.broadcastPlayerUpdate(player)
 	client.reply(env.ID, map[string]any{"player": s.publicPlayer(player)}, "")
@@ -998,7 +993,7 @@ func (s *Server) onNameWarRenameTarget(client *Client, env wsEnvelope) {
 		target.ExtremeRenamedBy = actor.ID
 		target.ExtremeRenamedByName = playerShortName(actor)
 		s.refreshNameWarState(target, now)
-		target.DisplayName = formatDisplayName(target)
+		target.DisplayName = s.formatDisplayName(target)
 		s.refreshPlayerSnapshots(target)
 		s.broadcastPlayerUpdate(target)
 		client.reply(env.ID, map[string]any{"ok": true}, "")
@@ -1035,7 +1030,7 @@ func (s *Server) onNameWarRenameTarget(client *Client, env wsEnvelope) {
 	target.NameWarRenamedBy = actor.ID
 	target.NameWarRenamedByName = playerShortName(actor)
 	actor.NameWarRenameCount = intPtr(ptrInt(actor.NameWarRenameCount) + 1)
-	target.DisplayName = formatDisplayName(target)
+	target.DisplayName = s.formatDisplayName(target)
 	s.logPlayerActivity("nameWar_rename", target.ID, cleanName, oldDisplayName, client.ipAddress, client.deviceKey, client.fingerprint, "")
 	s.refreshPlayerSnapshots(target)
 	s.broadcastPlayerUpdate(target)

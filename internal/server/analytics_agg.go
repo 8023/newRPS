@@ -10,46 +10,56 @@ import (
 
 // 日聚合 metric 常量（EAV key 见 plan）。
 const (
-	metricDAU            = "dau"
-	metricSessions       = "sessions"
-	metricPageviews      = "pageviews"
-	metricNewVisitors    = "new_visitors"
-	metricAvgSessionMs   = "avg_session_ms"
-	metricBounceSessions = "bounce_sessions"
-	metricSessionBucket  = "session_bucket"
-	metricViewPV         = "view_pv"
-	metricViewUV         = "view_uv"
-	metricPeakOnline     = "peak_online"
-	metricConnections    = "connections"
-	metricOnlineMs       = "online_ms"
-	metricRetention      = "retention"
-	metricBrowser        = "browser"
-	metricOS             = "os"
-	metricDevice         = "device"
-	metricReferrer       = "referrer"
-	metricProvince       = "province"
-	metricCity           = "city"
-	metricISP            = "isp"
-	metricRoomCreate     = "room_create"
-	metricRoomJoin       = "room_join"
-	metricGameRound      = "game_round"
-	metricGameResult     = "game_result"
-	metricPunishPublish  = "punish_publish"
-	metricPunishDone     = "punish_done"
-	metricPunishReject   = "punish_reject"
-	metricPunishProofMs  = "punish_proof_ms_bucket"
-	metricActivity       = "activity"
-	metricPetbondNew     = "petbond_new"
-	metricPetbondTotal   = "petbond_total"
-	metricChatLobby         = "chat_lobby"
-	metricChatRoom          = "chat_room"
-	metricChatSpeakers      = "chat_speakers"       // 大厅发言去重人数（历史字段名）
-	metricChatRoomSpeakers  = "chat_room_speakers"  // 房间发言去重人数
-	metricRoomRoundsMax     = "room_rounds_max"     // 当日单房对局数最大值
-	metricRoomRoundsAvg     = "room_rounds_avg"     // 当日有对局的房间局数均值（四舍五入为整数）
-	metricRegister          = "register"
-	metricFunnel            = "funnel"
-	metricLoggedDAU         = "logged_dau"
+	metricDAU                = "dau"
+	metricSessions           = "sessions"
+	metricPageviews          = "pageviews"
+	metricNewVisitors        = "new_visitors"
+	metricAvgSessionMs       = "avg_session_ms"
+	metricBounceSessions     = "bounce_sessions"
+	metricSessionBucket      = "session_bucket"
+	metricViewPV             = "view_pv"
+	metricViewUV             = "view_uv"
+	metricPeakOnline         = "peak_online"
+	metricConnections        = "connections"
+	metricOnlineMs           = "online_ms"
+	metricRetention          = "retention"
+	metricBrowser            = "browser"
+	metricOS                 = "os"
+	metricDevice             = "device"
+	metricReferrer           = "referrer"
+	metricProvince           = "province"
+	metricCity               = "city"
+	metricISP                = "isp"
+	metricRoomCreate         = "room_create"
+	metricRoomJoin           = "room_join"
+	metricGameRound          = "game_round"
+	metricGameResult         = "game_result"
+	// metricGameRoundDurationMs「每局时长」：round 结算(game_round.at)减同房间内最近一次
+	// game_start.at 的毫秒数，按 gameId 累加、按结算日归属——与 metricGameRound 同口径，
+	// 只是把「次」换成「累计耗时」。值以毫秒存库，forRange 输出前换算为分钟。
+	metricGameRoundDurationMs = "game_round_duration_ms"
+	// metricRoomDurationMs「房间时长」：房间 close.at 减 create.at 的毫秒数，按 gameId
+	// 累加、按创建日归属（与 metricRoomCreate 同口径）；尚未关闭的房间不计入。
+	metricRoomDurationMs = "room_duration_ms"
+	metricPunishPublish      = "punish_publish"
+	metricPunishDone         = "punish_done"
+	metricPunishReject       = "punish_reject"
+	metricPunishProofMs      = "punish_proof_ms_bucket"
+	metricPunishTagInclude   = "punish_tag_include"
+	metricPunishTagExclude   = "punish_tag_exclude"
+	metricPunishSeriesSelect = "punish_series_select"
+	metricActivity           = "activity"
+	metricPetbondNew         = "petbond_new"
+	metricPetbondTotal       = "petbond_total"
+	metricChatLobby          = "chat_lobby"
+	metricChatRoom           = "chat_room"
+	metricChatSpeakers       = "chat_speakers"      // 大厅发言去重人数（历史字段名）
+	metricChatRoomSpeakers   = "chat_room_speakers" // 房间发言去重人数
+	metricRoomRoundsMax      = "room_rounds_max"    // 当日单房对局数最大值
+	metricRoomRoundsAvg      = "room_rounds_avg"    // 当日有对局的房间局数均值（四舍五入为整数）
+	metricRegister           = "register"
+	metricFunnel             = "funnel"
+	metricLoggedDAU          = "logged_dau"
 )
 
 // analyticsSnapshot 是聚合器产出的不可变内存快照；RPC 只读它。
@@ -117,9 +127,18 @@ type analyticsRangeView struct {
 	GameRounds  []analyticsNamedSeries `json:"gameRounds"`
 	GameResults []analyticsBucket      `json:"gameResults"`
 	RoomCreates []analyticsNamedSeries `json:"roomCreates"`
+	// GameRoundDuration「每局时长」/RoomDuration「房间时长」：与 GameRounds/RoomCreates
+	// 同口径（按天/游戏），单位从「次」换成「分钟」。
+	GameRoundDuration []analyticsNamedSeries `json:"gameRoundDuration"`
+	RoomDuration      []analyticsNamedSeries `json:"roomDuration"`
 
 	// 玩法
 	Punishment analyticsPunishmentBlock `json:"punishment"`
+	// PunishTagInclude/PunishTagExclude 建房选随机惩罚任务时勾选/排除的标签分布（key=tagId）。
+	PunishTagInclude []analyticsBucket `json:"punishTagInclude"`
+	PunishTagExclude []analyticsBucket `json:"punishTagExclude"`
+	// PunishSeriesSelect 建房选系列惩罚任务时选中的系列分布（key=seriesId）。
+	PunishSeriesSelect []analyticsBucket `json:"punishSeriesSelect"`
 	// Activity 保留旧版分析接口的完整活动序列；新面板使用下面两个按语义拆分的字段。
 	Activity []analyticsNamedSeries `json:"activity"`
 	// ProfileChanges「用户信息变更」：性别/阵营变更、改名、更换头像、自定义称号。
@@ -196,8 +215,8 @@ type analyticsPetBondBlock struct {
 }
 
 type analyticsChatBlock struct {
-	Lobby    []int64 `json:"lobby"`
-	Room     []int64 `json:"room"`
+	Lobby []int64 `json:"lobby"`
+	Room  []int64 `json:"room"`
 	// Speakers 大厅发言去重人数（历史字段名；与 SpeakersRoom 对照）。
 	Speakers []int64 `json:"speakers"`
 	// SpeakersRoom 房间发言去重人数（按 player_id，跨房间合并去重）。
@@ -400,9 +419,11 @@ func (snap *analyticsSnapshot) forRange(days int) *analyticsRangeView {
 		ISPs:           sumByKey(snap, metricISP, start, n),
 		SessionBuckets: orderedBuckets(sumByKey(snap, metricSessionBucket, start, n), []string{"10s", "1min", "2min", "5min", "10min", "30min", "60min", "60min+"}),
 		ViewPV:         sumByKey(snap, metricViewPV, start, n),
-		GameRounds:     namedSeries(snap, metricGameRound, start, n, dayLabels),
-		GameResults:    sumByKey(snap, metricGameResult, start, n),
-		RoomCreates:    namedSeries(snap, metricRoomCreate, start, n, dayLabels),
+		GameRounds:        namedSeries(snap, metricGameRound, start, n, dayLabels),
+		GameResults:       sumByKey(snap, metricGameResult, start, n),
+		RoomCreates:       namedSeries(snap, metricRoomCreate, start, n, dayLabels),
+		GameRoundDuration: namedSeriesMinutes(snap, metricGameRoundDurationMs, start, n, dayLabels),
+		RoomDuration:      namedSeriesMinutes(snap, metricRoomDurationMs, start, n, dayLabels),
 		Punishment: analyticsPunishmentBlock{
 			Publish: slice(snap.PunishPublish), Done: slice(snap.PunishDone), Reject: slice(snap.PunishReject),
 			DoneRate: rate(sum(slice(snap.PunishDone)), sum(slice(snap.PunishPublish))),
@@ -415,11 +436,14 @@ func (snap *analyticsSnapshot) forRange(days int) *analyticsRangeView {
 				[]string{"10s", "30s", "1min", "5min", "10min", "10min+"},
 			),
 		},
-		Activity:        namedSeries(snap, metricActivity, start, n, dayLabels),
-		ProfileChanges:  namedSeriesForKeys(snap, metricActivity, []string{"gender_change", "rename", "avatar_change", "self_title_change"}, start, n),
-		NameWarGiveaway: namedSeriesForKeys(snap, metricActivity, []string{"nameWar_enable", "giveaway_enable", "giveaway_board_submit", "nameWar_rename", "extreme_enable"}, start, n),
-		NewOldUsers:     analyticsNewOldUsers{New: newAccounts, OldLogin: oldLogin},
-		PetBond: analyticsPetBondBlock{Total: slice(snap.PetbondTotal), New: slice(snap.PetbondNew)},
+		PunishTagInclude:   sumByKey(snap, metricPunishTagInclude, start, n),
+		PunishTagExclude:   sumByKey(snap, metricPunishTagExclude, start, n),
+		PunishSeriesSelect: sumByKey(snap, metricPunishSeriesSelect, start, n),
+		Activity:           namedSeries(snap, metricActivity, start, n, dayLabels),
+		ProfileChanges:     namedSeriesForKeys(snap, metricActivity, []string{"gender_change", "rename", "avatar_change", "self_title_change"}, start, n),
+		NameWarGiveaway:    namedSeriesForKeys(snap, metricActivity, []string{"nameWar_enable", "giveaway_enable", "giveaway_board_submit", "nameWar_rename", "extreme_enable"}, start, n),
+		NewOldUsers:        analyticsNewOldUsers{New: newAccounts, OldLogin: oldLogin},
+		PetBond:            analyticsPetBondBlock{Total: slice(snap.PetbondTotal), New: slice(snap.PetbondNew)},
 		Chat: analyticsChatBlock{
 			Lobby: slice(snap.ChatLobby), Room: slice(snap.ChatRoom),
 			Speakers: slice(snap.ChatSpeakers), SpeakersRoom: slice(snap.ChatRoomSpeakers),
@@ -548,6 +572,22 @@ func namedSeries(snap *analyticsSnapshot, metric string, start, n int, _ []strin
 	out := make([]analyticsNamedSeries, 0, len(list))
 	for _, x := range list {
 		out = append(out, analyticsNamedSeries{Key: x.k, Values: append([]int64(nil), x.s[start:]...)})
+	}
+	return out
+}
+
+// namedSeriesMinutes 复用 namedSeries 按总量取 top key 的逻辑，把累加的毫秒值换算成
+// 分钟（四舍五入）。metricGameRoundDurationMs/metricRoomDurationMs 库里存的是毫秒，
+// 避免按天独立取整后再求和造成的精度损失（例如 RPS 单局常 <1 分钟，逐日取整会一直是 0）。
+func namedSeriesMinutes(snap *analyticsSnapshot, metric string, start, n int, dayLabels []string) []analyticsNamedSeries {
+	series := namedSeries(snap, metric, start, n, dayLabels)
+	out := make([]analyticsNamedSeries, len(series))
+	for i, s := range series {
+		vals := make([]int64, len(s.Values))
+		for j, v := range s.Values {
+			vals[j] = (v + 30_000) / 60_000
+		}
+		out[i] = analyticsNamedSeries{Key: s.Key, Values: vals}
 	}
 	return out
 }
@@ -817,6 +857,46 @@ func (s *Server) rebuildDay(day int64, tz int) ([]analyticsDailyRow, error) {
 		return nil, err
 	}
 
+	// 每局时长：每条 game_round 主记录(结算)的 at 减去同房间(view)内最近一次 game_start
+	// 的 at，按 gameId 累加毫秒数。无 room_id（旧数据/未知房间）的记录配不出房间内的开局
+	// 时间，直接跳过；配不出开局时间（NULL）或耗时超过 4 小时（数据异常，如断线悬挂未收尾）
+	// 同样跳过，不计入累加。
+	if err := s.queryKeyCounts(db, `
+		SELECT gid, SUM(dur) FROM (
+			SELECT
+				CASE WHEN instr(gr.detail, ':') > 0
+				     THEN substr(gr.detail, 1, instr(gr.detail, ':') - 1)
+				     ELSE gr.detail END AS gid,
+				gr.at - (
+					SELECT MAX(gs.at) FROM analytics_events gs
+					WHERE gs.source=1 AND gs.name='game_start' AND gs.view=gr.view AND gs.at<=gr.at
+				) AS dur
+			FROM analytics_events gr
+			WHERE gr.day=? AND gr.source=1 AND gr.name='game_round' AND gr.value>0
+			      AND gr.detail<>'' AND gr.view<>''
+		)
+		WHERE dur IS NOT NULL AND dur > 0 AND dur < 14400000
+		GROUP BY gid`, day, metricGameRoundDurationMs, &rows); err != nil {
+		return nil, err
+	}
+
+	// 随机惩罚标签选中/排除、系列惩罚任务选中：建房时记录，detail=tagId/seriesId。
+	if err := s.queryKeyCounts(db, `
+		SELECT detail, COUNT(*) FROM analytics_events
+		WHERE day=? AND source=1 AND name='punish_tag_include' AND detail<>'' GROUP BY 1`, day, metricPunishTagInclude, &rows); err != nil {
+		return nil, err
+	}
+	if err := s.queryKeyCounts(db, `
+		SELECT detail, COUNT(*) FROM analytics_events
+		WHERE day=? AND source=1 AND name='punish_tag_exclude' AND detail<>'' GROUP BY 1`, day, metricPunishTagExclude, &rows); err != nil {
+		return nil, err
+	}
+	if err := s.queryKeyCounts(db, `
+		SELECT detail, COUNT(*) FROM analytics_events
+		WHERE day=? AND source=1 AND name='punish_series_select' AND detail<>'' GROUP BY 1`, day, metricPunishSeriesSelect, &rows); err != nil {
+		return nil, err
+	}
+
 	// connection_events 峰值 / 连接数 / 在线时长
 	connRows, err := db.Query(`
 		SELECT connected_at, disconnected_at FROM connection_events
@@ -881,6 +961,21 @@ func (s *Server) rebuildDay(day int64, tz int) ([]analyticsDailyRow, error) {
 	if err := queryKeyCountsRange(db, `
 		SELECT COALESCE(NULLIF(game_id,''),'unknown'), COUNT(*) FROM room_events
 		WHERE action='join' AND at >= ? AND at < ? GROUP BY 1`, dayStart, dayEnd, metricRoomJoin, day, &rows); err != nil {
+		return nil, err
+	}
+	// 房间时长：每个当日创建的房间，close.at 减 create.at 的毫秒数，按 gameId 累加、
+	// 归属到创建当日（与 metricRoomCreate 同口径）。尚未关闭（无匹配 close 行）的房间
+	// dur 为 NULL，不计入。
+	if err := queryKeyCountsRange(db, `
+		SELECT COALESCE(NULLIF(gid,''),'unknown'), SUM(dur) FROM (
+			SELECT rc.game_id AS gid,
+				(SELECT MIN(cl.at) FROM room_events cl
+				 WHERE cl.room_id=rc.room_id AND cl.action='close' AND cl.at>rc.at) - rc.at AS dur
+			FROM room_events rc
+			WHERE rc.action='create' AND rc.at >= ? AND rc.at < ?
+		)
+		WHERE dur IS NOT NULL AND dur > 0
+		GROUP BY 1`, dayStart, dayEnd, metricRoomDurationMs, day, &rows); err != nil {
 		return nil, err
 	}
 
@@ -950,34 +1045,14 @@ func (s *Server) rebuildDay(day int64, tz int) ([]analyticsDailyRow, error) {
 	_ = db.QueryRow(`SELECT COUNT(*) FROM players WHERE created_at >= ? AND created_at < ?`, dayStart, dayEnd).Scan(&reg)
 	add(metricRegister, "", reg.Int64)
 
-	// funnel：五层均为设备 UV（DISTINCT visitor）。
-	// visit  访问     = 当日会话 DISTINCT visitor
-	// lobby  进大厅   = pageview view=lobby 的 DISTINCT visitor
-	// room   进房     = create|join 玩家经当日 player_id→visitor 映射后的 DISTINCT visitor
-	// round  开局     = game_start 参战玩家映射后的 DISTINCT visitor
-	// finish 完成对局 = game_round 参战玩家映射后的 DISTINCT visitor（含 value=0 副记录）
-	// player→visitor 来自当日 analytics_sessions / analytics_events 中非空的 (player_id, visitor)。
-	add(metricFunnel, "visit", dau.Int64)
-	var lobbyUV sql.NullInt64
-	_ = db.QueryRow(`
-		SELECT COUNT(DISTINCT visitor) FROM analytics_events
-		WHERE day=? AND name='pageview' AND view='lobby' AND visitor<>''`, day).Scan(&lobbyUV)
-	add(metricFunnel, "lobby", lobbyUV.Int64)
-	roomUV, err := funnelDeviceUVFromPlayers(db, day, dayStart, dayEnd, funnelPlayersRoom)
+	// funnel：五层设备 UV，口径与逐层回填规则见 computeFunnelUV。
+	funnel, err := computeFunnelUV(db, day, dayStart, dayEnd)
 	if err != nil {
 		return nil, err
 	}
-	add(metricFunnel, "room", roomUV)
-	startUV, err := funnelDeviceUVFromPlayers(db, day, dayStart, dayEnd, funnelPlayersGameStart)
-	if err != nil {
-		return nil, err
+	for _, key := range funnelStageKeys {
+		add(metricFunnel, key, funnel[key])
 	}
-	add(metricFunnel, "round", startUV)
-	finishUV, err := funnelDeviceUVFromPlayers(db, day, dayStart, dayEnd, funnelPlayersGameRound)
-	if err != nil {
-		return nil, err
-	}
-	add(metricFunnel, "finish", finishUV)
 
 	// retention：用户 cohort 的 D0 基数 = 当日新建 players。
 	// 完整 D0–D30 矩阵由 backfillRetention 按 player_id 活动重算并 UPSERT。
@@ -988,61 +1063,171 @@ func (s *Server) rebuildDay(day int64, tz int) ([]analyticsDailyRow, error) {
 	return rows, nil
 }
 
-// funnelPlayerSource 漏斗后三层「业务玩家集合」来源。
-type funnelPlayerSource int
+// funnelStageKeys 转化漏斗五层，浅 → 深；顺序即回填方向的依据，不要随意调换。
+var funnelStageKeys = []string{"visit", "lobby", "room", "round", "finish"}
 
-const (
-	funnelPlayersRoom funnelPlayerSource = iota
-	funnelPlayersGameStart
-	funnelPlayersGameRound
-)
-
-// dayPlayerVisitorSQL 当日 player_id → visitor 映射（会话 + 带 visitor 的事件并集）。
-const dayPlayerVisitorSQL = `
-	SELECT player_id, visitor FROM analytics_sessions
-	WHERE day = ? AND player_id <> '' AND visitor <> ''
-	UNION
-	SELECT player_id, visitor FROM analytics_events
-	WHERE day = ? AND player_id <> '' AND visitor <> ''`
-
-// funnelDeviceUVFromPlayers 将业务侧玩家集合经当日 player→visitor 映射折成设备 UV。
-func funnelDeviceUVFromPlayers(db *sql.DB, day, dayStart, dayEnd int64, src funnelPlayerSource) (int64, error) {
-	var q string
-	var args []any
-	switch src {
-	case funnelPlayersRoom:
-		q = `
-			SELECT COUNT(DISTINCT pv.visitor) FROM (
-				` + dayPlayerVisitorSQL + `
-			) pv
-			INNER JOIN room_events r ON r.user_id = pv.player_id
-			WHERE r.action IN ('create','join') AND r.user_id <> '' AND r.at >= ? AND r.at < ?`
-		args = []any{day, day, dayStart, dayEnd}
-	case funnelPlayersGameStart:
-		q = `
-			SELECT COUNT(DISTINCT pv.visitor) FROM (
-				` + dayPlayerVisitorSQL + `
-			) pv
-			INNER JOIN analytics_events e ON e.player_id = pv.player_id
-			WHERE e.day = ? AND e.source = 1 AND e.name = 'game_start' AND e.player_id <> ''`
-		args = []any{day, day, day}
-	case funnelPlayersGameRound:
-		// 含 value=0 的参战副记录，才能覆盖双方/全员
-		q = `
-			SELECT COUNT(DISTINCT pv.visitor) FROM (
-				` + dayPlayerVisitorSQL + `
-			) pv
-			INNER JOIN analytics_events e ON e.player_id = pv.player_id
-			WHERE e.day = ? AND e.source = 1 AND e.name = 'game_round' AND e.player_id <> ''`
-		args = []any{day, day, day}
-	default:
-		return 0, nil
+// dayPlayerVisitorQuery 拼当日 player_id → visitor 映射（会话 + 带 visitor 的事件并集）。
+// 一个玩家一天可能对应多个 visitor——visitor 由 deviceKey（IP+指纹）派生，换网/换 IP
+// 就会变，这对漏斗每一层都是同样的影响，不会让层与层之间失衡。
+func dayPlayerVisitorQuery(day int64, hasSessions, hasEvents bool) (string, []any) {
+	const fromSessions = `SELECT player_id, visitor FROM analytics_sessions
+		WHERE day = ? AND player_id <> '' AND visitor <> ''`
+	const fromEvents = `SELECT player_id, visitor FROM analytics_events
+		WHERE day = ? AND player_id <> '' AND visitor <> ''`
+	switch {
+	case hasSessions && hasEvents:
+		return fromSessions + "\nUNION\n" + fromEvents, []any{day, day}
+	case hasSessions:
+		return fromSessions, []any{day}
+	case hasEvents:
+		return fromEvents, []any{day}
 	}
-	var n sql.NullInt64
-	if err := db.QueryRow(q, args...).Scan(&n); err != nil {
-		return 0, err
+	return "", nil
+}
+
+// queryVisitorSet 跑一条只返回 visitor 列的查询，收成集合。单日量级是几百个 16 位
+// 十六进制串，聚合器每分钟只重算今天/昨天两天，内存与耗时都可以忽略。
+func queryVisitorSet(db sqlExecer, query string, args ...any) (map[string]struct{}, error) {
+	out := map[string]struct{}{}
+	rs, err := db.Query(query, args...)
+	if err != nil {
+		return nil, err
 	}
-	return n.Int64, nil
+	defer rs.Close()
+	for rs.Next() {
+		var v string
+		if err := rs.Scan(&v); err != nil {
+			return nil, err
+		}
+		if v != "" {
+			out[v] = struct{}{}
+		}
+	}
+	return out, rs.Err()
+}
+
+// computeFunnelUV 计算某日转化漏斗五层的设备 UV（DISTINCT visitor）：
+//
+//	visit  访问     = 当日「会话 ∪ 事件」里出现过的 visitor
+//	lobby  进大厅   = pageview view=lobby 的 visitor
+//	room   进房     = create|join 玩家经当日 player→visitor 映射后的 visitor
+//	round  开局     = game_start 参战玩家映射后的 visitor
+//	finish 完成对局 = game_round 参战玩家映射后的 visitor（含 value=0 参战副记录）
+//
+// visit 不能只查 analytics_sessions：会话行的 visitor/day 只在首次落库时写入，之后
+// 的 ON CONFLICT 更新不会跟着改（见 analytics_store.go writeBatch），换网/换 IP 或
+// 跨零点保持同一 sid，都会让同一个人后续的事件落到新 visitor/新日期却不回写会话行。
+//
+// **关键：五层不是各自独立计数，而是从最深一层往回做并集（S_k ∪= S_{k+1}）。**
+// 走到更深一层的设备，按定义必然经过了前面每一层——哪怕对应那一层的埋点没记上。
+// 不这么做，任何一处埋点覆盖缺口都会让漏斗出现「下一级比上一级还多」的倒挂，例如：
+//   - game_start 埋点比 game_round 晚上线，上线当天只覆盖了一天里的最后几十分钟，
+//     「完成对局」就会凭空高出「开局」约 10%；
+//   - 一局跨零点，结算记在新的一天，而它的开局/进房事件留在前一天；
+//   - 中途换座/断线顶替的玩家，只赶上了结算没赶上开局。
+//
+// 并集回填让漏斗按定义单调，也让「埋点上线、口径调整」这类一次性缺口自愈，不必再
+// 为每一种缺口单独写兜底分支。代价是更深层的行为会把浅层的人数补上去，浅层因此略
+// 偏高——这正是漏斗该有的语义（完成过对局的人当然也算访问过）。
+func computeFunnelUV(db sqlExecer, day, dayStart, dayEnd int64) (map[string]int64, error) {
+	hasSessions, err := tableExists(db, "analytics_sessions")
+	if err != nil {
+		return nil, err
+	}
+	hasEvents, err := tableExists(db, "analytics_events")
+	if err != nil {
+		return nil, err
+	}
+	hasRooms, err := tableExists(db, "room_events")
+	if err != nil {
+		return nil, err
+	}
+
+	stages := make([]map[string]struct{}, len(funnelStageKeys))
+	for i := range stages {
+		stages[i] = map[string]struct{}{}
+	}
+	fill := func(idx int, query string, args ...any) error {
+		set, err := queryVisitorSet(db, query, args...)
+		if err != nil {
+			return err
+		}
+		stages[idx] = set
+		return nil
+	}
+
+	// visit
+	switch {
+	case hasSessions && hasEvents:
+		if err := fill(0, `
+			SELECT visitor FROM analytics_sessions WHERE day = ? AND visitor <> ''
+			UNION
+			SELECT visitor FROM analytics_events   WHERE day = ? AND visitor <> ''`, day, day); err != nil {
+			return nil, err
+		}
+	case hasSessions:
+		if err := fill(0, `SELECT DISTINCT visitor FROM analytics_sessions WHERE day = ? AND visitor <> ''`, day); err != nil {
+			return nil, err
+		}
+	case hasEvents:
+		if err := fill(0, `SELECT DISTINCT visitor FROM analytics_events WHERE day = ? AND visitor <> ''`, day); err != nil {
+			return nil, err
+		}
+	}
+
+	// lobby
+	if hasEvents {
+		if err := fill(1, `
+			SELECT DISTINCT visitor FROM analytics_events
+			WHERE day = ? AND name = 'pageview' AND view = 'lobby' AND visitor <> ''`, day); err != nil {
+			return nil, err
+		}
+	}
+
+	pvMap, pvArgs := dayPlayerVisitorQuery(day, hasSessions, hasEvents)
+	if pvMap != "" {
+		// room
+		if hasRooms {
+			if err := fill(2, `
+				SELECT DISTINCT pv.visitor FROM (
+					`+pvMap+`
+				) pv
+				INNER JOIN room_events r ON r.user_id = pv.player_id
+				WHERE r.action IN ('create','join') AND r.user_id <> '' AND r.at >= ? AND r.at < ?`,
+				append(append([]any{}, pvArgs...), dayStart, dayEnd)...); err != nil {
+				return nil, err
+			}
+		}
+		// round / finish
+		if hasEvents {
+			for _, stage := range []struct {
+				idx  int
+				name string
+			}{{3, "game_start"}, {4, "game_round"}} {
+				if err := fill(stage.idx, `
+					SELECT DISTINCT pv.visitor FROM (
+						`+pvMap+`
+					) pv
+					INNER JOIN analytics_events e ON e.player_id = pv.player_id
+					WHERE e.day = ? AND e.source = 1 AND e.name = ? AND e.player_id <> ''`,
+					append(append([]any{}, pvArgs...), day, stage.name)...); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
+	// 深 → 浅逐层并集回填，保证 visit ⊇ lobby ⊇ room ⊇ round ⊇ finish。
+	for i := len(stages) - 2; i >= 0; i-- {
+		for v := range stages[i+1] {
+			stages[i][v] = struct{}{}
+		}
+	}
+	out := make(map[string]int64, len(funnelStageKeys))
+	for i, key := range funnelStageKeys {
+		out[key] = int64(len(stages[i]))
+	}
+	return out, nil
 }
 
 func (s *Server) queryKeyCounts(db *sql.DB, query string, day int64, metric string, rows *[]analyticsDailyRow) error {

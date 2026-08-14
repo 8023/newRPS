@@ -7,6 +7,9 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+// TestSchemaMigrationV25CreatesPunishmentTables 验证从 v24 升级到当前版本时：
+// player_punishment_series_progress（系列任务进度）仍在；player_punishment_tag_prefs
+// 由 v25 建出、又被 v30 废弃（标签三态偏好改为纯浏览器本地存储），升级后不应残留。
 func TestSchemaMigrationV25CreatesPunishmentTables(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/database.db"
@@ -37,11 +40,12 @@ func TestSchemaMigrationV25CreatesPunishmentTables(t *testing.T) {
 	if v != currentSchemaVersion {
 		t.Fatalf("schema_version=%d want %d", v, currentSchemaVersion)
 	}
-	for _, table := range []string{"player_punishment_tag_prefs", "player_punishment_series_progress"} {
-		var name string
-		err := db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&name)
-		if err != nil {
-			t.Fatalf("table %s missing: %v", table, err)
-		}
+	var name string
+	if err := db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, "player_punishment_series_progress").Scan(&name); err != nil {
+		t.Fatalf("table player_punishment_series_progress missing: %v", err)
+	}
+	err = db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, "player_punishment_tag_prefs").Scan(&name)
+	if err != sql.ErrNoRows {
+		t.Fatalf("table player_punishment_tag_prefs should have been dropped by v30, got err=%v", err)
 	}
 }

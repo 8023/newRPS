@@ -804,9 +804,9 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
   async function create() {
     try {
       const result = await ask<{ room: RoomSnapshot }>("room:create", { settings });
-      // 与后端 handlers_room.go 的落库逻辑保持一致：随机任务模式下，创建成功即把本次标签
-      // 三态偏好同步进本地会话状态，避免同一会话内“创建-离开-再创建”读不到刚保存的偏好
-      // （只有下次 player:join / 刷新页面重新拉取时才会带上，体验上像是没生效）。
+      // 随机任务模式下，创建成功即把本次标签三态偏好写回本地浏览器存储（见 lib/session.ts
+      // readPunishmentTagPrefs/writePunishmentTagPrefs），供下次开房面板预填——纯本地偏好，
+      // 不再落服务端数据库、不跨设备同步。
       if (settings.enablePunishment && (settings.punishmentSource === "random" || settings.punishmentSource === "system") && onPunishmentTagPrefsChange) {
         const prefs: Record<string, string> = {};
         for (const id of settings.punishmentTagsIncluded || []) prefs[id] = "include";
@@ -1190,19 +1190,26 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
             </div>
             <div className="create-section">
               <h3>惩罚</h3>
-              <Toggle label="惩罚模式" value={settings.enablePunishment} onChange={(value) => patch({ enablePunishment: value })} />
               {settings.gameId === "othello" && <p className="hint">黑白棋惩罚会在终局、认输、逃跑或断线判负后触发；平局双罚开启时黑白棋平局双方都要惩罚。</p>}
               {settings.gameId === "tictactoe" && <p className="hint">井字棋惩罚会在终局或断线判负后触发；平局双罚开启时井字棋平局双方都要惩罚。</p>}
               {settings.gameId === "gomoku" && <p className="hint">五子棋惩罚会在终局、认输或断线判负后触发；平局双罚开启时五子棋平局双方都要惩罚。</p>}
               {settings.gameId === "jungle" && <p className="hint">斗兽棋惩罚会在终局、认输或断线判负后触发；平局双罚开启时斗兽棋平局双方都要惩罚。</p>}
               {settings.gameId === "liarsdice" && <p className="hint">大话骰惩罚仅对败者触发（叫点/开牌对决中的负方，或断线判负方）；其余参战玩家记平但不计分、不受罚。</p>}
+              <Select
+                value={!settings.enablePunishment ? "none" : ((settings.punishmentSource === "system" ? "random" : settings.punishmentSource) || "random")}
+                onChange={(value) => {
+                  if (value === "none") patch({ enablePunishment: false });
+                  else patch({ punishmentSource: value as RoomSettings["punishmentSource"], enablePunishment: true });
+                }}
+                options={[
+                  { value: "none", label: "无惩罚" },
+                  { value: "random", label: "随机惩罚任务" },
+                  { value: "series", label: "系列惩罚任务" },
+                  { value: "player", label: "自定义惩罚任务" }
+                ]}
+              />
               {settings.enablePunishment && (
                 <>
-                  <Select value={(settings.punishmentSource === "system" ? "random" : settings.punishmentSource) || "random"} onChange={(value) => patch({ punishmentSource: value as RoomSettings["punishmentSource"] })} options={[
-                    { value: "random", label: "随机任务" },
-                    { value: "series", label: "系列任务" },
-                    { value: "player", label: "玩家发布" }
-                  ]} />
                   {((settings.punishmentSource || "random") === "random" || settings.punishmentSource === "system") ? (
                     <>
                       <p className="hint">点一下标签循环：缺省 → 选中 → 拒绝。选中的标签任务必须全部命中，拒绝的标签一律排除；全缺省时只按拒绝集合过滤。难度与房间绑定：本房间抽任务次数越多目标难度越高，更难一侧不会达到或超过「目标 + 上浮硬顶」。</p>
@@ -1978,19 +1985,18 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
                 me={me}
                 players={chatPlayers}
                 onError={onError}
-                placeholder="发一句话...（点头像 @ 人）"
+                placeholder="点击头像可 @ 人"
                 emptyText="还没有房间聊天"
                 messagesClass="room-chat-messages"
               />
             ) : (
               <ChatPanel
-                key="lobby-readonly"
+                key="lobby-in-room"
                 scope=""
                 me={me}
                 players={chatPlayers}
                 onError={onError}
-                readOnly
-                readOnlyHint="大厅聊天内容在房间内只能查看，回到大厅后可以发送。"
+                placeholder="点击头像可 @ 人"
                 emptyText="大厅还没有留言"
                 subscribeLobbyChannel
                 messagesClass="room-chat-messages"
@@ -2776,7 +2782,7 @@ export function ChatBoardShell({
 // 首屏/历史走 chatStore（chat:load/loadOlder，读 SQLite），增量由 chatStore 监听 chat:new。
 // 滚到顶部瀑布流加载更早 100 条并保持滚动位置；点头像 @人；@到自己的气泡高亮。
 export function ChatPanel({
-  scope, me, players, onError, readOnly = false, readOnlyHint, placeholder, emptyText, subscribeLobbyChannel = false, messagesClass
+  scope, me, players, onError, placeholder, emptyText, subscribeLobbyChannel = false, messagesClass
 }: {
   scope: string;
   me: PublicPlayer;
@@ -2784,8 +2790,6 @@ export function ChatPanel({
   // authors（服务端按 playerId 从内存玩家表取的当前资料，含离线玩家）。
   players: PublicPlayer[];
   onError: (message: string) => void;
-  readOnly?: boolean;
-  readOnlyHint?: string;
   placeholder?: string;
   emptyText?: string;
   subscribeLobbyChannel?: boolean;
@@ -2858,7 +2862,7 @@ export function ChatPanel({
   }
 
   function insertMention(player?: PublicPlayer) {
-    if (!player || readOnly) return;
+    if (!player) return;
     const name = mentionLabel(player);
     if (!name) return;
     setText((t) => appendMentionText(t, name));
@@ -2893,7 +2897,7 @@ export function ChatPanel({
               message={item}
               me={me}
               author={item.playerId === me.id ? me : playersById.get(item.playerId)}
-              onMention={readOnly ? undefined : insertMention}
+              onMention={insertMention}
             />
           ))}
           {visible.length === 0 && <p className="empty">{emptyText || "还没有消息"}</p>}
@@ -2904,19 +2908,15 @@ export function ChatPanel({
           </button>
         )}
       </div>
-      {readOnly ? (
-        <p className="hint chat-readonly-hint">{readOnlyHint || "此处只能查看。"}</p>
-      ) : (
-        <div className="send-row">
-          <input
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            onKeyDown={(event) => { if (event.key === "Enter") send(); }}
-            placeholder={placeholder || "发一句话..."}
-          />
-          <button onClick={send}>发送</button>
-        </div>
-      )}
+      <div className="send-row">
+        <input
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={(event) => { if (event.key === "Enter") send(); }}
+          placeholder={placeholder || "发一句话..."}
+        />
+        <button onClick={send}>发送</button>
+      </div>
     </>
   );
 }
@@ -2934,7 +2934,7 @@ export function ChatBubble({ message, me, author, onMention }: { message: ChatMe
   const mine = message.playerId === me.id;
   // 精确匹配：消息 @ 的 playerId 列表命中我时高亮气泡。
   const mentionsMe = Array.isArray(message.mentions) && message.mentions.includes(me.id);
-  // 只能 @ 别人：点头像插入 @昵称（自己的气泡与只读场景不可点）。
+  // 只能 @ 别人：点头像插入 @昵称（自己的气泡不可点）。
   const canMention = Boolean(onMention) && !mine;
   return (
     <div className={`chat-bubble-row ${mine ? "mine" : ""} ${mentionsMe ? "mentioned" : ""}`}>
@@ -2982,7 +2982,7 @@ export function Settlement({ room }: { room: RoomSnapshot }) {
   return (
     <div className="settlement-pop">
       <span>{choiceText(latest.moveA)} <b>vs</b> {choiceText(latest.moveB)}</span>
-      <strong>{latest.resultLabel || historyResultText(latest.result)}</strong>
+      <strong>{latest.resultText || latest.resultLabel || historyResultText(latest.result)}</strong>
     </div>
   );
 }
@@ -3161,9 +3161,14 @@ export function lobbyRoomInfoTags(config: AppConfig, room: LobbySnapshot["rooms"
   const multiplier = room.rankMultiplier || 1;
   const tags: RoomInfoTagView[] = [
     gameInfoTag(config, room.gameId),
-    room.enableRanked ? roomInfoTag(config, "ranked", rankedInfoExtra(room.stake, multiplier, room.gameId)) : roomInfoTag(config, "normal"),
-    room.enablePunishment ? roomInfoTag(config, "punishment", punishmentSelectionText(config, room)) : roomInfoTag(config, "noPunishment")
+    room.enableRanked ? roomInfoTag(config, "ranked", rankedInfoExtra(room.stake, multiplier, room.gameId)) : roomInfoTag(config, "normal")
   ];
+  // 大厅列表的惩罚标签只显示玩家能感知的具体内容（自定义惩罚 / #标签 / 系列任务名），
+  // 不再套「惩罚开启：」这层前缀；未开启惩罚则完全不展示这个标签。
+  if (room.enablePunishment) {
+    const punishmentStyle = roomInfoTag(config, "punishment").style;
+    tags.push({ key: `punishment-${room.id}`, text: lobbyPunishmentTagText(config, room), style: punishmentStyle });
+  }
   if (room.enableExtremeRanked) tags.push(roomInfoTag(config, "extremeRanked"));
   if (room.enablePunishment) {
     if (room.tieDoublePunish && room.gameId !== "liarsdice") tags.push(roomInfoTag(config, "tieDoublePunish"));
@@ -3217,6 +3222,23 @@ export function punishmentSelectionText(config: AppConfig, settings: Pick<RoomSe
     .filter((name): name is string => Boolean(name));
   if (!names.length) return "：随机任务";
   return `：${names.join("、")}`;
+}
+
+/** 大厅房间列表的惩罚标签正文：自定义惩罚直接写“自定义惩罚”，随机任务写最多三个
+ * “#标签”（空格分隔），系列任务直接写系列名——都不带“惩罚开启：”这层前缀。 */
+export function lobbyPunishmentTagText(config: AppConfig, settings: Pick<RoomSettings, "punishmentSource" | "punishmentTagsIncluded" | "punishmentSeriesId" | "punishmentId" | "punishmentIds">) {
+  const src = settings.punishmentSource === "system" ? "random" : (settings.punishmentSource || "random");
+  if (src === "player") return "自定义惩罚";
+  if (src === "series") {
+    const series = (config.punishmentSeriesSummaries || []).find((s) => s.id === settings.punishmentSeriesId);
+    return series ? series.name : "系列任务";
+  }
+  const names = (settings.punishmentTagsIncluded || [])
+    .map((id) => (config.punishmentTags || []).find((t) => t.id === id)?.name)
+    .filter((name): name is string => Boolean(name))
+    .slice(0, 3);
+  if (!names.length) return "随机任务";
+  return names.map((name) => `#${name}`).join(" ");
 }
 
 export function RoomInfoTagList({ tags }: { tags: RoomInfoTagView[] }) {

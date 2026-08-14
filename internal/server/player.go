@@ -473,11 +473,12 @@ func (s *Server) generateNameWarPenaltyName() string {
 	return prefix + "-" + s.nameWarCode()
 }
 
-func formatDisplayName(player *PlayerState) string {
+func (s *Server) formatDisplayName(player *PlayerState) string {
 	if ptrBool(player.NameWarPunished) && player.NameWarPenaltyName != "" {
 		return player.NameWarPenaltyName
 	}
-	return player.GenderLabel + " - " + player.Stats.Title + " - " + player.Name
+	title, _ := s.resolveDisplayTitle(player)
+	return player.GenderLabel + " - " + title + " - " + player.Name
 }
 
 func playerShortName(player *PlayerState) string {
@@ -639,7 +640,7 @@ func (s *Server) refreshNameWarState(player *PlayerState, now int64) bool {
 			s.syncTitleForRankSegment(player, false)
 		}
 	}
-	player.DisplayName = formatDisplayName(player)
+	player.DisplayName = s.formatDisplayName(player)
 	after := fmt.Sprintf("%s|%s|%v|%s|%v|%s|%s",
 		player.Stats.Title, player.DisplayName, ptrBool(player.NameWarPunished),
 		player.NameWarPenaltyName, player.NameWarRenameProtectedUntil,
@@ -658,7 +659,7 @@ func (s *Server) applyGender(player *PlayerState, genderID string) {
 	if oldFactionID != "" && oldFactionID != next.FactionID && !ptrBool(player.NameWarPunished) {
 		s.syncTitleForRankSegment(player, true)
 	}
-	player.DisplayName = formatDisplayName(player)
+	player.DisplayName = s.formatDisplayName(player)
 }
 
 func (s *Server) publicPlayer(player *PlayerState) types.PublicPlayer {

@@ -5,7 +5,7 @@ import type { AppConfig, LobbySnapshot, PublicPlayer, RoomSnapshot } from "./sha
 import { leaderboardRefreshMs, playerSecretKey, securityDisclaimerKey, tokenKey } from "./lib/constants";
 import {
   bumpWsAuthRetryCount, cacheJoinProfile, clearPlayerIdentity, connectSocketWithSession, getWsAuthRetryCount, hasCachedLogin,
-  joinIdentityPayload, readCachedJoinGender, resetWsAuthRetryCount, sessionTokenLooksValid
+  joinIdentityPayload, readCachedJoinGender, readPunishmentTagPrefs, resetWsAuthRetryCount, sessionTokenLooksValid, writePunishmentTagPrefs
 } from "./lib/session";
 import { ask, isAdminRoute, todayKey } from "./lib/rpc";
 import {
@@ -32,6 +32,8 @@ export function App() {
   const [lobby, setLobby] = useState<LobbySnapshot | null>(null);
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
   const [me, setMe] = useState<MeState | null>(null);
+  // 随机任务开房标签偏好：纯本地浏览器存储，不再随 player:join 从服务端下发。
+  const [punishmentTagPrefs, setPunishmentTagPrefs] = useState<Record<string, string>>(() => readPunishmentTagPrefs());
   const [leaderboardPlayersSnapshot, setLeaderboardPlayersSnapshot] = useState<PublicPlayer[]>([]);
   const [view, setView] = useState<"login" | "lobby" | "room" | "admin">(() => isAdminRoute() ? "admin" : "login");
   // 有本地登录缓存时先进入恢复态，避免刷新时先闪一下登录页再进大厅。
@@ -298,7 +300,7 @@ export function App() {
     socket.on("config:update", (config: AppConfig) => {
       setConfig(normalizeConfig(config));
     });
-    // 聊天（房间 + 大厅留言板）已迁到 chatStore：chat:new / chat:cleared 由其内部监听，
+    // 聊天（房间 + 大厅留言板）已迁到 chatStore：chat:new / chat:deleted 由其内部监听，
     // 首屏与历史走 chat:load / chat:loadOlder，此处不再处理。
     socket.on("announcement:show", (payload: AnnouncementPayload) => {
       setAnnouncement(payload);
@@ -560,7 +562,7 @@ export function App() {
         setView(isAdminRoute() ? "admin" : next.room ? "room" : "lobby");
         if (next.room?.phase === "punishment") setNotice("已恢复到未完成的惩罚房间。");
       }} onError={setNotice} />}
-      {view === "lobby" && me && lobby && <Lobby config={config} lobby={lobby} me={me.player} punishmentTagPrefs={me.punishmentTagPrefs} onError={setNotice} onGoRoom={(nextRoom) => { if (nextRoom) setRoom(nextRoom); setView("room"); }} onPunishmentTagPrefsChange={(prefs) => setMe((old) => old ? { ...old, punishmentTagPrefs: prefs } : old)} />}
+      {view === "lobby" && me && lobby && <Lobby config={config} lobby={lobby} me={me.player} punishmentTagPrefs={punishmentTagPrefs} onError={setNotice} onGoRoom={(nextRoom) => { if (nextRoom) setRoom(nextRoom); setView("room"); }} onPunishmentTagPrefsChange={(prefs) => { setPunishmentTagPrefs(prefs); writePunishmentTagPrefs(prefs); }} />}
       {view === "room" && me && room && <Room config={config} room={room} me={me.player} lobby={lobby} onBack={() => setView("lobby")} onError={setNotice} />}
       {view === "admin" && lobby && (
         <Suspense fallback={<div className="loading">正在加载后台管理…</div>}>

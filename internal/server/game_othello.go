@@ -765,7 +765,7 @@ func (s *Server) finishOthelloGame(room *RoomState) {
 	s.refreshHumans(playerA, playerB)
 	resultLabel := "黑白棋平局"
 	if result != types.ResultDraw {
-		resultLabel = occupantName(room.Seats[types.SeatKey(result)]) + "胜利"
+		resultLabel = seatWinLabel(room, types.SeatKey(result))
 	}
 	item := s.buildMatchHistoryShell(room, result, types.GameOthello, resultLabel, room.ResultText)
 	item.OthelloScore = &types.OthelloScore{Black: blackCount, White: whiteCount}
@@ -970,7 +970,7 @@ func (s *Server) applyOthelloDisconnectForfeit(room *RoomState, forfeit Disconne
 		ID: randomID(), Round: len(room.RoundHistory) + 1, At: nowMs(),
 		PlayerA: playerAName, PlayerB: playerBName,
 		MoveA: types.MoveNoMove, MoveB: types.MoveNoMove,
-		Result: types.RoundResult(forfeit.WinnerSeat), ResultLabel: forfeit.WinnerName + "胜利",
+		Result: types.RoundResult(forfeit.WinnerSeat), ResultLabel: seatWinLabel(room, forfeit.WinnerSeat),
 		ResultText: room.ResultText + "（断线判负）", GameID: types.GameOthello,
 		OthelloScore: &types.OthelloScore{Black: blackCount, White: whiteCount},
 		Ranked:       room.Settings.EnableRanked, ExtremeRanked: room.Settings.EnableExtremeRanked,

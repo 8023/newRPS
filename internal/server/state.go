@@ -116,11 +116,6 @@ type PlayerState struct {
 	PushTurnEnabled    *bool // 轮到我出招/落子
 	PushSeatEnabled    *bool // 我的房间参战席被坐满
 	PushBondEnabled    *bool // 我的主/宠上线
-	// PunishmentTagPrefs：随机任务标签三态偏好（tagId -> "include"|"exclude"），开房面板
-	// 预填用；同样是私有字段，不进 PublicPlayer——否则会随座位/观战快照、player:get、
-	// 聊天作者列表广播给其他玩家，等于把"我想避开哪些惩罚标签"暴露给所有人。只在
-	// player:join 的应答里作为独立字段下发给玩家本人，见 onPlayerJoin。
-	PunishmentTagPrefs map[string]string
 	// GiveawayVoteQuotas：本玩家对白给自救板每个目标各自独立的每小时点赞/倒赞额度，
 	// key 为目标玩家 ID。与旧版"全体目标共用一个每小时总额度"不同——每个目标的窗口各自
 	// 独立起算/过期，互不影响。纯内存态，不落库，掉线/重启后清零（可接受：额度本就是
@@ -359,6 +354,10 @@ type Server struct {
 	// activityDB：玩家审计事件（改名/模式开关）+ 连接生命周期事件的 SQLite 持久化存储，
 	// system/error 两张活动日志表不在此列，仍走 work/logs/*.log（见 activitylog.go）
 	activityDB *activityStore
+	// activityRO：后台运营查询共享的只读连接（小号 connection_events、聊天检索等），
+	// 独立于 SetMaxOpenConns(1) 的主写连接，避免慢查询堵塞落盘；与 analyticsRO 不同，
+	// 它不受 ANALYTICS_ENABLED 开关影响，始终打开（见 server.go 的初始化处）。
+	activityRO *sql.DB
 	// analyticsDB：分析写路径（走 s.db）；analyticsRO 为只读聚合连接；
 	// analyticsSnap 无锁发布预算结果；analyticsKick 容量 1，手动催一次重算。
 	analyticsDB   *analyticsStore
@@ -413,8 +412,17 @@ type Server struct {
 	adminUploadsDir  string
 	avatarUploadsDir string
 	dataDir          string
-	playersFile      string // players.json 路径，仅用作 SQLite 写失败时的降级保底（见 persist.go writePlayersJSONFallback）
-	distDir          string
+
+	// proofImageRooms：证明图文件名 -> 上传时所在房间 ID（s.mu 保护）。房间是纯内存态、
+	// 不落盘（进程重启即全部消失），所以这张表天然也只在进程存活期内有意义——serveStatic
+	// 靠它在 Referer 校验之外再加一道"房间已销毁则一律拒绝"的时效性限制：房间销毁后
+	// （cleanupRoomIfEmpty/管理员强制关房/优雅关停）不删表项，而是查询时直接判
+	// s.rooms[roomID] 是否还在，找不到房间或表里压根没有这个文件名（例如进程重启后）都
+	// 一律拒绝，图片不会比它所属的房间活得更久。只覆盖证明图（avatars/admin 图片桶不经过
+	// 这张表，不受影响）。
+	proofImageRooms map[string]string
+	playersFile     string // players.json 路径，仅用作 SQLite 写失败时的降级保底（见 persist.go writePlayersJSONFallback）
+	distDir         string
 
 	persistMu          sync.Mutex
 	persistDirty       bool

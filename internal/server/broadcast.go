@@ -308,15 +308,37 @@ func chatLiveChannel(roomID string) string {
 
 // deliverChat 持久化（可选）+ 实时推送一条聊天。persist=false 用于系统提示等瞬时消息。
 // 走 chat:new（动态 RAW），携带 mentions/seq；房间/大厅由 message.RoomID 区分。
+// 房间聊天顺带把当前房间名当作快照落盘（room_messages.room_name），供后台聊天管理按
+// 房间名检索——房间之后改名/关闭都不影响历史消息里记录的这个名字。
 func (s *Server) deliverChat(message types.ChatMessage, persist bool) {
 	if persist && s.chatDB != nil {
-		if seq, err := s.chatDB.append(message.RoomID, message); err != nil {
+		roomName := ""
+		if message.RoomID != "" {
+			if room := s.rooms[message.RoomID]; room != nil {
+				roomName = room.Settings.Name
+			}
+		}
+		if seq, err := s.chatDB.append(message.RoomID, roomName, message); err != nil {
 			s.errorLog("chat_persist_failed", err.Error())
 		} else {
 			message.Seq = seq
 		}
 	}
 	s.emitToRoom(chatLiveChannel(message.RoomID), "chat:new", message)
+}
+
+// broadcastChatDeleted 按消息所属 scope（大厅 RoomID=="" / 各房间）分组推送 chat:deleted，
+// 通知在线客户端从本地视图立即摘除这些消息 id——配合 chatStore.older/recent 已经过滤掉
+// deleted=1 的行，做到新老访客都看不到被管理员删除的聊天。只在软删除（非恢复）时调用：
+// 恢复不需要主动推送，客户端本就已经看不到该消息，管理员刷新检索列表即可核实。
+func (s *Server) broadcastChatDeleted(refs []chatMessageRef) {
+	byScope := map[string][]string{}
+	for _, ref := range refs {
+		byScope[ref.RoomID] = append(byScope[ref.RoomID], ref.ID)
+	}
+	for roomID, ids := range byScope {
+		s.emitToRoom(chatLiveChannel(roomID), "chat:deleted", map[string]any{"roomId": roomID, "ids": ids})
+	}
 }
 
 func (s *Server) emitWireToRoom(room string, env *wire.Envelope) {

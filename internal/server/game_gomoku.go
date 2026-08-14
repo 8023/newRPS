@@ -358,7 +358,7 @@ func (s *Server) finishGomokuGame(room *RoomState, result types.RoundResult, win
 	s.refreshHumans(playerA, playerB)
 	resultLabel := "五子棋平局"
 	if result != types.ResultDraw {
-		resultLabel = occupantName(room.Seats[types.SeatKey(result)]) + "胜利"
+		resultLabel = seatWinLabel(room, types.SeatKey(result))
 	}
 	item := s.buildMatchHistoryShell(room, result, types.GameGomoku, resultLabel, room.ResultText)
 	item.GomokuBlackSeat = room.Gomoku.BlackSeat
@@ -691,7 +691,7 @@ func (s *Server) applyGomokuDisconnectForfeit(room *RoomState, forfeit Disconnec
 	item := types.RoundHistoryItem{
 		ID: randomID(), Round: len(room.RoundHistory) + 1, At: nowMs(),
 		PlayerA: playerAName, PlayerB: playerBName, MoveA: moveA, MoveB: moveB,
-		Result: types.RoundResult(forfeit.WinnerSeat), ResultLabel: forfeit.WinnerName + "胜利",
+		Result: types.RoundResult(forfeit.WinnerSeat), ResultLabel: seatWinLabel(room, forfeit.WinnerSeat),
 		ResultText: room.ResultText + "（断线判负）", GameID: types.GameGomoku,
 		Ranked: room.Settings.EnableRanked, ExtremeRanked: room.Settings.EnableExtremeRanked,
 		PunishmentTasks: punishmentTasks, PunishedNames: punishedNames, Proofs: []types.HistoryProof{},

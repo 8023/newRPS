@@ -316,7 +316,10 @@ main {
 .gender-chip,
 .title-chip,
 .giveaway-chip,
-.mode-chip {
+.mode-chip,
+.admin-chat-scope,
+.admin-chat-deleted-chip,
+.admin-chat-presence {
   display: inline-flex;
   align-items: center;
   min-height: 24px;
@@ -556,7 +559,7 @@ main {
   gap: 8px;
 }
 
-.announcement-popup ~ .version-update-popup {
+.announcement-popup~.version-update-popup {
   top: 168px;
 }
 
@@ -2240,13 +2243,6 @@ main {
 .chat-panel .send-row {
   align-self: end;
   padding-top: 2px;
-}
-
-.chat-readonly-hint {
-  align-self: end;
-  margin: 0;
-  padding-top: 4px;
-  text-align: center;
 }
 
 .sticky-panel-title {
@@ -5269,6 +5265,12 @@ main {
   gap: 8px;
 }
 
+/* 昵称搜索框与筛选按钮同排：固定宽度、对齐按钮的 36px 高度，不随按钮换行挤成整行 */
+.admin-player-name-search {
+  flex: 0 1 18em;
+  min-height: 36px;
+}
+
 .admin-filter-btn {
   min-height: 36px;
   padding: 7px 12px;
@@ -5302,6 +5304,237 @@ main {
   display: grid;
   width: 100%;
   gap: 8px;
+}
+
+/* 后台「聊天管理」：检索卡 + 结果列表，对齐用户管理/房间列表的卡片语言 */
+.admin-chat-manager {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-chat-filter-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--primary) 34%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 8%, var(--panel-solid));
+  padding: 12px;
+}
+
+.admin-chat-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-chat-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-chat-filter-actions .primary {
+  margin-left: auto;
+  min-width: 96px;
+}
+
+.admin-chat-list-section {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+}
+
+.admin-chat-bulk-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-chat-bulk-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.admin-chat-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.admin-chat-select-all em {
+  font-style: normal;
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel-solid));
+  color: var(--page-text);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 3px 8px;
+}
+
+/* 全局 input { width:100%; padding:10px } 会把复选框撑成巨型输入框 */
+.admin-chat-manager input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  padding: 0;
+  margin: 0;
+  flex: none;
+  accent-color: var(--primary);
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+}
+
+.admin-chat-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(68dvh, 760px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
+}
+
+.admin-chat-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-solid);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.admin-chat-row:hover {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  background: color-mix(in srgb, var(--primary) 6%, var(--panel-solid));
+}
+
+.admin-chat-row.selected {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel-solid));
+  box-shadow: 0 0 0 3px rgba(116, 199, 255, 0.18);
+}
+
+.admin-chat-row.deleted {
+  background: color-mix(in srgb, var(--notice-bg) 70%, var(--panel-solid));
+  border-color: var(--notice-border);
+}
+
+.admin-chat-row.deleted.selected {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--notice-border) 45%, transparent);
+}
+
+.admin-chat-row-body {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.admin-chat-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.admin-chat-row-meta strong {
+  color: var(--page-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-chat-row-meta .player-avatar {
+  flex: 0 0 auto;
+}
+
+.admin-chat-scope.lobby {
+  border-color: color-mix(in srgb, var(--pink) 55%, var(--border));
+  background: color-mix(in srgb, var(--pink) 22%, var(--panel-solid));
+  color: var(--page-text);
+}
+
+.admin-chat-scope.room {
+  border-color: color-mix(in srgb, #5fbf8f 55%, var(--border));
+  background: color-mix(in srgb, #5fbf8f 16%, var(--panel-solid));
+  color: #26724e;
+}
+
+[data-theme="dark"] .admin-chat-scope.room {
+  color: #c8f0d6;
+}
+
+.admin-chat-presence.online {
+  border-color: color-mix(in srgb, #5fbf8f 55%, var(--border));
+  background: color-mix(in srgb, #5fbf8f 16%, var(--panel-solid));
+  color: #26724e;
+}
+
+[data-theme="dark"] .admin-chat-presence.online {
+  color: #c8f0d6;
+}
+
+.admin-chat-presence.offline {
+  border-color: var(--pink-border);
+  background: var(--notice-bg);
+  color: #8a3158;
+}
+
+.admin-chat-deleted-chip {
+  border-color: var(--notice-border);
+  background: var(--notice-bg);
+  color: #8a3158;
+}
+
+[data-theme="dark"] .admin-chat-deleted-chip {
+  color: #ffd7e7;
+}
+
+.admin-chat-time {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.admin-chat-row-body p {
+  margin: 0;
+  word-break: break-word;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.admin-chat-row.deleted .admin-chat-row-body p {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.admin-chat-row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-chat-row-actions button {
+  min-width: 64px;
+}
+
+.admin-chat-more {
+  justify-self: center;
+  min-width: 160px;
 }
 
 /* 主宠关系（力导向图）管理面板：与「宠物乐园（认主/认宠）」平级的独立卡片 */
@@ -5638,6 +5871,22 @@ main {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.92em;
   letter-spacing: 0.02em;
+}
+
+/* 小号查询结果：三个按钮下方的只读列表框，每行仅头像+性别/称号/白给/名争徽章，不带任何编辑控件。 */
+.admin-alt-accounts {
+  display: grid;
+  gap: 8px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.admin-alt-accounts-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .field-label {
@@ -6196,8 +6445,7 @@ main {
   }
 
   .chat-panel.collapsed .chat-scroll-shell,
-  .chat-panel.collapsed .send-row,
-  .chat-panel.collapsed .chat-readonly-hint {
+  .chat-panel.collapsed .send-row {
     display: none;
   }
 
@@ -6296,6 +6544,37 @@ main {
 
   .admin-announcement-actions {
     grid-template-columns: 1fr;
+  }
+
+  .admin-chat-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-chat-filter-actions .primary {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .admin-chat-bulk-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-chat-bulk-actions button {
+    flex: 1;
+  }
+
+  .admin-chat-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .admin-chat-row-actions {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  .admin-chat-time {
+    margin-left: 0;
   }
 
   .admin-action-tabs {
@@ -7183,6 +7462,11 @@ main {
 .analytics-tooltip-row strong {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
+}
+
+.analytics-tooltip-pct {
+  color: var(--chart-ink-muted);
+  font-weight: 400;
 }
 
 .analytics-tooltip-total {

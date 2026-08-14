@@ -2,6 +2,7 @@ export const tokenKey = "rps-online-token";
 export const playerIdKey = "rps-player-id";
 export const playerSecretKey = "rps-player-secret";
 export const securityDisclaimerKey = "rps-online-security-disclaimer";
+export const punishmentTagPrefsKey = "rps-punishment-tag-prefs";
 export const defaultRoomName = "新的锤子剪刀布房间";
 export const defaultOthelloRoomName = "新的黑白棋房间";
 export const defaultTicTacToeRoomName = "新的井字棋房间";

@@ -47,12 +47,10 @@ type persistedPlayer struct {
 	BondMasterEnabled            *bool             `json:"bondMasterEnabled,omitempty"`
 	BondPetEnabled               *bool             `json:"bondPetEnabled,omitempty"`
 	BondPublicDisplay            *bool             `json:"bondPublicDisplay,omitempty"`
-	// PunishmentTagPrefs：tagId -> include|exclude，整表 DELETE+INSERT 同步。
-	PunishmentTagPrefs map[string]string `json:"punishmentTagPrefs,omitempty"`
-	Stats              types.PublicStats `json:"stats"`
-	GameStats          types.GameStats   `json:"gameStats"`
-	CreatedAt          int64             `json:"createdAt,omitempty"`
-	LastSeenAt         int64             `json:"lastSeenAt,omitempty"`
+	Stats                        types.PublicStats `json:"stats"`
+	GameStats                    types.GameStats   `json:"gameStats"`
+	CreatedAt                    int64             `json:"createdAt,omitempty"`
+	LastSeenAt                   int64             `json:"lastSeenAt,omitempty"`
 }
 
 func (s *Server) serializePlayer(p *PlayerState) (persistedPlayer, bool) {
@@ -80,21 +78,9 @@ func (s *Server) serializePlayer(p *PlayerState) (persistedPlayer, bool) {
 		PushMentionEnabled:   p.PushMentionEnabled, PushTurnEnabled: p.PushTurnEnabled, PushSeatEnabled: p.PushSeatEnabled,
 		PushBondEnabled:   p.PushBondEnabled,
 		BondMasterEnabled: p.BondMasterEnabled, BondPetEnabled: p.BondPetEnabled, BondPublicDisplay: p.BondPublicDisplay,
-		PunishmentTagPrefs: copyStringMap(p.PunishmentTagPrefs),
-		Stats:              p.Stats, GameStats: p.GameStats,
+		Stats: p.Stats, GameStats: p.GameStats,
 		CreatedAt: p.CreatedAt, LastSeenAt: p.LastSeenAt,
 	}, true
-}
-
-func copyStringMap(m map[string]string) map[string]string {
-	if len(m) == 0 {
-		return nil
-	}
-	out := make(map[string]string, len(m))
-	for k, v := range m {
-		out[k] = v
-	}
-	return out
 }
 
 func (s *Server) serializePlayers() []persistedPlayer {
@@ -241,14 +227,13 @@ func (s *Server) ingestPersistedPlayer(item persistedPlayer) bool {
 		PushTurnEnabled:    item.PushTurnEnabled,
 		PushSeatEnabled:    item.PushSeatEnabled,
 		PushBondEnabled:    item.PushBondEnabled,
-		PunishmentTagPrefs: copyStringMap(item.PunishmentTagPrefs),
 		CreatedAt:          createdAt,
 		LastSeenAt:         lastSeenAt,
 	}
 	if player.ClaimKey == "" {
 		player.ClaimKey = randomClaimKey()
 	}
-	player.DisplayName = formatDisplayName(player)
+	player.DisplayName = s.formatDisplayName(player)
 	// 旧版 players.json 迁移进库时没有历史最高/最低分字段：以当前排位分兜底，
 	// 保证展示上"历史最高"不会低于"当前"（SQLite 直接加载的行已在迁移 SQL 里回填过，这里是幂等的）。
 	recordRankedExtremes(player)

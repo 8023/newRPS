@@ -46,10 +46,10 @@ func TestChatStoreSurvivesReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	if _, err := store.append("", types.ChatMessage{ID: "a", Text: "before restart", At: 1}); err != nil {
+	if _, err := store.append("", "", types.ChatMessage{ID: "a", Text: "before restart", At: 1}); err != nil {
 		t.Fatalf("append: %v", err)
 	}
-	if _, err := store.append("roomX", types.ChatMessage{ID: "b", Text: "room msg", At: 2}); err != nil {
+	if _, err := store.append("roomX", "房间X", types.ChatMessage{ID: "b", Text: "room msg", At: 2}); err != nil {
 		t.Fatalf("append room: %v", err)
 	}
 	if err := store.Close(); err != nil {

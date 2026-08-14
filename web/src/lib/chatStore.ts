@@ -78,9 +78,16 @@ socket.on("chat:new", (msg: ChatMessage) => {
   appendLive(msg.roomId || "", msg);
 });
 
-// 管理员清空：重置对应 scope。
-socket.on("chat:cleared", (payload: { roomId?: string }) => {
-  setState(payload?.roomId || "", { ...EMPTY, loadedOnce: true });
+// 管理员软删除：按 id 从对应 scope 的本地消息里摘除（不清空整个 scope）。
+// 后端 chatStore.older/recent 已经过滤掉 deleted=1 的行，这里只是让当前在线的老/新
+// 访客立即看不到，不必等下次刷新历史。
+socket.on("chat:deleted", (payload: { roomId?: string; ids?: string[] }) => {
+  const ids = new Set(payload?.ids || []);
+  if (ids.size === 0) return;
+  const scope = payload?.roomId || "";
+  const st = getState(scope);
+  if (!st.messages.some((m) => ids.has(m.id))) return;
+  setState(scope, { ...st, messages: st.messages.filter((m) => !ids.has(m.id)) });
 });
 
 // 重连后刷新已激活过的 scope 的最近一页（补上断线期间遗漏的消息）。

@@ -185,6 +185,7 @@ func New() (*Server, error) {
 		proofUploadsDir:           proofDir,
 		adminUploadsDir:           adminDir,
 		avatarUploadsDir:          avatarDir,
+		proofImageRooms:           map[string]string{},
 		dataDir:                   dataDir,
 		playersFile:               filepath.Join(dataDir, "players.json"),
 		distDir:                   distDir,
@@ -253,6 +254,14 @@ func New() (*Server, error) {
 			} else {
 				s.analyticsRO = ro
 			}
+		}
+		// activityRO：给小号、聊天管理等后台运营只读查询使用，始终打开（不像 analyticsRO
+		// 那样挂在 ANALYTICS_ENABLED 上）；其中小号查询依赖的是核心 connection_events，
+		// 本来就不该被分析开关连带关闭。
+		if ro, err := openAnalyticsReadOnlyDB(dataDir); err != nil {
+			s.errorLog("activity_readonly_open_failed", err.Error())
+		} else {
+			s.activityRO = ro
 		}
 	}
 	s.petBonds = map[string]*petBond{}
@@ -334,6 +343,9 @@ func (s *Server) Run() error {
 		s.flushPersist()
 		if s.analyticsRO != nil {
 			_ = s.analyticsRO.Close()
+		}
+		if s.activityRO != nil {
+			_ = s.activityRO.Close()
 		}
 		if s.db != nil {
 			_ = s.db.Close()
@@ -432,6 +444,9 @@ func (s *Server) closeLiveStateOnShutdown() {
 		})
 		delete(s.rooms, id)
 	}
+	// 优雅关停等价于清空所有房间：进程一退出 s.rooms 本就不落盘，proofImageRooms 里
+	// 指向这些房间的表项后续也只会一路判"房间已销毁"，这里直接整表清空更省事。
+	s.proofImageRooms = map[string]string{}
 	s.mu.Unlock()
 
 	if s.activityDB != nil {

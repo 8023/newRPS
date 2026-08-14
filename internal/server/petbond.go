@@ -156,8 +156,9 @@ func (s *Server) removeBond(masterID, petID string) {
 			s.errorLog("petbond_delete_failed", err.Error())
 		}
 	}
-	// 称号可能变回积分档，刷新宠物展示。
+	// 称号可能变回积分档，刷新宠物展示（含缓存的 DisplayName，见 resolveDisplayTitle）。
 	if pet := s.players[petID]; pet != nil {
+		pet.DisplayName = s.formatDisplayName(pet)
 		s.refreshPlayerSnapshots(pet)
 	}
 }
@@ -204,27 +205,37 @@ func (s *Server) bestPetTitle(petID string) string {
 	return best
 }
 
-// applyDisplayTitle 在 publicPlayer 出站时：管理员自定义 > 宠物称号（主人设置）> 玩家自设
-// 称号 > 积分档称号。名争惩罚态由调用方 / 展示层处理（不在此改 Title）。
+// resolveDisplayTitle 按管理员自定义 > 宠物称号（主人设置）> 玩家自设称号 > 积分档称号的
+// 优先级解析当前应展示的称号；name/source 供 applyDisplayTitle（出站 PublicPlayer.Stats.Title，
+// 决定标签颜色）与 formatDisplayName（缓存的 DisplayName，供 occupantName/聊天署名/各游戏结算
+// 文案共用）共享同一份结果——两处早先各算一套，宠物称号/自设称号这类覆盖项只会体现在前者，
+// 后者缓存的 DisplayName 永远停在积分档称号，导致结算文案里嵌的称号和玩家资料页对不上。
+// 名争惩罚态由调用方/展示层处理，不在此改 Title。
+func (s *Server) resolveDisplayTitle(player *PlayerState) (title, source string) {
+	if player == nil {
+		return "", "system"
+	}
+	if player.Stats.TitleCustom {
+		return player.Stats.Title, "admin"
+	}
+	if t := s.bestPetTitle(player.ID); t != "" {
+		return t, "master"
+	}
+	if t := strings.TrimSpace(player.Stats.SelfTitle); t != "" {
+		return t, "self"
+	}
+	return player.Stats.Title, "system"
+}
+
+// applyDisplayTitle 在 publicPlayer 出站时按 resolveDisplayTitle 的优先级改写展示称号。
 func (s *Server) applyDisplayTitle(player *PlayerState, p *types.PublicPlayer) {
 	if player == nil || p == nil {
 		return
 	}
-	p.Stats.TitleSource = "system"
-	defer func() { p.Stats.TitleColors = s.titleColorsFor(p.Stats.TitleSource) }()
-	if p.Stats.TitleCustom {
-		p.Stats.TitleSource = "admin"
-		return
-	}
-	if title := s.bestPetTitle(player.ID); title != "" {
-		p.Stats.Title = title
-		p.Stats.TitleSource = "master"
-		return
-	}
-	if title := strings.TrimSpace(player.Stats.SelfTitle); title != "" {
-		p.Stats.Title = title
-		p.Stats.TitleSource = "self"
-	}
+	title, source := s.resolveDisplayTitle(player)
+	p.Stats.Title = title
+	p.Stats.TitleSource = source
+	p.Stats.TitleColors = s.titleColorsFor(source)
 }
 
 // titleColorsFor 按称号来源查 AppConfig.TitleTagStyles；缺失该 key 时兜底为中性灰

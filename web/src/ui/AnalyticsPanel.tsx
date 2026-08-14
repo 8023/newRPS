@@ -1,10 +1,10 @@
-import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart,
   Pie, PieChart, Rectangle, ResponsiveContainer, Tooltip, XAxis, YAxis
 } from "recharts";
 import type {
-  AnalyticsBucket, AnalyticsNamedSeries, AnalyticsRangeView, AnalyticsSessionBrief
+  AnalyticsBucket, AnalyticsNamedSeries, AnalyticsRangeView, AnalyticsSessionBrief, AppConfig
 } from "../shared/types";
 import { ask } from "../lib/rpc";
 import { AdminSectionHeader } from "./AdminViews";
@@ -53,6 +53,25 @@ function relabelBuckets(rows: AnalyticsBucket[], labels: Record<string, string>)
   return rows.map((r) => ({ ...r, key: labelFor(labels, r.key) }));
 }
 
+// data.punishTagInclude / data.punishTagExclude 的 key 是标签 ID（config.punishmentTags[].id），
+// 建房面板「随机惩罚」图需要把选中/排除两组按同一标签合并成一行，而不是分两张图各显示一半。
+type TagCompareRow = { key: string; include: number; exclude: number };
+function mergeTagCompareBuckets(
+  include: AnalyticsBucket[], exclude: AnalyticsBucket[], labels: Record<string, string>
+): TagCompareRow[] {
+  const map = new Map<string, TagCompareRow>();
+  const bump = (rows: AnalyticsBucket[], field: "include" | "exclude") => {
+    for (const r of rows) {
+      const cur = map.get(r.key) || { key: labelFor(labels, r.key), include: 0, exclude: 0 };
+      cur[field] += r.value;
+      map.set(r.key, cur);
+    }
+  };
+  bump(include, "include");
+  bump(exclude, "exclude");
+  return Array.from(map.values()).sort((a, b) => (b.include + b.exclude) - (a.include + a.exclude));
+}
+
 // data.gameResults 的 key 形如 "othello:draw"：先按 ":" 拆开游戏名/结果分别查表翻译，
 // 查不到时保底显示原始片段，不整体丢弃。
 function relabelGameResultBuckets(rows: AnalyticsBucket[]): AnalyticsBucket[] {
@@ -91,32 +110,42 @@ function formatDelta(d: number): string {
   return pct > 0 ? `↑${pct}%` : `↓${Math.abs(pct)}%`;
 }
 
-function AnalyticsTooltip({ active, payload, label, showTotal }: {
+function AnalyticsTooltip({ active, payload, label, showTotal, showPercent, percentTotal }: {
   active?: boolean;
   payload?: Array<{ name?: string; value?: number; color?: string }>;
   label?: string;
-  /** 堆叠图（对局数/开房数）悬停时附带当日各系列之和 */
+  /** 堆叠图（对局数/开房数/每局时长/房间时长）悬停时附带当日各系列之和 */
   showTotal?: boolean;
+  /** 每行附带占比：分母默认取当前悬停项各系列之和，也可用 percentTotal 指定外部分母
+   * （如饼图/单系列柱状图，需要占「全部类目合计」而非「当前这一根柱子」的比例）。 */
+  showPercent?: boolean;
+  percentTotal?: number;
 }) {
   if (!active || !payload?.length) return null;
-  const total = showTotal
-    ? payload.reduce((sum, p) => sum + (Number(p.value) || 0), 0)
-    : 0;
+  const localTotal = payload.reduce((sum, p) => sum + (Number(p.value) || 0), 0);
+  const percentDenom = percentTotal != null ? percentTotal : localTotal;
   return (
     <div className="analytics-tooltip">
       {label != null && label !== "" && <div className="analytics-tooltip-label">{label}</div>}
-      {payload.map((p, i) => (
-        <div key={i} className="analytics-tooltip-row">
-          <span className="analytics-tooltip-swatch" style={{ background: p.color }} />
-          <span>{p.name}</span>
-          <strong>{formatNum(Number(p.value) || 0)}</strong>
-        </div>
-      ))}
+      {payload.map((p, i) => {
+        const val = Number(p.value) || 0;
+        const pct = showPercent && percentDenom > 0 ? `${((val / percentDenom) * 100).toFixed(1)}%` : null;
+        return (
+          <div key={i} className="analytics-tooltip-row">
+            <span className="analytics-tooltip-swatch" style={{ background: p.color }} />
+            <span>{p.name}</span>
+            <strong>
+              {formatNum(val)}
+              {pct != null && <span className="analytics-tooltip-pct"> ({pct})</span>}
+            </strong>
+          </div>
+        );
+      })}
       {showTotal && (
         <div className="analytics-tooltip-row analytics-tooltip-total">
           <span className="analytics-tooltip-swatch analytics-tooltip-swatch-total" />
           <span>总计</span>
-          <strong>{formatNum(total)}</strong>
+          <strong>{formatNum(localTotal)}</strong>
         </div>
       )}
     </div>
@@ -313,7 +342,7 @@ function trendRows(data: AnalyticsRangeView) {
   }));
 }
 
-export function AnalyticsPanel({ onError }: { onError: (message: string) => void }) {
+export function AnalyticsPanel({ onError, config }: { onError: (message: string) => void; config: AppConfig }) {
   const [days, setDays] = useState(30);
   const [data, setData] = useState<AnalyticsRangeView | null>(null);
   const [sessions, setSessions] = useState<AnalyticsSessionBrief[]>([]);
@@ -387,6 +416,23 @@ export function AnalyticsPanel({ onError }: { onError: (message: string) => void
   const opacity = loading && hasData ? 0.6 : 1;
   const kpi = data?.kpi;
   const trends = data ? trendRows(data) : [];
+
+  // punishTagInclude/Exclude 与 punishSeriesSelect 的 key 是内部 ID，需要按当前后台配置
+  // 里的标签/系列名单翻译成中文名，查不到（已删除的标签/系列）时保底显示原始 ID。
+  const tagLabels = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const t of config.punishmentTags || []) map[t.id] = t.name || t.id;
+    return map;
+  }, [config.punishmentTags]);
+  const seriesLabels = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const s of config.punishmentSeriesSummaries || []) map[s.id] = s.name || s.id;
+    return map;
+  }, [config.punishmentSeriesSummaries]);
+  const tagCompareRows = data ? mergeTagCompareBuckets(data.punishTagInclude || [], data.punishTagExclude || [], tagLabels) : [];
+  // 会话时长分布 / 证明耗时分布悬停气泡的百分比分母：各自所有桶的合计，而不是当前这一根柱子。
+  const sessionBucketsTotal = (data?.sessionBuckets || []).reduce((s, r) => s + r.value, 0);
+  const proofMsTotal = (data?.punishment?.proofMs || []).reduce((s, r) => s + r.value, 0);
 
   return (
     <div className="analytics-panel">
@@ -489,7 +535,7 @@ export function AnalyticsPanel({ onError }: { onError: (message: string) => void
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
                   <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-                  <Tooltip content={<AnalyticsTooltip />} />
+                  <Tooltip content={<AnalyticsTooltip showPercent />} />
                   <Legend />
                   <Line type="monotone" dataKey="newUsers" name="新用户" stroke="var(--chart-1)" strokeWidth={2} dot={false}
                     activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--chart-surface)" }} isAnimationActive={false} />
@@ -514,7 +560,7 @@ export function AnalyticsPanel({ onError }: { onError: (message: string) => void
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
                   <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-                  <Tooltip content={<AnalyticsTooltip />} />
+                  <Tooltip content={<AnalyticsTooltip showPercent />} />
                   <Legend />
                   <Line type="monotone" dataKey="newVisitors" name="新设备" stroke="var(--chart-1)" strokeWidth={2} dot={false}
                     activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--chart-surface)" }} isAnimationActive={false} />
@@ -534,15 +580,15 @@ export function AnalyticsPanel({ onError }: { onError: (message: string) => void
           </ChartCard>
 
           <div className="analytics-row-3">
-            <HBarCard title="设备类型" rows={relabelBuckets(data.devices || [], DEVICE_LABELS).slice(0, 4)} donut />
-            <HBarCard title="浏览器" rows={(data.browsers || []).slice(0, 6)} />
-            <HBarCard title="操作系统" rows={(data.os || []).slice(0, 6)} />
+            <HBarCard title="设备类型" rows={relabelBuckets(data.devices || [], DEVICE_LABELS)} donut />
+            <HBarCard title="浏览器" rows={data.browsers || []} limit={6} showPercent />
+            <HBarCard title="操作系统" rows={data.os || []} limit={6} showPercent />
           </div>
 
           <div className="analytics-row-3">
-            <HBarCard title="来源 Top10" rows={(data.referrers || []).slice(0, 10)} />
-            <HBarCard title="省份 Top10" rows={(data.provinces || []).slice(0, 10)} />
-            <HBarCard title="ISP" rows={(data.isps || []).slice(0, 6)} donut />
+            <HBarCard title="来源 Top10" rows={data.referrers || []} showPercent />
+            <HBarCard title="省份 Top10" rows={data.provinces || []} showPercent />
+            <HBarCard title="ISP Top10" rows={data.isps || []} showPercent />
           </div>
 
           <div className="analytics-row-2">
@@ -568,23 +614,28 @@ export function AnalyticsPanel({ onError }: { onError: (message: string) => void
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={data.series.days.map((day, i) => ({
                   day,
-                  publish: data.punishment?.publish?.[i] || 0,
+                  pending: Math.max(0,
+                    (data.punishment?.publish?.[i] || 0)
+                    - (data.punishment?.done?.[i] || 0)
+                    - (data.punishment?.reject?.[i] || 0)),
                   done: data.punishment?.done?.[i] || 0,
                   reject: data.punishment?.reject?.[i] || 0
                 }))}>
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
                   <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-                  <Tooltip content={<AnalyticsTooltip />} />
+                  <Tooltip content={<AnalyticsTooltip showPercent />} />
                   <Legend />
-                  <Bar dataKey="publish" name="发布" stackId="a" fill="var(--chart-1)" maxBarSize={24}
-                    shape={(p: any) => <StackedSegment {...p} dataKey="publish" seriesKeys={["publish", "done", "reject"]} />}
+                  {/* 发布量包含 assigned/pending/approved/rejected。用“进行中 + 完成 + 驳回”
+                      互斥堆叠，柱子总高度才与发布量一致；不能把发布再作为第四段重复相加。 */}
+                  <Bar dataKey="pending" name="进行中" stackId="a" fill="var(--chart-1)" maxBarSize={24}
+                    shape={(p: any) => <StackedSegment {...p} dataKey="pending" seriesKeys={["pending", "done", "reject"]} />}
                     isAnimationActive={false} />
                   <Bar dataKey="done" name="完成" stackId="a" fill="var(--chart-3)" maxBarSize={24}
-                    shape={(p: any) => <StackedSegment {...p} dataKey="done" seriesKeys={["publish", "done", "reject"]} />}
+                    shape={(p: any) => <StackedSegment {...p} dataKey="done" seriesKeys={["pending", "done", "reject"]} />}
                     isAnimationActive={false} />
                   <Bar dataKey="reject" name="驳回" stackId="a" fill="var(--chart-critical)" maxBarSize={24}
-                    shape={(p: any) => <StackedSegment {...p} dataKey="reject" seriesKeys={["publish", "done", "reject"]} />}
+                    shape={(p: any) => <StackedSegment {...p} dataKey="reject" seriesKeys={["pending", "done", "reject"]} />}
                     isAnimationActive={false} />
                 </BarChart>
               </ResponsiveContainer>
@@ -592,14 +643,37 @@ export function AnalyticsPanel({ onError }: { onError: (message: string) => void
           </div>
 
           <div className="analytics-row-2">
+            <TagCompareChart rows={tagCompareRows} />
+            <HBarCard
+              title="系列惩罚·任务选中"
+              rows={relabelBuckets(data.punishSeriesSelect || [], seriesLabels)}
+            />
+          </div>
+
+          <div className="analytics-row-2">
             <ChartCard
               title="对局数"
               table={<SeriesTable days={data.series.days} series={data.gameRounds || []} labels={GAME_LABELS} />}
             >
-              <StackedGameChart days={data.series.days} series={data.gameRounds || []} labels={GAME_LABELS} />
+              <StackedGameChart days={data.series.days} series={data.gameRounds || []} labels={GAME_LABELS} showPercent />
             </ChartCard>
             <ChartCard title="开房数" table={<SeriesTable days={data.series.days} series={data.roomCreates || []} labels={GAME_LABELS} />}>
-              <StackedGameChart days={data.series.days} series={data.roomCreates || []} labels={GAME_LABELS} />
+              <StackedGameChart days={data.series.days} series={data.roomCreates || []} labels={GAME_LABELS} showPercent />
+            </ChartCard>
+          </div>
+
+          <div className="analytics-row-2">
+            <ChartCard
+              title="每局时长（分钟）"
+              table={<SeriesTable days={data.series.days} series={data.gameRoundDuration || []} labels={GAME_LABELS} />}
+            >
+              <StackedGameChart days={data.series.days} series={data.gameRoundDuration || []} labels={GAME_LABELS} showPercent />
+            </ChartCard>
+            <ChartCard
+              title="房间时长（分钟）"
+              table={<SeriesTable days={data.series.days} series={data.roomDuration || []} labels={GAME_LABELS} />}
+            >
+              <StackedGameChart days={data.series.days} series={data.roomDuration || []} labels={GAME_LABELS} showPercent />
             </ChartCard>
           </div>
 
@@ -610,7 +684,7 @@ export function AnalyticsPanel({ onError }: { onError: (message: string) => void
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
                   <XAxis dataKey="key" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-                  <Tooltip content={<AnalyticsTooltip />} />
+                  <Tooltip content={<AnalyticsTooltip showPercent percentTotal={sessionBucketsTotal} />} />
                   <Bar dataKey="value" name="会话数" maxBarSize={24} radius={[4, 4, 0, 0]} isAnimationActive={false}>
                     {(data.sessionBuckets || []).map((_, i) => (
                       <Cell key={i} fill={SEQ_COLORS[i % SEQ_COLORS.length]} />
@@ -626,7 +700,7 @@ export function AnalyticsPanel({ onError }: { onError: (message: string) => void
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
                   <XAxis dataKey="key" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-                  <Tooltip content={<AnalyticsTooltip />} />
+                  <Tooltip content={<AnalyticsTooltip showPercent percentTotal={proofMsTotal} />} />
                   <Bar dataKey="value" name="次数" maxBarSize={24} radius={[4, 4, 0, 0]} isAnimationActive={false}>
                     {(data.punishment?.proofMs || []).map((_, i) => (
                       <Cell key={i} fill={SEQ_COLORS[i % SEQ_COLORS.length]} />
@@ -939,9 +1013,66 @@ function FunnelTooltip({ active, payload, steps }: {
   );
 }
 
-function HBarCard({ title, rows, donut }: { title: string; rows: AnalyticsBucket[]; donut?: boolean }) {
-  const top = rows.slice(0, donut ? 4 : 10);
-  const total = top.reduce((s, r) => s + r.value, 0);
+// 随机惩罚标签「选中 / 拒绝」对照图：横轴为标签（按选中+拒绝总量取 top10），
+// 纵轴为该标签在当前时间范围内的选中/拒绝次数堆叠柱——柱子总高度=该标签的热度，
+// 色块占比=选中/拒绝的构成，与「惩罚任务」发布/完成/驳回堆叠图是同一视觉语言。
+function TagCompareChart({ rows }: { rows: TagCompareRow[] }) {
+  const top = rows.slice(0, 10);
+  const table = (
+    <table className="analytics-data-table">
+      <thead><tr><th>标签</th><th>选中</th><th>拒绝</th><th>合计</th></tr></thead>
+      <tbody>
+        {top.map((r) => (
+          <tr key={r.key}>
+            <td>{r.key}</td><td>{formatNum(r.include)}</td><td>{formatNum(r.exclude)}</td>
+            <td>{formatNum(r.include + r.exclude)}</td>
+          </tr>
+        ))}
+        {!top.length && <tr><td colSpan={4} className="empty">暂无数据</td></tr>}
+      </tbody>
+    </table>
+  );
+  return (
+    <ChartCard title="随机惩罚·标签选中/拒绝" table={table}>
+      {top.length ? (
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={top} margin={{ top: 8, right: 12, left: 0, bottom: 32 }}>
+            <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
+            <XAxis dataKey="key" interval={0} angle={-25} textAnchor="end" height={56}
+              tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+            <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+            <Tooltip content={<AnalyticsTooltip showTotal />} />
+            <Legend />
+            <Bar dataKey="include" name="选中" stackId="a" fill="var(--chart-1)" maxBarSize={40}
+              shape={(p: any) => <StackedSegment {...p} dataKey="include" seriesKeys={["include", "exclude"]} />}
+              isAnimationActive={false} />
+            <Bar dataKey="exclude" name="拒绝" stackId="a" fill="var(--chart-critical)" maxBarSize={40}
+              shape={(p: any) => <StackedSegment {...p} dataKey="exclude" seriesKeys={["include", "exclude"]} />}
+              isAnimationActive={false} />
+          </BarChart>
+        </ResponsiveContainer>
+      ) : (
+        <p className="empty">暂无数据</p>
+      )}
+    </ChartCard>
+  );
+}
+
+function HBarCard({ title, rows, donut, showPercent, limit }: {
+  title: string; rows: AnalyticsBucket[]; donut?: boolean;
+  /** 非圆环（横向条形）分支是否附带百分比；圆环分支恒有百分比，不受此开关影响。 */
+  showPercent?: boolean;
+  /** 展示的柱数上限，默认圆环 4、条形 10；调用方须传入未截断的完整 rows，
+   * 截断交给本组件做，否则下面的 fullTotal 会算不出「Top N 之外还有多少」。 */
+  limit?: number;
+}) {
+  const n = limit ?? (donut ? 4 : 10);
+  const top = rows.slice(0, n);
+  // 圆环图：中心「合计」与切片占比只针对实际画出来的切片，保证饼图视觉上刚好凑满 100%。
+  const topTotal = top.reduce((s, r) => s + r.value, 0);
+  // 条形图：占比分母是 rows 的完整合计（所选时间段全部类目，而不只是画出来的 Top N）——
+  // 否则 Top N 之外还有数据时，分母偏小会让百分比显得比实际更高。
+  const fullTotal = rows.reduce((s, r) => s + r.value, 0);
   return (
     <ChartCard title={title} table={<BucketTable rows={top} />}>
       {donut && top.length > 0 ? (
@@ -952,11 +1083,14 @@ function HBarCard({ title, rows, donut }: { title: string; rows: AnalyticsBucket
                 isAnimationActive={false}>
                 {top.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
               </Pie>
-              <Tooltip content={<AnalyticsTooltip />} />
+              {/* wrapperStyle 显式给个 z-index：中心「合计」叠层（analytics-donut-center）在
+                  DOM 顺序上排在 Tooltip 之后，默认层叠顺序会盖住鼠标悬停在中心附近时弹出的
+                  气泡，导致看不到内容；提高 Tooltip 自身层级即可让它盖住中心叠层。 */}
+              <Tooltip content={<AnalyticsTooltip showPercent percentTotal={topTotal} />} wrapperStyle={{ zIndex: 20 }} />
             </PieChart>
           </ResponsiveContainer>
           <div className="analytics-donut-center">
-            <strong>{formatNum(total)}</strong>
+            <strong>{formatNum(topTotal)}</strong>
             <span>合计</span>
           </div>
         </div>
@@ -966,7 +1100,7 @@ function HBarCard({ title, rows, donut }: { title: string; rows: AnalyticsBucket
             <CartesianGrid stroke="var(--chart-grid)" horizontal={false} strokeDasharray="" />
             <XAxis type="number" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
             <YAxis type="category" dataKey="key" width={72} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-            <Tooltip content={<AnalyticsTooltip />} />
+            <Tooltip content={<AnalyticsTooltip showPercent={showPercent} percentTotal={fullTotal} />} />
             <Bar dataKey="value" name="数量" maxBarSize={24} radius={[0, 4, 4, 0]} fill="var(--chart-1)" isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
@@ -995,9 +1129,11 @@ function orderSeriesStably(series: AnalyticsNamedSeries[], labels?: Record<strin
 }
 
 function StackedGameChart({
-  days, series: rawSeries, asLine, labels
+  days, series: rawSeries, asLine, labels, showPercent
 }: {
   days: string[]; series: AnalyticsNamedSeries[]; asLine?: boolean; labels?: Record<string, string>;
+  /** 仅堆叠柱状图分支生效：气泡内每个游戏附带其占当天（悬停这一根柱子）各游戏合计的百分比。 */
+  showPercent?: boolean;
 }) {
   const series = orderSeriesStably(rawSeries, labels);
   if (!series.length) return <p className="empty">暂无数据</p>;
@@ -1019,14 +1155,16 @@ function StackedGameChart({
       </ResponsiveContainer>
     );
   }
-  // 对局数 / 开房数：气泡里附带当日各游戏之和
+  // 对局数 / 开房数 / 每局时长 / 房间时长：气泡里附带当日各游戏之和；showPercent 时每个
+  // 游戏数值旁再附带其占当日合计（即 AnalyticsTooltip 默认的 localTotal）的百分比，
+  // 不外传 percentTotal——分母跟着悬停的那一天走，不是整个选定区间的合计。
   return (
     <ResponsiveContainer width="100%" height={240}>
       <BarChart data={rows}>
         <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
         <XAxis dataKey="day" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
         <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-        <Tooltip content={<AnalyticsTooltip showTotal />} />
+        <Tooltip content={<AnalyticsTooltip showTotal showPercent={showPercent} />} />
         <Legend />
         {series.map((s, i) => (
           <Bar key={s.key} dataKey={s.key} name={labelFor(labels, s.key)} stackId="a"

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -105,6 +106,22 @@ func schemeOf(raw string) string {
 		return strings.ToLower(raw[:i])
 	}
 	return ""
+}
+
+// refererOrigin 从 Referer 请求头（完整 URL）提取出 "scheme://host" 形式的来源，
+// 与浏览器 Origin 请求头同构，供 isAllowedOrigin 复用同一套白名单/本地开发判断逻辑。
+// 解析失败或没有 scheme+host（比如 Referer 缺失、或是形如 "about:blank" 的非常规值）
+// 一律返回空串——isAllowedOrigin 对空 Origin 本就判定为不放行，行为与"没有可信来源"一致。
+func refererOrigin(referer string) string {
+	referer = strings.TrimSpace(referer)
+	if referer == "" {
+		return ""
+	}
+	u, err := url.Parse(referer)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
 }
 
 func (s *Server) isAllowedOrigin(origin, requestHost string) bool {
@@ -277,6 +294,9 @@ func (s *Server) handleProofImage(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusTooManyRequests, map[string]string{"message": "上传过于频繁，请稍后再试"})
 		return
 	}
+	// 记录上传时所在房间，供 serveStatic 做"房间已销毁则拒绝访问"判断——必须在这里（拿到
+	// player 的临界区内）取值，出了这段锁 player.RoomID 随时可能因为玩家离房而变化。
+	roomID := player.RoomID
 	s.mu.Unlock()
 
 	file, header, err := r.FormFile("image")
@@ -309,6 +329,9 @@ func (s *Server) handleProofImage(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片真实格式不正确，请上传 webp"})
 		return
 	}
+	s.mu.Lock()
+	s.proofImageRooms[filepath.Base(url)] = roomID
+	s.mu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]string{"imageUrl": url})
 }
 
@@ -533,10 +556,52 @@ func (fs noDirListingFS) Open(name string) (http.File, error) {
 
 func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/uploads/") {
+		// 上传目录（尤其证明图，可能涉及真人隐私内容）目前唯一的访问门槛是文件名不可猜测，
+		// 没有任何会话/房间归属校验——文件名一旦泄露（截图分享、粘贴到站外）就永久可访问。
+		// 这里加一层 Referer 校验作为纵深防御：要求请求带着"来自本站页面"的 Referer，
+		// 复用 isAllowedOrigin 同一套白名单/本地开发判断（Referer 缺失按空 Origin 处理，
+		// 直接拒绝）。正常使用场景下图片都是站内 <img> 子资源加载，同源请求下浏览器默认
+		// 会带上 Referer（全局 securityHeaders 设置的 Referrer-Policy: same-origin 允许
+		// 同源请求携带），不影响正常展示；能拦住的是站外直接粘贴 URL 打开、跨站热链等场景。
+		// ⚠️ 这不是真正的身份鉴权——Referer 是请求方自己声明的，非浏览器客户端（curl 等）
+		// 可以随意伪造，只能挡住"浏览器里走正常链接跳转/嵌入"这一类场景，见 review.md 1.2。
+		if !s.isAllowedOrigin(refererOrigin(r.Header.Get("Referer")), publicRequestHost(r)) {
+			s.securityLog("upload_referer_blocked", map[string]any{
+				"ip": clientIP(r), "path": r.URL.Path, "userAgent": r.UserAgent(),
+			})
+			http.NotFound(w, r)
+			return
+		}
+		// 证明图额外一层限制：房间是纯内存态、不落盘，一旦销毁（正常清空/管理员强制关房/
+		// 进程重启）就不该再能看到当时的证明图，不管 Referer 是否合法——作者评估后认为这个
+		// 场景（本站是非盈利小站，流量成本比防泄露更值得优先，见下面 Cache-Control 的取舍）
+		// 比"细水长流地防陌生人拿到链接"更重要，值得单独拦一道。s.proofImageRooms 记录了
+		// 文件名在上传时归属的房间 ID，这里只需要确认那个房间现在还活着；找不到映射（例如
+		// 进程重启后，房间状态本就不落盘）同样按"房间已不存在"处理，一律拒绝。
+		if strings.HasPrefix(r.URL.Path, "/uploads/proofs/") {
+			filename := filepath.Base(r.URL.Path)
+			s.mu.Lock()
+			roomID, mapped := s.proofImageRooms[filename]
+			roomAlive := mapped && s.rooms[roomID] != nil
+			s.mu.Unlock()
+			if !roomAlive {
+				s.securityLog("upload_room_gone_blocked", map[string]any{
+					"ip": clientIP(r), "path": r.URL.Path, "userAgent": r.UserAgent(),
+				})
+				http.NotFound(w, r)
+				return
+			}
+		}
 		// security headers for uploads
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src 'self';")
-		w.Header().Set("Cache-Control", "public, max-age=2592000, immutable")
+		// 这是非盈利小站，流量成本比"链接泄露后被陌生人打开"的风险更优先——因此仍标 public
+		// 让 CDN/反代等共享缓存能扛流量（而不是像纵深防御该有的做法那样标 private 强制回源，
+		// 参考 review.md 1.2 与上面的讨论）。用较短的 max-age（6 小时，多数房间的存活时长）
+		// 把"链接泄露后经共享缓存仍可访问"的窗口从原来的 30 天大幅收窄；证明图这一路还额外
+		// 有上面那层"房间已销毁则拒绝"的校验兜底——只是那层校验只在缓存未命中、真正回源时才
+		// 会执行，6 小时内命中共享缓存的请求仍绕得开它，两者是互补而非互相替代的关系。
+		w.Header().Set("Cache-Control", "public, max-age=21600, immutable")
 		// 禁止目录列出：只能用已知文件名访问单文件（证明图/头像 URL）。
 		http.StripPrefix("/uploads/", http.FileServer(noDirListingFS{root: http.Dir(s.uploadsDir)})).ServeHTTP(w, r)
 		return

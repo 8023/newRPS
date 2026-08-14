@@ -19,7 +19,7 @@ import (
 //
 // 是 var 不是 const，只是为了让测试能临时替换掉去验证迁移机制本身；正常代码路径里
 // 把它当常量对待，不要在业务逻辑里修改它。
-var currentSchemaVersion = 26
+var currentSchemaVersion = 30
 
 // schemaVersionSchema：只有一行的版本表，openDatabase 每次启动都会先确保它存在。
 const schemaVersionSchema = `
@@ -261,10 +261,16 @@ var migrations = []schemaMigration{
 	// v23：转化漏斗键重定义（visit/lobby/room/round/finish），废弃 login/punish_done。
 	// sealed 历史日不会被聚合器重算，在此一次性按源表重写 funnel 行。
 	{version: 23, migrate: func(db sqlExecer) error {
+		if currentSchemaVersion >= 29 {
+			return nil // 最终口径由同一升级链末端的 v29 一次性重算，避免重复扫全量历史。
+		}
 		return recomputeAnalyticsFunnelMetrics(db)
 	}},
 	// v24：漏斗五层统一为设备 UV（player_id→visitor 映射）；v23 曾对后三层写事件次数/玩家 UV。
 	{version: 24, migrate: func(db sqlExecer) error {
+		if currentSchemaVersion >= 29 {
+			return nil
+		}
 		return recomputeAnalyticsFunnelMetrics(db)
 	}},
 	// v25：惩罚标签偏好 + 系列任务进度两张规范化表（见 playerstore）。
@@ -323,6 +329,64 @@ CREATE TABLE IF NOT EXISTS punishment_series (
 			return err
 		}
 		return nil
+	}},
+	// v27：漏斗「访问」层改为 sessions∪events 的 DISTINCT visitor（此前只查
+	// analytics_sessions，而会话行的 visitor/day 在首次落库后不再随 UPSERT 更新——
+	// 换网/换 IP 或跨零点保持同一会话都会让同一人后续事件落到新 visitor/日期却不
+	// 回写 sessions 表，导致 lobby/room/... 各层反而比 visit 还多，转化率超过
+	// 100%）。已 sealed 的历史日一次性按新口径重写；同一函数也顺带重写其余四层，
+	// 结果与线上聚合器口径保持一致。
+	{version: 27, migrate: func(db sqlExecer) error {
+		if currentSchemaVersion >= 29 {
+			return nil
+		}
+		return recomputeAnalyticsFunnelMetrics(db)
+	}},
+	// v28：聊天管理改为软删除（不再有"一键清空大厅/房间聊天"，只能对检索出的具体消息
+	// 单条/批量删除）。lobby_messages/room_messages 新增 deleted/deleted_at；
+	// room_messages 另新增 room_name——发送时刻的房间名快照，供房间关闭/改名后仍可
+	// 按房间名检索历史消息（旧行回填为空串，检索时按"房间名"过滤会漏掉存量消息，
+	// 属可接受的历史数据边界，本就无法凭 room_id 反查已关闭房间当时的名字）。
+	{version: 28, migrate: func(db sqlExecer) error {
+		if err := addColumnIfMissing(db, "lobby_messages", "deleted", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+			return err
+		}
+		if err := addColumnIfMissing(db, "lobby_messages", "deleted_at", "INTEGER"); err != nil {
+			return err
+		}
+		if err := addColumnIfMissing(db, "room_messages", "deleted", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+			return err
+		}
+		if err := addColumnIfMissing(db, "room_messages", "deleted_at", "INTEGER"); err != nil {
+			return err
+		}
+		if err := addColumnIfMissing(db, "room_messages", "room_name", "TEXT NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
+		for _, stmt := range []string{
+			`CREATE INDEX IF NOT EXISTS idx_lobby_messages_deleted ON lobby_messages(deleted)`,
+			`CREATE INDEX IF NOT EXISTS idx_room_messages_deleted  ON room_messages(deleted)`,
+			`CREATE INDEX IF NOT EXISTS idx_lobby_messages_id      ON lobby_messages(id)`,
+			`CREATE INDEX IF NOT EXISTS idx_room_messages_id       ON room_messages(room_id, id)`,
+		} {
+			if _, err := db.Exec(stmt); err != nil {
+				return fmt.Errorf("v28 index: %w", err)
+			}
+		}
+		return nil
+	}},
+	// v29：漏斗改为「深层向浅层逐级并集回填」，五层按定义单调（见 computeFunnelUV）。
+	// v27 只修好了「访问」层，但 game_start 埋点比 game_round 晚上线（v2.4.3，
+	// 2026-08-12 23:16），上线当天只覆盖了一天里最后几十分钟，那天的「开局」远小于
+	// 「完成对局」，区间求和后整体仍倒挂约 10%。已 sealed 的历史日按新口径重写。
+	{version: 29, migrate: func(db sqlExecer) error {
+		return recomputeAnalyticsFunnelMetrics(db)
+	}},
+	// v30：随机任务标签三态偏好改为纯浏览器本地存储（不再跨设备同步），废弃
+	// player_punishment_tag_prefs 表（惩罚标签数据分析统计走独立的 analytics_events，不受影响）。
+	{version: 30, migrate: func(db sqlExecer) error {
+		_, err := db.Exec(`DROP TABLE IF EXISTS player_punishment_tag_prefs`)
+		return err
 	}},
 }
 
@@ -454,21 +518,19 @@ func clearWrongAnalyticsGeo(db sqlExecer) error {
 	return nil
 }
 
-// recomputeAnalyticsFunnelMetrics 按「五层设备 UV」重写 analytics_daily 的 funnel 键。
-// 删除旧 login/punish_done 等废弃键；对已有 daily 覆盖的每一天写入
-// visit/lobby/room/round/finish。后三层经当日 player_id→visitor 映射折算。
-// 历史无 game_start 时，round 用 finish 的设备 UV 近似，避免 sealed 日「开局」全 0。
+// recomputeAnalyticsFunnelMetrics 按「五层设备 UV」重写 analytics_daily 的 funnel 键：
+// 删除旧 login/punish_done 等废弃键，对已有 daily 覆盖的每一天重算 visit/lobby/
+// room/round/finish。已 sealed 的历史日不会再被聚合器重算，只能靠这里一次性刷。
+//
+// 口径与线上聚合器（analytics_agg.go rebuildDay）共用同一个 computeFunnelUV——两边
+// 各写一份是 v23~v26 期间反复出现口径漂移的根因，不要再复制粘贴出第二份实现。
 func recomputeAnalyticsFunnelMetrics(db sqlExecer) error {
 	dailyOK, err := tableExists(db, "analytics_daily")
 	if err != nil || !dailyOK {
 		return err
 	}
-	if _, err := db.Exec(`DELETE FROM analytics_daily WHERE metric = ?`, metricFunnel); err != nil {
-		return fmt.Errorf("delete old funnel rows: %w", err)
-	}
-
-	offsetMs := int64(envIntDefault("ANALYTICS_TZ_OFFSET_MIN", 480)) * 60_000
-
+	// 必须先枚举日期再删除旧漏斗行：极简历史日可能只剩 funnel 指标，如果先删，
+	// 该日会从 DISTINCT day 结果里彻底消失，迁移反而把它永久漏掉。
 	dayRows, err := db.Query(`SELECT DISTINCT day FROM analytics_daily ORDER BY day`)
 	if err != nil {
 		return fmt.Errorf("list analytics days: %w", err)
@@ -485,13 +547,14 @@ func recomputeAnalyticsFunnelMetrics(db sqlExecer) error {
 	if err := dayRows.Close(); err != nil {
 		return err
 	}
+	if _, err := db.Exec(`DELETE FROM analytics_daily WHERE metric = ?`, metricFunnel); err != nil {
+		return fmt.Errorf("delete old funnel rows: %w", err)
+	}
 	if len(days) == 0 {
 		return nil
 	}
 
-	hasSessions, _ := tableExists(db, "analytics_sessions")
-	hasEvents, _ := tableExists(db, "analytics_events")
-	hasRooms, _ := tableExists(db, "room_events")
+	offsetMs := int64(envIntDefault("ANALYTICS_TZ_OFFSET_MIN", 480)) * 60_000
 
 	insert := func(day int64, key string, value int64) error {
 		_, err := db.Exec(
@@ -502,67 +565,18 @@ func recomputeAnalyticsFunnelMetrics(db sqlExecer) error {
 		)
 		return err
 	}
-	countDistinct := func(q string, args ...any) int64 {
-		var n sql.NullInt64
-		_ = db.QueryRow(q, args...).Scan(&n)
-		return n.Int64
-	}
-
-	const pvMap = `
-		SELECT player_id, visitor FROM analytics_sessions
-		WHERE day = ? AND player_id <> '' AND visitor <> ''
-		UNION
-		SELECT player_id, visitor FROM analytics_events
-		WHERE day = ? AND player_id <> '' AND visitor <> ''`
 
 	for _, day := range days {
 		dayStart := day*86_400_000 - offsetMs
 		dayEnd := dayStart + 86_400_000
 
-		var visit, lobby, roomUV, startUV, finishUV int64
-		if hasSessions {
-			visit = countDistinct(`SELECT COUNT(DISTINCT visitor) FROM analytics_sessions WHERE day = ?`, day)
+		funnel, err := computeFunnelUV(db, day, dayStart, dayEnd)
+		if err != nil {
+			return fmt.Errorf("compute funnel day=%d: %w", day, err)
 		}
-		if hasEvents {
-			lobby = countDistinct(`
-				SELECT COUNT(DISTINCT visitor) FROM analytics_events
-				WHERE day=? AND name='pageview' AND view='lobby' AND visitor<>''`, day)
-			if hasSessions || hasEvents {
-				startUV = countDistinct(`
-					SELECT COUNT(DISTINCT pv.visitor) FROM (`+pvMap+`) pv
-					INNER JOIN analytics_events e ON e.player_id = pv.player_id
-					WHERE e.day=? AND e.source=1 AND e.name='game_start' AND e.player_id<>''`,
-					day, day, day)
-				finishUV = countDistinct(`
-					SELECT COUNT(DISTINCT pv.visitor) FROM (`+pvMap+`) pv
-					INNER JOIN analytics_events e ON e.player_id = pv.player_id
-					WHERE e.day=? AND e.source=1 AND e.name='game_round' AND e.player_id<>''`,
-					day, day, day)
-			}
-		}
-		if hasRooms && (hasSessions || hasEvents) {
-			roomUV = countDistinct(`
-				SELECT COUNT(DISTINCT pv.visitor) FROM (`+pvMap+`) pv
-				INNER JOIN room_events r ON r.user_id = pv.player_id
-				WHERE r.action IN ('create','join') AND r.user_id<>'' AND r.at >= ? AND r.at < ?`,
-				day, day, dayStart, dayEnd)
-		}
-		// 升级前无 game_start：用完成对局设备 UV 近似开局
-		if startUV == 0 && finishUV > 0 {
-			startUV = finishUV
-		}
-		for _, kv := range []struct {
-			key string
-			val int64
-		}{
-			{"visit", visit},
-			{"lobby", lobby},
-			{"room", roomUV},
-			{"round", startUV},
-			{"finish", finishUV},
-		} {
-			if err := insert(day, kv.key, kv.val); err != nil {
-				return fmt.Errorf("insert funnel %s day=%d: %w", kv.key, day, err)
+		for _, key := range funnelStageKeys {
+			if err := insert(day, key, funnel[key]); err != nil {
+				return fmt.Errorf("insert funnel %s day=%d: %w", key, day, err)
 			}
 		}
 	}

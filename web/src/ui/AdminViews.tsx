@@ -8,8 +8,8 @@ import { formatBytes, formatDuration } from "../lib/format";
 import { encodeClaimCode } from "../lib/session";
 import { PetBondGraphPanel } from "./PetBondGraphPanel";
 import {
-  FactionSelect, GenderSelectField, PlayerAvatar, PlayerBadge, RoomInfoTagList, RoomTagList, Select, Stat, Toggle,
-  defaultRoomInfoTagStyle, factionStyle, formatGiveawayValue, genderChoiceError, lobbyRoomInfoTags, nextGenderIdForFaction,
+  FactionSelect, GenderSelectField, GiveawayChip, ModeChip, PlayerAvatar, PlayerBadge, RoomInfoTagList, RoomTagList, Select, Stat, Toggle,
+  defaultRoomInfoTagStyle, displayPlayerName, factionStyle, formatGiveawayValue, genderChoiceError, genderStyle, lobbyRoomInfoTags, nextGenderIdForFaction,
   roomInfoTagOrder, roomInfoTagStyle, roomStatusText, safePlayerStats, titleStyle, titleTagStyleOrder
 } from "./AppViews";
 
@@ -109,6 +109,9 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
   const [announcementSeconds, setAnnouncementSeconds] = useState("8");
   const [activeRoomTab, setActiveRoomTab] = useState<AdminRoomTab>("rooms");
   const [playerFilters, setPlayerFilters] = useState<AdminPlayerFilters>(DEFAULT_ADMIN_PLAYER_FILTERS);
+  // 昵称搜索：纯前端对 admin:listPlayers 已按过滤器返回的列表做模糊匹配，不发额外请求；
+  // 只匹配 player.name（原始昵称），不含称号/惩罚名/性别等展示层信息。
+  const [playerNameSearch, setPlayerNameSearch] = useState("");
   const [adminPlayers, setAdminPlayers] = useState<PublicPlayer[]>([]);
   const [adminPlayersTotal, setAdminPlayersTotal] = useState(0);
   const [adminPlayersTruncated, setAdminPlayersTruncated] = useState(false);
@@ -396,7 +399,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
     if (activeSection === "analytics") {
       return (
         <Suspense fallback={<div className="analytics-loading">正在加载图表…</div>}>
-          <AnalyticsPanel onError={onError} />
+          <AnalyticsPanel onError={onError} config={config} />
         </Suspense>
       );
     }
@@ -1552,10 +1555,22 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
 
     if (activeSection === "users") {
       const listHint = `匹配过滤器 · 在线 ${adminFilterOnlineCount} / 离线 ${adminFilterOfflineCount}`;
+      const nameKeyword = playerNameSearch.trim().toLowerCase();
+      const visiblePlayers = nameKeyword
+        ? adminPlayers.filter((player) => (player.name || "").toLowerCase().includes(nameKeyword))
+        : adminPlayers;
       return (
         <div className="config-section admin-section-card">
           <AdminSectionHeader title="用户管理" subtitle="按过滤器查询玩家档案，协助改资料、踢出与找回认领密钥。" />
           <div className="admin-player-filters" role="group" aria-label="用户列表过滤器">
+            <input
+              className="admin-player-name-search"
+              value={playerNameSearch}
+              onChange={(event) => setPlayerNameSearch(event.target.value)}
+              placeholder="搜索昵称，留空则不筛选"
+              aria-label="按昵称搜索"
+              autoComplete="off"
+            />
             {ADMIN_PLAYER_FILTER_BUTTONS.map((item) => {
               const active = playerFilters[item.key];
               return (
@@ -1577,12 +1592,14 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
               <span>
                 {adminPlayersLoading
                   ? "加载中…"
-                  : adminPlayersTruncated
-                    ? `显示 ${adminPlayers.length} / 共 ${adminPlayersTotal} 人（已截断）· ${listHint}`
-                    : `${adminPlayersTotal} 人 · ${listHint}`}
+                  : nameKeyword
+                    ? `昵称匹配 ${visiblePlayers.length} / 已加载 ${adminPlayers.length} 人 · ${listHint}`
+                    : adminPlayersTruncated
+                      ? `显示 ${adminPlayers.length} / 共 ${adminPlayersTotal} 人（已截断）· ${listHint}`
+                      : `${adminPlayersTotal} 人 · ${listHint}`}
               </span>
             </div>
-            {adminPlayers.map((player) => (
+            {visiblePlayers.map((player) => (
               <AdminPlayerEditor
                 key={player.id}
                 config={config}
@@ -1596,8 +1613,8 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                 onError={onError}
               />
             ))}
-            {!adminPlayersLoading && adminPlayers.length === 0 && (
-              <p className="empty">当前没有符合条件的玩家</p>
+            {!adminPlayersLoading && visiblePlayers.length === 0 && (
+              <p className="empty">{nameKeyword ? "没有昵称匹配的玩家" : "当前没有符合条件的玩家"}</p>
             )}
           </div>
         </div>
@@ -1634,11 +1651,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
               </button>
             ))}
           </div>
-          {activeRoomTab === "announcement" && (
-            <div className="admin-action-row">
-              <button className="danger-button" onClick={() => action("clearLobbyChat")}>清空大厅聊天</button>
-            </div>
-          )}
+          {activeRoomTab === "announcement" && <AdminChatManager onError={onError} action={action} />}
           {activeRoomTab === "rooms" && (
             <div className="admin-list-section">
               <div className="admin-list-heading">
@@ -1660,7 +1673,6 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                     <RoomInfoTagList tags={lobbyRoomInfoTags(config, room)} />
                     <div className="admin-action-row othello-admin-actions">
                       <button className="danger-button" onClick={() => action("closeRoom", { roomId: room.id })}>关闭房间</button>
-                      <button onClick={() => action("clearRoomChat", { roomId: room.id })}>清空房间聊天</button>
                       <button onClick={() => action("forceNext", { roomId: room.id })}>重开</button>
                       <button onClick={() => action("forceSeatOutcome", { roomId: room.id, result: "A" })} disabled={!canForceSeatOutcome}>判 {seatALabel} 胜</button>
                       <button onClick={() => action("forceSeatOutcome", { roomId: room.id, result: "B" })} disabled={!canForceSeatOutcome}>判 {seatBLabel} 胜</button>
@@ -1785,6 +1797,335 @@ export function newSeriesTask(id: string): PunishmentSeriesTaskConfig {
   };
 }
 
+/** 后台聊天检索结果的一行；在玩家可见的聊天字段之上叠加房间名快照与软删除状态。 */
+type AdminChatMessage = {
+  id: string;
+  roomId?: string;
+  roomName?: string;
+  playerId: string;
+  author: string;
+  text: string;
+  at: number;
+  deleted?: boolean;
+  deletedAt?: number;
+};
+
+/** 定位一条聊天消息给后端 chatSoftDelete/chatRestore：roomId 空串表示大厅。 */
+function chatRefKey(m: AdminChatMessage): string {
+  return `${m.roomId || ""}\u0000${m.id}`;
+}
+
+function formatAdminChatTime(at: number) {
+  const d = new Date(at);
+  if (!Number.isFinite(d.getTime()) || d.getTime() <= 0) return "未知时间";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function adminChatAuthorName(author: string) {
+  const text = (author || "").trim();
+  if (!text) return "匿名";
+  const parts = text.split(" - ");
+  return (parts[parts.length - 1] || text).trim() || "匿名";
+}
+
+function adminChatScopeLabel(m: AdminChatMessage) {
+  if (!m.roomId) return "大厅";
+  const name = (m.roomName || "").trim();
+  return name || "已关闭房间";
+}
+
+function AdminChatSpeaker({
+  player,
+  fallbackName,
+  isLobby,
+  scopeLabel
+}: {
+  player?: PublicPlayer;
+  fallbackName: string;
+  isLobby: boolean;
+  scopeLabel: string;
+}) {
+  const stats = player ? safePlayerStats(player) : undefined;
+  const punished = Boolean(player?.nameWarPunished && player?.nameWarPenaltyName);
+  return (
+    <>
+      <PlayerAvatar player={player} size={24} />
+      {player ? (
+        <>
+          <span className="gender-chip" style={genderStyle(player)} title={player.factionLabel}>{player.genderLabel || "未知"}</span>
+          <span className="title-chip" style={titleStyle(stats?.titleColors)}>{stats?.title || "无称号"}</span>
+          <strong className={punished ? "name-war-pill" : ""}>{displayPlayerName(player)}</strong>
+          <GiveawayChip player={player} />
+          <ModeChip player={player} />
+          {player.nameWarEnabled && player.nameWarPunished && !player.extremeModeEnabled && (
+            <span className="mode-chip">⚔️ 名争</span>
+          )}
+          <span className={`admin-chat-presence ${player.connected ? "online" : "offline"}`}>
+            {player.connected ? "在线" : "离线"}
+          </span>
+        </>
+      ) : (
+        <>
+          <strong>{fallbackName}</strong>
+          <span className="admin-chat-presence offline">离线</span>
+        </>
+      )}
+      <span className={`admin-chat-scope ${isLobby ? "lobby" : "room"}`}>{scopeLabel}</span>
+    </>
+  );
+}
+
+/**
+ * 「聊天管理」面板：按用户名/聊天内容/房间名（或仅大厅）检索历史消息，多选后批量软删除
+ * /恢复。取代旧版"一键清空大厅/房间聊天"——只能对检索出的具体违规留言操作，删除是软删除
+ * （数据库保留、普通玩家读不到），删除后端会主动推 chat:deleted 通知在线客户端摘除本地视图。
+ */
+function AdminChatManager({ onError, action }: {
+  onError: (message: string) => void;
+  action: (actionName: string, payload?: Record<string, unknown>) => Promise<boolean>;
+}) {
+  const [author, setAuthor] = useState("");
+  const [text, setText] = useState("");
+  const [room, setRoom] = useState("");
+  const [lobbyOnly, setLobbyOnly] = useState(false);
+  const [includeDeleted, setIncludeDeleted] = useState(false);
+  const [messages, setMessages] = useState<AdminChatMessage[]>([]);
+  const [authors, setAuthors] = useState<Record<string, PublicPlayer>>({});
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const searchRequestGen = useRef(0);
+
+  async function runSearch(offset: number, append: boolean) {
+    const gen = ++searchRequestGen.current;
+    setLoading(true);
+    setSearchError(null);
+    try {
+      const res = await ask<{ messages?: AdminChatMessage[]; hasMore?: boolean; authors?: Record<string, PublicPlayer> }>("admin:chatSearch", {
+        author, text, room: lobbyOnly ? "" : room, lobbyOnly, includeDeleted, limit: 50, offset
+      });
+      if (gen !== searchRequestGen.current) return;
+      const list = res.messages || [];
+      const nextAuthors = res.authors || {};
+      setMessages((prev) => (append ? [...prev, ...list] : list));
+      setAuthors((prev) => (append ? { ...prev, ...nextAuthors } : nextAuthors));
+      setHasMore(!!res.hasMore);
+      setSearched(true);
+      if (!append) setSelected(new Set());
+    } catch (error) {
+      if (gen !== searchRequestGen.current) return;
+      const message = error instanceof Error ? error.message : "检索失败";
+      setSearchError(message);
+      setSearched(true);
+      onError(message);
+    } finally {
+      if (gen === searchRequestGen.current) setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void runSearch(0, false);
+    // 进入页签时拉最近消息；之后只在点「检索」、切换范围开关或加载更多时再请求。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const skipToggleSearch = useRef(true);
+  useEffect(() => {
+    if (skipToggleSearch.current) {
+      skipToggleSearch.current = false;
+      return;
+    }
+    void runSearch(0, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lobbyOnly, includeDeleted]);
+
+  function toggleSelect(key: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelected((prev) => (prev.size === messages.length && messages.length > 0 ? new Set() : new Set(messages.map(chatRefKey))));
+  }
+
+  async function applyToRefs(actionName: "chatSoftDelete" | "chatRestore", refs: { roomId: string; id: string }[]) {
+    if (refs.length === 0) {
+      onError("请先勾选要操作的消息");
+      return;
+    }
+    if (await action(actionName, { refs })) {
+      onError(actionName === "chatSoftDelete" ? `已删除 ${refs.length} 条` : `已恢复 ${refs.length} 条`);
+      await runSearch(0, false);
+    }
+  }
+
+  const selectedRefs = messages.filter((m) => selected.has(chatRefKey(m))).map((m) => ({ roomId: m.roomId || "", id: m.id }));
+  const allSelected = messages.length > 0 && selected.size === messages.length;
+  const resultHint = loading && !searched
+    ? "检索中…"
+    : searchError
+      ? "检索失败"
+    : hasMore
+      ? `已显示 ${messages.length} 条 · 还有更多`
+      : `${messages.length} 条`;
+
+  return (
+    <div className="admin-chat-manager">
+      <form
+        className="admin-chat-filter-card"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void runSearch(0, false);
+        }}
+      >
+        <div className="admin-chat-filter-grid">
+          <label className="field-label">
+            <span>用户名</span>
+            <input value={author} onChange={(event) => setAuthor(event.target.value)} placeholder="按发言人昵称" autoComplete="off" />
+          </label>
+          <label className="field-label">
+            <span>聊天内容</span>
+            <input value={text} onChange={(event) => setText(event.target.value)} placeholder="按消息关键字" autoComplete="off" />
+          </label>
+          <label className="field-label">
+            <span>房间名</span>
+            <input value={room} onChange={(event) => setRoom(event.target.value)} placeholder={lobbyOnly ? "只看大厅时不可用" : "留空则不限房间"} disabled={lobbyOnly} autoComplete="off" />
+          </label>
+        </div>
+        <div className="admin-chat-filter-actions">
+          <div className="admin-player-filters" role="group" aria-label="检索范围">
+            <button
+              type="button"
+              className={`admin-filter-btn${lobbyOnly ? " active" : ""}`}
+              aria-pressed={lobbyOnly}
+              onClick={() => setLobbyOnly((old) => {
+                const next = !old;
+                if (next) setRoom("");
+                return next;
+              })}
+            >
+              只看大厅
+            </button>
+            <button
+              type="button"
+              className={`admin-filter-btn${includeDeleted ? " active" : ""}`}
+              aria-pressed={includeDeleted}
+              onClick={() => setIncludeDeleted((old) => !old)}
+            >
+              显示已删除
+            </button>
+          </div>
+          <button className="primary" type="submit" disabled={loading}>{loading ? "检索中…" : "检索"}</button>
+        </div>
+      </form>
+
+      <div className="admin-list-section admin-chat-list-section">
+        <div className="admin-list-heading">
+          <h3>检索结果</h3>
+          <span>{resultHint}</span>
+        </div>
+        <div className="admin-chat-bulk-row">
+          <label className="admin-chat-select-all">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleSelectAll}
+              disabled={messages.length === 0}
+            />
+            全选
+            {messages.length > 0 && <em>已选 {selected.size}/{messages.length}</em>}
+          </label>
+          <div className="admin-chat-bulk-actions">
+            <button type="button" className="danger-button small" onClick={() => applyToRefs("chatSoftDelete", selectedRefs)} disabled={selected.size === 0}>删除所选</button>
+            <button type="button" className="small" onClick={() => applyToRefs("chatRestore", selectedRefs)} disabled={selected.size === 0}>恢复所选</button>
+          </div>
+        </div>
+        <div className="admin-chat-list" role="list">
+          {messages.map((m) => {
+            const key = chatRefKey(m);
+            const isSelected = selected.has(key);
+            const isLobby = !m.roomId;
+            const player = m.playerId ? authors[m.playerId] : undefined;
+            const authorLabel = player ? displayPlayerName(player) : adminChatAuthorName(m.author);
+            return (
+              <div
+                className={`admin-chat-row${m.deleted ? " deleted" : ""}${isSelected ? " selected" : ""}`}
+                key={key}
+                role="listitem"
+                onClick={() => toggleSelect(key)}
+              >
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => toggleSelect(key)}
+                  onClick={(event) => event.stopPropagation()}
+                  aria-label={`选择 ${authorLabel} 的消息`}
+                />
+                <div className="admin-chat-row-body">
+                  <div className="admin-chat-row-meta">
+                    <AdminChatSpeaker
+                      player={player}
+                      fallbackName={authorLabel}
+                      isLobby={isLobby}
+                      scopeLabel={adminChatScopeLabel(m)}
+                    />
+                    {m.deleted && <span className="admin-chat-deleted-chip">已删除</span>}
+                    <time className="admin-chat-time" dateTime={m.at ? new Date(m.at).toISOString() : undefined}>{formatAdminChatTime(m.at)}</time>
+                  </div>
+                  <p>{m.text || "（空消息）"}</p>
+                </div>
+                <div className="admin-chat-row-actions">
+                  {m.deleted
+                    ? (
+                      <button
+                        type="button"
+                        className="small"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void applyToRefs("chatRestore", [{ roomId: m.roomId || "", id: m.id }]);
+                        }}
+                      >
+                        恢复
+                      </button>
+                    )
+                    : (
+                      <button
+                        type="button"
+                        className="danger-button small"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void applyToRefs("chatSoftDelete", [{ roomId: m.roomId || "", id: m.id }]);
+                        }}
+                      >
+                        删除
+                      </button>
+                    )}
+                </div>
+              </div>
+            );
+          })}
+          {!loading && messages.length === 0 && (
+            <p className="empty">
+              {searchError ? `检索失败：${searchError}` : searched ? "没有符合条件的聊天消息" : "正在加载最近消息…"}
+            </p>
+          )}
+        </div>
+        {hasMore && (
+          <button type="button" className="admin-chat-more" onClick={() => runSearch(messages.length, true)} disabled={loading}>
+            {loading ? "加载中…" : "加载更多"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function AdminSectionHeader({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div className="admin-section-header">
@@ -1793,6 +2134,9 @@ export function AdminSectionHeader({ title, subtitle }: { title: string; subtitl
     </div>
   );
 }
+
+type AdminAltAccountsState = { loading: boolean; queried: boolean; error: string | null; players: PublicPlayer[]; truncated: boolean };
+const ADMIN_ALT_ACCOUNTS_IDLE: AdminAltAccountsState = { loading: false, queried: false, error: null, players: [], truncated: false };
 
 export function AdminPlayerEditor({ config, player, onSave, onKick, onError }: { config: AppConfig; player: PublicPlayer; onSave: (payload: Record<string, unknown>) => void; onKick: () => void; onError: (message: string) => void }) {
   const [name, setName] = useState(player.name);
@@ -1807,6 +2151,7 @@ export function AdminPlayerEditor({ config, player, onSave, onKick, onError }: {
   const [genderTouched, setGenderTouched] = useState(false);
   const focusedFieldRef = useRef<"name" | "rankedPoints" | "title" | "giveaway" | "gender" | null>(null);
   const titleCustom = !!safePlayerStats(player).titleCustom;
+  const [altAccounts, setAltAccounts] = useState<AdminAltAccountsState>(ADMIN_ALT_ACCOUNTS_IDLE);
 
   useEffect(() => {
     const stats = safePlayerStats(player);
@@ -1829,6 +2174,29 @@ export function AdminPlayerEditor({ config, player, onSave, onKick, onError }: {
       setGenderTouched(false);
     }
   }, [player.id, player.name, player.stats.sortRankedPoints, player.stats.title, player.giveawayEnabled, player.giveawayValue, player.genderId, player.factionId]);
+
+  useEffect(() => {
+    setAltAccounts(ADMIN_ALT_ACCOUNTS_IDLE);
+  }, [player.id]);
+
+  async function queryAltAccounts() {
+    setAltAccounts((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const result = await ask<{ players?: PublicPlayer[]; truncated?: boolean }>("admin:action", {
+        action: "altAccounts",
+        playerId: player.id
+      });
+      setAltAccounts({ loading: false, queried: true, error: null, players: result.players || [], truncated: !!result.truncated });
+    } catch (error) {
+      setAltAccounts({
+        loading: false,
+        queried: true,
+        error: error instanceof Error ? error.message : "查询失败",
+        players: [],
+        truncated: false
+      });
+    }
+  }
 
   return (
     <div className="admin-player-editor">
@@ -1937,8 +2305,28 @@ export function AdminPlayerEditor({ config, player, onSave, onKick, onError }: {
         >
           保存玩家资料
         </button>
+        <button onClick={queryAltAccounts} disabled={altAccounts.loading}>
+          {altAccounts.loading ? "查询中…" : "小号查询"}
+        </button>
         <button className="danger-button" onClick={onKick}>踢出</button>
       </div>
+      {altAccounts.queried && (
+        <div className="admin-alt-accounts">
+          {altAccounts.error && <p className="empty">{altAccounts.error}</p>}
+          {!altAccounts.error && altAccounts.players.length === 0 && (
+            <p className="empty">未查询到该玩家关联设备登录过的其它账号</p>
+          )}
+          {!altAccounts.error && altAccounts.truncated && (
+            <p className="hint">关联范围过大，已达到服务器查询上限，本次结果可能不完整。</p>
+          )}
+          {!altAccounts.error && altAccounts.players.length > 0 && altAccounts.players.map((alt) => (
+            <div className="admin-alt-accounts-row" key={alt.id}>
+              <PlayerAvatar player={alt} size={24} />
+              <PlayerBadge player={alt} compact />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
