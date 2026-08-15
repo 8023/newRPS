@@ -136,7 +136,7 @@ func (s *Server) clearGomokuUndoTimer(roomID string) {
 
 func (s *Server) resetGomokuRoom(room *RoomState) {
 	s.clearGomokuUndoTimer(room.ID)
-	s.clearGomokuClockTimer(room.ID)
+	s.clearTurnBasedClockTimer(room.ID)
 	room.Gomoku = nil
 	s.resetTurnBasedRoom(room)
 }
@@ -154,108 +154,45 @@ func (s *Server) startGomokuRoom(room *RoomState) {
 
 // ── 每子时长 / 每局时长（超时判负）──────────────────────
 
-func (s *Server) clearGomokuClockTimer(roomID string) {
-	if t := s.gomokuClockTimers[roomID]; t != nil {
-		t.Stop()
-		delete(s.gomokuClockTimers, roomID)
-	}
-}
-
-// freezeGomokuClock 把 seat 当前正在走动的总时长时钟冻结为静态剩余值（毫秒）。
-func (s *Server) freezeGomokuClock(room *RoomState, seat types.SeatKey) {
-	if room.Gomoku == nil || room.Gomoku.ClockRemaining == nil {
-		return
-	}
-	if room.Gomoku.ClockDeadlineAt > 0 {
-		remaining := room.Gomoku.ClockDeadlineAt - nowMs()
-		if remaining < 0 {
-			remaining = 0
-		}
-		room.Gomoku.ClockRemaining[seat] = remaining
-	}
-	room.Gomoku.ClockDeadlineAt = 0
-}
-
 // pauseGomokuTimers：悔棋/认输请求处理完成前不能落子，期间暂停两个计时器，避免用等待对方
 // 回应的时间把自己计时计没了；respondGomokuUndo/respondGomokuResign 处理完后重新计时。
 func (s *Server) pauseGomokuTimers(room *RoomState) {
-	if room.Gomoku == nil {
-		return
+	if room.Gomoku != nil {
+		s.pauseTurnBasedClock(room, room.Gomoku.Turn, s.gomokuClockHooks())
 	}
-	s.freezeGomokuClock(room, room.Gomoku.Turn)
-	room.Gomoku.MoveDeadlineAt = 0
-	s.clearGomokuClockTimer(room.ID)
 }
 
 func (s *Server) resumeGomokuTimers(room *RoomState) {
-	if room.Gomoku == nil || room.Gomoku.Ended {
-		return
-	}
-	s.armGomokuTimers(room, room.Gomoku.Turn)
+	s.resumeTurnBasedClock(room, s.gomokuClockHooks())
 }
 
-// armGomokuTimers 在真正轮到 seat 落子时重新起算每子倒计时/总时长时钟，并重排服务端超时检测。
 func (s *Server) armGomokuTimers(room *RoomState, seat types.SeatKey) {
-	if room.Gomoku == nil {
-		return
-	}
-	if room.Settings.GomokuMoveSeconds > 0 {
-		room.Gomoku.MoveDeadlineAt = nowMs() + int64(room.Settings.GomokuMoveSeconds)*1000
-	} else {
-		room.Gomoku.MoveDeadlineAt = 0
-	}
-	if room.Settings.GomokuGameMinutes > 0 {
-		if room.Gomoku.ClockRemaining == nil {
-			total := int64(room.Settings.GomokuGameMinutes) * 60_000
-			room.Gomoku.ClockRemaining = map[types.SeatKey]int64{types.SeatA: total, types.SeatB: total}
-		}
-		room.Gomoku.ClockDeadlineAt = nowMs() + room.Gomoku.ClockRemaining[seat]
-	} else {
-		room.Gomoku.ClockDeadlineAt = 0
-	}
-	s.scheduleGomokuClockTimer(room)
+	s.armTurnBasedClock(room, seat, s.gomokuClockHooks())
 }
 
-func (s *Server) scheduleGomokuClockTimer(room *RoomState) {
-	s.clearGomokuClockTimer(room.ID)
-	if room.Gomoku == nil || room.Gomoku.Ended {
-		return
+func (s *Server) gomokuClockHooks() turnBasedClockHooks {
+	return turnBasedClockHooks{
+		state: func(room *RoomState) (turnBasedClockState, bool) {
+			if room.Gomoku == nil {
+				return turnBasedClockState{}, false
+			}
+			return turnBasedClockState{
+				turn: room.Gomoku.Turn, ended: room.Gomoku.Ended,
+				blocked:        room.Gomoku.UndoRequest != nil || room.Gomoku.ResignRequest != nil,
+				moveDeadlineAt: &room.Gomoku.MoveDeadlineAt, clockDeadlineAt: &room.Gomoku.ClockDeadlineAt,
+				clockRemaining: &room.Gomoku.ClockRemaining,
+			}, true
+		},
+		settings: func(room *RoomState) (int, int) {
+			return room.Settings.GomokuMoveSeconds, room.Settings.GomokuGameMinutes
+		},
+		onTimeout: func(room *RoomState, seat types.SeatKey) {
+			winnerSeat := oppositeSeat(seat)
+			loserName := occupantName(room.Seats[seat])
+			s.roomNotice(room, loserName+" 用时已到，本局判负。")
+			s.finishGomokuGame(room, types.RoundResult(winnerSeat), nil, "超时判负")
+		},
 	}
-	deadline := earliestPositiveDeadline(room.Gomoku.MoveDeadlineAt, room.Gomoku.ClockDeadlineAt)
-	if deadline == 0 {
-		return
-	}
-	delay := deadline - nowMs()
-	if delay < 0 {
-		delay = 0
-	}
-	seat := room.Gomoku.Turn
-	roomID := room.ID
-	timer := timeAfterFunc(time.Duration(delay)*time.Millisecond, func() {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		delete(s.gomokuClockTimers, roomID)
-		current := s.rooms[roomID]
-		if current == nil || current.Gomoku == nil || current.Gomoku.Ended {
-			return
-		}
-		if current.Gomoku.Turn != seat || current.Gomoku.UndoRequest != nil || current.Gomoku.ResignRequest != nil {
-			return
-		}
-		now := nowMs()
-		moveExpired := current.Gomoku.MoveDeadlineAt > 0 && now >= current.Gomoku.MoveDeadlineAt
-		clockExpired := current.Gomoku.ClockDeadlineAt > 0 && now >= current.Gomoku.ClockDeadlineAt
-		if !moveExpired && !clockExpired {
-			s.scheduleGomokuClockTimer(current)
-			return
-		}
-		winnerSeat := oppositeSeat(seat)
-		loserName := occupantName(current.Seats[seat])
-		s.roomNotice(current, loserName+" 用时已到，本局判负。")
-		s.finishGomokuGame(current, types.RoundResult(winnerSeat), nil, "超时判负")
-		s.broadcastRoom(current.ID, true)
-	})
-	s.gomokuClockTimers[room.ID] = timer
 }
 
 func (s *Server) scheduleGomokuReadyStart(room *RoomState) {
@@ -304,7 +241,7 @@ func (s *Server) finishGomokuGame(room *RoomState, result types.RoundResult, win
 		return
 	}
 	s.clearGomokuUndoTimer(room.ID)
-	s.clearGomokuClockTimer(room.ID)
+	s.clearTurnBasedClockTimer(room.ID)
 	room.Gomoku.UndoRequest = nil
 	room.Gomoku.GiveawaySeat = ""
 	room.Gomoku.GiveawayForcedByMasterName = ""
@@ -625,7 +562,7 @@ func (s *Server) applyGomokuDisconnectForfeit(room *RoomState, forfeit Disconnec
 	if room.Phase == types.PhaseResult || (room.Gomoku != nil && room.Gomoku.Ended) {
 		return true
 	}
-	s.clearGomokuClockTimer(room.ID)
+	s.clearTurnBasedClockTimer(room.ID)
 	winner := s.players[forfeit.WinnerID]
 	loser := s.players[forfeit.LoserID]
 	rankedDelta := map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}

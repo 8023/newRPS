@@ -26,7 +26,7 @@ var (
 	// detail 允许更宽松的集合（gameId、弹窗名、结果码等），仍做长度与字符约束。
 	analyticsDetailKeys = map[string]struct{}{
 		"restore": {}, "manual": {}, "light": {}, "dark": {},
-		"rps": {}, "othello": {}, "tictactoe": {}, "gomoku": {}, "jungle": {}, "liarsdice": {},
+		"rps": {}, "othello": {}, "tictactoe": {}, "gomoku": {}, "jungle": {}, "liarsdice": {}, "chess": {},
 		"win": {}, "draw": {}, "doubleloss": {}, "loss": {},
 		"other": {},
 	}

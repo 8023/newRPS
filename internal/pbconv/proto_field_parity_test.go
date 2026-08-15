@@ -88,6 +88,11 @@ func TestDomainWireFieldParity(t *testing.T) {
 			domain: types.GomokuState{},
 			msg:    &wire.GomokuState{},
 		},
+		{
+			name:   "ChessState",
+			domain: types.ChessState{},
+			msg:    &wire.ChessState{},
+		},
 	}
 
 	for _, tc := range cases {

@@ -69,6 +69,7 @@ const (
 	GameLiarsDice GameID = "liarsdice"
 	GameGomoku    GameID = "gomoku"
 	GameJungle    GameID = "jungle"
+	GameChess     GameID = "chess"
 )
 
 type RankStake int
@@ -201,11 +202,12 @@ type GameStats struct {
 	Gomoku    GameWLD `json:"gomoku"`
 	LiarsDice GameWLD `json:"liarsdice"`
 	Jungle    GameWLD `json:"jungle"`
+	Chess     GameWLD `json:"chess"`
 }
 
 // Total 汇总各游戏胜负平。
 func (g GameStats) Total() (wins, losses, draws int) {
-	for _, w := range []GameWLD{g.RPS, g.Othello, g.TicTacToe, g.Gomoku, g.LiarsDice, g.Jungle} {
+	for _, w := range []GameWLD{g.RPS, g.Othello, g.TicTacToe, g.Gomoku, g.LiarsDice, g.Jungle, g.Chess} {
 		wins += w.Wins
 		losses += w.Losses
 		draws += w.Draws
@@ -229,6 +231,8 @@ func (g *GameStats) WLDFor(gameID GameID) *GameWLD {
 		return &g.LiarsDice
 	case GameJungle:
 		return &g.Jungle
+	case GameChess:
+		return &g.Chess
 	default:
 		return &g.RPS
 	}
@@ -363,10 +367,14 @@ type RoomSettings struct {
 	TicTacToeBoardTheme    string         `json:"tictactoeBoardTheme,omitempty"`
 	GomokuBoardTheme       string         `json:"gomokuBoardTheme,omitempty"`
 	JungleBoardTheme       string         `json:"jungleBoardTheme,omitempty"`
+	ChessBoardTheme        string         `json:"chessBoardTheme,omitempty"`
 	LiarsDiceMinPlayers    int            `json:"liarsDiceMinPlayers,omitempty"`
 	LiarsDiceMaxPlayers    int            `json:"liarsDiceMaxPlayers,omitempty"`
 	// 合法取值含 0（禁止悔棋），不能用 omitempty，否则 0 会被当成"未设置"丢失
-	GomokuUndoLimit int `json:"gomokuUndoLimit"`
+	GomokuUndoLimit  int `json:"gomokuUndoLimit"`
+	JungleUndoLimit  int `json:"jungleUndoLimit"`
+	ChessUndoLimit   int `json:"chessUndoLimit"`
+	OthelloUndoLimit int `json:"othelloUndoLimit"`
 	// 计时设置：0 表示不限时，omitempty 安全（0 本就是"未设置/不限"的默认值）
 	OthelloMoveSeconds int `json:"othelloMoveSeconds,omitempty"`
 	OthelloGameMinutes int `json:"othelloGameMinutes,omitempty"`
@@ -374,6 +382,8 @@ type RoomSettings struct {
 	GomokuGameMinutes  int `json:"gomokuGameMinutes,omitempty"`
 	JungleMoveSeconds  int `json:"jungleMoveSeconds,omitempty"`
 	JungleGameMinutes  int `json:"jungleGameMinutes,omitempty"`
+	ChessMoveSeconds   int `json:"chessMoveSeconds,omitempty"`
+	ChessGameMinutes   int `json:"chessGameMinutes,omitempty"`
 }
 
 type PunishmentProof struct {
@@ -420,6 +430,7 @@ type RoundHistoryItem struct {
 	TicTacToeLine        []Pos            `json:"tictactoeLine,omitempty"`
 	GomokuBlackSeat      SeatKey          `json:"gomokuBlackSeat,omitempty"`
 	GomokuLine           []Pos            `json:"gomokuLine,omitempty"`
+	ChessWhiteSeat       SeatKey          `json:"chessWhiteSeat,omitempty"`
 	Ranked               bool             `json:"ranked"`
 	Stake                *RankStake       `json:"stake,omitempty"`
 	RankMultiplier       *RankMultiplier  `json:"rankMultiplier,omitempty"`
@@ -505,6 +516,13 @@ type OthelloSurrenderRequest struct {
 	CreatedAt int64   `json:"createdAt"`
 }
 
+type OthelloUndoRequest struct {
+	FromSeat  SeatKey `json:"fromSeat"`
+	ToSeat    SeatKey `json:"toSeat"`
+	CreatedAt int64   `json:"createdAt"`
+	ExpiresAt int64   `json:"expiresAt"`
+}
+
 type OthelloState struct {
 	Board             [][]*OthelloCell          `json:"board"`
 	Turn              SeatKey                   `json:"turn"`
@@ -517,6 +535,8 @@ type OthelloState struct {
 	SettlementEvents  []string                  `json:"settlementEvents"`
 	PendingSettlement *OthelloPendingSettlement `json:"pendingSettlement,omitempty"`
 	SurrenderRequest  *OthelloSurrenderRequest  `json:"surrenderRequest,omitempty"`
+	UndoCount         map[SeatKey]int           `json:"undoCount"`
+	UndoRequest       *OthelloUndoRequest       `json:"undoRequest,omitempty"`
 	Ended             bool                      `json:"ended,omitempty"`
 	Winner            RoundResult               `json:"winner,omitempty"`
 	// 计时：MoveDeadlineAt/ClockDeadlineAt 为 0 表示对应计时器未启用或当前无人在计时中
@@ -617,6 +637,83 @@ type JungleResignRequest struct {
 	CreatedAt int64   `json:"createdAt"`
 }
 
+type JungleUndoRequest struct {
+	FromSeat  SeatKey `json:"fromSeat"`
+	ToSeat    SeatKey `json:"toSeat"`
+	CreatedAt int64   `json:"createdAt"`
+	ExpiresAt int64   `json:"expiresAt"`
+}
+
+// ChessColor 国际象棋棋子颜色。
+type ChessColor string
+
+const (
+	ChessWhite ChessColor = "white"
+	ChessBlack ChessColor = "black"
+)
+
+// ChessPiece 国际象棋棋子种类。
+type ChessPiece string
+
+const (
+	ChessKing   ChessPiece = "king"
+	ChessQueen  ChessPiece = "queen"
+	ChessRook   ChessPiece = "rook"
+	ChessBishop ChessPiece = "bishop"
+	ChessKnight ChessPiece = "knight"
+	ChessPawn   ChessPiece = "pawn"
+)
+
+// ChessCell 棋盘格子上的棋子，编码为 "white:king" / "black:pawn"。
+type ChessCell string
+
+type ChessResignRequest struct {
+	FromSeat  SeatKey `json:"fromSeat"`
+	ToSeat    SeatKey `json:"toSeat"`
+	CreatedAt int64   `json:"createdAt"`
+}
+
+type ChessUndoRequest struct {
+	FromSeat  SeatKey `json:"fromSeat"`
+	ToSeat    SeatKey `json:"toSeat"`
+	CreatedAt int64   `json:"createdAt"`
+	ExpiresAt int64   `json:"expiresAt"`
+}
+
+// ChessMove 一步合法走法（升变时 Promote 为 queen/rook/bishop/knight）。
+type ChessMove struct {
+	From    Pos    `json:"from"`
+	To      Pos    `json:"to"`
+	Promote string `json:"promote,omitempty"`
+}
+
+// ChessState 国际象棋对局状态。白方先走；执白座位由开局随机决定。
+type ChessState struct {
+	Board           [][]*ChessCell      `json:"board"`
+	Turn            SeatKey             `json:"turn"`
+	WhiteSeat       SeatKey             `json:"whiteSeat"`
+	MoveCount       int                 `json:"moveCount"`
+	LastFrom        *Pos                `json:"lastFrom,omitempty"`
+	LastTo          *Pos                `json:"lastTo,omitempty"`
+	RankedDelta     map[SeatKey]int     `json:"rankedDelta"`
+	ResignRequest   *ChessResignRequest `json:"resignRequest,omitempty"`
+	UndoCount       map[SeatKey]int     `json:"undoCount"`
+	UndoRequest     *ChessUndoRequest   `json:"undoRequest,omitempty"`
+	Ended           bool                `json:"ended,omitempty"`
+	Winner          RoundResult         `json:"winner,omitempty"`
+	MoveDeadlineAt  int64               `json:"moveDeadlineAt,omitempty"`
+	ClockDeadlineAt int64               `json:"clockDeadlineAt,omitempty"`
+	ClockRemaining  map[SeatKey]int64   `json:"clockRemaining,omitempty"`
+	CastlingWhiteK  bool                `json:"castlingWhiteK,omitempty"`
+	CastlingWhiteQ  bool                `json:"castlingWhiteQ,omitempty"`
+	CastlingBlackK  bool                `json:"castlingBlackK,omitempty"`
+	CastlingBlackQ  bool                `json:"castlingBlackQ,omitempty"`
+	EnPassant       *Pos                `json:"enPassant,omitempty"`
+	HalfmoveClock   int                 `json:"halfmoveClock,omitempty"`
+	InCheck         bool                `json:"inCheck,omitempty"`
+	LegalMoves      []ChessMove         `json:"legalMoves"`
+}
+
 // JungleState 斗兽棋对局状态。座位 A 执下方棋子（第 6–8 行），座位 B 执上方（第 0–2 行）。
 type JungleState struct {
 	Board           [][]*JungleCell      `json:"board"`
@@ -626,6 +723,8 @@ type JungleState struct {
 	LastTo          *Pos                 `json:"lastTo,omitempty"`
 	RankedDelta     map[SeatKey]int      `json:"rankedDelta"`
 	ResignRequest   *JungleResignRequest `json:"resignRequest,omitempty"`
+	UndoCount       map[SeatKey]int      `json:"undoCount"`
+	UndoRequest     *JungleUndoRequest   `json:"undoRequest,omitempty"`
 	Ended           bool                 `json:"ended,omitempty"`
 	Winner          RoundResult          `json:"winner,omitempty"`
 	MoveDeadlineAt  int64                `json:"moveDeadlineAt,omitempty"`
@@ -674,6 +773,7 @@ type RoomSnapshot struct {
 	LiarsDice         *LiarsDiceState       `json:"liarsDice,omitempty"`
 	Gomoku            *GomokuState          `json:"gomoku,omitempty"`
 	Jungle            *JungleState          `json:"jungle,omitempty"`
+	Chess             *ChessState           `json:"chess,omitempty"`
 	ResultText        string                `json:"resultText,omitempty"`
 	PunishedPlayerIDs []string              `json:"punishedPlayerIds"`
 	Proofs            []PunishmentProof     `json:"proofs"`
@@ -727,7 +827,7 @@ type LobbyRoomInfo struct {
 	RankMultiplier         RankMultiplier  `json:"rankMultiplier,omitempty"`
 	EnableExtremeRanked    bool            `json:"enableExtremeRanked,omitempty"`
 	Tags                   []string        `json:"tags"`
-	// 大厅房间卡片标签用：大话骰参战人数区间 / 黑白棋、五子棋计时设置（均为 0 表示未设置/不限）
+	// 大厅房间卡片标签用：大话骰参战人数区间 / 黑白棋、五子棋、斗兽棋、国际象棋计时设置（均为 0 表示未设置/不限）
 	LiarsDiceMinPlayers int `json:"liarsDiceMinPlayers,omitempty"`
 	LiarsDiceMaxPlayers int `json:"liarsDiceMaxPlayers,omitempty"`
 	OthelloMoveSeconds  int `json:"othelloMoveSeconds,omitempty"`
@@ -735,8 +835,13 @@ type LobbyRoomInfo struct {
 	GomokuMoveSeconds   int `json:"gomokuMoveSeconds,omitempty"`
 	GomokuGameMinutes   int `json:"gomokuGameMinutes,omitempty"`
 	GomokuUndoLimit     int `json:"gomokuUndoLimit,omitempty"`
+	JungleUndoLimit     int `json:"jungleUndoLimit,omitempty"`
+	ChessUndoLimit      int `json:"chessUndoLimit,omitempty"`
+	OthelloUndoLimit    int `json:"othelloUndoLimit,omitempty"`
 	JungleMoveSeconds   int `json:"jungleMoveSeconds,omitempty"`
 	JungleGameMinutes   int `json:"jungleGameMinutes,omitempty"`
+	ChessMoveSeconds    int `json:"chessMoveSeconds,omitempty"`
+	ChessGameMinutes    int `json:"chessGameMinutes,omitempty"`
 }
 
 // PetBondEdge 大厅公开展示的一条主人→宠物边（双方均在线且开启公开展示）。

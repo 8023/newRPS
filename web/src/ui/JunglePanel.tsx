@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { JungleAnimal, PublicPlayer, RoomSnapshot, RoomSettings, SeatKey } from "../shared/types";
 import { jungleBoardThemes } from "../lib/constants";
 import { ask } from "../lib/rpc";
-import { GameClockBar, occupantDisplay } from "./AppViews";
+import { GameClockBar, occupantDisplay, useNow } from "./AppViews";
 
 const ROWS = 9;
 const COLS = 7;
@@ -179,7 +179,7 @@ export function JunglePanel({ room, me, onError }: { room: RoomSnapshot; me: Pub
     [state?.board]
   );
 
-  const isMyTurn = Boolean(mySeat && state && state.turn === mySeat && room.phase === "choosing" && !state.ended && !state.resignRequest);
+  const isMyTurn = Boolean(mySeat && state && state.turn === mySeat && room.phase === "choosing" && !state.ended && !state.resignRequest && !state.undoRequest);
   const destKeys = useMemo(() => {
     if (!isMyTurn || !selected || !mySeat) return new Set<string>();
     return new Set(legalDests(board, mySeat, selected.row, selected.col).map((p) => `${p.row}-${p.col}`));
@@ -210,11 +210,23 @@ export function JunglePanel({ room, me, onError }: { room: RoomSnapshot; me: Pub
   const waitingForReady = room.phase === "ready" && Boolean(room.seats.A && room.seats.B);
   const drawingFirst = waitingForReady && room.ready.A && room.ready.B;
   const myReady = mySeat ? room.ready[mySeat] : false;
+  const undoLimit = room.settings.jungleUndoLimit ?? 0;
+  const undoRequest = state?.undoRequest;
+  const undoToMe = Boolean(mySeat && undoRequest?.toSeat === mySeat);
+  const undoFromMe = Boolean(mySeat && undoRequest?.fromSeat === mySeat);
+  const undoFromName = undoRequest ? occupantDisplay(room.seats[undoRequest.fromSeat]) : "";
+  const now = useNow(1000, Boolean(undoRequest));
+  const undoSecondsLeft = undoRequest ? Math.max(0, Math.ceil((undoRequest.expiresAt - now) / 1000)) : 0;
+  const myUndoCount = mySeat ? (state?.undoCount?.[mySeat] ?? 0) : 0;
+  const canRequestUndo = Boolean(
+    state && mySeat && room.phase === "choosing" && !state.ended && !state.undoRequest && !state.resignRequest &&
+    state.turn === mySeat && state.moveCount >= 2 && myUndoCount < undoLimit
+  );
   const resignRequest = state?.resignRequest;
   const resignToMe = Boolean(mySeat && resignRequest?.toSeat === mySeat);
   const resignFromMe = Boolean(mySeat && resignRequest?.fromSeat === mySeat);
   const resignFromName = resignRequest ? occupantDisplay(room.seats[resignRequest.fromSeat]) : "";
-  const canRequestResign = Boolean(state && mySeat && room.phase === "choosing" && !state.ended && !state.resignRequest);
+  const canRequestResign = Boolean(state && mySeat && room.phase === "choosing" && !state.ended && !state.undoRequest && !state.resignRequest);
 
   let statusHint: string;
   if (!room.seats.A || !room.seats.B) {
@@ -267,6 +279,20 @@ export function JunglePanel({ room, me, onError }: { room: RoomSnapshot; me: Pub
       {state?.ended && mySeat && room.phase === "result" && (
         <button className="primary jungle-restart-button" disabled={busy} onClick={() => act("jungle:restart")}>再来一局</button>
       )}
+      {undoRequest && (
+        <div className={`jungle-request-card ${undoToMe ? "needs-action" : ""}`}>
+          <div>
+            <strong>{undoFromMe ? "已申请悔棋" : `${undoFromName} 申请悔棋`}</strong>
+            <p className="hint">{undoFromMe ? `等待对方确认，${undoSecondsLeft} 秒后自动拒绝。` : `同意后棋局回退 2 手，${undoSecondsLeft} 秒后自动拒绝。`}</p>
+          </div>
+          {undoToMe && (
+            <div className="jungle-request-actions">
+              <button className="primary" disabled={busy} onClick={() => act("jungle:undoRespond", { accept: true })}>同意悔棋</button>
+              <button className="soft-button" disabled={busy} onClick={() => act("jungle:undoRespond", { accept: false })}>拒绝</button>
+            </div>
+          )}
+        </div>
+      )}
       {resignRequest && (
         <div className={`jungle-request-card ${resignToMe ? "needs-action" : ""}`}>
           <div>
@@ -281,9 +307,12 @@ export function JunglePanel({ room, me, onError }: { room: RoomSnapshot; me: Pub
           )}
         </div>
       )}
-      {canRequestResign && (
+      {(canRequestUndo || canRequestResign) && (
         <div className="jungle-risk-actions">
-          <button className="soft-button danger-soft" disabled={busy} onClick={() => act("jungle:resignRequest")}>申请认输</button>
+          {canRequestUndo && (
+            <button className="soft-button" disabled={busy} onClick={() => act("jungle:undoRequest")}>申请悔棋<br />本局剩 {undoLimit - myUndoCount} 次</button>
+          )}
+          {canRequestResign && <button className="soft-button danger-soft" disabled={busy} onClick={() => act("jungle:resignRequest")}>申请认输</button>}
         </div>
       )}
       <GameClockBar

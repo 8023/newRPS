@@ -40,6 +40,9 @@ export function playerSyncKey(player: PublicPlayer) {
     player.gameStats?.jungle?.wins || 0,
     player.gameStats?.jungle?.losses || 0,
     player.gameStats?.jungle?.draws || 0,
+    player.gameStats?.chess?.wins || 0,
+    player.gameStats?.chess?.losses || 0,
+    player.gameStats?.chess?.draws || 0,
     player.nameWarEnabled ? "1" : "0",
     player.nameWarPunished ? "1" : "0",
     player.nameWarPenaltyName || "",
@@ -133,17 +136,33 @@ export function normalizeGameStats(stats: PublicPlayer["gameStats"] | null | und
     tictactoe: normalizeGameWLD(s.tictactoe),
     gomoku: normalizeGameWLD(s.gomoku),
     liarsdice: normalizeGameWLD(s.liarsdice),
-    jungle: normalizeGameWLD(s.jungle)
+    jungle: normalizeGameWLD(s.jungle),
+    chess: normalizeGameWLD(s.chess)
   };
 }
 
 export function totalFromGameStats(gs: PublicPlayer["gameStats"] | null | undefined) {
   const g = normalizeGameStats(gs);
-  const parts = [g.rps, g.othello, g.tictactoe, g.gomoku, g.liarsdice, g.jungle];
+  const parts = [g.rps, g.othello, g.tictactoe, g.gomoku, g.liarsdice, g.jungle, g.chess];
   return {
     wins: parts.reduce((n, p) => n + p.wins, 0),
     losses: parts.reduce((n, p) => n + p.losses, 0),
     draws: parts.reduce((n, p) => n + p.draws, 0)
+  };
+}
+
+/**
+ * 将大厅玩家视图合并回登录时取得的完整玩家资料。
+ * 实时大厅快照会省略 GameStats；protobuf 物化后无法再区分“省略”与“全零”，
+ * 因此当补丁没有任何分游戏记录时，保留当前完整资料里的分项战绩。
+ */
+export function mergeLobbyPlayerIntoFullPlayer(current: PublicPlayer, incoming: PublicPlayer): PublicPlayer {
+  const totals = totalFromGameStats(incoming.gameStats);
+  const incomingHasGameStats = totals.wins + totals.losses + totals.draws > 0;
+  return {
+    ...current,
+    ...incoming,
+    gameStats: incomingHasGameStats ? incoming.gameStats : current.gameStats
   };
 }
 
@@ -310,6 +329,10 @@ export function normalizeLobbySnapshot(snapshot: LobbySnapshot, old?: LobbySnaps
   const players = coerceLobbyPlayers(snapshot.players as any).map(normalizePublicPlayer);
   const rooms = coerceLobbyRooms(snapshot.rooms as any).map((room) => ({
     ...room,
+    // 最终展示边界再做一次有限数字兜底，兼容旧服务端或已在浏览器中缓存的
+    // 缺字段快照，避免任何大厅/后台房间卡片出现 undefined/NaN。
+    players: statNum(room.players),
+    spectators: statNum(room.spectators),
     punishmentSource: room.punishmentSource === "system" ? "random" : (room.punishmentSource || "random"),
     punishmentTagsIncluded: room.punishmentTagsIncluded || [],
     punishmentTagsExcluded: room.punishmentTagsExcluded || [],
@@ -399,6 +422,7 @@ export function normalizeOthello(state: RoomSnapshot["othello"]): RoomSnapshot["
     legalMoves: fixPosList(state.legalMoves),
     settlementEvents: state.settlementEvents || [],
     rankedDelta: state.rankedDelta || { A: 0, B: 0 },
+    undoCount: state.undoCount || { A: 0, B: 0 },
     blackCount: Number(state.blackCount) || 0,
     whiteCount: Number(state.whiteCount) || 0,
     passCount: Number(state.passCount) || 0,
@@ -441,11 +465,28 @@ export function normalizeJungle(state: RoomSnapshot["jungle"]): RoomSnapshot["ju
   return {
     ...state,
     rankedDelta: state.rankedDelta || { A: 0, B: 0 },
+    undoCount: state.undoCount || { A: 0, B: 0 },
     moveCount: Number(state.moveCount) || 0,
     board: padBoardRect(state.board, 9, 7),
     moveDeadlineAt: Number(state.moveDeadlineAt) || 0,
     clockDeadlineAt: Number(state.clockDeadlineAt) || 0,
     clockRemaining: state.clockRemaining || { A: 0, B: 0 }
+  };
+}
+
+export function normalizeChess(state: RoomSnapshot["chess"]): RoomSnapshot["chess"] {
+  if (!state) return state;
+  return {
+    ...state,
+    rankedDelta: state.rankedDelta || { A: 0, B: 0 },
+    undoCount: state.undoCount || { A: 0, B: 0 },
+    moveCount: Number(state.moveCount) || 0,
+    board: padBoardRect(state.board, 8, 8),
+    moveDeadlineAt: Number(state.moveDeadlineAt) || 0,
+    clockDeadlineAt: Number(state.clockDeadlineAt) || 0,
+    clockRemaining: state.clockRemaining || { A: 0, B: 0 },
+    halfmoveClock: Number(state.halfmoveClock) || 0,
+    legalMoves: Array.isArray(state.legalMoves) ? state.legalMoves : []
   };
 }
 
@@ -497,7 +538,8 @@ export function normalizeRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
     tictactoe: normalizeTicTacToe(room.tictactoe),
     liarsDice: normalizeLiarsDice(room.liarsDice),
     gomoku: normalizeGomoku(room.gomoku),
-    jungle: normalizeJungle(room.jungle)
+    jungle: normalizeJungle(room.jungle),
+    chess: normalizeChess(room.chess)
   };
 }
 

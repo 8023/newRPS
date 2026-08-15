@@ -10,7 +10,7 @@ import {
 import { ask, isAdminRoute, todayKey } from "./lib/rpc";
 import {
   lobbyOnlineCount, mergeRoundHistory, normalizeConfig, normalizeLobbySnapshot,
-  normalizePublicPlayer, normalizeRoomSnapshot, normalizeRoundHistoryItem, playerSyncKey,
+  mergeLobbyPlayerIntoFullPlayer, normalizePublicPlayer, normalizeRoomSnapshot, normalizeRoundHistoryItem, playerSyncKey,
   replacePlayersInLobby, replacePlayersInRoom, replacePlayerInRoom
 } from "./lib/normalize";
 import { refreshActiveChats } from "./lib/chatStore";
@@ -257,18 +257,10 @@ export function App() {
         if (!p) return old;
         // LobbyPlayer/typed PublicPlayer 会省略空串字段：avatarUrl 清空时会变成 undefined。
         // 合并时必须显式写回空值，否则旧头像会残留在 me 上。
-        // LobbyPlayer 热路径可能省略 gameStats；合并时保留本地分项，避免资料被抹空。
-        const incomingHasGames = Boolean(
-          p.gameStats &&
-          [p.gameStats.rps, p.gameStats.othello, p.gameStats.tictactoe, p.gameStats.gomoku, p.gameStats.liarsdice, p.gameStats.jungle]
-            .some((g) => g && ((g.wins || 0) + (g.losses || 0) + (g.draws || 0) > 0))
-        );
         const merged = {
-          ...old.player,
-          ...p,
+          ...mergeLobbyPlayerIntoFullPlayer(old.player, p),
           genderId: typeof p.genderId === "string" ? p.genderId : "",
-          avatarUrl: p.avatarUrl || undefined,
-          gameStats: incomingHasGames ? p.gameStats : old.player.gameStats
+          avatarUrl: p.avatarUrl || undefined
         };
         return { ...old, player: merged, room: old.room ? replacePlayerInRoom(old.room, merged) : old.room };
       });
@@ -454,11 +446,15 @@ export function App() {
   useEffect(() => {
     if (!me || !lobby) return;
     const latest = lobby.players.find((player) => player.id === me.player.id);
-    if (latest && playerSyncKey(latest) !== playerSyncKey(me.player)) {
+    if (!latest) return;
+    // 实时大厅快照会省略 GameStats；先按精简视图契约合并再比较，否则不仅会把
+    // 个人设置里的分游戏战绩覆盖成 0，保留后还会因比较键不同造成重复 setState。
+    const nextPlayer = mergeLobbyPlayerIntoFullPlayer(me.player, latest);
+    if (playerSyncKey(nextPlayer) !== playerSyncKey(me.player)) {
       // LobbyPlayer 是精简视图，禁止整对象覆盖 join 时的完整 PublicPlayer（会冲掉冷却等字段）。
       setMe((old) => {
         if (!old) return old;
-        const merged = { ...old.player, ...latest } as typeof old.player;
+        const merged = mergeLobbyPlayerIntoFullPlayer(old.player, latest);
         // 头像空串/缺省：batch 路径同样显式写回，避免残留旧 URL。
         if (latest.avatarUrl === undefined || latest.avatarUrl === "") {
           merged.avatarUrl = latest.avatarUrl || "";
@@ -536,8 +532,8 @@ export function App() {
             <p>检测到新版本，当前页面可能已经过期，建议刷新以获取最新功能与修复。</p>
           </div>
           <div className="version-update-actions">
-            <button className="soft-button" type="button" onClick={() => window.location.reload()}>刷新</button>
-            <button className="icon-button" type="button" aria-label="关闭提示" onClick={() => setDismissedRemoteBuildId(remoteBuildId)}>×</button>
+            <button className="version-update-button version-update-refresh" type="button" onClick={() => window.location.reload()}>刷新</button>
+            <button className="version-update-button version-update-ignore" type="button" onClick={() => setDismissedRemoteBuildId(remoteBuildId)}>忽略</button>
           </div>
         </div>
       )}

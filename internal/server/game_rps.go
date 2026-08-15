@@ -166,6 +166,15 @@ func (s *Server) maybeStartChoosing(room *RoomState) {
 		}
 		return
 	}
+	if room.Settings.GameID == types.GameChess {
+		if room.Phase == types.PhaseReady || room.Phase == types.PhaseChoosing {
+			return
+		}
+		if room.Seats[types.SeatA] != nil && room.Seats[types.SeatB] != nil {
+			s.resetChessRoom(room)
+		}
+		return
+	}
 	if room.Phase == types.PhaseChoosing && (room.Choices[types.SeatA] != "" || room.Choices[types.SeatB] != "") {
 		return
 	}
@@ -208,6 +217,10 @@ func (s *Server) prepareNextChoice(room *RoomState) {
 	}
 	if room.Settings.GameID == types.GameJungle {
 		s.resetJungleRoom(room)
+		return
+	}
+	if room.Settings.GameID == types.GameChess {
+		s.resetChessRoom(room)
 		return
 	}
 	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
@@ -471,6 +484,9 @@ func (s *Server) applyDisconnectForfeit(room *RoomState, player *PlayerState) bo
 	}
 	if room.Settings.GameID == types.GameJungle {
 		return s.applyJungleDisconnectForfeit(room, forfeit)
+	}
+	if room.Settings.GameID == types.GameChess {
+		return s.applyChessDisconnectForfeit(room, forfeit)
 	}
 	// RPS：仅出拳阶段可判负；已进入 result/punishment/ready 说明本局已结算或未在对局中。
 	if room.Phase != types.PhaseChoosing {

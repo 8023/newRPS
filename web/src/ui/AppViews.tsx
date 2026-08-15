@@ -1,5 +1,5 @@
 import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type ReactNode, type UIEvent as ReactUIEvent, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Coffee, Crown, DoorOpen, ExternalLink, Eye, HeartHandshake, Info, Moon, Pencil, Save, Send, Shield, Sun, Swords, Upload, UserRound, Users, BookOpen } from "lucide-react";
+import { ChevronDown, ChessKnight, Coffee, Crown, DoorOpen, ExternalLink, Eye, HeartHandshake, Info, Moon, Pencil, Save, Send, Shield, Sun, Swords, Upload, UserRound, Users, BookOpen } from "lucide-react";
 import type {
   AppConfig, ChatMessage, GenderColors, GenderFaction, GiveawayVoteQuota, LobbySnapshot, Move, PetBondBadgeFields, PetBondState, PublicPlayer,
   RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant
@@ -7,8 +7,8 @@ import type {
 import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, DEFAULT_NAME_WAR_RENAME_MIN_POINTS, normalizePublicPlayer, withPetBondDefaults, withRankedScoreDefaults } from "../lib/normalize";
 import { socket } from "../ws";
 import {
-  defaultGomokuRoomName, defaultJungleRoomName, defaultLiarsDiceRoomName, defaultOthelloRoomName, defaultRoomName, defaultTicTacToeRoomName,
-  gameMinutesOptions, gomokuBoardThemes, jungleBoardThemes, moveSecondsOptions, othelloBoardThemes, playerSecretKey, doumiaoLinks, luv4uLinks, tictactoeBoardThemes, tokenKey
+  defaultChessRoomName, defaultGomokuRoomName, defaultJungleRoomName, defaultLiarsDiceRoomName, defaultOthelloRoomName, defaultRoomName, defaultTicTacToeRoomName,
+  chessBoardThemes, gameMinutesOptions, gomokuBoardThemes, jungleBoardThemes, moveSecondsOptions, othelloBoardThemes, playerSecretKey, doumiaoLinks, luv4uLinks, tictactoeBoardThemes, tokenKey
 } from "../lib/constants";
 import { ask } from "../lib/rpc";
 import { cacheJoinProfile, claimIdentity, clearPlayerIdentity, encodeClaimCode, fetchClaimKey, joinIdentityPayload, logout, refreshClaimKey } from "../lib/session";
@@ -26,6 +26,7 @@ import type { MeState } from "../lib/types";
 import { LiarsDicePanel } from "./LiarsDicePanel";
 import { GomokuPanel, GomokuScore } from "./GomokuPanel";
 import { JunglePanel, JungleScore, jungleSideLabel } from "./JunglePanel";
+import { ChessPanel, ChessScore, chessSideLabel } from "./ChessPanel";
 
 import { formatDuration, formatOnlineDuration } from "../lib/format";
 
@@ -36,6 +37,18 @@ export function useNow(intervalMs = 1000, enabled = true): number {
     if (!enabled) return;
     setNow(Date.now());
     const id = window.setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs, enabled]);
+  return now;
+}
+
+/** 棋钟使用服务端时间轴，避免玩家设备系统时间不同造成显示偏长或提前归零。 */
+function useServerNow(intervalMs = 1000, enabled = true): number {
+  const [now, setNow] = useState(() => socket.serverNow());
+  useEffect(() => {
+    if (!enabled) return;
+    setNow(socket.serverNow());
+    const id = window.setInterval(() => setNow(socket.serverNow()), intervalMs);
     return () => clearInterval(id);
   }, [intervalMs, enabled]);
   return now;
@@ -196,7 +209,7 @@ export function ClaimKeyPanel({ onError }: { onError: (message: string) => void 
       const result = await fetchClaimKey();
       setCode(encodeClaimCode(result.playerId, result.claimKey));
     } catch (error) {
-      onError(error instanceof Error ? error.message : "获取认领密钥失败");
+      onError(error instanceof Error ? error.message : "获取失败");
     } finally {
       setLoading(false);
     }
@@ -209,7 +222,7 @@ export function ClaimKeyPanel({ onError }: { onError: (message: string) => void 
       setCode(encodeClaimCode(result.playerId, result.claimKey));
       setCopied(false);
     } catch (error) {
-      onError(error instanceof Error ? error.message : "刷新认领密钥失败");
+      onError(error instanceof Error ? error.message : "刷新失败");
     } finally {
       setLoading(false);
     }
@@ -222,23 +235,23 @@ export function ClaimKeyPanel({ onError }: { onError: (message: string) => void 
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      onError("复制失败，请手动选中密钥");
+      onError("请手动选中复制");
     }
   }
 
   return (
     <div className="claim-key-panel">
-      <p className="hint">认领密钥用于在另一台设备登录同一个账号，粘贴一次就会失效，请勿分享给他人。</p>
+      <p className="hint">本网站没有传统用户名/密码认证体系，认领密钥作为你在本站的唯一标识，请务必妥善保存、不要告知他人。认领密钥用于在另一台设备登录同一个账号，或在清空浏览器缓存或登出后恢复该账号信息。认领密钥只能存在一个（获取新认领密钥后，旧密钥立即作废）且仅可使用一次（使用认领密钥恢复账号后作废，但可以申请新的认领密钥）。</p>
       {code ? (
         <>
           <code className="claim-key-code">{code}</code>
           <div className="claim-key-actions">
-            <button type="button" onClick={copy}>{copied ? "已复制" : "复制"}</button>
-            <button type="button" disabled={loading} onClick={refresh}>刷新（旧密钥立即作废）</button>
+            <button type="button" onClick={copy}>{copied ? "已复制" : "复制密钥"}</button>
+            <button type="button" disabled={loading} onClick={refresh}>刷新密钥</button>
           </div>
         </>
       ) : (
-        <button type="button" disabled={loading} onClick={load}>{loading ? "获取中…" : "显示认领密钥"}</button>
+        <button type="button" disabled={loading} onClick={load}>{loading ? "获取中…" : "获取认领密钥"}</button>
       )}
     </div>
   );
@@ -583,6 +596,58 @@ function prefsToTagSelection(prefs: Record<string, string> | undefined, tagIds: 
   return { included, excluded };
 }
 
+const timedGameSettingKeys = {
+  othello: { move: "othelloMoveSeconds", game: "othelloGameMinutes", undo: "othelloUndoLimit" },
+  gomoku: { move: "gomokuMoveSeconds", game: "gomokuGameMinutes", undo: "gomokuUndoLimit" },
+  jungle: { move: "jungleMoveSeconds", game: "jungleGameMinutes", undo: "jungleUndoLimit" },
+  chess: { move: "chessMoveSeconds", game: "chessGameMinutes", undo: "chessUndoLimit" }
+} as const;
+
+type TimedGameID = keyof typeof timedGameSettingKeys;
+
+function isTimedGame(gameId: RoomSettings["gameId"]): gameId is TimedGameID {
+  return gameId in timedGameSettingKeys;
+}
+
+function GameTimerSettings({ gameId, settings, onPatch }: {
+  gameId: TimedGameID;
+  settings: RoomSettings;
+  onPatch: (next: Partial<RoomSettings>) => void;
+}) {
+  const keys = timedGameSettingKeys[gameId];
+  return (
+    <div className="game-timer-settings">
+      <label>
+        悔棋次数
+        <select
+          value={Number(settings[keys.undo]) || 0}
+          onChange={(event) => onPatch({ [keys.undo]: Number(event.target.value) } as Partial<RoomSettings>)}
+        >
+          {([0, 1, 3, 10] as const).map((limit) => <option key={limit} value={limit}>{limit === 0 ? "禁止" : `${limit}次`}</option>)}
+        </select>
+      </label>
+      <label>
+        每子时长
+        <select
+          value={Number(settings[keys.move]) || 0}
+          onChange={(event) => onPatch({ [keys.move]: Number(event.target.value) } as Partial<RoomSettings>)}
+        >
+          {moveSecondsOptions.map((value) => <option key={value} value={value}>{value === 0 ? "不限" : `${value} 秒`}</option>)}
+        </select>
+      </label>
+      <label>
+        每局时长
+        <select
+          value={Number(settings[keys.game]) || 0}
+          onChange={(event) => onPatch({ [keys.game]: Number(event.target.value) } as Partial<RoomSettings>)}
+        >
+          {gameMinutesOptions.map((value) => <option key={value} value={value}>{value === 0 ? "不限" : `${value} 分钟`}</option>)}
+        </select>
+      </label>
+    </div>
+  );
+}
+
 export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunishmentTagPrefsChange, onCancel, onError }: { config: AppConfig; me: PublicPlayer; punishmentTagPrefs?: Record<string, string>; onCreated: (room?: RoomSnapshot) => void; onPunishmentTagPrefsChange?: (prefs: Record<string, string>) => void; onCancel: () => void; onError: (message: string) => void }) {
   const tagIds = (config.punishmentTags || []).map((t) => t.id);
   const initialPrefs = prefsToTagSelection(punishmentTagPrefs, tagIds);
@@ -609,7 +674,11 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
     tictactoeBoardTheme: "paper",
     gomokuBoardTheme: "wood",
     jungleBoardTheme: "forest",
+    chessBoardTheme: "classic",
     gomokuUndoLimit: 0,
+    jungleUndoLimit: 0,
+    chessUndoLimit: 0,
+    othelloUndoLimit: 0,
     liarsDiceMinPlayers: 3,
     liarsDiceMaxPlayers: 3,
     othelloMoveSeconds: 0,
@@ -617,7 +686,9 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
     gomokuMoveSeconds: 0,
     gomokuGameMinutes: 0,
     jungleMoveSeconds: 0,
-    jungleGameMinutes: 0
+    jungleGameMinutes: 0,
+    chessMoveSeconds: 0,
+    chessGameMinutes: 0
   });
   const [customRoomName, setCustomRoomName] = useState(false);
 
@@ -659,10 +730,12 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
             : next.gameId === "liarsdice" ? defaultLiarsDiceRoomName
               : next.gameId === "gomoku" ? defaultGomokuRoomName
                 : next.gameId === "jungle" ? defaultJungleRoomName
-                  : defaultRoomName;
+                  : next.gameId === "chess" ? defaultChessRoomName
+                    : defaultRoomName;
       }
       if (next.gameId === "othello" || merged.gameId === "othello") {
         merged.othelloBoardTheme = merged.othelloBoardTheme || "classic";
+        merged.othelloUndoLimit = merged.othelloUndoLimit ?? 0;
       }
       if (next.gameId === "tictactoe" || merged.gameId === "tictactoe") {
         merged.tictactoeBoardTheme = merged.tictactoeBoardTheme || "paper";
@@ -673,24 +746,21 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
       }
       if (next.gameId === "jungle" || merged.gameId === "jungle") {
         merged.jungleBoardTheme = merged.jungleBoardTheme || "forest";
+        merged.jungleUndoLimit = merged.jungleUndoLimit ?? 0;
       }
-      if ("othelloMoveSeconds" in next && !moveSecondsOptions.includes(next.othelloMoveSeconds as typeof moveSecondsOptions[number])) {
-        merged.othelloMoveSeconds = 0;
+      if (next.gameId === "chess" || merged.gameId === "chess") {
+        merged.chessBoardTheme = merged.chessBoardTheme || "classic";
+        merged.chessUndoLimit = merged.chessUndoLimit ?? 0;
       }
-      if ("othelloGameMinutes" in next && !gameMinutesOptions.includes(next.othelloGameMinutes as typeof gameMinutesOptions[number])) {
-        merged.othelloGameMinutes = 0;
-      }
-      if ("gomokuMoveSeconds" in next && !moveSecondsOptions.includes(next.gomokuMoveSeconds as typeof moveSecondsOptions[number])) {
-        merged.gomokuMoveSeconds = 0;
-      }
-      if ("gomokuGameMinutes" in next && !gameMinutesOptions.includes(next.gomokuGameMinutes as typeof gameMinutesOptions[number])) {
-        merged.gomokuGameMinutes = 0;
-      }
-      if ("jungleMoveSeconds" in next && !moveSecondsOptions.includes(next.jungleMoveSeconds as typeof moveSecondsOptions[number])) {
-        merged.jungleMoveSeconds = 0;
-      }
-      if ("jungleGameMinutes" in next && !gameMinutesOptions.includes(next.jungleGameMinutes as typeof gameMinutesOptions[number])) {
-        merged.jungleGameMinutes = 0;
+      for (const keys of Object.values(timedGameSettingKeys)) {
+        const moveSeconds = next[keys.move];
+        if (moveSeconds !== undefined && !moveSecondsOptions.includes(moveSeconds as typeof moveSecondsOptions[number])) {
+          merged[keys.move] = 0;
+        }
+        const gameMinutes = next[keys.game];
+        if (gameMinutes !== undefined && !gameMinutesOptions.includes(gameMinutes as typeof gameMinutesOptions[number])) {
+          merged[keys.game] = 0;
+        }
       }
       if (next.gameId === "liarsdice" || merged.gameId === "liarsdice") {
         merged.liarsDiceMinPlayers = merged.liarsDiceMinPlayers || 3;
@@ -742,6 +812,8 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
       } else if (merged.gameId === "gomoku") {
         if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) merged.stake = 5;
       } else if (merged.gameId === "jungle") {
+        if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) merged.stake = 5;
+      } else if (merged.gameId === "chess") {
         if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) merged.stake = 5;
       } else if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) {
         merged.stake = 5;
@@ -862,69 +934,14 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
                   </button>
                 ))}
               </div>
-              {settings.gameId === "othello" && <p className="hint">黑白棋支持真人 1v1、观战、聊天、排位和惩罚；排位房会支持白给/上贡结算。</p>}
+              {settings.gameId === "othello" && <p className="hint">黑白棋支持真人 1v1、观战、聊天、排位和惩罚；排位房会支持白给/上贡结算，可向对方请求悔棋或认输。</p>}
               {settings.gameId === "tictactoe" && <p className="hint">井字棋支持真人 1v1、观战、聊天、排位和惩罚；双方准备后随机 X/O 先手。</p>}
               {settings.gameId === "liarsdice" && <p className="hint">大话骰支持 2-8 人参战，进房默认观战，可自由加入/离开参战席；全员准备且名单 5 秒无变动后自动开局。</p>}
               {settings.gameId === "gomoku" && <p className="hint">五子棋支持真人 1v1、观战、聊天、排位和惩罚；15x15 棋盘先连成五子者胜，可向对方请求悔棋或认输。</p>}
-              {settings.gameId === "jungle" && <p className="hint">斗兽棋支持真人 1v1、观战、聊天、排位和惩罚；7×9 棋盘，先入对方兽穴或令对方无子可走者胜，可向对方申请认输。</p>}
-              {settings.gameId === "jungle" && (
-                <div className="game-timer-settings">
-                  <label>
-                    每步时长
-                    <select
-                      value={settings.jungleMoveSeconds ?? 0}
-                      onChange={(event) => patch({ jungleMoveSeconds: Number(event.target.value) as RoomSettings["jungleMoveSeconds"] })}
-                    >
-                      {moveSecondsOptions.map((sec) => <option key={sec} value={sec}>{sec === 0 ? "不限" : `${sec} 秒`}</option>)}
-                    </select>
-                  </label>
-                  <label>
-                    每局时长
-                    <select
-                      value={settings.jungleGameMinutes ?? 0}
-                      onChange={(event) => patch({ jungleGameMinutes: Number(event.target.value) as RoomSettings["jungleGameMinutes"] })}
-                    >
-                      {gameMinutesOptions.map((min) => <option key={min} value={min}>{min === 0 ? "不限" : `${min} 分钟`}</option>)}
-                    </select>
-                  </label>
-                </div>
-              )}
-              {settings.gameId === "gomoku" && (
-                <div className="game-timer-settings">
-                  <label>
-                    悔棋次数
-                    <select
-                      value={settings.gomokuUndoLimit ?? 0}
-                      onChange={(event) => patch({ gomokuUndoLimit: Number(event.target.value) as RoomSettings["gomokuUndoLimit"] })}
-                    >
-                      {([0, 1, 3, 10] as const).map((limit) => (
-                        <option key={limit} value={limit}>{limit === 0 ? "禁止" : `${limit}次`}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    每子时长
-                    <select
-                      value={settings.gomokuMoveSeconds ?? 0}
-                      onChange={(event) => patch({ gomokuMoveSeconds: Number(event.target.value) as RoomSettings["gomokuMoveSeconds"] })}
-                    >
-                      {moveSecondsOptions.map((n) => (
-                        <option key={n} value={n}>{n === 0 ? "不限" : `${n} 秒`}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    每局时长
-                    <select
-                      value={settings.gomokuGameMinutes ?? 0}
-                      onChange={(event) => patch({ gomokuGameMinutes: Number(event.target.value) as RoomSettings["gomokuGameMinutes"] })}
-                    >
-                      {gameMinutesOptions.map((n) => (
-                        <option key={n} value={n}>{n === 0 ? "不限" : `${n} 分钟`}</option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
+              {settings.gameId === "jungle" && <p className="hint">斗兽棋支持真人 1v1、观战、聊天、排位和惩罚；7×9 棋盘，先入对方兽穴或令对方无子可走者胜，可向对方请求悔棋或认输。</p>}
+              {settings.gameId === "chess" && <p className="hint">国际象棋支持真人 1v1、观战、聊天、排位和惩罚；8×8 棋盘白方先走，将死对方的王获胜，可向对方请求悔棋或认输。</p>}
+              {isTimedGame(settings.gameId) && (
+                <GameTimerSettings gameId={settings.gameId} settings={settings} onPatch={patch} />
               )}
               {settings.gameId === "liarsdice" && (
                 <div className="liarsdice-roster-settings">
@@ -947,32 +964,6 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
                     >
                       {Array.from({ length: 7 }, (_, i) => i + 2).map((n) => (
                         <option key={n} value={n}>{n} 人</option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-              )}
-              {settings.gameId === "othello" && (
-                <div className="game-timer-settings">
-                  <label>
-                    每子时长
-                    <select
-                      value={settings.othelloMoveSeconds ?? 0}
-                      onChange={(event) => patch({ othelloMoveSeconds: Number(event.target.value) as RoomSettings["othelloMoveSeconds"] })}
-                    >
-                      {moveSecondsOptions.map((n) => (
-                        <option key={n} value={n}>{n === 0 ? "不限" : `${n} 秒`}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    每局时长
-                    <select
-                      value={settings.othelloGameMinutes ?? 0}
-                      onChange={(event) => patch({ othelloGameMinutes: Number(event.target.value) as RoomSettings["othelloGameMinutes"] })}
-                    >
-                      {gameMinutesOptions.map((n) => (
-                        <option key={n} value={n}>{n === 0 ? "不限" : `${n} 分钟`}</option>
                       ))}
                     </select>
                   </label>
@@ -1074,6 +1065,34 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
                   ))}
                 </div>
               )}
+              {settings.gameId === "chess" && (
+                <div className="othello-theme-grid">
+                  {chessBoardThemes.map((theme) => (
+                    <button
+                      type="button"
+                      className={`othello-theme-card ${settings.chessBoardTheme === theme.id ? "active" : ""}`}
+                      key={theme.id}
+                      onClick={() => patch({ chessBoardTheme: theme.id })}
+                      style={{
+                        "--theme-board": theme.board,
+                        "--theme-cell": theme.light,
+                        "--theme-line": theme.dark,
+                        "--theme-hover": theme.hover,
+                        "--theme-border": theme.border
+                      } as CSSProperties}
+                    >
+                      <span className="othello-theme-preview chess-theme-preview" aria-hidden="true">
+                        <i><b className="chess-preview-piece light">♟</b></i>
+                        <i><b className="chess-preview-piece dark">♟</b></i>
+                        <i><b className="chess-preview-piece dark">♟</b></i>
+                        <i><b className="chess-preview-piece light">♟</b></i>
+                      </span>
+                      <strong>{theme.name}</strong>
+                      <small>{theme.description}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
               {settings.gameId === "jungle" && (
                 <div className="othello-theme-grid">
                   {jungleBoardThemes.map((theme) => (
@@ -1124,7 +1143,7 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
                 </button>
                 {(settings.gameId === "othello" ? ([1, 2, 5, 10] as const) : ([5, 10, 20] as const)).map((stake) => (
                   <button type="button" className={`ranked-choice-card ${settings.enableRanked && settings.stake === stake ? "active" : ""}`} key={stake} onClick={() => patch({ enableRanked: true, stake, enableExtremeRanked: Boolean(me.extremeModeEnabled) })}>
-                    <span>{settings.gameId === "othello" ? "🏆 黑白棋排位" : settings.gameId === "tictactoe" ? "🏆 井字棋排位" : settings.gameId === "gomoku" ? "🏆 五子棋排位" : settings.gameId === "jungle" ? "🏆 斗兽棋排位" : me.extremeModeEnabled ? "⚡ 极限排位" : "🏆 排位"} {stake}{settings.gameId === "othello" ? " 分/子" : " 分"}</span>
+                    <span>{settings.gameId === "othello" ? "🏆 黑白棋排位" : settings.gameId === "tictactoe" ? "🏆 井字棋排位" : settings.gameId === "gomoku" ? "🏆 五子棋排位" : settings.gameId === "jungle" ? "🏆 斗兽棋排位" : settings.gameId === "chess" ? "🏆 国际象棋排位" : me.extremeModeEnabled ? "⚡ 极限排位" : "🏆 排位"} {stake}{settings.gameId === "othello" ? " 分/子" : " 分"}</span>
                     <small>{
                       settings.gameId === "othello"
                         ? `每翻掉对方 1 子立即结算 ${stake} 分，终局不重复结算。`
@@ -1141,6 +1160,7 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
               {settings.gameId === "tictactoe" && <p className="hint">井字棋排位按胜负固定分结算，可选 5/10/20 分；支持倍率和极限模式。</p>}
               {settings.gameId === "gomoku" && <p className="hint">五子棋排位按胜负固定分结算，可选 5/10/20 分；支持倍率和极限模式。</p>}
               {settings.gameId === "jungle" && <p className="hint">斗兽棋排位按胜负固定分结算，可选 5/10/20 分；支持倍率和极限模式。</p>}
+              {settings.gameId === "chess" && <p className="hint">国际象棋排位按胜负固定分结算，可选 5/10/20 分；支持倍率和极限模式。</p>}
               {settings.enableRanked && me.extremeModeEnabled && (
                 <div className="multiplier-box extreme-mode-box">
                   <div className="multiplier-head">
@@ -1194,6 +1214,7 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
               {settings.gameId === "tictactoe" && <p className="hint">井字棋惩罚会在终局或断线判负后触发；平局双罚开启时井字棋平局双方都要惩罚。</p>}
               {settings.gameId === "gomoku" && <p className="hint">五子棋惩罚会在终局、认输或断线判负后触发；平局双罚开启时五子棋平局双方都要惩罚。</p>}
               {settings.gameId === "jungle" && <p className="hint">斗兽棋惩罚会在终局、认输或断线判负后触发；平局双罚开启时斗兽棋平局双方都要惩罚。</p>}
+              {settings.gameId === "chess" && <p className="hint">国际象棋惩罚会在终局、认输或断线判负后触发；平局双罚开启时国际象棋平局双方都要惩罚。</p>}
               {settings.gameId === "liarsdice" && <p className="hint">大话骰惩罚仅对败者触发（叫点/开牌对决中的负方，或断线判负方）；其余参战玩家记平但不计分、不受罚。</p>}
               <Select
                 value={!settings.enablePunishment ? "none" : ((settings.punishmentSource === "system" ? "random" : settings.punishmentSource) || "random")}
@@ -1286,6 +1307,7 @@ export function generateRoomName(config: AppConfig, settings: RoomSettings) {
   if (settings.gameId === "tictactoe" && !settings.enablePunishment) return defaultTicTacToeRoomName;
   if (settings.gameId === "gomoku" && !settings.enablePunishment) return defaultGomokuRoomName;
   if (settings.gameId === "jungle" && !settings.enablePunishment) return defaultJungleRoomName;
+  if (settings.gameId === "chess" && !settings.enablePunishment) return defaultChessRoomName;
   if (settings.gameId === "liarsdice" && !settings.enablePunishment) return defaultLiarsDiceRoomName;
   const pool = roomNamePoolForSettings(config, settings);
   if (!pool) return defaultRoomName;
@@ -1357,6 +1379,7 @@ export function gameIcon(gameId: RoomSettings["gameId"]): ReactNode {
     );
   }
   if (gameId === "jungle") return "🦁";
+  if (gameId === "chess") return <ChessKnight className="game-choice-icon-chess" size={30} strokeWidth={1.9} />;
   if (gameId === "liarsdice") return "🎲";
   // 三个手势倒三角排布（上两下一），避免挤在一行导致溢出裁切。
   return (
@@ -1454,7 +1477,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
   const resultChoice = mySeat ? room.revealedChoices?.[mySeat] : undefined;
   const canChoose = Boolean(mySeat && room.phase !== "punishment" && (room.phase === "choosing" || room.phase === "result") && seats.A && seats.B);
   const canShowGiveawayButton = Boolean(mySeat && me.giveawayEnabled && seats.A && seats.B);
-  const canGoSpectate = Boolean(mySeat && room.phase !== "punishment" && !choices[mySeat] && !((room.settings.gameId === "tictactoe" || room.settings.gameId === "gomoku" || room.settings.gameId === "jungle") && room.phase === "choosing"));
+  const canGoSpectate = Boolean(mySeat && room.phase !== "punishment" && !choices[mySeat] && !((room.settings.gameId === "tictactoe" || room.settings.gameId === "gomoku" || room.settings.gameId === "jungle" || room.settings.gameId === "chess") && room.phase === "choosing"));
   const opponentSeat = mySeat === "A" ? "B" : mySeat === "B" ? "A" : null;
   const opponentPlayer = opponentSeat ? seats[opponentSeat] : null;
   const forceGiveawayEligibleGame = room.settings.gameId === "rps" || room.settings.gameId === "tictactoe" || room.settings.gameId === "gomoku" || (room.settings.gameId === "othello" && room.settings.enableRanked);
@@ -1518,7 +1541,9 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
         ? "五子棋对局进行中不能离开战斗席"
         : room.settings.gameId === "jungle" && room.phase === "choosing" && mySeat
           ? "斗兽棋对局进行中不能离开战斗席"
-          : "离开房间";
+          : room.settings.gameId === "chess" && room.phase === "choosing" && mySeat
+            ? "国际象棋对局进行中不能离开战斗席"
+            : "离开房间";
 
   useEffect(() => {
     if (!mySeat || room.phase === "choosing" && !choices[mySeat]) setLocalChoice(null);
@@ -1651,6 +1676,22 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
       await ask("othello:requestSurrender", {});
     } catch (error) {
       onError(error instanceof Error ? error.message : "申请认输失败");
+    }
+  }
+
+  async function requestOthelloUndo() {
+    try {
+      await ask("othello:undoRequest", {});
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "申请悔棋失败");
+    }
+  }
+
+  async function respondOthelloUndo(accept: boolean) {
+    try {
+      await ask("othello:undoRespond", { accept });
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "处理悔棋失败");
     }
   }
 
@@ -1788,7 +1829,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
           <div className="versus">
             <span className="versus-label">⚔️ 对战比分</span>
             <strong className="score-number">{room.score.A} : {room.score.B}</strong>
-            {room.settings.gameId === "othello" ? <OthelloScore room={room} /> : room.settings.gameId === "tictactoe" ? <TicTacToeScore room={room} /> : room.settings.gameId === "gomoku" ? <GomokuScore room={room} /> : room.settings.gameId === "jungle" ? <JungleScore room={room} /> : <Settlement room={room} />}
+            {room.settings.gameId === "othello" ? <OthelloScore room={room} /> : room.settings.gameId === "tictactoe" ? <TicTacToeScore room={room} /> : room.settings.gameId === "gomoku" ? <GomokuScore room={room} /> : room.settings.gameId === "jungle" ? <JungleScore room={room} /> : room.settings.gameId === "chess" ? <ChessScore room={room} /> : <Settlement room={room} />}
           </div>
           <SeatView seat="B" room={room} me={me} onSit={() => act("room:sit", { seat: "B" })} />
         </div>
@@ -1796,7 +1837,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
       <div className="room-content-grid">
         <div className="actions-panel panel">
           {room.settings.gameId === "othello" ? (
-            <OthelloPanel room={room} me={me} onMove={playOthello} onSettle={settleOthelloMove} onRestart={restartOthello} onReady={readyOthello} onRequestSurrender={requestOthelloSurrender} onRespondSurrender={respondOthelloSurrender} onEscape={escapeOthello} />
+          <OthelloPanel room={room} me={me} onMove={playOthello} onSettle={settleOthelloMove} onRestart={restartOthello} onReady={readyOthello} onRequestUndo={requestOthelloUndo} onRespondUndo={respondOthelloUndo} onRequestSurrender={requestOthelloSurrender} onRespondSurrender={respondOthelloSurrender} onEscape={escapeOthello} />
           ) : room.settings.gameId === "tictactoe" ? (
             <TicTacToePanel room={room} me={me} onMove={playTicTacToe} onReady={readyTicTacToe} onRestart={restartTicTacToe} onGiveawayChoice={chooseTicTacToeGiveaway} />
           ) : room.settings.gameId === "liarsdice" ? (
@@ -1805,6 +1846,8 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
             <GomokuPanel room={room} me={me} onError={onError} />
           ) : room.settings.gameId === "jungle" ? (
             <JunglePanel room={room} me={me} onError={onError} />
+          ) : room.settings.gameId === "chess" ? (
+            <ChessPanel room={room} me={me} onError={onError} />
           ) : mySeat && (
             <div className="move-panel">
               <div>
@@ -2216,7 +2259,7 @@ type TimedGameState = {
   clockRemaining?: Record<SeatKey, number>;
 };
 
-/** 黑白棋/五子棋/斗兽棋共用：棋盘上方的每子/每局倒计时条，未启用对应计时器时不显示。 */
+/** 黑白棋/五子棋/斗兽棋/国际象棋共用：棋盘上方的每子/每局倒计时条，未启用对应计时器时不显示。 */
 export function GameClockBar({ room, state, moveSeconds, gameMinutes, labels }: {
   room: RoomSnapshot;
   state?: TimedGameState;
@@ -2226,15 +2269,21 @@ export function GameClockBar({ room, state, moveSeconds, gameMinutes, labels }: 
   labels?: { primary: string; secondary: string };
 }) {
   const ticking = Boolean(state && !state.ended && room.phase === "choosing" && (moveSeconds || gameMinutes));
-  const now = useNow(1000, ticking);
+  const now = useServerNow(250, ticking);
   if (!state || state.ended || room.phase !== "choosing" || (!moveSeconds && !gameMinutes)) return null;
   const whiteSeat: SeatKey = state.blackSeat === "A" ? "B" : "A";
   const primary = labels?.primary ?? "⚫";
   const secondary = labels?.secondary ?? "⚪";
-  const moveSecondsLeft = moveSeconds && state.moveDeadlineAt ? Math.max(0, Math.ceil((state.moveDeadlineAt - now) / 1000)) : null;
+  const deadline = Number(state.moveDeadlineAt) || 0;
+  // 网络往返中点估算仍可能有几毫秒误差；显示值再按建房上限收口，绝不出现
+  // “每子 30 秒”刚刷新却显示 31 秒的情况。
+  const moveSecondsLeft = moveSeconds && deadline
+    ? Math.min(moveSeconds, Math.max(0, Math.ceil((deadline - now) / 1000)))
+    : null;
   function remainingMsFor(seat: SeatKey): number {
-    if (state!.turn === seat && state!.clockDeadlineAt) return Math.max(0, state!.clockDeadlineAt - now);
-    return state!.clockRemaining?.[seat] ?? 0;
+    const clockAt = Number(state!.clockDeadlineAt) || 0;
+    if (state!.turn === seat && clockAt) return Math.max(0, clockAt - now);
+    return Number(state!.clockRemaining?.[seat]) || 0;
   }
   return (
     <div className="game-clock-bar">
@@ -2250,18 +2299,31 @@ export function GameClockBar({ room, state, moveSeconds, gameMinutes, labels }: 
   );
 }
 
-export function OthelloPanel({ room, me, onMove, onSettle, onRestart, onReady, onRequestSurrender, onRespondSurrender, onEscape }: { room: RoomSnapshot; me: PublicPlayer; onMove: (row: number, col: number) => void; onSettle: (mode: "normal" | "giveaway" | "tribute") => void; onRestart: () => void; onReady: () => void; onRequestSurrender: () => void; onRespondSurrender: (accept: boolean) => void; onEscape: () => void }) {
+export function OthelloPanel({ room, me, onMove, onSettle, onRestart, onReady, onRequestUndo, onRespondUndo, onRequestSurrender, onRespondSurrender, onEscape }: { room: RoomSnapshot; me: PublicPlayer; onMove: (row: number, col: number) => void; onSettle: (mode: "normal" | "giveaway" | "tribute") => void; onRestart: () => void; onReady: () => void; onRequestUndo: () => void; onRespondUndo: (accept: boolean) => void; onRequestSurrender: () => void; onRespondSurrender: (accept: boolean) => void; onEscape: () => void }) {
   const state = room.othello;
   const boardTheme = othelloThemeStyle(room.settings.othelloBoardTheme);
   const mySeat = room.seats.A?.id === me.id ? "A" : room.seats.B?.id === me.id ? "B" : null;
   const pending = state?.pendingSettlement;
-  const isMyTurn = Boolean(state && mySeat && state.turn === mySeat && room.phase === "choosing" && !state.ended && !pending);
+  const isMyTurn = Boolean(state && mySeat && state.turn === mySeat && room.phase === "choosing" && !state.ended && !pending && !state.undoRequest);
   const legalKeys = new Set((state?.legalMoves || []).map((move) => `${move.row}-${move.col}`));
   const turnName = state?.turn === "A" ? occupantDisplay(room.seats.A) : occupantDisplay(room.seats.B);
   const waitingForReady = room.phase === "ready" && Boolean(room.seats.A && room.seats.B);
   const drawingFirst = waitingForReady && room.ready.A && room.ready.B;
   const myReady = mySeat ? room.ready[mySeat] : false;
-  const canSurrender = Boolean(mySeat && state && room.phase === "choosing" && !state.ended && !pending);
+  const undoLimit = room.settings.othelloUndoLimit ?? 0;
+  const undoRequest = state?.undoRequest;
+  const undoToMe = Boolean(mySeat && undoRequest?.toSeat === mySeat);
+  const undoFromMe = Boolean(mySeat && undoRequest?.fromSeat === mySeat);
+  const undoFromName = undoRequest ? occupantDisplay(room.seats[undoRequest.fromSeat]) : "";
+  const now = useNow(1000, Boolean(undoRequest));
+  const undoSecondsLeft = undoRequest ? Math.max(0, Math.ceil((undoRequest.expiresAt - now) / 1000)) : 0;
+  const myUndoCount = mySeat ? (state?.undoCount?.[mySeat] ?? 0) : 0;
+  const moveCount = state ? Math.max(0, state.blackCount + state.whiteCount - 4) : 0;
+  const canRequestUndo = Boolean(
+    mySeat && state && room.phase === "choosing" && !state.ended && !pending && !state.undoRequest && !state.surrenderRequest &&
+    state.turn === mySeat && moveCount >= 2 && myUndoCount < undoLimit
+  );
+  const canSurrender = Boolean(mySeat && state && room.phase === "choosing" && !state.ended && !pending && !state.undoRequest);
   const surrenderRequest = state?.surrenderRequest;
   const surrenderFromMe = Boolean(mySeat && surrenderRequest?.fromSeat === mySeat);
   const surrenderToMe = Boolean(mySeat && surrenderRequest?.toSeat === mySeat);
@@ -2309,6 +2371,20 @@ export function OthelloPanel({ room, me, onMove, onSettle, onRestart, onReady, o
         </div>
       )}
       {state?.ended && mySeat && room.phase === "result" && <button className="primary othello-restart-button" onClick={onRestart}>再来一局</button>}
+      {undoRequest && (
+        <div className={`othello-surrender-card ${undoToMe ? "needs-action" : ""}`}>
+          <div>
+            <strong>{undoFromMe ? "已申请悔棋" : `${undoFromName} 申请悔棋`}</strong>
+            <p className="hint">{undoFromMe ? `等待对方确认，${undoSecondsLeft} 秒后自动拒绝。` : `同意后棋局回退 2 手，${undoSecondsLeft} 秒后自动拒绝。`}</p>
+          </div>
+          {undoToMe && (
+            <div className="othello-surrender-actions">
+              <button className="primary" onClick={() => onRespondUndo(true)}>同意悔棋</button>
+              <button className="soft-button" onClick={() => onRespondUndo(false)}>拒绝</button>
+            </div>
+          )}
+        </div>
+      )}
       {canSurrender && surrenderRequest && (
         <div className={`othello-surrender-card ${surrenderToMe ? "needs-action" : ""}`}>
           <div>
@@ -2323,14 +2399,13 @@ export function OthelloPanel({ room, me, onMove, onSettle, onRestart, onReady, o
           )}
         </div>
       )}
-      {canSurrender && (
+      {(canRequestUndo || canSurrender) && (
         <div className="othello-risk-actions">
-          <button className="soft-button othello-surrender-button" disabled={Boolean(surrenderRequest)} onClick={onRequestSurrender}>
-            申请认输
-          </button>
-          <button className="soft-button danger-soft othello-surrender-button" onClick={onEscape}>
-            逃跑
-          </button>
+          {canRequestUndo && (
+            <button className="soft-button othello-surrender-button" onClick={onRequestUndo}>申请悔棋<br />本局剩 {undoLimit - myUndoCount} 次</button>
+          )}
+          {canSurrender && <button className="soft-button othello-surrender-button" disabled={Boolean(surrenderRequest)} onClick={onRequestSurrender}>申请认输</button>}
+          {canSurrender && <button className="soft-button danger-soft othello-surrender-button" onClick={onEscape}>逃跑</button>}
         </div>
       )}
       {pending && (
@@ -2468,6 +2543,7 @@ export function RoundHistoryCard({ item, onOpenImage }: { item: RoomSnapshot["ro
           {safe.gameId === "tictactoe" && <em>❌⭕ 井字棋</em>}
           {safe.gameId === "gomoku" && <em>●○ 五子棋</em>}
           {safe.gameId === "jungle" && <em>🦁 斗兽棋</em>}
+          {safe.gameId === "chess" && <em>♔ 国际象棋</em>}
           {safe.gameId === "liarsdice" && <em>🎲 大话骰</em>}
           {safe.ranked && <em>🏆 {safe.gameId === "othello" ? `${safe.stake}分/子${safe.rankMultiplier && safe.rankMultiplier > 1 ? ` ×${safe.rankMultiplier}` : ""}` : `${safe.stake}分${safe.rankMultiplier && safe.rankMultiplier > 1 ? ` ×${safe.rankMultiplier}` : ""}`}</em>}
           {safe.extremeRanked && <em>⚡ 极限</em>}
@@ -2480,7 +2556,7 @@ export function RoundHistoryCard({ item, onOpenImage }: { item: RoomSnapshot["ro
           <strong>{historySeatLabel(safe, "A")}</strong>
         </div>
         <div className="history-result">
-          <small>{safe.gameId === "othello" && safe.othelloScore ? `${safe.othelloScore.black} : ${safe.othelloScore.white}` : safe.gameId === "tictactoe" ? "3 × 3" : safe.gameId === "gomoku" ? "15 × 15" : safe.gameId === "jungle" ? "7 × 9" : "VS"}</small>
+          <small>{safe.gameId === "othello" && safe.othelloScore ? `${safe.othelloScore.black} : ${safe.othelloScore.white}` : safe.gameId === "tictactoe" ? "3 × 3" : safe.gameId === "gomoku" ? "15 × 15" : safe.gameId === "jungle" ? "7 × 9" : safe.gameId === "chess" ? "8 × 8" : "VS"}</small>
           <b>{safe.resultLabel || historyResultText(safe.result)}</b>
         </div>
         <div className="history-side">
@@ -2559,6 +2635,9 @@ export function historySeatLabel(item: RoomSnapshot["roundHistory"][number], sea
   }
   if (item.gameId === "jungle") {
     return jungleSideLabel(seat);
+  }
+  if (item.gameId === "chess") {
+    return item.chessWhiteSeat === seat ? "⚪ 白棋" : "⚫ 黑棋";
   }
   if (item.gameId === "liarsdice") {
     // 大话骰对局记录里 playerA 固定是本局赢家、playerB 固定是输家（见后端 game_liarsdice.go）。
@@ -3016,6 +3095,8 @@ export function SeatView({ seat, room, me, onSit }: { seat: SeatKey; room: RoomS
     : "随机后显示黑/白";
   const jungleTurn = room.settings.gameId === "jungle" && room.jungle?.turn === seat && room.phase === "choosing" && !room.jungle.ended;
   const jungleMarkLabel = room.settings.gameId === "jungle" ? jungleSideLabel(seat) : "";
+  const chessTurn = room.settings.gameId === "chess" && room.chess?.turn === seat && room.phase === "choosing" && !room.chess.ended;
+  const chessMarkLabel = room.settings.gameId === "chess" ? chessSideLabel(room.chess, seat) : "";
   return (
     <div className={`seat-card seat-${seat.toLowerCase()}`}>
       <div className="seat-identity">
@@ -3037,7 +3118,9 @@ export function SeatView({ seat, room, me, onSit }: { seat: SeatKey; room: RoomS
               ? gomokuTurn ? `${gomokuMarkLabel}落子中` : gomokuMarkLabel
               : room.settings.gameId === "jungle"
                 ? jungleTurn ? `${jungleMarkLabel} 走子中` : jungleMarkLabel
-                : choice ? choiceText(choice) : room.seats.A && room.seats.B ? "🤔 等待出拳" : "⏳ 等人"}
+                : room.settings.gameId === "chess"
+                  ? chessTurn ? `${chessMarkLabel} 走子中` : chessMarkLabel
+                  : choice ? choiceText(choice) : room.seats.A && room.seats.B ? "🤔 等待出拳" : "⏳ 等人"}
       </p>
       {occupant && <SeatStatsView stats={stats} />}
     </div>
@@ -3103,7 +3186,7 @@ function liarsDiceRosterTag(roomId: string, min?: number, max?: number): RoomInf
   return { key: `liarsdice-roster-${roomId}`, text: `${min}-${max}人`, style: plainInfoTagStyle };
 }
 
-/** 黑白棋/五子棋计时标签，如「计时：30秒/20分钟」；两个计时器都未启用时不显示。 */
+/** 黑白棋/五子棋/斗兽棋/国际象棋计时标签，如「计时：30秒/20分钟」；两个计时器都未启用时不显示。 */
 function gameTimerTag(roomId: string, moveSeconds?: number, gameMinutes?: number): RoomInfoTagView | null {
   if (!moveSeconds && !gameMinutes) return null;
   const parts: string[] = [];
@@ -3112,10 +3195,10 @@ function gameTimerTag(roomId: string, moveSeconds?: number, gameMinutes?: number
   return { key: `game-timer-${roomId}`, text: `计时：${parts.join("/")}`, style: plainInfoTagStyle };
 }
 
-/** 五子棋悔棋次数标签，如「禁止悔棋」「允许悔棋1次」。 */
-function gomokuUndoTag(roomId: string, undoLimit?: number): RoomInfoTagView {
+/** 棋类悔棋次数标签，如「禁止悔棋」「允许悔棋1次」。 */
+function gameUndoTag(roomId: string, gameId: RoomSettings["gameId"], undoLimit?: number): RoomInfoTagView {
   return {
-    key: `gomoku-undo-${roomId}`,
+    key: `${gameId}-undo-${roomId}`,
     text: undoLimit ? `允许悔棋${undoLimit}次` : "禁止悔棋",
     style: plainInfoTagStyle
   };
@@ -3146,13 +3229,19 @@ export function roomInfoTags(config: AppConfig, room: RoomSnapshot) {
   } else if (room.settings.gameId === "othello") {
     const t = gameTimerTag(room.id, room.settings.othelloMoveSeconds, room.settings.othelloGameMinutes);
     if (t) tags.push(t);
+    tags.push(gameUndoTag(room.id, room.settings.gameId, room.settings.othelloUndoLimit));
   } else if (room.settings.gameId === "gomoku") {
     const t = gameTimerTag(room.id, room.settings.gomokuMoveSeconds, room.settings.gomokuGameMinutes);
     if (t) tags.push(t);
-    tags.push(gomokuUndoTag(room.id, room.settings.gomokuUndoLimit));
+    tags.push(gameUndoTag(room.id, room.settings.gameId, room.settings.gomokuUndoLimit));
   } else if (room.settings.gameId === "jungle") {
     const t = gameTimerTag(room.id, room.settings.jungleMoveSeconds, room.settings.jungleGameMinutes);
     if (t) tags.push(t);
+    tags.push(gameUndoTag(room.id, room.settings.gameId, room.settings.jungleUndoLimit));
+  } else if (room.settings.gameId === "chess") {
+    const t = gameTimerTag(room.id, room.settings.chessMoveSeconds, room.settings.chessGameMinutes);
+    if (t) tags.push(t);
+    tags.push(gameUndoTag(room.id, room.settings.gameId, room.settings.chessUndoLimit));
   }
   return tags;
 }
@@ -3180,13 +3269,19 @@ export function lobbyRoomInfoTags(config: AppConfig, room: LobbySnapshot["rooms"
   } else if (room.gameId === "othello") {
     const t = gameTimerTag(room.id, room.othelloMoveSeconds, room.othelloGameMinutes);
     if (t) tags.push(t);
+    tags.push(gameUndoTag(room.id, room.gameId, room.othelloUndoLimit));
   } else if (room.gameId === "gomoku") {
     const t = gameTimerTag(room.id, room.gomokuMoveSeconds, room.gomokuGameMinutes);
     if (t) tags.push(t);
-    tags.push(gomokuUndoTag(room.id, room.gomokuUndoLimit));
+    tags.push(gameUndoTag(room.id, room.gameId, room.gomokuUndoLimit));
   } else if (room.gameId === "jungle") {
     const t = gameTimerTag(room.id, room.jungleMoveSeconds, room.jungleGameMinutes);
     if (t) tags.push(t);
+    tags.push(gameUndoTag(room.id, room.gameId, room.jungleUndoLimit));
+  } else if (room.gameId === "chess") {
+    const t = gameTimerTag(room.id, room.chessMoveSeconds, room.chessGameMinutes);
+    if (t) tags.push(t);
+    tags.push(gameUndoTag(room.id, room.gameId, room.chessUndoLimit));
   }
   tags.push({
     key: `opponent-${room.id}`,
@@ -3207,7 +3302,9 @@ export function gameInfoTag(config: AppConfig, gameId: RoomSettings["gameId"]) {
           ? roomInfoTag(config, "gameGomoku", "", "●○ ")
           : gameId === "jungle"
             ? roomInfoTag(config, "gameJungle", "", "🦁 ")
-            : roomInfoTag(config, "gameRps");
+            : gameId === "chess"
+              ? roomInfoTag(config, "gameChess", "", "♔ ")
+              : roomInfoTag(config, "gameRps");
 }
 
 export function punishmentSelectionText(config: AppConfig, settings: Pick<RoomSettings, "punishmentSource" | "punishmentTagsIncluded" | "punishmentSeriesId" | "punishmentId" | "punishmentIds">) {
@@ -3263,7 +3360,7 @@ export function phaseText(phase: RoomSnapshot["phase"], gameId?: RoomSettings["g
   if (phase === "ready") return "🪑 等待坐满";
   if (phase === "choosing") {
     if (gameId === "liarsdice") return "🎲 叫点中";
-    if (gameId === "othello" || gameId === "tictactoe" || gameId === "gomoku" || gameId === "jungle") return "♟ 对局中";
+    if (gameId === "othello" || gameId === "tictactoe" || gameId === "gomoku" || gameId === "jungle" || gameId === "chess") return "♟ 对局中";
     return "🤜 出拳中";
   }
   if (phase === "result") return "✨ 结果展示";
@@ -3311,7 +3408,7 @@ export function Leaderboard({ title, players }: { title: string; players: Public
 export type GlobalLeaderboardTab =
   | "positive" | "negative" | "historyPositive" | "historyNegative" | "extremePositive" | "extremeNegative" | "nameWar" | "giveaway"
   | "totalWins" | "onlineTime"
-  | "rps" | "othello" | "tictactoe" | "gomoku" | "liarsdice" | "jungle";
+  | "rps" | "othello" | "tictactoe" | "gomoku" | "liarsdice" | "jungle" | "chess";
 
 const GAME_LEADERBOARD_TABS: Array<{ id: GlobalLeaderboardTab; label: string; title: string }> = [
   { id: "rps", label: "猜拳", title: "锤子剪刀布胜场榜" },
@@ -3319,18 +3416,20 @@ const GAME_LEADERBOARD_TABS: Array<{ id: GlobalLeaderboardTab; label: string; ti
   { id: "tictactoe", label: "井字棋", title: "井字棋胜场榜" },
   { id: "gomoku", label: "五子棋", title: "五子棋胜场榜" },
   { id: "jungle", label: "斗兽棋", title: "斗兽棋胜场榜" },
+  { id: "chess", label: "国象", title: "国际象棋胜场榜" },
   { id: "liarsdice", label: "大话骰", title: "大话骰胜场榜" }
 ];
 
 function gameWLDOf(player: PublicPlayer, tab: GlobalLeaderboardTab) {
-  const gs = player.gameStats || { rps: {}, othello: {}, tictactoe: {}, gomoku: {}, liarsdice: {}, jungle: {} } as PublicPlayer["gameStats"];
+  const gs = player.gameStats || { rps: {}, othello: {}, tictactoe: {}, gomoku: {}, liarsdice: {}, jungle: {}, chess: {} } as PublicPlayer["gameStats"];
   const raw = tab === "rps" ? gs.rps
     : tab === "othello" ? gs.othello
       : tab === "tictactoe" ? gs.tictactoe
         : tab === "gomoku" ? gs.gomoku
           : tab === "jungle" ? gs.jungle
-            : tab === "liarsdice" ? gs.liarsdice
-              : undefined;
+            : tab === "chess" ? gs.chess
+              : tab === "liarsdice" ? gs.liarsdice
+                : undefined;
   return {
     wins: Number(raw?.wins) || 0,
     losses: Number(raw?.losses) || 0,
@@ -3673,7 +3772,7 @@ export function leaderboardPlayers(players: PublicPlayer[], tab: GlobalLeaderboa
 }
 
 export function isGameLeaderboardTab(tab: GlobalLeaderboardTab) {
-  return tab === "rps" || tab === "othello" || tab === "tictactoe" || tab === "gomoku" || tab === "jungle" || tab === "liarsdice";
+  return tab === "rps" || tab === "othello" || tab === "tictactoe" || tab === "gomoku" || tab === "jungle" || tab === "chess" || tab === "liarsdice";
 }
 
 export function LeaderboardExtra({ player, tab, now }: { player: PublicPlayer; tab: GlobalLeaderboardTab; now: number }) {
@@ -4027,7 +4126,8 @@ function resolveLobbyPlayer(players: PublicPlayer[], id: string, fallback?: Part
       tictactoe: { wins: 0, losses: 0, draws: 0 },
       gomoku: { wins: 0, losses: 0, draws: 0 },
       liarsdice: { wins: 0, losses: 0, draws: 0 },
-      jungle: { wins: 0, losses: 0, draws: 0 }
+      jungle: { wins: 0, losses: 0, draws: 0 },
+      chess: { wins: 0, losses: 0, draws: 0 }
     }
   };
 }
@@ -4707,6 +4807,7 @@ export function ProfilePanel({ config, me, theme, onThemeChange, onClose, onUpda
               ["井字棋", me.gameStats?.tictactoe],
               ["五子棋", me.gameStats?.gomoku],
               ["斗兽棋", me.gameStats?.jungle],
+              ["国际象棋", me.gameStats?.chess],
               ["大话骰", me.gameStats?.liarsdice]
             ] as const).map(([label, g]) => (
               <Stat key={label} label={label} value={`${g?.wins || 0} / ${g?.losses || 0} / ${g?.draws || 0}`} />
@@ -4849,7 +4950,7 @@ export function ProfilePanel({ config, me, theme, onThemeChange, onClose, onUpda
               <>
                 {pushStatus.state !== "active" && (
                   <button type="button" disabled={pushBusy} onClick={enableNotifications}>
-                    {pushBusy ? "订阅中…" : "启用或重新订阅这台设备"}
+                    {pushBusy ? "订阅中…" : "订阅推送通知"}
                   </button>
                 )}
                 <Toggle label="有人 @ 我" value={pushPrefs.mentionEnabled} onChange={(v) => togglePushPref("mentionEnabled", v)} />
@@ -4858,8 +4959,8 @@ export function ProfilePanel({ config, me, theme, onThemeChange, onClose, onUpda
                 <Toggle label="我的主人/宠物上线" value={pushPrefs.bondEnabled} onChange={(v) => togglePushPref("bondEnabled", v)} />
                 {pushStatus.state === "active" && (
                   <div className="profile-action-row">
-                    <button type="button" disabled={pushBusy} onClick={testNotifications}>发送测试通知</button>
-                    <button type="button" className="danger-button" disabled={pushBusy} onClick={stopNotificationsOnDevice}>停止这台设备的推送</button>
+                    <button type="button" disabled={pushBusy} onClick={testNotifications}>测试通知</button>
+                    <button type="button" className="danger-button" disabled={pushBusy} onClick={stopNotificationsOnDevice}>停止通知</button>
                   </div>
                 )}
               </>
@@ -4871,7 +4972,7 @@ export function ProfilePanel({ config, me, theme, onThemeChange, onClose, onUpda
               <small>最多同时记住 3 台设备</small>
             </div>
             <ClaimKeyPanel onError={onError} />
-            <button type="button" className="danger-button" onClick={openLogoutConfirm}>登出（清空本设备登录状态）</button>
+            <button type="button" className="danger-button" onClick={openLogoutConfirm}>登出</button>
           </div>
           <div className="profile-action-row">
             <button className="primary" disabled={(nameChanged && (cooldownMs > 0 || nameLockedByWar)) || ((nameWarChanged || nameWarAllowRenameChanged) && nameWarCooldownMs > 0) || giveawayCannotClose || extremeCannotEnable || extremeCannotClose} onClick={saveProfile}><Save size={16} /> 保存资料</button>
@@ -4906,6 +5007,7 @@ export const roomInfoTagOrder = [
   { key: "gameTicTacToe", label: "井字棋" },
   { key: "gameGomoku", label: "五子棋" },
   { key: "gameJungle", label: "斗兽棋" },
+  { key: "gameChess", label: "国际象棋" },
   { key: "gameLiarsDice", label: "大话骰" },
   { key: "phaseReady", label: "等待坐满" },
   { key: "phaseChoosing", label: "出拳中" },

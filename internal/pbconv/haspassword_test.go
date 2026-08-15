@@ -40,6 +40,9 @@ func TestLobbyHasPasswordInFrontTree(t *testing.T) {
 	if r["hasPassword"] != true {
 		t.Fatalf("hasPassword want true, got %#v", r["hasPassword"])
 	}
+	if r["players"] != float64(0) || r["spectators"] != float64(0) {
+		t.Fatalf("zero room counts must survive front-tree conversion: players=%#v spectators=%#v", r["players"], r["spectators"])
+	}
 }
 func keysOf(m map[string]any) []string {
 	ks := make([]string, 0, len(m))

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 
 	"github.com/doumiao/newRPS/internal/types"
 	"github.com/doumiao/newRPS/internal/wire"
@@ -344,12 +345,13 @@ func gameStatsToProto(g types.GameStats) *wire.GameStats {
 	gomoku := gameWLDToProto(g.Gomoku)
 	liars := gameWLDToProto(g.LiarsDice)
 	jungle := gameWLDToProto(g.Jungle)
-	if rps == nil && othello == nil && ttt == nil && gomoku == nil && liars == nil && jungle == nil {
+	chess := gameWLDToProto(g.Chess)
+	if rps == nil && othello == nil && ttt == nil && gomoku == nil && liars == nil && jungle == nil && chess == nil {
 		return nil
 	}
 	return &wire.GameStats{
 		Rps: rps, Othello: othello, Tictactoe: ttt,
-		Gomoku: gomoku, Liarsdice: liars, Jungle: jungle,
+		Gomoku: gomoku, Liarsdice: liars, Jungle: jungle, Chess: chess,
 	}
 }
 
@@ -473,7 +475,11 @@ func lobbyRoomToProto(r types.LobbyRoomInfo) (*wire.LobbyRoomInfo, error) {
 		OthelloMoveSeconds: int32(r.OthelloMoveSeconds), OthelloGameMinutes: int32(r.OthelloGameMinutes),
 		GomokuMoveSeconds: int32(r.GomokuMoveSeconds), GomokuGameMinutes: int32(r.GomokuGameMinutes),
 		GomokuUndoLimit:   int32(r.GomokuUndoLimit),
+		JungleUndoLimit:   int32(r.JungleUndoLimit),
+		ChessUndoLimit:    int32(r.ChessUndoLimit),
+		OthelloUndoLimit:  int32(r.OthelloUndoLimit),
 		JungleMoveSeconds: int32(r.JungleMoveSeconds), JungleGameMinutes: int32(r.JungleGameMinutes),
+		ChessMoveSeconds: int32(r.ChessMoveSeconds), ChessGameMinutes: int32(r.ChessGameMinutes),
 	}
 	for _, seat := range []types.SeatKey{types.SeatA, types.SeatB} {
 		vs := &wire.VersusSeat{}
@@ -625,6 +631,13 @@ func RoomToProto(snap types.RoomSnapshot) (*wire.RoomSnapshot, error) {
 		}
 		m.Jungle = j
 	}
+	if snap.Chess != nil {
+		c, err := chessToProto(snap.Chess)
+		if err != nil {
+			return nil, err
+		}
+		m.Chess = c
+	}
 	return m, nil
 }
 
@@ -770,6 +783,16 @@ func othelloToProto(s *types.OthelloState) (*wire.OthelloState, error) {
 			CreatedAt: s.SurrenderRequest.CreatedAt,
 		}
 	}
+	for k, v := range s.UndoCount {
+		m.UndoCount = append(m.UndoCount, &wire.IntPair{Key: string(k), Value: int32(v)})
+	}
+	sort.Slice(m.UndoCount, func(i, j int) bool { return m.UndoCount[i].Key < m.UndoCount[j].Key })
+	if s.UndoRequest != nil {
+		m.UndoRequest = &wire.OthelloUndoRequest{
+			FromSeat: string(s.UndoRequest.FromSeat), ToSeat: string(s.UndoRequest.ToSeat),
+			CreatedAt: s.UndoRequest.CreatedAt, ExpiresAt: s.UndoRequest.ExpiresAt,
+		}
+	}
 	return m, nil
 }
 
@@ -892,6 +915,79 @@ func jungleToProto(s *types.JungleState) (*wire.JungleState, error) {
 			FromSeat: string(s.ResignRequest.FromSeat), ToSeat: string(s.ResignRequest.ToSeat),
 			CreatedAt: s.ResignRequest.CreatedAt,
 		}
+	}
+	for k, v := range s.UndoCount {
+		m.UndoCount = append(m.UndoCount, &wire.IntPair{Key: string(k), Value: int32(v)})
+	}
+	sort.Slice(m.UndoCount, func(i, j int) bool { return m.UndoCount[i].Key < m.UndoCount[j].Key })
+	if s.UndoRequest != nil {
+		m.UndoRequest = &wire.JungleUndoRequest{
+			FromSeat: string(s.UndoRequest.FromSeat), ToSeat: string(s.UndoRequest.ToSeat),
+			CreatedAt: s.UndoRequest.CreatedAt, ExpiresAt: s.UndoRequest.ExpiresAt,
+		}
+	}
+	return m, nil
+}
+
+func chessToProto(s *types.ChessState) (*wire.ChessState, error) {
+	m := &wire.ChessState{
+		Turn: string(s.Turn), WhiteSeat: string(s.WhiteSeat), MoveCount: int32(s.MoveCount),
+		Ended: s.Ended, Winner: string(s.Winner),
+		MoveDeadlineAt: s.MoveDeadlineAt, ClockDeadlineAt: s.ClockDeadlineAt,
+		CastlingWhiteK: s.CastlingWhiteK, CastlingWhiteQ: s.CastlingWhiteQ,
+		CastlingBlackK: s.CastlingBlackK, CastlingBlackQ: s.CastlingBlackQ,
+		HalfmoveClock: int32(s.HalfmoveClock), InCheck: s.InCheck,
+	}
+	for k, v := range s.ClockRemaining {
+		m.ClockRemaining = append(m.ClockRemaining, &wire.IntPair{Key: string(k), Value: int32(v)})
+	}
+	sort.Slice(m.ClockRemaining, func(i, j int) bool { return m.ClockRemaining[i].Key < m.ClockRemaining[j].Key })
+	for _, row := range s.Board {
+		br := &wire.BoardRow{}
+		for _, cell := range row {
+			if cell == nil {
+				br.Cells = append(br.Cells, "")
+			} else {
+				br.Cells = append(br.Cells, string(*cell))
+			}
+		}
+		m.Board = append(m.Board, br)
+	}
+	for k, v := range s.RankedDelta {
+		m.RankedDelta = append(m.RankedDelta, &wire.IntPair{Key: string(k), Value: int32(v)})
+	}
+	sort.Slice(m.RankedDelta, func(i, j int) bool { return m.RankedDelta[i].Key < m.RankedDelta[j].Key })
+	if s.LastFrom != nil {
+		m.LastFrom = &wire.Pos{Row: int32(s.LastFrom.Row), Col: int32(s.LastFrom.Col)}
+	}
+	if s.LastTo != nil {
+		m.LastTo = &wire.Pos{Row: int32(s.LastTo.Row), Col: int32(s.LastTo.Col)}
+	}
+	if s.EnPassant != nil {
+		m.EnPassant = &wire.Pos{Row: int32(s.EnPassant.Row), Col: int32(s.EnPassant.Col)}
+	}
+	if s.ResignRequest != nil {
+		m.ResignRequest = &wire.ChessResignRequest{
+			FromSeat: string(s.ResignRequest.FromSeat), ToSeat: string(s.ResignRequest.ToSeat),
+			CreatedAt: s.ResignRequest.CreatedAt,
+		}
+	}
+	for k, v := range s.UndoCount {
+		m.UndoCount = append(m.UndoCount, &wire.IntPair{Key: string(k), Value: int32(v)})
+	}
+	sort.Slice(m.UndoCount, func(i, j int) bool { return m.UndoCount[i].Key < m.UndoCount[j].Key })
+	if s.UndoRequest != nil {
+		m.UndoRequest = &wire.ChessUndoRequest{
+			FromSeat: string(s.UndoRequest.FromSeat), ToSeat: string(s.UndoRequest.ToSeat),
+			CreatedAt: s.UndoRequest.CreatedAt, ExpiresAt: s.UndoRequest.ExpiresAt,
+		}
+	}
+	for _, mv := range s.LegalMoves {
+		m.LegalMoves = append(m.LegalMoves, &wire.ChessMove{
+			From:    &wire.Pos{Row: int32(mv.From.Row), Col: int32(mv.From.Col)},
+			To:      &wire.Pos{Row: int32(mv.To.Row), Col: int32(mv.To.Col)},
+			Promote: mv.Promote,
+		})
 	}
 	return m, nil
 }
@@ -1162,7 +1258,7 @@ func fillGameStatsDefaults(s any) any {
 	if sm == nil {
 		sm = map[string]any{}
 	}
-	for _, g := range []string{"rps", "othello", "tictactoe", "gomoku", "liarsdice", "jungle"} {
+	for _, g := range []string{"rps", "othello", "tictactoe", "gomoku", "liarsdice", "jungle", "chess"} {
 		sm[g] = fillGameWLDDefaults(sm[g])
 	}
 	return sm
@@ -1184,8 +1280,14 @@ func fillRoomSettingsDefaults(s any) any {
 	if _, exists := sm["gomokuUndoLimit"]; !exists {
 		sm["gomokuUndoLimit"] = float64(0)
 	}
+	// jungleUndoLimit/chessUndoLimit/othelloUndoLimit 同 gomokuUndoLimit：0=禁止悔棋。
+	for _, k := range []string{"jungleUndoLimit", "chessUndoLimit", "othelloUndoLimit"} {
+		if _, exists := sm[k]; !exists {
+			sm[k] = float64(0)
+		}
+	}
 	// 0 = 不限时；protojson 会丢掉数值 0，与前端 fillRoomSettingsDefaults 对齐。
-	for _, k := range []string{"othelloMoveSeconds", "othelloGameMinutes", "gomokuMoveSeconds", "gomokuGameMinutes", "jungleMoveSeconds", "jungleGameMinutes"} {
+	for _, k := range []string{"othelloMoveSeconds", "othelloGameMinutes", "gomokuMoveSeconds", "gomokuGameMinutes", "jungleMoveSeconds", "jungleGameMinutes", "chessMoveSeconds", "chessGameMinutes"} {
 		if _, exists := sm[k]; !exists {
 			sm[k] = float64(0)
 		}
@@ -1251,6 +1353,11 @@ func expandLobbyRoom(r any) any {
 	if !ok {
 		return r
 	}
+	// protojson EmitUnpopulated:false 会省略合法的 int32 零值。大厅状态树既用于
+	// FULL 的 hash，也用于后续 DELTA diff；若这里不补回 0，人数从 1 变为 0 时
+	// 会生成 remove /players，而浏览器最终会渲染成 undefined。
+	rm["players"] = numAny(rm["players"], 0)
+	rm["spectators"] = numAny(rm["spectators"], 0)
 	if vs, ok := rm["versus"].([]any); ok {
 		obj := map[string]any{"A": nil, "B": nil}
 		for _, item := range vs {
@@ -1366,6 +1473,7 @@ func RoomProtoToFront(pb *wire.RoomSnapshot) (map[string]any, error) {
 	if o, ok := m["othello"].(map[string]any); ok {
 		o["board"] = boardRowsToMatrix(o["board"])
 		o["rankedDelta"] = pairsToIntMap(o["rankedDelta"])
+		o["undoCount"] = pairsToIntMap(o["undoCount"])
 		o["clockRemaining"] = pairsToIntMap(o["clockRemaining"])
 		m["othello"] = o
 	}
@@ -1389,8 +1497,16 @@ func RoomProtoToFront(pb *wire.RoomSnapshot) (map[string]any, error) {
 	if j, ok := m["jungle"].(map[string]any); ok {
 		j["board"] = boardRowsToMatrix(j["board"])
 		j["rankedDelta"] = pairsToIntMap(j["rankedDelta"])
+		j["undoCount"] = pairsToIntMap(j["undoCount"])
 		j["clockRemaining"] = pairsToIntMap(j["clockRemaining"])
 		m["jungle"] = j
+	}
+	if c, ok := m["chess"].(map[string]any); ok {
+		c["board"] = boardRowsToMatrix(c["board"])
+		c["rankedDelta"] = pairsToIntMap(c["rankedDelta"])
+		c["undoCount"] = pairsToIntMap(c["undoCount"])
+		c["clockRemaining"] = pairsToIntMap(c["clockRemaining"])
+		m["chess"] = c
 	}
 	if hist, ok := m["roundHistory"].([]any); ok {
 		for i, item := range hist {
@@ -1900,6 +2016,41 @@ func NormalizeFrontTree(v any) any {
 			}
 			out["jungle"] = jungle
 		}
+		if chess, ok := out["chess"].(map[string]any); ok {
+			chess["board"] = padBoardAny(chess["board"], 8)
+			chess["moveCount"] = numAny(chess["moveCount"], 0)
+			chess["moveDeadlineAt"] = numAny(chess["moveDeadlineAt"], 0)
+			chess["clockDeadlineAt"] = numAny(chess["clockDeadlineAt"], 0)
+			chess["halfmoveClock"] = numAny(chess["halfmoveClock"], 0)
+			// protojson 会丢弃 row/col 为 0 的 key；必须与 web/src/wire.ts 对齐。
+			for _, k := range []string{"lastFrom", "lastTo", "enPassant"} {
+				if p, ok := chess[k].(map[string]any); ok {
+					p["row"] = numAny(p["row"], 0)
+					p["col"] = numAny(p["col"], 0)
+					chess[k] = p
+				}
+			}
+			if moves, ok := chess["legalMoves"].([]any); ok {
+				for i, item := range moves {
+					im, ok := item.(map[string]any)
+					if !ok {
+						continue
+					}
+					for _, k := range []string{"from", "to"} {
+						if p, ok := im[k].(map[string]any); ok {
+							p["row"] = numAny(p["row"], 0)
+							p["col"] = numAny(p["col"], 0)
+							im[k] = p
+						}
+					}
+					moves[i] = im
+				}
+				chess["legalMoves"] = moves
+			} else if chess["legalMoves"] == nil {
+				chess["legalMoves"] = []any{}
+			}
+			out["chess"] = chess
+		}
 		if ss, ok := out["serverStats"].(map[string]any); ok {
 			for _, k := range []string{
 				"startedAt", "roomBroadcasts", "lobbyBroadcasts", "disconnects", "reconnects",
@@ -2029,6 +2180,13 @@ func numAny(v any, fallback float64) float64 {
 		return float64(t)
 	case int64:
 		return float64(t)
+	case string:
+		// protojson 按规范把 int64 编成十进制字符串；棋钟 deadline、startedAt
+		// 等字段会走到这里，不能把合法时间戳误补成 0。
+		f, err := strconv.ParseFloat(t, 64)
+		if err == nil {
+			return f
+		}
 	case json.Number:
 		f, err := t.Float64()
 		if err == nil {

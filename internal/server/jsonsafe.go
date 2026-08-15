@@ -204,6 +204,9 @@ func sanitizeOthello(state *types.OthelloState) *types.OthelloState {
 	if out.RankedDelta == nil {
 		out.RankedDelta = map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}
 	}
+	if out.UndoCount == nil {
+		out.UndoCount = map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}
+	}
 	// board 内 null 格子是合法的；保证外层 8 行存在
 	if out.Board == nil {
 		out.Board = make([][]*types.OthelloCell, 8)
@@ -282,10 +285,33 @@ func sanitizeJungle(state *types.JungleState) *types.JungleState {
 	if out.RankedDelta == nil {
 		out.RankedDelta = map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}
 	}
+	if out.UndoCount == nil {
+		out.UndoCount = map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}
+	}
 	if out.Board == nil {
 		out.Board = make([][]*types.JungleCell, jungleRows)
 		for i := range out.Board {
 			out.Board[i] = make([]*types.JungleCell, jungleCols)
+		}
+	}
+	return &out
+}
+
+func sanitizeChess(state *types.ChessState) *types.ChessState {
+	if state == nil {
+		return nil
+	}
+	out := *state
+	if out.RankedDelta == nil {
+		out.RankedDelta = map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}
+	}
+	if out.UndoCount == nil {
+		out.UndoCount = map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}
+	}
+	if out.Board == nil {
+		out.Board = make([][]*types.ChessCell, 8)
+		for i := range out.Board {
+			out.Board[i] = make([]*types.ChessCell, 8)
 		}
 	}
 	return &out
@@ -322,6 +348,7 @@ func sanitizeRoomSnapshot(snap types.RoomSnapshot) types.RoomSnapshot {
 	snap.LiarsDice = sanitizeLiarsDice(snap.LiarsDice)
 	snap.Gomoku = sanitizeGomoku(snap.Gomoku)
 	snap.Jungle = sanitizeJungle(snap.Jungle)
+	snap.Chess = sanitizeChess(snap.Chess)
 	return snap
 }
 

@@ -209,6 +209,14 @@ type RoomState struct {
 	LiarsDice       *types.LiarsDiceState
 	Gomoku          *types.GomokuState
 	Jungle          *types.JungleState
+	Chess           *types.ChessState
+	// chessRepetition：局面键历史，仅服务端用于三次重复和棋，不进房间快照。
+	chessRepetition []string
+	// jungleMoves/chessUndoStack/othelloUndoStack：各游戏悔棋用的服务端私有历史
+	// （斗兽棋走子记录 / 国际象棋局面快照 / 黑白棋落子前快照+结算记录），不进房间快照。
+	jungleMoves      []jungleMoveRecord
+	chessUndoStack   []*chessUndoSnapshot
+	othelloUndoStack []*othelloUndoEntry
 	// LiarsDiceHands：私有骰子，playerId -> 点数列表；绝不进 roomSnapshot/广播，
 	// 只通过 emitToClient 单播给玩家自己（保密性来自"只发给这一个 socket"，不需要加密）。
 	LiarsDiceHands              map[string][]int
@@ -323,9 +331,10 @@ type Server struct {
 	ticTacToeGiveawayTimers map[string]*time.Timer
 	liarsDiceStartTimers    map[string]*time.Timer
 	gomokuUndoTimers        map[string]*time.Timer
-	othelloClockTimers      map[string]*time.Timer
-	gomokuClockTimers       map[string]*time.Timer
-	jungleClockTimers       map[string]*time.Timer
+	// 黑白棋/斗兽棋/国际象棋共用一张按房间索引的悔棋超时表；一个房间同一时刻只运行一种游戏。
+	turnBasedUndoTimers map[string]*time.Timer
+	// 所有双人棋类共用一张按房间索引的棋钟表；一个房间同一时刻只运行一种游戏。
+	turnBasedClockTimers map[string]*turnBasedClockTimer
 
 	// deviceCreateAttempts：按 deviceKey 记录 10 分钟内新建玩家时间戳
 	deviceCreateAttempts map[string][]int64

@@ -11,6 +11,12 @@
     "borderColor": "#ffbf75",
     "label": "极限排位"
   },
+  "gameChess": {
+    "textColor": "#4a3a1a",
+    "backgroundColor": "#f4ead4",
+    "borderColor": "#c4a46a",
+    "label": "国际象棋"
+  },
   "gameGomoku": {
     "textColor": "#3d4a29",
     "backgroundColor": "#eaf3d8",

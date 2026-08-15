@@ -411,7 +411,7 @@ export function PetBondGraphPanel({ onError }: { onError: (message: string) => v
     <>
       <AdminSectionHeader
         title="主宠关系"
-        subtitle="力导向关系图：拖动节点调整布局；点击节点头像查看详细资料，点击连线上的 × 可直接解除关系；下方搜索建立新关系不受在线限制。"
+        subtitle="拖动节点调整布局，点击头像查看详细资料，点击连线上的 × 可解除关系。"
       />
       <div className="admin-preview-card">
         <span>概况</span>

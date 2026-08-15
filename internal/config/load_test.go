@@ -20,7 +20,7 @@ func TestLoadConfigFromSplitJSON(t *testing.T) {
 		t.Fatal("punishment tags incomplete")
 	}
 	// games.json 白名单必须覆盖全部玩法 id，否则建房列表会静默丢掉条目（斗兽棋曾踩坑）。
-	wantGames := map[string]bool{"rps": true, "othello": true, "tictactoe": true, "liarsdice": true, "gomoku": true, "jungle": true}
+	wantGames := map[string]bool{"rps": true, "othello": true, "tictactoe": true, "liarsdice": true, "gomoku": true, "jungle": true, "chess": true}
 	gotGames := map[string]bool{}
 	for _, g := range cfg.Games {
 		gotGames[string(g.ID)] = true

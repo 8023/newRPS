@@ -199,7 +199,78 @@ func (s *Server) freshOthelloState(blackSeat types.SeatKey) *types.OthelloState 
 		BlackCount:       bc,
 		WhiteCount:       wc,
 		RankedDelta:      map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0},
+		UndoCount:        freshUndoCount(),
 		SettlementEvents: []string{},
+	}
+}
+
+// othelloUndoEntry：一手落子的回退材料。黑白棋每手都可能已经把排位分/白给值实时
+// 结算进玩家档案（normal/tribute 加减分、giveaway/tribute 加白给值），悔棋时除了
+// 恢复棋盘快照，还必须按 settled 里记录的实际入账值精确逆转，否则回退棋盘却留下分数。
+// 计时字段刻意不入快照（回退后由 resume 重建，避免把思考耗时一并退回去）。
+type othelloUndoEntry struct {
+	board       [][]*types.OthelloCell
+	turn        types.SeatKey
+	passCount   int
+	rankedDelta map[types.SeatKey]int
+	eventsLen   int
+	resultText  string
+	settled     *othelloUndoSettlement
+}
+
+// othelloUndoSettlement：落子结算实际造成的玩家档案变动。seat 为落子方；
+// seatDelta/opponentDelta 为两位玩家实际入账的排位分（giveaway 恒 0/0）。
+type othelloUndoSettlement struct {
+	seat                types.SeatKey
+	opponentSeat        types.SeatKey
+	seatDelta           int
+	opponentDelta       int
+	giveawayValueGained float64
+}
+
+func snapshotOthelloState(state *types.OthelloState, resultText string) *othelloUndoEntry {
+	rankedDelta := map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}
+	for k, v := range state.RankedDelta {
+		rankedDelta[k] = v
+	}
+	return &othelloUndoEntry{
+		board:       cloneOthelloBoard(state.Board),
+		turn:        state.Turn,
+		passCount:   state.PassCount,
+		rankedDelta: rankedDelta,
+		eventsLen:   len(state.SettlementEvents),
+		resultText:  resultText,
+	}
+}
+
+// recordOthelloSettlement：把本手结算的实际入账值记到栈顶条目上（栈顶恒为本手）。
+func (s *Server) recordOthelloSettlement(room *RoomState, settlement *othelloUndoSettlement) {
+	if len(room.othelloUndoStack) == 0 {
+		return
+	}
+	entry := room.othelloUndoStack[len(room.othelloUndoStack)-1]
+	entry.settled = settlement
+}
+
+// reverseOthelloSettlement：按记录精确逆转排位分与白给值入账。
+func (s *Server) reverseOthelloSettlement(room *RoomState, settlement *othelloUndoSettlement) {
+	if settlement == nil {
+		return
+	}
+	if settlement.seatDelta != 0 {
+		if p := s.humanPlayerFromSeat(room, settlement.seat); p != nil {
+			s.updateRankedPoints(p, -settlement.seatDelta)
+		}
+	}
+	if settlement.opponentDelta != 0 {
+		if p := s.humanPlayerFromSeat(room, settlement.opponentSeat); p != nil {
+			s.updateRankedPoints(p, -settlement.opponentDelta)
+		}
+	}
+	if settlement.giveawayValueGained > 0 {
+		if p := s.humanPlayerFromSeat(room, settlement.seat); p != nil {
+			s.addGiveawayValue(p, -settlement.giveawayValueGained)
+		}
 	}
 }
 
@@ -214,9 +285,11 @@ func (s *Server) resetOthelloRoom(room *RoomState) {
 	// 和 forceEndOthelloGame/applyOthelloDisconnectForfeit 一样，重置前必须先把还没定
 	// 型的白给/上贡结算 flush 掉，否则那笔待结算的排位分/回合记录会被下面的置空直接吞掉。
 	s.flushOthelloPendingSettlement(room)
+	s.clearTurnBasedUndoTimer(room.ID)
 	s.clearOthelloSettlementTimer(room.ID)
-	s.clearOthelloClockTimer(room.ID)
+	s.clearTurnBasedClockTimer(room.ID)
 	room.Othello = nil
+	room.othelloUndoStack = nil
 	s.resetTurnBasedRoom(room)
 }
 
@@ -224,106 +297,46 @@ func (s *Server) startOthelloRoom(room *RoomState) {
 	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
 		return
 	}
+	s.clearTurnBasedUndoTimer(room.ID)
 	blackSeat := randomSeat()
 	s.startTurnBasedPlaying(room)
 	room.Othello = s.freshOthelloState(blackSeat)
+	room.othelloUndoStack = nil
 	s.armOthelloTimers(room, blackSeat)
 }
 
 // ── 每子时长 / 每局时长（超时判负）──────────────────────
 
-func (s *Server) clearOthelloClockTimer(roomID string) {
-	if t := s.othelloClockTimers[roomID]; t != nil {
-		t.Stop()
-		delete(s.othelloClockTimers, roomID)
-	}
-}
-
-// freezeOthelloClock 把 seat 当前正在走动的总时长时钟冻结为静态剩余值（毫秒），供离场/换手时调用。
-func (s *Server) freezeOthelloClock(room *RoomState, seat types.SeatKey) {
-	if room.Othello == nil || room.Othello.ClockRemaining == nil {
-		return
-	}
-	if room.Othello.ClockDeadlineAt > 0 {
-		remaining := room.Othello.ClockDeadlineAt - nowMs()
-		if remaining < 0 {
-			remaining = 0
-		}
-		room.Othello.ClockRemaining[seat] = remaining
-	}
-	room.Othello.ClockDeadlineAt = 0
-}
-
 // pauseOthelloTimers：进入白给/上贡结算等待窗口时暂停两个计时器——该窗口已有自己独立的超时机制
 // （scheduleOthelloSettlement），避免和每子/每局计时器重复判负。
 func (s *Server) pauseOthelloTimers(room *RoomState, seat types.SeatKey) {
-	if room.Othello == nil {
-		return
-	}
-	s.freezeOthelloClock(room, seat)
-	room.Othello.MoveDeadlineAt = 0
-	s.clearOthelloClockTimer(room.ID)
+	s.pauseTurnBasedClock(room, seat, s.othelloClockHooks())
 }
 
-// armOthelloTimers 在真正轮到 seat 落子时重新起算每子倒计时/总时长时钟，并重排服务端超时检测。
 func (s *Server) armOthelloTimers(room *RoomState, seat types.SeatKey) {
-	if room.Othello == nil {
-		return
-	}
-	if room.Settings.OthelloMoveSeconds > 0 {
-		room.Othello.MoveDeadlineAt = nowMs() + int64(room.Settings.OthelloMoveSeconds)*1000
-	} else {
-		room.Othello.MoveDeadlineAt = 0
-	}
-	if room.Settings.OthelloGameMinutes > 0 {
-		if room.Othello.ClockRemaining == nil {
-			total := int64(room.Settings.OthelloGameMinutes) * 60_000
-			room.Othello.ClockRemaining = map[types.SeatKey]int64{types.SeatA: total, types.SeatB: total}
-		}
-		room.Othello.ClockDeadlineAt = nowMs() + room.Othello.ClockRemaining[seat]
-	} else {
-		room.Othello.ClockDeadlineAt = 0
-	}
-	s.scheduleOthelloClockTimer(room)
+	s.armTurnBasedClock(room, seat, s.othelloClockHooks())
 }
 
-func (s *Server) scheduleOthelloClockTimer(room *RoomState) {
-	s.clearOthelloClockTimer(room.ID)
-	if room.Othello == nil || room.Othello.Ended {
-		return
+func (s *Server) othelloClockHooks() turnBasedClockHooks {
+	return turnBasedClockHooks{
+		state: func(room *RoomState) (turnBasedClockState, bool) {
+			if room.Othello == nil {
+				return turnBasedClockState{}, false
+			}
+			return turnBasedClockState{
+				turn: room.Othello.Turn, ended: room.Othello.Ended,
+				blocked:        room.Othello.PendingSettlement != nil || room.Othello.UndoRequest != nil,
+				moveDeadlineAt: &room.Othello.MoveDeadlineAt, clockDeadlineAt: &room.Othello.ClockDeadlineAt,
+				clockRemaining: &room.Othello.ClockRemaining,
+			}, true
+		},
+		settings: func(room *RoomState) (int, int) {
+			return room.Settings.OthelloMoveSeconds, room.Settings.OthelloGameMinutes
+		},
+		onTimeout: func(room *RoomState, seat types.SeatKey) {
+			s.forfeitOthelloTimeout(room, seat)
+		},
 	}
-	deadline := earliestPositiveDeadline(room.Othello.MoveDeadlineAt, room.Othello.ClockDeadlineAt)
-	if deadline == 0 {
-		return
-	}
-	delay := deadline - nowMs()
-	if delay < 0 {
-		delay = 0
-	}
-	seat := room.Othello.Turn
-	roomID := room.ID
-	timer := timeAfterFunc(time.Duration(delay)*time.Millisecond, func() {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		delete(s.othelloClockTimers, roomID)
-		current := s.rooms[roomID]
-		if current == nil || current.Othello == nil || current.Othello.Ended {
-			return
-		}
-		if current.Othello.Turn != seat || current.Othello.PendingSettlement != nil {
-			return
-		}
-		now := nowMs()
-		moveExpired := current.Othello.MoveDeadlineAt > 0 && now >= current.Othello.MoveDeadlineAt
-		clockExpired := current.Othello.ClockDeadlineAt > 0 && now >= current.Othello.ClockDeadlineAt
-		if !moveExpired && !clockExpired {
-			s.scheduleOthelloClockTimer(current)
-			return
-		}
-		s.forfeitOthelloTimeout(current, seat)
-		s.broadcastRoom(current.ID, true)
-	})
-	s.othelloClockTimers[room.ID] = timer
 }
 
 func (s *Server) forfeitOthelloTimeout(room *RoomState, loserSeat types.SeatKey) {
@@ -437,19 +450,28 @@ func (s *Server) settleOthelloPendingMoveClean(room *RoomState, mode, reason str
 		rankedDelta[pending.Seat] += wD
 		rankedDelta[pending.OpponentSeat] += lD
 		resultText = fmt.Sprintf("%s 本手正常结算：%s", occupantName(room.Seats[pending.Seat]), formatSigned(wD))
+		s.recordOthelloSettlement(room, &othelloUndoSettlement{seat: pending.Seat, opponentSeat: pending.OpponentSeat, seatDelta: wD, opponentDelta: lD})
 	case "giveaway":
+		giveawayValueGained := 0.0
 		if player != nil {
+			before := ptrFloat(player.GiveawayValue)
 			s.addGiveawayValue(player, float64(pending.Flips)*0.1)
+			giveawayValueGained = ptrFloat(player.GiveawayValue) - before
 		}
 		resultText = fmt.Sprintf("%s 本手白给，%d 子不结算排位分", occupantName(room.Seats[pending.Seat]), pending.Flips)
+		s.recordOthelloSettlement(room, &othelloUndoSettlement{seat: pending.Seat, opponentSeat: pending.OpponentSeat, giveawayValueGained: giveawayValueGained})
 	default: // tribute
 		wD, lD := s.applyRankedStake(opponent, player, pending.Stake)
 		rankedDelta[pending.OpponentSeat] += wD
 		rankedDelta[pending.Seat] += lD
+		giveawayValueGained := 0.0
 		if player != nil {
+			before := ptrFloat(player.GiveawayValue)
 			s.addGiveawayValue(player, float64(pending.Flips)*0.2)
+			giveawayValueGained = ptrFloat(player.GiveawayValue) - before
 		}
 		resultText = fmt.Sprintf("%s 本手上贡，%s 获得 %s", occupantName(room.Seats[pending.Seat]), occupantName(room.Seats[pending.OpponentSeat]), formatSigned(wD))
+		s.recordOthelloSettlement(room, &othelloUndoSettlement{seat: pending.Seat, opponentSeat: pending.OpponentSeat, seatDelta: lD, opponentDelta: wD, giveawayValueGained: giveawayValueGained})
 	}
 	if reason == "timeout" && finalMode == "normal" {
 		resultText += "（10 秒未选择，自动不白给）"
@@ -610,6 +632,9 @@ func (s *Server) applyOthelloMove(room *RoomState, seat types.SeatKey, row, col 
 	if room.Othello.PendingSettlement != nil {
 		return false, "上一手还在等待白给/上贡结算"
 	}
+	if room.Othello.UndoRequest != nil {
+		return false, "悔棋请求处理完成前不能落子"
+	}
 	if room.Othello.Turn != seat {
 		return false, "还没轮到你落子"
 	}
@@ -619,6 +644,7 @@ func (s *Server) applyOthelloMove(room *RoomState, seat types.SeatKey, row, col 
 		return false, "这个位置不能落子"
 	}
 	s.pauseOthelloTimers(room, seat)
+	room.othelloUndoStack = append(room.othelloUndoStack, snapshotOthelloState(room.Othello, room.ResultText))
 	board := cloneOthelloBoard(room.Othello.Board)
 	c := color
 	board[row][col] = &c
@@ -692,6 +718,7 @@ func (s *Server) applyOthelloMove(room *RoomState, seat types.SeatKey, row, col 
 		wD, lD := s.applyRankedStake(player, opponent, liveStake)
 		rankedDelta[seat] += wD
 		rankedDelta[opponentSeat] += lD
+		s.recordOthelloSettlement(room, &othelloUndoSettlement{seat: seat, opponentSeat: opponentSeat, seatDelta: wD, opponentDelta: lD})
 	}
 	if player != nil {
 		s.refreshPlayerSnapshots(player)
@@ -728,8 +755,9 @@ func (s *Server) finishOthelloGame(room *RoomState) {
 	if room.Othello == nil {
 		return
 	}
+	s.clearTurnBasedUndoTimer(room.ID)
 	s.clearOthelloSettlementTimer(room.ID)
-	s.clearOthelloClockTimer(room.ID)
+	s.clearTurnBasedClockTimer(room.ID)
 	blackCount, whiteCount := othelloCounts(room.Othello.Board)
 	blackSeat := room.Othello.BlackSeat
 	whiteSeat := oppositeSeat(blackSeat)
@@ -746,6 +774,8 @@ func (s *Server) finishOthelloGame(room *RoomState) {
 	room.Othello.Ended = true
 	room.Othello.Winner = result
 	room.Othello.LegalMoves = []types.Pos{}
+	room.Othello.SurrenderRequest = nil
+	room.Othello.UndoRequest = nil
 	room.Phase = types.PhaseResult
 	room.Status = "playing"
 	if result == types.ResultDraw {
@@ -801,8 +831,9 @@ func (s *Server) forceEndOthelloGame(room *RoomState, result types.RoundResult, 
 	if room.Othello == nil || room.Othello.Ended {
 		return false, "当前黑白棋对局已经结束"
 	}
+	s.clearTurnBasedUndoTimer(room.ID)
 	s.clearOthelloSettlementTimer(room.ID)
-	s.clearOthelloClockTimer(room.ID)
+	s.clearTurnBasedClockTimer(room.ID)
 	blackCount, whiteCount := othelloCounts(room.Othello.Board)
 	punishedPlayers := s.punishmentPlayersForResult(room, result)
 	punishedNames := make([]string, len(punishedPlayers))
@@ -818,6 +849,7 @@ func (s *Server) forceEndOthelloGame(room *RoomState, result types.RoundResult, 
 	room.Othello.Winner = result
 	room.Othello.LegalMoves = []types.Pos{}
 	room.Othello.SurrenderRequest = nil
+	room.Othello.UndoRequest = nil
 	room.Phase = types.PhaseResult
 	room.Status = "playing"
 	blackSeat := room.Othello.BlackSeat
@@ -908,7 +940,8 @@ func (s *Server) applyOthelloDisconnectForfeit(room *RoomState, forfeit Disconne
 	if room.Phase == types.PhaseResult || (room.Othello != nil && room.Othello.Ended) {
 		return true
 	}
-	s.clearOthelloClockTimer(room.ID)
+	s.clearTurnBasedUndoTimer(room.ID)
+	s.clearTurnBasedClockTimer(room.ID)
 	winner := s.players[forfeit.WinnerID]
 	loser := s.players[forfeit.LoserID]
 	blackCount, whiteCount := 0, 0
@@ -952,6 +985,7 @@ func (s *Server) applyOthelloDisconnectForfeit(room *RoomState, forfeit Disconne
 		room.Othello.Winner = types.RoundResult(forfeit.WinnerSeat)
 		room.Othello.LegalMoves = []types.Pos{}
 		room.Othello.SurrenderRequest = nil
+		room.Othello.UndoRequest = nil
 	}
 	room.ResultText = fmt.Sprintf("%s 断线超时判负，%s胜利（黑 %d，白 %d；实时结算：%s%s%s）%s%s",
 		forfeit.LoserName, forfeit.WinnerName, blackCount, whiteCount,
@@ -999,4 +1033,108 @@ func (s *Server) applyOthelloDisconnectForfeit(room *RoomState, forfeit Disconne
 	s.roomNotice(room, room.ResultText)
 	s.setupPunishmentOrNext(room, types.RoundResult(forfeit.WinnerSeat))
 	return true
+}
+
+// requestOthelloUndo：只能由「当前轮到落子的一方」在无待结算窗口时发起，回退最近 2 手
+// 落子（含各自已入账的排位分/白给值），次数上限由 room.Settings.OthelloUndoLimit 决定，
+// 30 秒无响应自动拒绝。
+func (s *Server) requestOthelloUndo(room *RoomState, seat types.SeatKey) (bool, string) {
+	if room.Othello == nil || room.Phase != types.PhaseChoosing || room.Othello.Ended {
+		return false, "当前不能悔棋"
+	}
+	if room.Othello.PendingSettlement != nil {
+		return false, "本手白给/上贡结算完成前不能悔棋"
+	}
+	if room.Othello.Turn != seat {
+		return false, "只能在轮到你落子时申请悔棋"
+	}
+	if len(room.othelloUndoStack) < 2 {
+		return false, "棋局刚开始，还不能悔棋"
+	}
+	if room.Othello.UndoRequest != nil {
+		return false, "当前已有悔棋请求，请先处理"
+	}
+	if room.Othello.SurrenderRequest != nil {
+		return false, "认输请求处理完成前不能悔棋"
+	}
+	if room.Othello.UndoCount[seat] >= room.Settings.OthelloUndoLimit {
+		return false, "你本局的悔棋次数已经用完"
+	}
+	toSeat := oppositeSeat(seat)
+	if room.Seats[toSeat] == nil {
+		return false, "对手不在战斗席，不能悔棋"
+	}
+	startedAt := nowMs()
+	room.Othello.UndoRequest = &types.OthelloUndoRequest{
+		FromSeat: seat, ToSeat: toSeat, CreatedAt: startedAt, ExpiresAt: startedAt + undoRequestWindow.Milliseconds(),
+	}
+	s.pauseOthelloTimers(room, seat)
+	s.scheduleOthelloUndoTimeout(room)
+	return true, ""
+}
+
+func (s *Server) scheduleOthelloUndoTimeout(room *RoomState) {
+	request := room.Othello.UndoRequest
+	if request == nil {
+		return
+	}
+	roomID := room.ID
+	createdAt := request.CreatedAt
+	s.scheduleTurnBasedUndoTimeout(roomID, createdAt,
+		func(current *RoomState) int64 {
+			if current.Othello == nil || current.Othello.UndoRequest == nil {
+				return 0
+			}
+			return current.Othello.UndoRequest.CreatedAt
+		},
+		func(current *RoomState) {
+			current.Othello.UndoRequest = nil
+			s.resumeTurnBasedClock(current, s.othelloClockHooks())
+			s.roomNotice(current, fmt.Sprintf("%s 未在 30 秒内回应悔棋请求，已自动拒绝。", occupantName(current.Seats[request.ToSeat])))
+		})
+}
+
+// respondOthelloUndo：accept 时弹出最近 2 手的快照并恢复较早的一份；两手的排位分/白给值
+// 按结算记录精确逆转。落子权恢复为快照局面的行棋方（存在自动跳过时可能与请求方不同）。
+func (s *Server) respondOthelloUndo(room *RoomState, seat types.SeatKey, accept bool) (bool, string) {
+	if room.Othello == nil || room.Othello.UndoRequest == nil {
+		return false, "当前没有悔棋请求"
+	}
+	request := room.Othello.UndoRequest
+	if request.ToSeat != seat {
+		return false, "这个悔棋请求不是发给你的"
+	}
+	s.clearTurnBasedUndoTimer(room.ID)
+	fromSeat := request.FromSeat
+	room.Othello.UndoRequest = nil
+	if !accept {
+		s.resumeTurnBasedClock(room, s.othelloClockHooks())
+		s.roomNotice(room, occupantName(room.Seats[seat])+" 拒绝悔棋，对局继续。")
+		return true, ""
+	}
+	if len(room.othelloUndoStack) < 2 {
+		s.resumeTurnBasedClock(room, s.othelloClockHooks())
+		return false, "当前棋局状态不支持悔棋"
+	}
+	restore := room.othelloUndoStack[len(room.othelloUndoStack)-2]
+	entries := room.othelloUndoStack[:len(room.othelloUndoStack)-2]
+	for _, entry := range room.othelloUndoStack[len(entries):] {
+		s.reverseOthelloSettlement(room, entry.settled)
+	}
+	state := room.Othello
+	state.Board = restore.board
+	state.Turn = restore.turn
+	state.PassCount = restore.passCount
+	state.RankedDelta = restore.rankedDelta
+	room.ResultText = restore.resultText
+	if restore.eventsLen <= len(state.SettlementEvents) {
+		state.SettlementEvents = state.SettlementEvents[:restore.eventsLen]
+	}
+	state.LegalMoves = othelloLegalMoves(state.Board, othelloColorForSeat(state, state.Turn))
+	state.BlackCount, state.WhiteCount = othelloCounts(state.Board)
+	room.othelloUndoStack = entries
+	state.UndoCount[fromSeat]++
+	s.resumeTurnBasedClock(room, s.othelloClockHooks())
+	s.roomNotice(room, occupantName(room.Seats[seat])+" 同意悔棋，棋局回退 2 手。")
+	return true, ""
 }

@@ -58,6 +58,26 @@ func TestLobbyPlayerHandMappedFields(t *testing.T) {
 	}
 }
 
+func TestLobbyRoomChessTimersToProto(t *testing.T) {
+	pb, err := lobbyRoomToProto(types.LobbyRoomInfo{
+		ID: "r1", GameID: types.GameChess, Name: "国象",
+		Versus:            map[types.SeatKey]any{types.SeatA: nil, types.SeatB: nil},
+		Tags:              []string{},
+		ChessMoveSeconds:  30,
+		ChessGameMinutes:  15,
+		JungleMoveSeconds: 45,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pb.ChessMoveSeconds != 30 || pb.ChessGameMinutes != 15 {
+		t.Fatalf("chess timers: move=%d game=%d", pb.ChessMoveSeconds, pb.ChessGameMinutes)
+	}
+	if pb.JungleMoveSeconds != 45 {
+		t.Fatalf("jungle timer should still map, got %d", pb.JungleMoveSeconds)
+	}
+}
+
 func boolPtr(v bool) *bool { return &v }
 func TestLobbyPlayerGiveawayVoteFieldsRoundTrip(t *testing.T) {
 	started := int64(1_700_000_000_000)

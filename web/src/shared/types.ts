@@ -15,7 +15,7 @@ export type Move = "rock" | "scissors" | "paper" | "giveaway" | "forfeit" | "noM
 export type RoundResult = "A" | "B" | "draw" | "doubleLoss";
 export type GamePhase = "waiting" | "ready" | "choosing" | "result" | "punishment";
 export type SeatKey = "A" | "B";
-export type GameId = "rps" | "othello" | "tictactoe" | "liarsdice" | "gomoku" | "jungle";
+export type GameId = "rps" | "othello" | "tictactoe" | "liarsdice" | "gomoku" | "jungle" | "chess";
 export type RankStake = 1 | 2 | 5 | 10 | 20;
 export type OthelloCell = "black" | "white" | null;
 export type TicTacToeCell = "X" | "O" | null;
@@ -62,6 +62,13 @@ export type OthelloState = {
     toSeat: SeatKey;
     createdAt: number;
   };
+  undoCount?: Record<SeatKey, number>;
+  undoRequest?: {
+    fromSeat: SeatKey;
+    toSeat: SeatKey;
+    createdAt: number;
+    expiresAt: number;
+  };
   // 计时：0/缺省表示对应计时器未启用或当前无人在计时（如白给/上贡结算等待窗口期间）。
   // clockRemaining 是双方总时长剩余（毫秒）：非当前落子方为冻结静态值，当前落子方需用
   // clockDeadlineAt 在前端本地倒算实时剩余，不依赖服务器逐秒推送。
@@ -103,6 +110,48 @@ export type GomokuState = {
 /** 斗兽棋棋子编码："A:rat" / "B:elephant" */
 export type JungleCell = string | null;
 export type JungleAnimal = "rat" | "cat" | "dog" | "wolf" | "leopard" | "tiger" | "lion" | "elephant";
+export type ChessColor = "white" | "black";
+export type ChessPiece = "king" | "queen" | "rook" | "bishop" | "knight" | "pawn";
+export type ChessCell = string | null;
+export type ChessMove = {
+  from: { row: number; col: number };
+  to: { row: number; col: number };
+  promote?: string;
+};
+export type ChessState = {
+  board: ChessCell[][];
+  turn: SeatKey;
+  whiteSeat: SeatKey;
+  moveCount: number;
+  lastFrom?: { row: number; col: number } | null;
+  lastTo?: { row: number; col: number } | null;
+  rankedDelta?: Record<SeatKey, number>;
+  resignRequest?: {
+    fromSeat: SeatKey;
+    toSeat: SeatKey;
+    createdAt: number;
+  };
+  undoCount?: Record<SeatKey, number>;
+  undoRequest?: {
+    fromSeat: SeatKey;
+    toSeat: SeatKey;
+    createdAt: number;
+    expiresAt: number;
+  };
+  ended?: boolean;
+  winner?: RoundResult;
+  moveDeadlineAt?: number;
+  clockDeadlineAt?: number;
+  clockRemaining?: Record<SeatKey, number>;
+  castlingWhiteK?: boolean;
+  castlingWhiteQ?: boolean;
+  castlingBlackK?: boolean;
+  castlingBlackQ?: boolean;
+  enPassant?: { row: number; col: number } | null;
+  halfmoveClock?: number;
+  inCheck?: boolean;
+  legalMoves: ChessMove[];
+};
 export type JungleState = {
   board: JungleCell[][];
   turn: SeatKey;
@@ -114,6 +163,13 @@ export type JungleState = {
     fromSeat: SeatKey;
     toSeat: SeatKey;
     createdAt: number;
+  };
+  undoCount?: Record<SeatKey, number>;
+  undoRequest?: {
+    fromSeat: SeatKey;
+    toSeat: SeatKey;
+    createdAt: number;
+    expiresAt: number;
   };
   ended?: boolean;
   winner?: RoundResult;
@@ -222,6 +278,7 @@ export type GameStats = {
   gomoku: GameWLD;
   liarsdice: GameWLD;
   jungle: GameWLD;
+  chess: GameWLD;
 };
 
 export type PublicPlayer = {
@@ -449,7 +506,11 @@ export type RoomSettings = {
   tictactoeBoardTheme?: "paper" | "mint" | "midnight" | "candy" | "arcade";
   gomokuBoardTheme?: "classic" | "pastel" | "midnight" | "wood" | "neon";
   jungleBoardTheme?: "forest" | "bamboo" | "river" | "dusk" | "night";
+  chessBoardTheme?: "classic" | "wood" | "midnight" | "marble" | "green";
   gomokuUndoLimit?: 0 | 1 | 3 | 10;
+  jungleUndoLimit?: 0 | 1 | 3 | 10;
+  chessUndoLimit?: 0 | 1 | 3 | 10;
+  othelloUndoLimit?: 0 | 1 | 3 | 10;
   liarsDiceMinPlayers?: number;
   liarsDiceMaxPlayers?: number;
   // 计时设置：0/缺省表示不限时
@@ -459,6 +520,8 @@ export type RoomSettings = {
   gomokuGameMinutes?: number;
   jungleMoveSeconds?: number;
   jungleGameMinutes?: number;
+  chessMoveSeconds?: number;
+  chessGameMinutes?: number;
 };
 
 export type LiarsDiceBid = {
@@ -525,6 +588,7 @@ export type RoundHistoryItem = {
   tictactoeLine?: Array<{ row: number; col: number }>;
   gomokuBlackSeat?: SeatKey;
   gomokuLine?: Array<{ row: number; col: number }>;
+  chessWhiteSeat?: SeatKey;
   liarsDiceWinnerId?: string;
   liarsDiceLoserId?: string;
   liarsDiceBidCount?: number;
@@ -583,6 +647,7 @@ export type RoomSnapshot = {
   liarsDice?: LiarsDiceState;
   gomoku?: GomokuState;
   jungle?: JungleState;
+  chess?: ChessState;
   resultText?: string;
   punishedPlayerIds: string[];
   proofs: PunishmentProof[];
@@ -649,8 +714,13 @@ export type LobbySnapshot = {
     gomokuMoveSeconds?: number;
     gomokuGameMinutes?: number;
     gomokuUndoLimit?: number;
+    jungleUndoLimit?: number;
+    chessUndoLimit?: number;
+    othelloUndoLimit?: number;
     jungleMoveSeconds?: number;
     jungleGameMinutes?: number;
+    chessMoveSeconds?: number;
+    chessGameMinutes?: number;
   }>;
   normalLeaderboard: PublicPlayer[];
   rankedLeaderboard: PublicPlayer[];

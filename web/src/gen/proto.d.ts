@@ -1572,6 +1572,9 @@ export namespace game {
         /** GameStats jungle. */
         jungle?: (game.GameWLD.$Properties|null);
 
+        /** GameStats chess. */
+        chess?: (game.GameWLD.$Properties|null);
+
         /**
          * Creates a new GameStats instance using the specified properties.
          * @param [properties] Properties to set
@@ -1673,6 +1676,9 @@ export namespace game {
 
             /** GameStats jungle */
             jungle?: (game.GameWLD.$Properties|null);
+
+            /** GameStats chess */
+            chess?: (game.GameWLD.$Properties|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -3059,6 +3065,24 @@ export namespace game {
         /** RoomSettings punishmentSeriesId. */
         punishmentSeriesId: string;
 
+        /** RoomSettings chessBoardTheme. */
+        chessBoardTheme: string;
+
+        /** RoomSettings chessMoveSeconds. */
+        chessMoveSeconds: number;
+
+        /** RoomSettings chessGameMinutes. */
+        chessGameMinutes: number;
+
+        /** RoomSettings jungleUndoLimit. */
+        jungleUndoLimit: number;
+
+        /** RoomSettings chessUndoLimit. */
+        chessUndoLimit: number;
+
+        /** RoomSettings othelloUndoLimit. */
+        othelloUndoLimit: number;
+
         /**
          * Creates a new RoomSettings instance using the specified properties.
          * @param [properties] Properties to set
@@ -3244,6 +3268,24 @@ export namespace game {
 
             /** RoomSettings punishmentSeriesId */
             punishmentSeriesId?: (string|null);
+
+            /** RoomSettings chessBoardTheme */
+            chessBoardTheme?: (string|null);
+
+            /** RoomSettings chessMoveSeconds */
+            chessMoveSeconds?: (number|null);
+
+            /** RoomSettings chessGameMinutes */
+            chessGameMinutes?: (number|null);
+
+            /** RoomSettings jungleUndoLimit */
+            jungleUndoLimit?: (number|null);
+
+            /** RoomSettings chessUndoLimit */
+            chessUndoLimit?: (number|null);
+
+            /** RoomSettings othelloUndoLimit */
+            othelloUndoLimit?: (number|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -3860,6 +3902,141 @@ export namespace game {
     }
 
     /**
+     * Properties of a JungleUndoRequest.
+     * @deprecated Use game.JungleUndoRequest.$Properties instead.
+     */
+    interface IJungleUndoRequest extends game.JungleUndoRequest.$Properties {
+    }
+
+    /** Represents a JungleUndoRequest. */
+    class JungleUndoRequest {
+
+        /**
+         * Constructs a new JungleUndoRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: game.JungleUndoRequest.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** JungleUndoRequest fromSeat. */
+        fromSeat: string;
+
+        /** JungleUndoRequest toSeat. */
+        toSeat: string;
+
+        /** JungleUndoRequest createdAt. */
+        createdAt: (number|Long);
+
+        /** JungleUndoRequest expiresAt. */
+        expiresAt: (number|Long);
+
+        /**
+         * Creates a new JungleUndoRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns JungleUndoRequest instance
+         */
+        static create(properties: game.JungleUndoRequest.$Shape): game.JungleUndoRequest & game.JungleUndoRequest.$Shape;
+        static create(properties?: game.JungleUndoRequest.$Properties): game.JungleUndoRequest;
+
+        /**
+         * Encodes the specified JungleUndoRequest message. Does not implicitly {@link game.JungleUndoRequest.verify|verify} messages.
+         * @param message JungleUndoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: game.JungleUndoRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified JungleUndoRequest message, length delimited. Does not implicitly {@link game.JungleUndoRequest.verify|verify} messages.
+         * @param message JungleUndoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: game.JungleUndoRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a JungleUndoRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {game.JungleUndoRequest & game.JungleUndoRequest.$Shape} JungleUndoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.JungleUndoRequest & game.JungleUndoRequest.$Shape;
+
+        /**
+         * Decodes a JungleUndoRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {game.JungleUndoRequest & game.JungleUndoRequest.$Shape} JungleUndoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.JungleUndoRequest & game.JungleUndoRequest.$Shape;
+
+        /**
+         * Verifies a JungleUndoRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a JungleUndoRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns JungleUndoRequest
+         */
+        static fromObject(object: { [k: string]: any }): game.JungleUndoRequest;
+
+        /**
+         * Creates a plain object from a JungleUndoRequest message. Also converts values to other types if specified.
+         * @param message JungleUndoRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: game.JungleUndoRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this JungleUndoRequest to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for JungleUndoRequest
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace JungleUndoRequest {
+
+        /** Properties of a JungleUndoRequest. */
+        interface $Properties {
+
+            /** JungleUndoRequest fromSeat */
+            fromSeat?: (string|null);
+
+            /** JungleUndoRequest toSeat */
+            toSeat?: (string|null);
+
+            /** JungleUndoRequest createdAt */
+            createdAt?: (number|Long|null);
+
+            /** JungleUndoRequest expiresAt */
+            expiresAt?: (number|Long|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a JungleUndoRequest. */
+        type $Shape = game.JungleUndoRequest.$Properties;
+    }
+
+    /**
      * Properties of a JungleState.
      * @deprecated Use game.JungleState.$Properties instead.
      */
@@ -3913,6 +4090,12 @@ export namespace game {
 
         /** JungleState clockRemaining. */
         clockRemaining: game.IntPair.$Properties[];
+
+        /** JungleState undoCount. */
+        undoCount: game.IntPair.$Properties[];
+
+        /** JungleState undoRequest. */
+        undoRequest?: (game.JungleUndoRequest.$Properties|null);
 
         /**
          * Creates a new JungleState instance using the specified properties.
@@ -4034,12 +4217,660 @@ export namespace game {
             /** JungleState clockRemaining */
             clockRemaining?: (game.IntPair.$Properties[]|null);
 
+            /** JungleState undoCount */
+            undoCount?: (game.IntPair.$Properties[]|null);
+
+            /** JungleState undoRequest */
+            undoRequest?: (game.JungleUndoRequest.$Properties|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
 
         /** Shape of a JungleState. */
         type $Shape = game.JungleState.$Properties;
+    }
+
+    /**
+     * Properties of a ChessResignRequest.
+     * @deprecated Use game.ChessResignRequest.$Properties instead.
+     */
+    interface IChessResignRequest extends game.ChessResignRequest.$Properties {
+    }
+
+    /** Represents a ChessResignRequest. */
+    class ChessResignRequest {
+
+        /**
+         * Constructs a new ChessResignRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: game.ChessResignRequest.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** ChessResignRequest fromSeat. */
+        fromSeat: string;
+
+        /** ChessResignRequest toSeat. */
+        toSeat: string;
+
+        /** ChessResignRequest createdAt. */
+        createdAt: (number|Long);
+
+        /**
+         * Creates a new ChessResignRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ChessResignRequest instance
+         */
+        static create(properties: game.ChessResignRequest.$Shape): game.ChessResignRequest & game.ChessResignRequest.$Shape;
+        static create(properties?: game.ChessResignRequest.$Properties): game.ChessResignRequest;
+
+        /**
+         * Encodes the specified ChessResignRequest message. Does not implicitly {@link game.ChessResignRequest.verify|verify} messages.
+         * @param message ChessResignRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: game.ChessResignRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ChessResignRequest message, length delimited. Does not implicitly {@link game.ChessResignRequest.verify|verify} messages.
+         * @param message ChessResignRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: game.ChessResignRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ChessResignRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {game.ChessResignRequest & game.ChessResignRequest.$Shape} ChessResignRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.ChessResignRequest & game.ChessResignRequest.$Shape;
+
+        /**
+         * Decodes a ChessResignRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {game.ChessResignRequest & game.ChessResignRequest.$Shape} ChessResignRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.ChessResignRequest & game.ChessResignRequest.$Shape;
+
+        /**
+         * Verifies a ChessResignRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ChessResignRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ChessResignRequest
+         */
+        static fromObject(object: { [k: string]: any }): game.ChessResignRequest;
+
+        /**
+         * Creates a plain object from a ChessResignRequest message. Also converts values to other types if specified.
+         * @param message ChessResignRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: game.ChessResignRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ChessResignRequest to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for ChessResignRequest
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace ChessResignRequest {
+
+        /** Properties of a ChessResignRequest. */
+        interface $Properties {
+
+            /** ChessResignRequest fromSeat */
+            fromSeat?: (string|null);
+
+            /** ChessResignRequest toSeat */
+            toSeat?: (string|null);
+
+            /** ChessResignRequest createdAt */
+            createdAt?: (number|Long|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a ChessResignRequest. */
+        type $Shape = game.ChessResignRequest.$Properties;
+    }
+
+    /**
+     * Properties of a ChessUndoRequest.
+     * @deprecated Use game.ChessUndoRequest.$Properties instead.
+     */
+    interface IChessUndoRequest extends game.ChessUndoRequest.$Properties {
+    }
+
+    /** Represents a ChessUndoRequest. */
+    class ChessUndoRequest {
+
+        /**
+         * Constructs a new ChessUndoRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: game.ChessUndoRequest.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** ChessUndoRequest fromSeat. */
+        fromSeat: string;
+
+        /** ChessUndoRequest toSeat. */
+        toSeat: string;
+
+        /** ChessUndoRequest createdAt. */
+        createdAt: (number|Long);
+
+        /** ChessUndoRequest expiresAt. */
+        expiresAt: (number|Long);
+
+        /**
+         * Creates a new ChessUndoRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ChessUndoRequest instance
+         */
+        static create(properties: game.ChessUndoRequest.$Shape): game.ChessUndoRequest & game.ChessUndoRequest.$Shape;
+        static create(properties?: game.ChessUndoRequest.$Properties): game.ChessUndoRequest;
+
+        /**
+         * Encodes the specified ChessUndoRequest message. Does not implicitly {@link game.ChessUndoRequest.verify|verify} messages.
+         * @param message ChessUndoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: game.ChessUndoRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ChessUndoRequest message, length delimited. Does not implicitly {@link game.ChessUndoRequest.verify|verify} messages.
+         * @param message ChessUndoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: game.ChessUndoRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ChessUndoRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {game.ChessUndoRequest & game.ChessUndoRequest.$Shape} ChessUndoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.ChessUndoRequest & game.ChessUndoRequest.$Shape;
+
+        /**
+         * Decodes a ChessUndoRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {game.ChessUndoRequest & game.ChessUndoRequest.$Shape} ChessUndoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.ChessUndoRequest & game.ChessUndoRequest.$Shape;
+
+        /**
+         * Verifies a ChessUndoRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ChessUndoRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ChessUndoRequest
+         */
+        static fromObject(object: { [k: string]: any }): game.ChessUndoRequest;
+
+        /**
+         * Creates a plain object from a ChessUndoRequest message. Also converts values to other types if specified.
+         * @param message ChessUndoRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: game.ChessUndoRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ChessUndoRequest to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for ChessUndoRequest
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace ChessUndoRequest {
+
+        /** Properties of a ChessUndoRequest. */
+        interface $Properties {
+
+            /** ChessUndoRequest fromSeat */
+            fromSeat?: (string|null);
+
+            /** ChessUndoRequest toSeat */
+            toSeat?: (string|null);
+
+            /** ChessUndoRequest createdAt */
+            createdAt?: (number|Long|null);
+
+            /** ChessUndoRequest expiresAt */
+            expiresAt?: (number|Long|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a ChessUndoRequest. */
+        type $Shape = game.ChessUndoRequest.$Properties;
+    }
+
+    /**
+     * Properties of a ChessMove.
+     * @deprecated Use game.ChessMove.$Properties instead.
+     */
+    interface IChessMove extends game.ChessMove.$Properties {
+    }
+
+    /** Represents a ChessMove. */
+    class ChessMove {
+
+        /**
+         * Constructs a new ChessMove.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: game.ChessMove.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** ChessMove from. */
+        from?: (game.Pos.$Properties|null);
+
+        /** ChessMove to. */
+        to?: (game.Pos.$Properties|null);
+
+        /** ChessMove promote. */
+        promote: string;
+
+        /**
+         * Creates a new ChessMove instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ChessMove instance
+         */
+        static create(properties: game.ChessMove.$Shape): game.ChessMove & game.ChessMove.$Shape;
+        static create(properties?: game.ChessMove.$Properties): game.ChessMove;
+
+        /**
+         * Encodes the specified ChessMove message. Does not implicitly {@link game.ChessMove.verify|verify} messages.
+         * @param message ChessMove message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: game.ChessMove.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ChessMove message, length delimited. Does not implicitly {@link game.ChessMove.verify|verify} messages.
+         * @param message ChessMove message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: game.ChessMove.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ChessMove message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {game.ChessMove & game.ChessMove.$Shape} ChessMove
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.ChessMove & game.ChessMove.$Shape;
+
+        /**
+         * Decodes a ChessMove message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {game.ChessMove & game.ChessMove.$Shape} ChessMove
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.ChessMove & game.ChessMove.$Shape;
+
+        /**
+         * Verifies a ChessMove message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ChessMove message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ChessMove
+         */
+        static fromObject(object: { [k: string]: any }): game.ChessMove;
+
+        /**
+         * Creates a plain object from a ChessMove message. Also converts values to other types if specified.
+         * @param message ChessMove
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: game.ChessMove, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ChessMove to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for ChessMove
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace ChessMove {
+
+        /** Properties of a ChessMove. */
+        interface $Properties {
+
+            /** ChessMove from */
+            from?: (game.Pos.$Properties|null);
+
+            /** ChessMove to */
+            to?: (game.Pos.$Properties|null);
+
+            /** ChessMove promote */
+            promote?: (string|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a ChessMove. */
+        type $Shape = game.ChessMove.$Properties;
+    }
+
+    /**
+     * Properties of a ChessState.
+     * @deprecated Use game.ChessState.$Properties instead.
+     */
+    interface IChessState extends game.ChessState.$Properties {
+    }
+
+    /** Represents a ChessState. */
+    class ChessState {
+
+        /**
+         * Constructs a new ChessState.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: game.ChessState.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** ChessState board. */
+        board: game.BoardRow.$Properties[];
+
+        /** ChessState turn. */
+        turn: string;
+
+        /** ChessState whiteSeat. */
+        whiteSeat: string;
+
+        /** ChessState moveCount. */
+        moveCount: number;
+
+        /** ChessState lastFrom. */
+        lastFrom?: (game.Pos.$Properties|null);
+
+        /** ChessState lastTo. */
+        lastTo?: (game.Pos.$Properties|null);
+
+        /** ChessState rankedDelta. */
+        rankedDelta: game.IntPair.$Properties[];
+
+        /** ChessState resignRequest. */
+        resignRequest?: (game.ChessResignRequest.$Properties|null);
+
+        /** ChessState ended. */
+        ended: boolean;
+
+        /** ChessState winner. */
+        winner: string;
+
+        /** ChessState moveDeadlineAt. */
+        moveDeadlineAt: (number|Long);
+
+        /** ChessState clockDeadlineAt. */
+        clockDeadlineAt: (number|Long);
+
+        /** ChessState clockRemaining. */
+        clockRemaining: game.IntPair.$Properties[];
+
+        /** ChessState castlingWhiteK. */
+        castlingWhiteK: boolean;
+
+        /** ChessState castlingWhiteQ. */
+        castlingWhiteQ: boolean;
+
+        /** ChessState castlingBlackK. */
+        castlingBlackK: boolean;
+
+        /** ChessState castlingBlackQ. */
+        castlingBlackQ: boolean;
+
+        /** ChessState enPassant. */
+        enPassant?: (game.Pos.$Properties|null);
+
+        /** ChessState halfmoveClock. */
+        halfmoveClock: number;
+
+        /** ChessState inCheck. */
+        inCheck: boolean;
+
+        /** ChessState legalMoves. */
+        legalMoves: game.ChessMove.$Properties[];
+
+        /** ChessState undoCount. */
+        undoCount: game.IntPair.$Properties[];
+
+        /** ChessState undoRequest. */
+        undoRequest?: (game.ChessUndoRequest.$Properties|null);
+
+        /**
+         * Creates a new ChessState instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ChessState instance
+         */
+        static create(properties: game.ChessState.$Shape): game.ChessState & game.ChessState.$Shape;
+        static create(properties?: game.ChessState.$Properties): game.ChessState;
+
+        /**
+         * Encodes the specified ChessState message. Does not implicitly {@link game.ChessState.verify|verify} messages.
+         * @param message ChessState message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: game.ChessState.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ChessState message, length delimited. Does not implicitly {@link game.ChessState.verify|verify} messages.
+         * @param message ChessState message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: game.ChessState.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ChessState message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {game.ChessState & game.ChessState.$Shape} ChessState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.ChessState & game.ChessState.$Shape;
+
+        /**
+         * Decodes a ChessState message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {game.ChessState & game.ChessState.$Shape} ChessState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.ChessState & game.ChessState.$Shape;
+
+        /**
+         * Verifies a ChessState message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ChessState message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ChessState
+         */
+        static fromObject(object: { [k: string]: any }): game.ChessState;
+
+        /**
+         * Creates a plain object from a ChessState message. Also converts values to other types if specified.
+         * @param message ChessState
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: game.ChessState, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ChessState to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for ChessState
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace ChessState {
+
+        /** Properties of a ChessState. */
+        interface $Properties {
+
+            /** ChessState board */
+            board?: (game.BoardRow.$Properties[]|null);
+
+            /** ChessState turn */
+            turn?: (string|null);
+
+            /** ChessState whiteSeat */
+            whiteSeat?: (string|null);
+
+            /** ChessState moveCount */
+            moveCount?: (number|null);
+
+            /** ChessState lastFrom */
+            lastFrom?: (game.Pos.$Properties|null);
+
+            /** ChessState lastTo */
+            lastTo?: (game.Pos.$Properties|null);
+
+            /** ChessState rankedDelta */
+            rankedDelta?: (game.IntPair.$Properties[]|null);
+
+            /** ChessState resignRequest */
+            resignRequest?: (game.ChessResignRequest.$Properties|null);
+
+            /** ChessState ended */
+            ended?: (boolean|null);
+
+            /** ChessState winner */
+            winner?: (string|null);
+
+            /** ChessState moveDeadlineAt */
+            moveDeadlineAt?: (number|Long|null);
+
+            /** ChessState clockDeadlineAt */
+            clockDeadlineAt?: (number|Long|null);
+
+            /** ChessState clockRemaining */
+            clockRemaining?: (game.IntPair.$Properties[]|null);
+
+            /** ChessState castlingWhiteK */
+            castlingWhiteK?: (boolean|null);
+
+            /** ChessState castlingWhiteQ */
+            castlingWhiteQ?: (boolean|null);
+
+            /** ChessState castlingBlackK */
+            castlingBlackK?: (boolean|null);
+
+            /** ChessState castlingBlackQ */
+            castlingBlackQ?: (boolean|null);
+
+            /** ChessState enPassant */
+            enPassant?: (game.Pos.$Properties|null);
+
+            /** ChessState halfmoveClock */
+            halfmoveClock?: (number|null);
+
+            /** ChessState inCheck */
+            inCheck?: (boolean|null);
+
+            /** ChessState legalMoves */
+            legalMoves?: (game.ChessMove.$Properties[]|null);
+
+            /** ChessState undoCount */
+            undoCount?: (game.IntPair.$Properties[]|null);
+
+            /** ChessState undoRequest */
+            undoRequest?: (game.ChessUndoRequest.$Properties|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a ChessState. */
+        type $Shape = game.ChessState.$Properties;
     }
 
     /**
@@ -4949,6 +5780,9 @@ export namespace game {
         /** RoundHistoryItem gomokuLine. */
         gomokuLine: game.Pos.$Properties[];
 
+        /** RoundHistoryItem chessWhiteSeat. */
+        chessWhiteSeat: string;
+
         /**
          * Creates a new RoundHistoryItem instance using the specified properties.
          * @param [properties] Properties to set
@@ -5137,6 +5971,9 @@ export namespace game {
 
             /** RoundHistoryItem gomokuLine */
             gomokuLine?: (game.Pos.$Properties[]|null);
+
+            /** RoundHistoryItem chessWhiteSeat */
+            chessWhiteSeat?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -6023,6 +6860,141 @@ export namespace game {
     }
 
     /**
+     * Properties of an OthelloUndoRequest.
+     * @deprecated Use game.OthelloUndoRequest.$Properties instead.
+     */
+    interface IOthelloUndoRequest extends game.OthelloUndoRequest.$Properties {
+    }
+
+    /** Represents an OthelloUndoRequest. */
+    class OthelloUndoRequest {
+
+        /**
+         * Constructs a new OthelloUndoRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: game.OthelloUndoRequest.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** OthelloUndoRequest fromSeat. */
+        fromSeat: string;
+
+        /** OthelloUndoRequest toSeat. */
+        toSeat: string;
+
+        /** OthelloUndoRequest createdAt. */
+        createdAt: (number|Long);
+
+        /** OthelloUndoRequest expiresAt. */
+        expiresAt: (number|Long);
+
+        /**
+         * Creates a new OthelloUndoRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns OthelloUndoRequest instance
+         */
+        static create(properties: game.OthelloUndoRequest.$Shape): game.OthelloUndoRequest & game.OthelloUndoRequest.$Shape;
+        static create(properties?: game.OthelloUndoRequest.$Properties): game.OthelloUndoRequest;
+
+        /**
+         * Encodes the specified OthelloUndoRequest message. Does not implicitly {@link game.OthelloUndoRequest.verify|verify} messages.
+         * @param message OthelloUndoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: game.OthelloUndoRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified OthelloUndoRequest message, length delimited. Does not implicitly {@link game.OthelloUndoRequest.verify|verify} messages.
+         * @param message OthelloUndoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: game.OthelloUndoRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an OthelloUndoRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {game.OthelloUndoRequest & game.OthelloUndoRequest.$Shape} OthelloUndoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.OthelloUndoRequest & game.OthelloUndoRequest.$Shape;
+
+        /**
+         * Decodes an OthelloUndoRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {game.OthelloUndoRequest & game.OthelloUndoRequest.$Shape} OthelloUndoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.OthelloUndoRequest & game.OthelloUndoRequest.$Shape;
+
+        /**
+         * Verifies an OthelloUndoRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an OthelloUndoRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns OthelloUndoRequest
+         */
+        static fromObject(object: { [k: string]: any }): game.OthelloUndoRequest;
+
+        /**
+         * Creates a plain object from an OthelloUndoRequest message. Also converts values to other types if specified.
+         * @param message OthelloUndoRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: game.OthelloUndoRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this OthelloUndoRequest to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for OthelloUndoRequest
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace OthelloUndoRequest {
+
+        /** Properties of an OthelloUndoRequest. */
+        interface $Properties {
+
+            /** OthelloUndoRequest fromSeat */
+            fromSeat?: (string|null);
+
+            /** OthelloUndoRequest toSeat */
+            toSeat?: (string|null);
+
+            /** OthelloUndoRequest createdAt */
+            createdAt?: (number|Long|null);
+
+            /** OthelloUndoRequest expiresAt */
+            expiresAt?: (number|Long|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of an OthelloUndoRequest. */
+        type $Shape = game.OthelloUndoRequest.$Properties;
+    }
+
+    /**
      * Properties of a BoardRow.
      * @deprecated Use game.BoardRow.$Properties instead.
      */
@@ -6329,6 +7301,12 @@ export namespace game {
         /** OthelloState clockRemaining. */
         clockRemaining: game.IntPair.$Properties[];
 
+        /** OthelloState undoCount. */
+        undoCount: game.IntPair.$Properties[];
+
+        /** OthelloState undoRequest. */
+        undoRequest?: (game.OthelloUndoRequest.$Properties|null);
+
         /**
          * Creates a new OthelloState instance using the specified properties.
          * @param [properties] Properties to set
@@ -6460,6 +7438,12 @@ export namespace game {
 
             /** OthelloState clockRemaining */
             clockRemaining?: (game.IntPair.$Properties[]|null);
+
+            /** OthelloState undoCount */
+            undoCount?: (game.IntPair.$Properties[]|null);
+
+            /** OthelloState undoRequest */
+            undoRequest?: (game.OthelloUndoRequest.$Properties|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -7329,6 +8313,9 @@ export namespace game {
         /** RoomSnapshot jungle. */
         jungle?: (game.JungleState.$Properties|null);
 
+        /** RoomSnapshot chess. */
+        chess?: (game.ChessState.$Properties|null);
+
         /** RoomSnapshot resultText. */
         resultText: string;
 
@@ -7491,6 +8478,9 @@ export namespace game {
             /** RoomSnapshot jungle */
             jungle?: (game.JungleState.$Properties|null);
 
+            /** RoomSnapshot chess */
+            chess?: (game.ChessState.$Properties|null);
+
             /** RoomSnapshot resultText */
             resultText?: (string|null);
 
@@ -7545,6 +8535,7 @@ export namespace game {
           liarsDice?: game.LiarsDiceState.$Shape|null;
           gomoku?: game.GomokuState.$Shape|null;
           jungle?: game.JungleState.$Shape|null;
+          chess?: game.ChessState.$Shape|null;
           resultText?: string|null;
           punishedPlayerIds?: string[]|null;
           proofs?: game.PunishmentProof.$Shape[]|null;
@@ -8095,6 +9086,21 @@ export namespace game {
         /** LobbyRoomInfo punishmentSeriesId. */
         punishmentSeriesId: string;
 
+        /** LobbyRoomInfo chessMoveSeconds. */
+        chessMoveSeconds: number;
+
+        /** LobbyRoomInfo chessGameMinutes. */
+        chessGameMinutes: number;
+
+        /** LobbyRoomInfo jungleUndoLimit. */
+        jungleUndoLimit: number;
+
+        /** LobbyRoomInfo chessUndoLimit. */
+        chessUndoLimit: number;
+
+        /** LobbyRoomInfo othelloUndoLimit. */
+        othelloUndoLimit: number;
+
         /**
          * Creates a new LobbyRoomInfo instance using the specified properties.
          * @param [properties] Properties to set
@@ -8277,6 +9283,21 @@ export namespace game {
 
             /** LobbyRoomInfo punishmentSeriesId */
             punishmentSeriesId?: (string|null);
+
+            /** LobbyRoomInfo chessMoveSeconds */
+            chessMoveSeconds?: (number|null);
+
+            /** LobbyRoomInfo chessGameMinutes */
+            chessGameMinutes?: (number|null);
+
+            /** LobbyRoomInfo jungleUndoLimit */
+            jungleUndoLimit?: (number|null);
+
+            /** LobbyRoomInfo chessUndoLimit */
+            chessUndoLimit?: (number|null);
+
+            /** LobbyRoomInfo othelloUndoLimit */
+            othelloUndoLimit?: (number|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

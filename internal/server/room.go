@@ -14,6 +14,7 @@ const (
 	defaultTicTacToeRoomName = "新的井字棋房间"
 	defaultGomokuRoomName    = "新的五子棋房间"
 	defaultJungleRoomName    = "新的斗兽棋房间"
+	defaultChessRoomName     = "新的国际象棋房间"
 )
 
 // activeRoomsOwnedBy 统计某玩家当前存活（未关闭，s.rooms 里还在）的房间数，
@@ -106,10 +107,9 @@ func (s *Server) cleanupRoomIfEmpty(room *RoomState) bool {
 	s.clearOthelloSettlementTimer(room.ID)
 	s.clearTicTacToeGiveawayTimer(room.ID)
 	s.clearGomokuUndoTimer(room.ID)
+	s.clearTurnBasedUndoTimer(room.ID)
 	s.clearLiarsDiceStartTimer(room.ID)
-	s.clearOthelloClockTimer(room.ID)
-	s.clearGomokuClockTimer(room.ID)
-	s.clearJungleClockTimer(room.ID)
+	s.clearTurnBasedClockTimer(room.ID)
 	s.clearRoomBroadcastTimer(room.ID)
 	s.dropSyncChannel(channelRoom(room.ID))
 	delete(s.rooms, room.ID)
@@ -221,6 +221,7 @@ func (s *Server) roomSnapshot(room *RoomState, includeChat, includeHistory bool)
 		LiarsDice:         room.LiarsDice,
 		Gomoku:            room.Gomoku,
 		Jungle:            room.Jungle,
+		Chess:             room.Chess,
 		ResultText:        room.ResultText,
 		PunishedPlayerIDs: room.PunishedPlayerIDs,
 		Proofs:            room.Proofs,
@@ -449,6 +450,9 @@ func (s *Server) generatedRoomName(settings types.RoomSettings) string {
 	if settings.GameID == types.GameJungle && !settings.EnablePunishment {
 		return s.uniqueRoomName(defaultJungleRoomName)
 	}
+	if settings.GameID == types.GameChess && !settings.EnablePunishment {
+		return s.uniqueRoomName(defaultChessRoomName)
+	}
 	pool := s.roomNamePoolForSettings(settings)
 	if pool == nil {
 		if strings.TrimSpace(settings.Name) != "" {
@@ -476,7 +480,7 @@ func (s *Server) normalizeRoomName(settings types.RoomSettings) string {
 	if len(runes) > 24 {
 		cleanName = string(runes[:24])
 	}
-	if cleanName == "" || cleanName == defaultRoomName || cleanName == defaultOthelloRoomName || cleanName == defaultTicTacToeRoomName || cleanName == defaultGomokuRoomName || cleanName == defaultJungleRoomName {
+	if cleanName == "" || cleanName == defaultRoomName || cleanName == defaultOthelloRoomName || cleanName == defaultTicTacToeRoomName || cleanName == defaultGomokuRoomName || cleanName == defaultJungleRoomName || cleanName == defaultChessRoomName {
 		return s.generatedRoomName(settings)
 	}
 	return cleanName
@@ -542,6 +546,11 @@ func (s *Server) canLeaveRoom(player *PlayerState, reason LeaveReason) LeaveResu
 	if room.Settings.GameID == types.GameJungle && room.Phase == types.PhaseChoosing {
 		if _, ok := s.seatOf(room, player.ID); ok && isProtected {
 			return LeaveResult{OK: false, Error: "斗兽棋对局进行中不能离开战斗席，请等待对局结束"}
+		}
+	}
+	if room.Settings.GameID == types.GameChess && room.Phase == types.PhaseChoosing {
+		if _, ok := s.seatOf(room, player.ID); ok && isProtected {
+			return LeaveResult{OK: false, Error: "国际象棋对局进行中不能离开战斗席，请等待对局结束"}
 		}
 	}
 	if room.Settings.GameID == types.GameLiarsDice && room.Phase == types.PhaseChoosing {
@@ -610,6 +619,9 @@ func (s *Server) clearSeatForPlayer(room *RoomState, seat types.SeatKey) {
 	if room.Settings.GameID == types.GameJungle && room.Phase != types.PhaseResult && room.Phase != types.PhaseChoosing {
 		s.resetJungleRoom(room)
 	}
+	if room.Settings.GameID == types.GameChess && room.Phase != types.PhaseResult && room.Phase != types.PhaseChoosing {
+		s.resetChessRoom(room)
+	}
 }
 
 func (s *Server) leaveRoom(player *PlayerState, reason LeaveReason) LeaveResult {
@@ -637,7 +649,7 @@ func (s *Server) leaveRoom(player *PlayerState, reason LeaveReason) LeaveResult 
 	}
 	if reason == LeaveAdminKick && room.Phase == types.PhaseChoosing {
 		if room.Settings.GameID == types.GameOthello || room.Settings.GameID == types.GameTicTacToe || room.Settings.GameID == types.GameGomoku ||
-			room.Settings.GameID == types.GameJungle || room.Settings.GameID == types.GameRPS || room.Settings.GameID == "" {
+			room.Settings.GameID == types.GameJungle || room.Settings.GameID == types.GameChess || room.Settings.GameID == types.GameRPS || room.Settings.GameID == "" {
 			if _, ok := s.seatOf(room, player.ID); ok {
 				s.createDisconnectForfeit(room, player)
 				s.applyDisconnectForfeit(room, player)
@@ -710,6 +722,9 @@ func (s *Server) createDisconnectForfeit(room *RoomState, player *PlayerState) {
 		return
 	}
 	if room.Settings.GameID == types.GameJungle && room.Jungle == nil {
+		return
+	}
+	if room.Settings.GameID == types.GameChess && room.Chess == nil {
 		return
 	}
 	loserSeat, ok := s.seatOf(room, player.ID)

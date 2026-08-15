@@ -103,6 +103,7 @@ message GameStats {
   GameWLD gomoku = 4;
   GameWLD liarsdice = 5;
   GameWLD jungle = 6;
+  GameWLD chess = 7;
 }
 
 // 完整玩家（房间 / me / player:get）
@@ -303,6 +304,13 @@ message RoomSettings {
   repeated string punishment_tags_excluded = 36;
   // 系列任务模式下选中的系列 ID。
   string punishment_series_id = 37;
+  string chess_board_theme = 38;
+  int32 chess_move_seconds = 39;
+  int32 chess_game_minutes = 40;
+  // 各游戏悔棋次数上限：0=禁止（与 gomoku_undo_limit 同一套 0/1/3/10 取值）
+  int32 jungle_undo_limit = 41;
+  int32 chess_undo_limit = 42;
+  int32 othello_undo_limit = 43;
 }
 
 message GomokuUndoRequest {
@@ -344,6 +352,13 @@ message JungleResignRequest {
   int64 created_at = 3;
 }
 
+message JungleUndoRequest {
+  string from_seat = 1;
+  string to_seat = 2;
+  int64 created_at = 3;
+  int64 expires_at = 4;
+}
+
 message JungleState {
   repeated BoardRow board = 1;
   string turn = 2;
@@ -357,6 +372,53 @@ message JungleState {
   int64 move_deadline_at = 10;
   int64 clock_deadline_at = 11;
   repeated IntPair clock_remaining = 12;
+  repeated IntPair undo_count = 13;
+  JungleUndoRequest undo_request = 14;
+}
+
+message ChessResignRequest {
+  string from_seat = 1;
+  string to_seat = 2;
+  int64 created_at = 3;
+}
+
+message ChessUndoRequest {
+  string from_seat = 1;
+  string to_seat = 2;
+  int64 created_at = 3;
+  int64 expires_at = 4;
+}
+
+message ChessMove {
+  Pos from = 1;
+  Pos to = 2;
+  string promote = 3;
+}
+
+message ChessState {
+  repeated BoardRow board = 1;
+  string turn = 2;
+  string white_seat = 3;
+  int32 move_count = 4;
+  Pos last_from = 5;
+  Pos last_to = 6;
+  repeated IntPair ranked_delta = 7;
+  ChessResignRequest resign_request = 8;
+  bool ended = 9;
+  string winner = 10;
+  int64 move_deadline_at = 11;
+  int64 clock_deadline_at = 12;
+  repeated IntPair clock_remaining = 13;
+  bool castling_white_k = 14;
+  bool castling_white_q = 15;
+  bool castling_black_k = 16;
+  bool castling_black_q = 17;
+  Pos en_passant = 18;
+  int32 halfmove_clock = 19;
+  bool in_check = 20;
+  repeated ChessMove legal_moves = 21;
+  repeated IntPair undo_count = 22;
+  ChessUndoRequest undo_request = 23;
 }
 
 message PunishmentProof {
@@ -450,6 +512,7 @@ message RoundHistoryItem {
   repeated StringPair liars_dice_names = 36;
   string gomoku_black_seat = 37;
   repeated Pos gomoku_line = 38;
+  string chess_white_seat = 39;
 }
 
 message Int32List {
@@ -505,6 +568,13 @@ message OthelloSurrenderRequest {
   int64 created_at = 3;
 }
 
+message OthelloUndoRequest {
+  string from_seat = 1;
+  string to_seat = 2;
+  int64 created_at = 3;
+  int64 expires_at = 4;
+}
+
 // 棋盘格："" 空 / "black"|"white" / "X"|"O"
 message BoardRow {
   repeated string cells = 1;
@@ -532,6 +602,8 @@ message OthelloState {
   int64 move_deadline_at = 14;
   int64 clock_deadline_at = 15;
   repeated IntPair clock_remaining = 16;
+  repeated IntPair undo_count = 17;
+  OthelloUndoRequest undo_request = 18;
 }
 
 message TicTacToeGiveawayPrompt {
@@ -591,6 +663,7 @@ message RoomSnapshot {
   LiarsDiceState liars_dice = 23;
   GomokuState gomoku = 24;
   JungleState jungle = 27;
+  ChessState chess = 28;
   string result_text = 14;
   repeated string punished_player_ids = 15;
   repeated PunishmentProof proofs = 16;
@@ -666,6 +739,11 @@ message LobbyRoomInfo {
   repeated string punishment_tags_included = 34;
   repeated string punishment_tags_excluded = 35;
   string punishment_series_id = 36;
+  int32 chess_move_seconds = 37;
+  int32 chess_game_minutes = 38;
+  int32 jungle_undo_limit = 39;
+  int32 chess_undo_limit = 40;
+  int32 othello_undo_limit = 41;
 }
 
 message LobbyPlayerEntry {

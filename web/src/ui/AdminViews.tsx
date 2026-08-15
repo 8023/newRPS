@@ -871,7 +871,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
             </div>
           </div>
           <div className="config-section admin-section-card">
-            <AdminSectionHeader title="称号标签配色" subtitle="称号标签的底色按该称号的赋予来源区分：系统自动分配 / 玩家自定义 / 主人为宠物设置 / 管理员后台手动设置。" />
+            <AdminSectionHeader title="称号标签配色" subtitle="称号标签的底色按该称号的赋予来源区分" />
             <div className="admin-preview-card">
               <span>预览</span>
               <div className="title-tag-style-preview">
@@ -1405,107 +1405,131 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
 
     if (activeSection === "giveaway") {
       return (
-        <div className="config-section admin-section-card">
-          <AdminSectionHeader title="白给模式" subtitle="修改大厅白给自救板的标题、说明和输入提示。" />
-          <div className="admin-preview-card">
-            <span>预览</span>
-            <strong>{draft.giveaway.panelTitle}</strong>
-            <p>{draft.giveaway.panelDescription}</p>
+        <>
+          <div className="config-section admin-section-card">
+            <AdminSectionHeader title="白给模式" subtitle="修改大厅白给自救板的标题、说明和输入提示。" />
+            <div className="admin-preview-card">
+              <span>预览</span>
+              <strong>{draft.giveaway.panelTitle}</strong>
+              <p>{draft.giveaway.panelDescription}</p>
+            </div>
+            <div className="config-row">
+              <label className="field-label">
+                <span>大厅面板标题</span>
+                <input value={draft.giveaway.panelTitle} maxLength={24} onChange={(event) => patch({ giveaway: { ...draft.giveaway, panelTitle: event.target.value } })} placeholder="白给自救板" />
+              </label>
+              <label className="field-label">
+                <span>提交框提示</span>
+                <input value={draft.giveaway.submitPlaceholder} maxLength={60} onChange={(event) => patch({ giveaway: { ...draft.giveaway, submitPlaceholder: event.target.value } })} placeholder="写下你的自我惩罚宣言..." />
+              </label>
+            </div>
+            <label className="field-label">
+              <span>面板说明</span>
+              <textarea value={draft.giveaway.panelDescription} maxLength={160} onChange={(event) => patch({ giveaway: { ...draft.giveaway, panelDescription: event.target.value } })} placeholder="提交一点自我惩罚宣言..." />
+            </label>
+            <label className="field-label">
+              <span>空状态文案</span>
+              <input value={draft.giveaway.emptyText} maxLength={60} onChange={(event) => patch({ giveaway: { ...draft.giveaway, emptyText: event.target.value } })} placeholder="还没有人在白给自救板上。" />
+            </label>
+            <div className="config-row">
+              <label className="field-label">
+                <span>主动白给增量 (%)</span>
+                <input type="number" min={0.1} max={100} step={0.1} value={draft.giveaway.activeBoostValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, activeBoostValue: Number(event.target.value) } })} />
+              </label>
+              <label className="field-label">
+                <span>胜利扣减白给值 (%)</span>
+                <input type="number" min={0.1} max={100} step={0.1} value={draft.giveaway.winPenaltyValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, winPenaltyValue: Number(event.target.value) } })} />
+              </label>
+            </div>
+            <p className="hint">胜利扣减仅对已开启白给模式的胜方生效（含断线判负）。</p>
           </div>
-          <div className="config-row">
-            <label className="field-label">
-              <span>大厅面板标题</span>
-              <input value={draft.giveaway.panelTitle} maxLength={24} onChange={(event) => patch({ giveaway: { ...draft.giveaway, panelTitle: event.target.value } })} placeholder="白给自救板" />
-            </label>
-            <label className="field-label">
-              <span>提交框提示</span>
-              <input value={draft.giveaway.submitPlaceholder} maxLength={60} onChange={(event) => patch({ giveaway: { ...draft.giveaway, submitPlaceholder: event.target.value } })} placeholder="写下你的自我惩罚宣言..." />
-            </label>
+
+          <div className="config-section admin-section-card">
+            <AdminSectionHeader title="自救版设置" subtitle="分别设置不同认主认宠关系下的投票次数与白给值变化。" />
+            <div className="admin-settings-groups">
+              <section className="admin-settings-group" aria-labelledby="giveaway-regular-votes-title">
+                <div className="admin-card-title">
+                  <strong id="giveaway-regular-votes-title">普通用户</strong>
+                  <small>投票者与被投票者之间没有认主认宠关系时使用</small>
+                </div>
+                <div className="config-row">
+                  <label className="field-label">
+                    <span>点赞每小时次数上限</span>
+                    <input type="number" min={1} step={1} value={draft.giveaway.likeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, likeVoteLimitPerHour: Number(event.target.value) } })} />
+                  </label>
+                  <label className="field-label">
+                    <span>点赞降低值 (%)</span>
+                    <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.likeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, likeVoteValue: Number(event.target.value) } })} />
+                  </label>
+                </div>
+                <div className="config-row">
+                  <label className="field-label">
+                    <span>倒赞每小时次数上限</span>
+                    <input type="number" min={1} step={1} value={draft.giveaway.dislikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, dislikeVoteLimitPerHour: Number(event.target.value) } })} />
+                  </label>
+                  <label className="field-label">
+                    <span>倒赞增加值 (%)</span>
+                    <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.dislikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, dislikeVoteValue: Number(event.target.value) } })} />
+                  </label>
+                </div>
+              </section>
+
+              <section className="admin-settings-group" aria-labelledby="giveaway-pet-votes-title">
+                <div className="admin-card-title">
+                  <strong id="giveaway-pet-votes-title">对自己宠物</strong>
+                  <small>投票者是被投票者的直系主人时使用</small>
+                </div>
+                <div className="config-row">
+                  <label className="field-label">
+                    <span>点赞每小时次数上限</span>
+                    <input type="number" min={1} step={1} value={draft.giveaway.petLikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, petLikeVoteLimitPerHour: Number(event.target.value) } })} />
+                  </label>
+                  <label className="field-label">
+                    <span>点赞降低值 (%)</span>
+                    <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.petLikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, petLikeVoteValue: Number(event.target.value) } })} />
+                  </label>
+                </div>
+                <div className="config-row">
+                  <label className="field-label">
+                    <span>倒赞每小时次数上限</span>
+                    <input type="number" min={1} step={1} value={draft.giveaway.petDislikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, petDislikeVoteLimitPerHour: Number(event.target.value) } })} />
+                  </label>
+                  <label className="field-label">
+                    <span>倒赞增加值 (%)</span>
+                    <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.petDislikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, petDislikeVoteValue: Number(event.target.value) } })} />
+                  </label>
+                </div>
+              </section>
+
+              <section className="admin-settings-group" aria-labelledby="giveaway-master-votes-title">
+                <div className="admin-card-title">
+                  <strong id="giveaway-master-votes-title">对自己主人</strong>
+                  <small>投票者是被投票者的直系宠物时使用</small>
+                </div>
+                <div className="config-row">
+                  <label className="field-label">
+                    <span>点赞每小时次数上限</span>
+                    <input type="number" min={1} step={1} value={draft.giveaway.masterLikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, masterLikeVoteLimitPerHour: Number(event.target.value) } })} />
+                  </label>
+                  <label className="field-label">
+                    <span>点赞降低值 (%)</span>
+                    <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.masterLikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, masterLikeVoteValue: Number(event.target.value) } })} />
+                  </label>
+                </div>
+                <div className="config-row">
+                  <label className="field-label">
+                    <span>倒赞每小时次数上限</span>
+                    <input type="number" min={1} step={1} value={draft.giveaway.masterDislikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, masterDislikeVoteLimitPerHour: Number(event.target.value) } })} />
+                  </label>
+                  <label className="field-label">
+                    <span>倒赞增加值 (%)</span>
+                    <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.masterDislikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, masterDislikeVoteValue: Number(event.target.value) } })} />
+                  </label>
+                </div>
+              </section>
+            </div>
           </div>
-          <label className="field-label">
-            <span>面板说明</span>
-            <textarea value={draft.giveaway.panelDescription} maxLength={160} onChange={(event) => patch({ giveaway: { ...draft.giveaway, panelDescription: event.target.value } })} placeholder="提交一点自我惩罚宣言..." />
-          </label>
-          <label className="field-label">
-            <span>空状态文案</span>
-            <input value={draft.giveaway.emptyText} maxLength={60} onChange={(event) => patch({ giveaway: { ...draft.giveaway, emptyText: event.target.value } })} placeholder="还没有人在白给自救板上。" />
-          </label>
-          <div className="config-row">
-            <label className="field-label">
-              <span>主动白给增量 (%)</span>
-              <input type="number" min={0.1} max={100} step={0.1} value={draft.giveaway.activeBoostValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, activeBoostValue: Number(event.target.value) } })} />
-            </label>
-            <label className="field-label">
-              <span>胜利扣减白给值 (%)</span>
-              <input type="number" min={0.1} max={100} step={0.1} value={draft.giveaway.winPenaltyValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, winPenaltyValue: Number(event.target.value) } })} />
-            </label>
-          </div>
-          <p className="hint">以下三档（普通用户 / 对自己宠物 / 对自己主人）的每小时次数上限、每次点赞降低值、每次倒赞增加值均可分别设置，按「投票者与被投票者的认主认宠关系」（只认直系，不含宠物的宠物等二级以上关系）挑选对应档位，且对每个上板玩家独立计时/计次（不是投票者的总量）。</p>
-          <AdminSectionHeader title="普通用户" subtitle="投票者与被投票者之间没有认主认宠关系时使用。" />
-          <div className="config-row">
-            <label className="field-label">
-              <span>点赞每小时次数上限</span>
-              <input type="number" min={1} step={1} value={draft.giveaway.likeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, likeVoteLimitPerHour: Number(event.target.value) } })} />
-            </label>
-            <label className="field-label">
-              <span>点赞降低值 (%)</span>
-              <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.likeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, likeVoteValue: Number(event.target.value) } })} />
-            </label>
-          </div>
-          <div className="config-row">
-            <label className="field-label">
-              <span>倒赞每小时次数上限</span>
-              <input type="number" min={1} step={1} value={draft.giveaway.dislikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, dislikeVoteLimitPerHour: Number(event.target.value) } })} />
-            </label>
-            <label className="field-label">
-              <span>倒赞增加值 (%)</span>
-              <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.dislikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, dislikeVoteValue: Number(event.target.value) } })} />
-            </label>
-          </div>
-          <AdminSectionHeader title="对自己宠物" subtitle="投票者是被投票者的直系主人时使用。" />
-          <div className="config-row">
-            <label className="field-label">
-              <span>点赞每小时次数上限</span>
-              <input type="number" min={1} step={1} value={draft.giveaway.petLikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, petLikeVoteLimitPerHour: Number(event.target.value) } })} />
-            </label>
-            <label className="field-label">
-              <span>点赞降低值 (%)</span>
-              <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.petLikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, petLikeVoteValue: Number(event.target.value) } })} />
-            </label>
-          </div>
-          <div className="config-row">
-            <label className="field-label">
-              <span>倒赞每小时次数上限</span>
-              <input type="number" min={1} step={1} value={draft.giveaway.petDislikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, petDislikeVoteLimitPerHour: Number(event.target.value) } })} />
-            </label>
-            <label className="field-label">
-              <span>倒赞增加值 (%)</span>
-              <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.petDislikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, petDislikeVoteValue: Number(event.target.value) } })} />
-            </label>
-          </div>
-          <AdminSectionHeader title="对自己主人" subtitle="投票者是被投票者的直系宠物时使用。" />
-          <div className="config-row">
-            <label className="field-label">
-              <span>点赞每小时次数上限</span>
-              <input type="number" min={1} step={1} value={draft.giveaway.masterLikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, masterLikeVoteLimitPerHour: Number(event.target.value) } })} />
-            </label>
-            <label className="field-label">
-              <span>点赞降低值 (%)</span>
-              <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.masterLikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, masterLikeVoteValue: Number(event.target.value) } })} />
-            </label>
-          </div>
-          <div className="config-row">
-            <label className="field-label">
-              <span>倒赞每小时次数上限</span>
-              <input type="number" min={1} step={1} value={draft.giveaway.masterDislikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, masterDislikeVoteLimitPerHour: Number(event.target.value) } })} />
-            </label>
-            <label className="field-label">
-              <span>倒赞增加值 (%)</span>
-              <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.masterDislikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, masterDislikeVoteValue: Number(event.target.value) } })} />
-            </label>
-          </div>
-          <p className="hint">胜利扣减仅对已开启白给模式的胜方生效（含断线判负）。</p>
-        </div>
+        </>
       );
     }
 
@@ -1672,10 +1696,10 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
         detail: string;
         meta: string;
       }> = [
-        { id: "users", label: "用户管理", detail: "查询资料、踢出用户与找回密钥", meta: `${lobby.onlineCount} 人在线` },
-        { id: "rooms", label: "房间管理", detail: "查看房间状态并处理当前对局", meta: `${lobby.rooms.length} 个房间` },
-        { id: "announcement", label: "聊天管理", detail: "检索、删除或恢复历史消息", meta: "历史消息" }
-      ];
+          { id: "users", label: "用户管理", detail: "查询资料、踢出用户与找回密钥", meta: `${lobby.onlineCount} 人在线` },
+          { id: "rooms", label: "房间管理", detail: "查看房间状态并处理当前对局", meta: `${lobby.rooms.length} 个房间` },
+          { id: "announcement", label: "聊天管理", detail: "检索、删除或恢复历史消息", meta: "历史消息" }
+        ];
       const currentManagementTab = managementTabs.find((tab) => tab.id === activeRoomTab) || managementTabs[0];
       return (
         <>

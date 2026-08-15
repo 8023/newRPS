@@ -1,11 +1,15 @@
 package server
 
-import "github.com/doumiao/newRPS/internal/types"
+import (
+	"time"
 
-// 轮流制棋类（黑白棋 / 井字棋）共用：复位字段、座位胜负统计、历史+惩罚收尾。
+	"github.com/doumiao/newRPS/internal/types"
+)
+
+// 轮流制棋类（黑白棋 / 井字棋 / 五子棋 / 斗兽棋 / 国际象棋）共用：复位字段、座位胜负统计、历史+惩罚收尾。
 // RPS 结算路径不同（按手即时结算），不走此处。
 
-// clampMoveSeconds/clampGameMinutes：黑白棋/五子棋建房计时下拉框合法值校验，0 表示不限时。
+// clampMoveSeconds/clampGameMinutes：黑白棋/五子棋/斗兽棋/国际象棋建房计时下拉框合法值校验，0 表示不限时。
 func clampMoveSeconds(v int) int {
 	switch v {
 	case 0, 30, 45, 60, 90, 120, 180:
@@ -22,6 +26,58 @@ func clampGameMinutes(v int) int {
 	default:
 		return 0
 	}
+}
+
+// clampUndoLimit：黑白棋/五子棋/斗兽棋/国际象棋悔棋次数合法值，0 表示禁止悔棋。
+func clampUndoLimit(v int) int {
+	switch v {
+	case 0, 1, 3, 10:
+		return v
+	default:
+		return 0
+	}
+}
+
+// undoRequestWindow：悔棋请求等待对方回应的窗口，超时自动拒绝（与五子棋一致）。
+const undoRequestWindow = 30 * time.Second
+
+// clearTurnBasedUndoTimer：黑白棋/斗兽棋/国际象棋共用一张按房间索引的悔棋超时表
+// （一个房间同一时刻只运行一种游戏，与 turnBasedClockTimers 同理）。
+func (s *Server) clearTurnBasedUndoTimer(roomID string) {
+	if t := s.turnBasedUndoTimers[roomID]; t != nil {
+		t.Stop()
+		delete(s.turnBasedUndoTimers, roomID)
+	}
+}
+
+// scheduleTurnBasedUndoTimeout：黑白棋/斗兽棋/国际象棋共用的悔棋超时调度。
+// createdAt 为本次请求的创建时间戳（用于识别请求是否已被替换）；
+// lookup 返回当前请求的创建时间戳（0 表示已无请求）；expire 执行置空请求、恢复计时与公告。
+func (s *Server) scheduleTurnBasedUndoTimeout(roomID string, createdAt int64, lookup func(*RoomState) int64, expire func(*RoomState)) {
+	s.clearTurnBasedUndoTimer(roomID)
+	if createdAt == 0 {
+		return
+	}
+	timer := timeAfterFunc(undoRequestWindow, func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		delete(s.turnBasedUndoTimers, roomID)
+		current := s.rooms[roomID]
+		if current == nil {
+			return
+		}
+		if lookup(current) != createdAt {
+			return
+		}
+		expire(current)
+		s.broadcastRoom(current.ID, true)
+	})
+	s.turnBasedUndoTimers[roomID] = timer
+}
+
+// freshUndoCount：开局时给双方初始化 0 次悔棋计数。
+func freshUndoCount() map[types.SeatKey]int {
+	return map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}
 }
 
 // earliestPositiveDeadline 取两个 epoch 毫秒时间戳中较早的一个；<=0 视为「未启用」并忽略。

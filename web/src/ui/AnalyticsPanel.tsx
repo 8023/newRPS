@@ -18,11 +18,17 @@ const SEQ_COLORS = [
   "var(--chart-seq-4)", "var(--chart-seq-5)", "var(--chart-seq-6)"
 ];
 
+// Recharts 的数值 Y 轴默认会预留约 60px，短刻度图因此显得整体偏右。后台卡片已经
+// 自带 14px 内边距，普通数值轴统一压到 40px，并只在右侧保留防止端点/圆角被裁切的
+// 6px 安全区；类别文字轴、双 Y 轴与倾斜标签仍在各图中按实际内容单独设置。
+const NUMERIC_Y_AXIS_WIDTH = 40;
+const CARTESIAN_MARGIN = { top: 8, right: 6, left: 0, bottom: 0 };
+
 // data.gameRounds / data.roomCreates 的 series key 是后端存的 gameId（"unknown" 为
 // game_id 为空的历史脏数据），图例/表头需要中文名，不能直接展示英文标识符。
 const GAME_LABELS: Record<string, string> = {
   rps: "猜拳", othello: "黑白棋", tictactoe: "井字棋", gomoku: "五子棋",
-  jungle: "斗兽棋", liarsdice: "大话骰", unknown: "未知游戏"
+  jungle: "斗兽棋", chess: "国际象棋", liarsdice: "大话骰", unknown: "未知游戏"
 };
 
 // data.profileChanges / data.nameWarGiveaway 的 series key 是 player_activity_events.action
@@ -479,10 +485,10 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
               </table>
             }>
               <ResponsiveContainer width="100%" height={240}>
-                <LineChart data={trends} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                <LineChart data={trends} margin={CARTESIAN_MARGIN}>
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
                   <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-                  <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <YAxis width={NUMERIC_Y_AXIS_WIDTH} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <Tooltip content={<AnalyticsTooltip />} />
                   <Legend />
                   <Line type="monotone" dataKey="dau" name="日活" stroke="var(--chart-1)" strokeWidth={2} dot={false}
@@ -502,10 +508,10 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
               </table>
             }>
               <ResponsiveContainer width="100%" height={240}>
-                <LineChart data={trends} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                <LineChart data={trends} margin={CARTESIAN_MARGIN}>
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
                   <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-                  <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <YAxis width={NUMERIC_Y_AXIS_WIDTH} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <Tooltip content={<AnalyticsTooltip />} />
                   <Line type="monotone" dataKey="pageviews" name="页面浏览" stroke="var(--chart-1)" strokeWidth={2} dot={false}
                     activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--chart-surface)" }} isAnimationActive={false} />
@@ -526,10 +532,10 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
               </table>
             }>
               <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={trends} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                <LineChart data={trends} margin={CARTESIAN_MARGIN}>
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
                   <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-                  <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <YAxis width={NUMERIC_Y_AXIS_WIDTH} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <Tooltip content={<AnalyticsTooltip showPercent />} />
                   <Legend />
                   <Line type="monotone" dataKey="newUsers" name="新用户" stroke="var(--chart-1)" strokeWidth={2} dot={false}
@@ -551,10 +557,10 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
               </table>
             }>
               <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={trends} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                <LineChart data={trends} margin={CARTESIAN_MARGIN}>
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
                   <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-                  <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <YAxis width={NUMERIC_Y_AXIS_WIDTH} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <Tooltip content={<AnalyticsTooltip showPercent />} />
                   <Legend />
                   <Line type="monotone" dataKey="newVisitors" name="新设备" stroke="var(--chart-1)" strokeWidth={2} dot={false}
@@ -623,7 +629,7 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
               <p className="analytics-inline-kpi">
                 完成率 <strong>{((data.punishment?.doneRate || 0) * 100).toFixed(1)}%</strong>
               </p>
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={236}>
                 <BarChart data={data.series.days.map((day, i) => ({
                   day,
                   pending: Math.max(0,
@@ -632,10 +638,10 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
                     - (data.punishment?.reject?.[i] || 0)),
                   done: data.punishment?.done?.[i] || 0,
                   reject: data.punishment?.reject?.[i] || 0
-                }))}>
+                }))} margin={CARTESIAN_MARGIN}>
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
                   <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-                  <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <YAxis width={NUMERIC_Y_AXIS_WIDTH} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <Tooltip content={<AnalyticsTooltip showPercent />} />
                   <Legend />
                   {/* 发布量包含 assigned/pending/approved/rejected。用“进行中 + 完成 + 驳回”
@@ -677,11 +683,11 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
 
           <div className="analytics-row-2">
             <ChartCard title="会话时长分布" table={<BucketTable rows={data.sessionBuckets || []} />}>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={data.sessionBuckets || []} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={data.sessionBuckets || []} margin={CARTESIAN_MARGIN}>
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
                   <XAxis dataKey="key" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-                  <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <YAxis width={NUMERIC_Y_AXIS_WIDTH} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <Tooltip content={<AnalyticsTooltip showPercent percentTotal={sessionBucketsTotal} />} />
                   <Bar dataKey="value" name="会话数" maxBarSize={24} radius={[4, 4, 0, 0]} isAnimationActive={false}>
                     {(data.sessionBuckets || []).map((_, i) => (
@@ -694,10 +700,10 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
 
             <ChartCard title="证明耗时分布" table={<BucketTable rows={data.punishment?.proofMs || []} />}>
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={data.punishment?.proofMs || []}>
+                <BarChart data={data.punishment?.proofMs || []} margin={CARTESIAN_MARGIN}>
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
                   <XAxis dataKey="key" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-                  <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <YAxis width={NUMERIC_Y_AXIS_WIDTH} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <Tooltip content={<AnalyticsTooltip showPercent percentTotal={proofMsTotal} />} />
                   <Bar dataKey="value" name="次数" maxBarSize={24} radius={[4, 4, 0, 0]} isAnimationActive={false}>
                     {(data.punishment?.proofMs || []).map((_, i) => (
@@ -881,10 +887,10 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
                   day,
                   lobby: data.chat?.speakers?.[i] || 0,
                   room: data.chat?.speakersRoom?.[i] || 0
-                }))}>
+                }))} margin={CARTESIAN_MARGIN}>
                   <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
                   <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-                  <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+                  <YAxis width={NUMERIC_Y_AXIS_WIDTH} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                   <Tooltip content={<AnalyticsTooltip />} />
                   <Legend />
                   <Line type="monotone" dataKey="lobby" name="大厅发言人" stroke="var(--chart-1)" strokeWidth={2} dot={false} isAnimationActive={false} />
@@ -896,7 +902,7 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
 
           <ChartCard title="转化漏斗" table={<BucketTable rows={funnelOrdered(data.funnel || [])} />}>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart layout="vertical" data={funnelOrdered(data.funnel || [])} margin={{ left: 16, right: 16 }}>
+              <BarChart layout="vertical" data={funnelOrdered(data.funnel || [])} margin={CARTESIAN_MARGIN}>
                 <CartesianGrid stroke="var(--chart-grid)" horizontal={false} strokeDasharray="" />
                 <XAxis type="number" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
                 <YAxis type="category" dataKey="key" width={80} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
@@ -1034,11 +1040,11 @@ function TagCompareChart({ rows }: { rows: TagCompareRow[] }) {
     <ChartCard title="随机惩罚·标签选中/拒绝" table={table}>
       {top.length ? (
         <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={top} margin={{ top: 8, right: 12, left: 0, bottom: 32 }}>
+          <BarChart data={top} margin={{ top: 8, right: 6, left: 0, bottom: 32 }}>
             <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
             <XAxis dataKey="key" interval={0} angle={-25} textAnchor="end" height={56}
               tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-            <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+            <YAxis width={NUMERIC_Y_AXIS_WIDTH} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
             <Tooltip content={<AnalyticsTooltip showTotal />} />
             <Legend />
             <Bar dataKey="include" name="选中" stackId="a" fill="var(--chart-1)" maxBarSize={40}
@@ -1075,7 +1081,7 @@ function HBarCard({ title, rows, donut, showPercent, limit }: {
     <ChartCard title={title} table={<BucketTable rows={top} />}>
       {donut && top.length > 0 ? (
         <div className="analytics-donut-wrap">
-          <ResponsiveContainer width="100%" height={180}>
+          <ResponsiveContainer width="100%" height={200}>
             <PieChart>
               <Pie data={top} dataKey="value" nameKey="key" innerRadius="60%" outerRadius="85%" paddingAngle={2}
                 isAnimationActive={false}>
@@ -1094,7 +1100,7 @@ function HBarCard({ title, rows, donut, showPercent, limit }: {
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={200}>
-          <BarChart layout="vertical" data={top} margin={{ left: 8, right: 12 }}>
+          <BarChart layout="vertical" data={top} margin={{ top: 8, right: 6, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="var(--chart-grid)" horizontal={false} strokeDasharray="" />
             <XAxis type="number" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
             <YAxis type="category" dataKey="key" width={72} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
@@ -1139,10 +1145,10 @@ function StackedGameChart({
   if (asLine) {
     return (
       <ResponsiveContainer width="100%" height={220}>
-        <LineChart data={rows}>
+        <LineChart data={rows} margin={CARTESIAN_MARGIN}>
           <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
           <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-          <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+          <YAxis width={NUMERIC_Y_AXIS_WIDTH} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
           <Tooltip content={<AnalyticsTooltip />} />
           <Legend />
           {series.map((s, i) => (
@@ -1158,10 +1164,10 @@ function StackedGameChart({
   // 分母跟着悬停的那一天走，不是整个选定区间的合计。
   return (
     <ResponsiveContainer width="100%" height={240}>
-      <BarChart data={rows}>
+      <BarChart data={rows} margin={CARTESIAN_MARGIN}>
         <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
         <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-        <YAxis tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+        <YAxis width={NUMERIC_Y_AXIS_WIDTH} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
         <Tooltip content={<AnalyticsTooltip showTotal showPercent={showPercent} />} />
         <Legend />
         {series.map((s, i) => (

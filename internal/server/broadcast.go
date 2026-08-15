@@ -129,7 +129,11 @@ func (s *Server) lobbySnapshot(includeConfig, includeSuggestions bool) types.Lob
 			OthelloMoveSeconds: room.Settings.OthelloMoveSeconds, OthelloGameMinutes: room.Settings.OthelloGameMinutes,
 			GomokuMoveSeconds: room.Settings.GomokuMoveSeconds, GomokuGameMinutes: room.Settings.GomokuGameMinutes,
 			GomokuUndoLimit:   room.Settings.GomokuUndoLimit,
+			OthelloUndoLimit:  room.Settings.OthelloUndoLimit,
+			JungleUndoLimit:   room.Settings.JungleUndoLimit,
+			ChessUndoLimit:    room.Settings.ChessUndoLimit,
 			JungleMoveSeconds: room.Settings.JungleMoveSeconds, JungleGameMinutes: room.Settings.JungleGameMinutes,
+			ChessMoveSeconds: room.Settings.ChessMoveSeconds, ChessGameMinutes: room.Settings.ChessGameMinutes,
 		}
 		if room.Settings.EnableTags {
 			info.Tags = room.Settings.Tags

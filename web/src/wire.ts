@@ -224,6 +224,15 @@ function valueToJs(v: any): any {
 export function normalizeStateTree(doc: any): any {
   if (!doc || typeof doc !== "object") return doc;
   const out = doc;
+  // 大厅房间人数是合法的 0，但 protobuf defaults:false 会省略零值。DELTA 在
+  // 1 -> 0 时也可能删除该 key；每次合并后补齐，保证通道缓存、CRC 和 UI 一致。
+  if (Array.isArray(out.rooms)) {
+    for (const room of out.rooms) {
+      if (!room || typeof room !== "object") continue;
+      room.players = numOr(room.players, 0);
+      room.spectators = numOr(room.spectators, 0);
+    }
+  }
   if (out.othello && typeof out.othello === "object") {
     out.othello.board = padBoardMatrix(boardRows(out.othello.board), 8);
     out.othello.legalMoves = normalizePosList(out.othello.legalMoves);
@@ -254,6 +263,9 @@ export function normalizeStateTree(doc: any): any {
     out.jungle.clockDeadlineAt = numOr(out.jungle.clockDeadlineAt, 0);
     if (out.jungle.lastFrom) out.jungle.lastFrom = { row: numOr(out.jungle.lastFrom.row, 0), col: numOr(out.jungle.lastFrom.col, 0) };
     if (out.jungle.lastTo) out.jungle.lastTo = { row: numOr(out.jungle.lastTo.row, 0), col: numOr(out.jungle.lastTo.col, 0) };
+  }
+  if (out.chess && typeof out.chess === "object") {
+    materializeChessTree(out.chess);
   }
   // protobufjs defaults:false 会丢掉数值零值；这些字段会在广播窗口清空时回落到 0，
   // 若不补齐，管理面板会在 DELTA 把 key 整个删掉后显示 undefined/NaN。
@@ -315,7 +327,7 @@ function fillRoomSettingsDefaults(settings: any): any {
   // allowProofImage 对应 Go *bool，但 handlers_room.go 建房时已把 nil 归一化成具体的
   // true/false，线上房间永远不会是"未设置"——false 是它的零值，缺省按 false 补齐即可
   // 无损还原（true 是非零值，永远不会被 protojson 丢掉）。
-  // gomokuUndoLimit 同理：建房时已校验为 0/1/3/10 之一，键缺失只可能是真值 0（禁止悔棋）
+  // 四种棋类的 UndoLimit 同理：建房时已校验为 0/1/3/10 之一，键缺失只可能是真值 0（禁止悔棋）
   // 被 defaults:false 连 key 一起丢掉，缺省按 0 补齐即可无损还原。计时设置四个字段同理，
   // 0 就是"不限时"的合法值。
   let source = settings.punishmentSource || "random";
@@ -329,12 +341,17 @@ function fillRoomSettingsDefaults(settings: any): any {
     punishmentSeriesId: typeof settings.punishmentSeriesId === "string" ? settings.punishmentSeriesId : "",
     allowProofImage: settings.allowProofImage ?? false,
     gomokuUndoLimit: numOr(settings.gomokuUndoLimit, 0),
+    jungleUndoLimit: numOr(settings.jungleUndoLimit, 0),
+    chessUndoLimit: numOr(settings.chessUndoLimit, 0),
+    othelloUndoLimit: numOr(settings.othelloUndoLimit, 0),
     othelloMoveSeconds: numOr(settings.othelloMoveSeconds, 0),
     othelloGameMinutes: numOr(settings.othelloGameMinutes, 0),
     gomokuMoveSeconds: numOr(settings.gomokuMoveSeconds, 0),
     gomokuGameMinutes: numOr(settings.gomokuGameMinutes, 0),
     jungleMoveSeconds: numOr(settings.jungleMoveSeconds, 0),
-    jungleGameMinutes: numOr(settings.jungleGameMinutes, 0)
+    jungleGameMinutes: numOr(settings.jungleGameMinutes, 0),
+    chessMoveSeconds: numOr(settings.chessMoveSeconds, 0),
+    chessGameMinutes: numOr(settings.chessGameMinutes, 0)
   };
 }
 
@@ -410,7 +427,8 @@ function materializeGameStats(stats: any): any {
     tictactoe: materializeGameWLD(s.tictactoe),
     gomoku: materializeGameWLD(s.gomoku),
     liarsdice: materializeGameWLD(s.liarsdice),
-    jungle: materializeGameWLD(s.jungle)
+    jungle: materializeGameWLD(s.jungle),
+    chess: materializeGameWLD(s.chess)
   };
 }
 
@@ -501,6 +519,7 @@ function materializeRoom(room: any): any {
     r.othello.board = padBoardMatrix(boardRows(r.othello.board), 8);
     r.othello.legalMoves = normalizePosList(r.othello.legalMoves);
     r.othello.rankedDelta = pairsToMap(r.othello.rankedDelta, 0);
+    r.othello.undoCount = pairsToMap(r.othello.undoCount, 0);
     r.othello.clockRemaining = pairsToMap(r.othello.clockRemaining, 0);
     r.othello.blackCount = numOr(r.othello.blackCount, 0);
     r.othello.whiteCount = numOr(r.othello.whiteCount, 0);
@@ -535,12 +554,20 @@ function materializeRoom(room: any): any {
   if (r.jungle) {
     r.jungle.board = padBoardRect(boardRows(r.jungle.board), 9, 7);
     r.jungle.rankedDelta = pairsToMap(r.jungle.rankedDelta, 0);
+    r.jungle.undoCount = pairsToMap(r.jungle.undoCount, 0);
     r.jungle.clockRemaining = pairsToMap(r.jungle.clockRemaining, 0);
     r.jungle.moveCount = numOr(r.jungle.moveCount, 0);
     r.jungle.moveDeadlineAt = numOr(r.jungle.moveDeadlineAt, 0);
     r.jungle.clockDeadlineAt = numOr(r.jungle.clockDeadlineAt, 0);
     if (r.jungle.lastFrom) r.jungle.lastFrom = { row: numOr(r.jungle.lastFrom.row, 0), col: numOr(r.jungle.lastFrom.col, 0) };
     if (r.jungle.lastTo) r.jungle.lastTo = { row: numOr(r.jungle.lastTo.row, 0), col: numOr(r.jungle.lastTo.col, 0) };
+  }
+  if (r.chess) {
+    r.chess.board = padBoardMatrix(boardRows(r.chess.board), 8);
+    r.chess.rankedDelta = pairsToMap(r.chess.rankedDelta, 0);
+    r.chess.undoCount = pairsToMap(r.chess.undoCount, 0);
+    r.chess.clockRemaining = pairsToMap(r.chess.clockRemaining, 0);
+    materializeChessTree(r.chess);
   }
   // 历史里的井字连线/大话骰开牌数据同样可能丢 0 / 需要 pair 展开
   if (Array.isArray(r.roundHistory)) {
@@ -793,6 +820,27 @@ function boardRows(rows: any): any[] {
     const cells = row?.cells || row || [];
     return (cells as any[]).map((c) => (c === "" || c == null ? null : c));
   });
+}
+
+function materializeChessTree(chess: any) {
+  if (!chess || typeof chess !== "object") return;
+  chess.board = padBoardMatrix(boardRows(chess.board), 8);
+  chess.moveCount = numOr(chess.moveCount, 0);
+  chess.moveDeadlineAt = numOr(chess.moveDeadlineAt, 0);
+  chess.clockDeadlineAt = numOr(chess.clockDeadlineAt, 0);
+  chess.halfmoveClock = numOr(chess.halfmoveClock, 0);
+  if (chess.lastFrom) chess.lastFrom = { row: numOr(chess.lastFrom.row, 0), col: numOr(chess.lastFrom.col, 0) };
+  if (chess.lastTo) chess.lastTo = { row: numOr(chess.lastTo.row, 0), col: numOr(chess.lastTo.col, 0) };
+  if (chess.enPassant) chess.enPassant = { row: numOr(chess.enPassant.row, 0), col: numOr(chess.enPassant.col, 0) };
+  if (Array.isArray(chess.legalMoves)) {
+    chess.legalMoves = chess.legalMoves.map((mv: any) => ({
+      from: { row: numOr(mv?.from?.row, 0), col: numOr(mv?.from?.col, 0) },
+      to: { row: numOr(mv?.to?.row, 0), col: numOr(mv?.to?.col, 0) },
+      promote: typeof mv?.promote === "string" ? mv.promote : ""
+    }));
+  } else {
+    chess.legalMoves = [];
+  }
 }
 
 /** 保证 n×n 棋盘；缺行/列补 null（避免 proto 省略空串后尺寸变短） */

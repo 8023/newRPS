@@ -550,13 +550,51 @@ main {
   background: color-mix(in srgb, var(--panel-solid) 70%, transparent);
 }
 
-/* 版本更新提示：复用 .announcement-popup 的基础样式，仅需要按钮组横排。
+/* 版本更新提示：复用 .announcement-popup 的基础样式，按钮统一尺寸并使用站点蓝/红色系。
    若全服公告恰好同时展示，靠通用兄弟选择器错开垂直位置，避免叠在一起。 */
+.version-update-popup {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.version-update-popup > div:first-child {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
 .version-update-actions {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
+}
+
+.version-update-button {
+  min-width: 72px;
+  min-height: 38px;
+  padding: 9px 14px;
+  font-weight: 700;
+}
+
+.version-update-refresh {
+  border-color: color-mix(in srgb, var(--primary) 58%, var(--border-strong));
+  background: color-mix(in srgb, var(--button-bg) 68%, var(--primary));
+}
+
+.version-update-refresh:hover {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--button-bg) 54%, var(--primary));
+}
+
+.version-update-ignore {
+  border-color: color-mix(in srgb, var(--reject-border) 64%, var(--border-strong));
+  background: color-mix(in srgb, var(--button-bg) 68%, var(--reject));
+}
+
+.version-update-ignore:hover {
+  border-color: var(--reject-border);
+  background: color-mix(in srgb, var(--button-bg) 54%, var(--reject));
 }
 
 .announcement-popup~.version-update-popup {
@@ -1205,6 +1243,15 @@ main {
 
 .game-choice-icon-pair {
   font-size: 13px;
+}
+
+/* 国际象棋使用 SVG，避免 ♚ 在 macOS / Windows 字体里的基线与墨迹框不同而上下漂移。 */
+.game-choice-icon-chess {
+  display: block;
+  width: 30px;
+  height: 30px;
+  color: var(--page-text);
+  stroke: currentColor;
 }
 
 /* 井字棋/五子棋：两个图标沿左上→右下对角线排布，与黑白棋的水平并排区分开。
@@ -3690,6 +3737,324 @@ main {
   line-height: 1;
 }
 
+.chess-panel {
+  --chess-content-max: 680px;
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+}
+
+.chess-head {
+  width: min(100%, var(--chess-content-max));
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.chess-head h3,
+.chess-head p {
+  margin: 0;
+}
+
+.chess-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chess-turn-card,
+.chess-score-mini {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  padding: 8px 10px;
+  display: grid;
+  gap: 3px;
+  min-width: 112px;
+  text-align: center;
+}
+
+.chess-score-mini {
+  grid-template-columns: repeat(2, auto);
+  justify-content: center;
+  align-items: start;
+  gap: 6px 12px;
+}
+
+.chess-score-side {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.chess-score-side em {
+  font-style: normal;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.chess-score-mini strong,
+.chess-live-rank {
+  grid-column: 1 / -1;
+}
+
+.chess-live-rank,
+.chess-turn-card small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.chess-ready-card,
+.chess-request-card,
+.chess-restart-button,
+.chess-risk-actions,
+.chess-legend,
+.chess-rules-hint {
+  width: min(100%, var(--chess-content-max));
+}
+
+.chess-ready-card,
+.chess-request-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--primary) 34%, var(--border));
+  border-radius: 8px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 9%, var(--panel-solid)), color-mix(in srgb, var(--pink) 10%, var(--panel-solid)));
+  padding: 10px;
+}
+
+.chess-ready-card strong,
+.chess-ready-card p,
+.chess-request-card strong,
+.chess-request-card p {
+  margin: 0;
+}
+
+.chess-draw-animation {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.chess-ready-card.drawing .chess-draw-animation span {
+  animation: othello-draw-bounce 0.7s ease-in-out infinite alternate;
+}
+
+.chess-request-card.needs-action {
+  border-color: color-mix(in srgb, var(--pink-border) 58%, var(--border));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 10%, var(--panel-solid)), color-mix(in srgb, var(--pink) 20%, var(--panel-solid)));
+}
+
+.chess-request-actions,
+.chess-risk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.chess-risk-actions {
+  justify-content: flex-end;
+}
+
+.chess-board-wrap {
+  width: min(100%, var(--chess-content-max), 78dvh);
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  grid-template-rows: 1fr 16px;
+  gap: 4px;
+}
+
+.chess-ranks,
+.chess-files {
+  display: grid;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.chess-ranks {
+  grid-template-rows: repeat(8, 1fr);
+  align-items: center;
+  justify-items: center;
+}
+
+.chess-files {
+  grid-column: 2;
+  grid-template-columns: repeat(8, 1fr);
+  justify-items: center;
+}
+
+.chess-board {
+  grid-column: 2;
+  aspect-ratio: 1;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  border: 3px solid color-mix(in srgb, var(--chess-border, #6b4220) 70%, var(--border));
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--chess-board, #8b5a2b);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 18px 36px color-mix(in srgb, var(--chess-border, #6b4220) 28%, transparent);
+}
+
+.chess-cell {
+  --chess-cell-move: var(--chess-dark-move, #bae6fd);
+  --chess-cell-capture: var(--chess-dark-capture, #fecdd3);
+  --chess-cell-last: var(--chess-dark-last, #fef08a);
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: var(--chess-dark, #b58863);
+  transform: none;
+  cursor: pointer;
+  container-type: size;
+}
+
+.chess-cell:hover:not(:disabled)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--chess-hover, rgba(255, 255, 255, 0.22));
+  pointer-events: none;
+}
+
+.chess-cell:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.chess-cell.light {
+  --chess-cell-move: var(--chess-light-move, #075985);
+  --chess-cell-capture: var(--chess-light-capture, #9f1239);
+  --chess-cell-last: var(--chess-light-last, #854d0e);
+  background: var(--chess-light, #f0d9b5);
+}
+
+.chess-cell.selected {
+  outline: 4px solid var(--chess-cell-move);
+  outline-offset: -4px;
+  z-index: 2;
+}
+
+.chess-cell.legal {
+  box-shadow:
+    inset 0 0 0 3px var(--chess-cell-move),
+    inset 0 0 0 999px color-mix(in srgb, var(--chess-cell-move) 14%, transparent);
+}
+
+.chess-cell.legal::after {
+  content: "";
+  position: relative;
+  z-index: 1;
+  width: 28%;
+  height: 28%;
+  border-radius: 50%;
+  background: var(--chess-cell-move);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--chess-cell-move) 42%, transparent);
+}
+
+.chess-cell.legal.capture {
+  box-shadow:
+    inset 0 0 0 4px var(--chess-cell-capture),
+    inset 0 0 0 999px color-mix(in srgb, var(--chess-cell-capture) 14%, transparent);
+}
+
+.chess-cell.legal.capture::after {
+  display: none;
+}
+
+.chess-cell.last-from,
+.chess-cell.last-to {
+  box-shadow:
+    inset 0 0 0 2px var(--chess-cell-last),
+    inset 0 0 0 999px color-mix(in srgb, var(--chess-cell-last) 18%, transparent);
+}
+
+.chess-cell.legal:not(.capture).last-from,
+.chess-cell.legal:not(.capture).last-to {
+  box-shadow:
+    inset 0 0 0 3px var(--chess-cell-move),
+    inset 0 0 0 999px color-mix(in srgb, var(--chess-cell-move) 14%, transparent);
+}
+
+.chess-cell.in-check {
+  box-shadow: inset 0 0 0 999px var(--chess-check, rgba(220, 38, 38, 0.42));
+}
+
+.chess-piece {
+  position: relative;
+  z-index: 1;
+  font-size: clamp(22px, 72cqmin, 46px);
+  line-height: 1;
+}
+
+.chess-piece.color-black {
+  color: #161616;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.chess-piece.color-white {
+  color: #f7f1e4;
+  text-shadow:
+    1px 1px 0 #2a1a0c,
+    -1px 1px 0 #2a1a0c,
+    1px -1px 0 #2a1a0c,
+    -1px -1px 0 #2a1a0c;
+}
+
+.chess-legend,
+.chess-rules-hint {
+  text-align: center;
+  font-size: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.chess-theme-preview i:nth-child(1),
+.chess-theme-preview i:nth-child(4) {
+  background: var(--theme-cell, #f0d9b5);
+  border-color: transparent;
+}
+
+.chess-theme-preview i:nth-child(2),
+.chess-theme-preview i:nth-child(3) {
+  background: var(--theme-line, #b58863);
+  border-color: transparent;
+}
+
+.chess-preview-piece {
+  font-size: 16px;
+  line-height: 1;
+  font-style: normal;
+}
+
+.chess-preview-piece.light {
+  color: #f7f1e4;
+  text-shadow: 0 0 0 1px #2a1a0c;
+}
+
+.chess-preview-piece.dark {
+  color: #161616;
+}
+
 .move-panel h3,
 .chat-panel>h3,
 .sticky-panel-title {
@@ -4923,6 +5288,9 @@ main {
 
 .profile-panel {
   width: min(680px, 100%);
+  /* 允许弹框收缩到窄屏可用宽度；否则 grid item 默认的 min-width:auto
+     会被内部表单的最小内容宽度撑开，在 Galaxy S10 等窄屏上产生横向滚动。 */
+  min-width: 0;
   max-height: min(760px, 92vh);
   overflow: auto;
   border: 1px solid var(--border);
@@ -5106,7 +5474,17 @@ main {
 
 .claim-key-actions {
   display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  justify-content: stretch;
   gap: 8px;
+}
+
+.claim-key-actions button {
+  flex: 1 1 0;
+  width: 50%;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .account-devices-card {

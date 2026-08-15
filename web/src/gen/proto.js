@@ -4353,6 +4353,7 @@ export const game = $root.game = (() => {
          * @property {game.GameWLD.$Properties|null} [gomoku] GameStats gomoku
          * @property {game.GameWLD.$Properties|null} [liarsdice] GameStats liarsdice
          * @property {game.GameWLD.$Properties|null} [jungle] GameStats jungle
+         * @property {game.GameWLD.$Properties|null} [chess] GameStats chess
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -4433,6 +4434,14 @@ export const game = $root.game = (() => {
         GameStats.prototype.jungle = null;
 
         /**
+         * GameStats chess.
+         * @member {game.GameWLD.$Properties|null|undefined} chess
+         * @memberof game.GameStats
+         * @instance
+         */
+        GameStats.prototype.chess = null;
+
+        /**
          * Creates a new GameStats instance using the specified properties.
          * @function create
          * @memberof game.GameStats
@@ -4476,6 +4485,8 @@ export const game = $root.game = (() => {
                 $root.game.GameWLD.encode(message.liarsdice, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
             if (message.jungle != null && $Object.hasOwnProperty.call(message, "jungle"))
                 $root.game.GameWLD.encode(message.jungle, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
+            if (message.chess != null && $Object.hasOwnProperty.call(message, "chess"))
+                $root.game.GameWLD.encode(message.chess, writer.uint32(/* id 7, wireType 2 =*/58).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -4559,6 +4570,12 @@ export const game = $root.game = (() => {
                         message.jungle = $root.game.GameWLD.decode(reader, reader.uint32(), $undefined, _depth + 1, message.jungle);
                         continue;
                     }
+                case 7: {
+                        if (wireType !== 2)
+                            break;
+                        message.chess = $root.game.GameWLD.decode(reader, reader.uint32(), $undefined, _depth + 1, message.chess);
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -4632,6 +4649,11 @@ export const game = $root.game = (() => {
                 if (error)
                     return "jungle." + error;
             }
+            if (message.chess != null && $Object.hasOwnProperty.call(message, "chess")) {
+                let error = $root.game.GameWLD.verify(message.chess, _depth + 1);
+                if (error)
+                    return "chess." + error;
+            }
             return null;
         };
 
@@ -4683,6 +4705,11 @@ export const game = $root.game = (() => {
                     throw $TypeError(".game.GameStats.jungle: object expected");
                 message.jungle = $root.game.GameWLD.fromObject(object.jungle, _depth + 1);
             }
+            if (object.chess != null) {
+                if (!$util.isObject(object.chess))
+                    throw $TypeError(".game.GameStats.chess: object expected");
+                message.chess = $root.game.GameWLD.fromObject(object.chess, _depth + 1);
+            }
             return message;
         };
 
@@ -4710,6 +4737,7 @@ export const game = $root.game = (() => {
                 object.gomoku = null;
                 object.liarsdice = null;
                 object.jungle = null;
+                object.chess = null;
             }
             if (message.rps != null && $Object.hasOwnProperty.call(message, "rps"))
                 object.rps = $root.game.GameWLD.toObject(message.rps, options, _depth + 1);
@@ -4723,6 +4751,8 @@ export const game = $root.game = (() => {
                 object.liarsdice = $root.game.GameWLD.toObject(message.liarsdice, options, _depth + 1);
             if (message.jungle != null && $Object.hasOwnProperty.call(message, "jungle"))
                 object.jungle = $root.game.GameWLD.toObject(message.jungle, options, _depth + 1);
+            if (message.chess != null && $Object.hasOwnProperty.call(message, "chess"))
+                object.chess = $root.game.GameWLD.toObject(message.chess, options, _depth + 1);
             return object;
         };
 
@@ -9750,6 +9780,12 @@ export const game = $root.game = (() => {
          * @property {Array.<string>|null} [punishmentTagsIncluded] RoomSettings punishmentTagsIncluded
          * @property {Array.<string>|null} [punishmentTagsExcluded] RoomSettings punishmentTagsExcluded
          * @property {string|null} [punishmentSeriesId] RoomSettings punishmentSeriesId
+         * @property {string|null} [chessBoardTheme] RoomSettings chessBoardTheme
+         * @property {number|null} [chessMoveSeconds] RoomSettings chessMoveSeconds
+         * @property {number|null} [chessGameMinutes] RoomSettings chessGameMinutes
+         * @property {number|null} [jungleUndoLimit] RoomSettings jungleUndoLimit
+         * @property {number|null} [chessUndoLimit] RoomSettings chessUndoLimit
+         * @property {number|null} [othelloUndoLimit] RoomSettings othelloUndoLimit
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -10058,6 +10094,54 @@ export const game = $root.game = (() => {
         RoomSettings.prototype.punishmentSeriesId = "";
 
         /**
+         * RoomSettings chessBoardTheme.
+         * @member {string} chessBoardTheme
+         * @memberof game.RoomSettings
+         * @instance
+         */
+        RoomSettings.prototype.chessBoardTheme = "";
+
+        /**
+         * RoomSettings chessMoveSeconds.
+         * @member {number} chessMoveSeconds
+         * @memberof game.RoomSettings
+         * @instance
+         */
+        RoomSettings.prototype.chessMoveSeconds = 0;
+
+        /**
+         * RoomSettings chessGameMinutes.
+         * @member {number} chessGameMinutes
+         * @memberof game.RoomSettings
+         * @instance
+         */
+        RoomSettings.prototype.chessGameMinutes = 0;
+
+        /**
+         * RoomSettings jungleUndoLimit.
+         * @member {number} jungleUndoLimit
+         * @memberof game.RoomSettings
+         * @instance
+         */
+        RoomSettings.prototype.jungleUndoLimit = 0;
+
+        /**
+         * RoomSettings chessUndoLimit.
+         * @member {number} chessUndoLimit
+         * @memberof game.RoomSettings
+         * @instance
+         */
+        RoomSettings.prototype.chessUndoLimit = 0;
+
+        /**
+         * RoomSettings othelloUndoLimit.
+         * @member {number} othelloUndoLimit
+         * @memberof game.RoomSettings
+         * @instance
+         */
+        RoomSettings.prototype.othelloUndoLimit = 0;
+
+        /**
          * Creates a new RoomSettings instance using the specified properties.
          * @function create
          * @memberof game.RoomSettings
@@ -10161,6 +10245,18 @@ export const game = $root.game = (() => {
                     writer.uint32(/* id 36, wireType 2 =*/290).string(message.punishmentTagsExcluded[i]);
             if (message.punishmentSeriesId != null && $Object.hasOwnProperty.call(message, "punishmentSeriesId") && message.punishmentSeriesId !== "")
                 writer.uint32(/* id 37, wireType 2 =*/298).string(message.punishmentSeriesId);
+            if (message.chessBoardTheme != null && $Object.hasOwnProperty.call(message, "chessBoardTheme") && message.chessBoardTheme !== "")
+                writer.uint32(/* id 38, wireType 2 =*/306).string(message.chessBoardTheme);
+            if (message.chessMoveSeconds != null && $Object.hasOwnProperty.call(message, "chessMoveSeconds") && message.chessMoveSeconds !== 0)
+                writer.uint32(/* id 39, wireType 0 =*/312).int32(message.chessMoveSeconds);
+            if (message.chessGameMinutes != null && $Object.hasOwnProperty.call(message, "chessGameMinutes") && message.chessGameMinutes !== 0)
+                writer.uint32(/* id 40, wireType 0 =*/320).int32(message.chessGameMinutes);
+            if (message.jungleUndoLimit != null && $Object.hasOwnProperty.call(message, "jungleUndoLimit") && message.jungleUndoLimit !== 0)
+                writer.uint32(/* id 41, wireType 0 =*/328).int32(message.jungleUndoLimit);
+            if (message.chessUndoLimit != null && $Object.hasOwnProperty.call(message, "chessUndoLimit") && message.chessUndoLimit !== 0)
+                writer.uint32(/* id 42, wireType 0 =*/336).int32(message.chessUndoLimit);
+            if (message.othelloUndoLimit != null && $Object.hasOwnProperty.call(message, "othelloUndoLimit") && message.othelloUndoLimit !== 0)
+                writer.uint32(/* id 43, wireType 0 =*/344).int32(message.othelloUndoLimit);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -10510,6 +10606,60 @@ export const game = $root.game = (() => {
                             delete message.punishmentSeriesId;
                         continue;
                     }
+                case 38: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.chessBoardTheme = value;
+                        else
+                            delete message.chessBoardTheme;
+                        continue;
+                    }
+                case 39: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.chessMoveSeconds = value;
+                        else
+                            delete message.chessMoveSeconds;
+                        continue;
+                    }
+                case 40: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.chessGameMinutes = value;
+                        else
+                            delete message.chessGameMinutes;
+                        continue;
+                    }
+                case 41: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.jungleUndoLimit = value;
+                        else
+                            delete message.jungleUndoLimit;
+                        continue;
+                    }
+                case 42: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.chessUndoLimit = value;
+                        else
+                            delete message.chessUndoLimit;
+                        continue;
+                    }
+                case 43: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.othelloUndoLimit = value;
+                        else
+                            delete message.othelloUndoLimit;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -10671,6 +10821,24 @@ export const game = $root.game = (() => {
             if (message.punishmentSeriesId != null && $Object.hasOwnProperty.call(message, "punishmentSeriesId"))
                 if (!$util.isString(message.punishmentSeriesId))
                     return "punishmentSeriesId: string expected";
+            if (message.chessBoardTheme != null && $Object.hasOwnProperty.call(message, "chessBoardTheme"))
+                if (!$util.isString(message.chessBoardTheme))
+                    return "chessBoardTheme: string expected";
+            if (message.chessMoveSeconds != null && $Object.hasOwnProperty.call(message, "chessMoveSeconds"))
+                if (!$util.isInteger(message.chessMoveSeconds))
+                    return "chessMoveSeconds: integer expected";
+            if (message.chessGameMinutes != null && $Object.hasOwnProperty.call(message, "chessGameMinutes"))
+                if (!$util.isInteger(message.chessGameMinutes))
+                    return "chessGameMinutes: integer expected";
+            if (message.jungleUndoLimit != null && $Object.hasOwnProperty.call(message, "jungleUndoLimit"))
+                if (!$util.isInteger(message.jungleUndoLimit))
+                    return "jungleUndoLimit: integer expected";
+            if (message.chessUndoLimit != null && $Object.hasOwnProperty.call(message, "chessUndoLimit"))
+                if (!$util.isInteger(message.chessUndoLimit))
+                    return "chessUndoLimit: integer expected";
+            if (message.othelloUndoLimit != null && $Object.hasOwnProperty.call(message, "othelloUndoLimit"))
+                if (!$util.isInteger(message.othelloUndoLimit))
+                    return "othelloUndoLimit: integer expected";
             return null;
         };
 
@@ -10810,6 +10978,24 @@ export const game = $root.game = (() => {
             if (object.punishmentSeriesId != null)
                 if (typeof object.punishmentSeriesId !== "string" || object.punishmentSeriesId.length)
                     message.punishmentSeriesId = $String(object.punishmentSeriesId);
+            if (object.chessBoardTheme != null)
+                if (typeof object.chessBoardTheme !== "string" || object.chessBoardTheme.length)
+                    message.chessBoardTheme = $String(object.chessBoardTheme);
+            if (object.chessMoveSeconds != null)
+                if ($Number(object.chessMoveSeconds) !== 0)
+                    message.chessMoveSeconds = object.chessMoveSeconds | 0;
+            if (object.chessGameMinutes != null)
+                if ($Number(object.chessGameMinutes) !== 0)
+                    message.chessGameMinutes = object.chessGameMinutes | 0;
+            if (object.jungleUndoLimit != null)
+                if ($Number(object.jungleUndoLimit) !== 0)
+                    message.jungleUndoLimit = object.jungleUndoLimit | 0;
+            if (object.chessUndoLimit != null)
+                if ($Number(object.chessUndoLimit) !== 0)
+                    message.chessUndoLimit = object.chessUndoLimit | 0;
+            if (object.othelloUndoLimit != null)
+                if ($Number(object.othelloUndoLimit) !== 0)
+                    message.othelloUndoLimit = object.othelloUndoLimit | 0;
             return message;
         };
 
@@ -10867,6 +11053,12 @@ export const game = $root.game = (() => {
                 object.jungleMoveSeconds = 0;
                 object.jungleGameMinutes = 0;
                 object.punishmentSeriesId = "";
+                object.chessBoardTheme = "";
+                object.chessMoveSeconds = 0;
+                object.chessGameMinutes = 0;
+                object.jungleUndoLimit = 0;
+                object.chessUndoLimit = 0;
+                object.othelloUndoLimit = 0;
             }
             if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
                 object.name = message.name;
@@ -10948,6 +11140,18 @@ export const game = $root.game = (() => {
             }
             if (message.punishmentSeriesId != null && $Object.hasOwnProperty.call(message, "punishmentSeriesId"))
                 object.punishmentSeriesId = message.punishmentSeriesId;
+            if (message.chessBoardTheme != null && $Object.hasOwnProperty.call(message, "chessBoardTheme"))
+                object.chessBoardTheme = message.chessBoardTheme;
+            if (message.chessMoveSeconds != null && $Object.hasOwnProperty.call(message, "chessMoveSeconds"))
+                object.chessMoveSeconds = message.chessMoveSeconds;
+            if (message.chessGameMinutes != null && $Object.hasOwnProperty.call(message, "chessGameMinutes"))
+                object.chessGameMinutes = message.chessGameMinutes;
+            if (message.jungleUndoLimit != null && $Object.hasOwnProperty.call(message, "jungleUndoLimit"))
+                object.jungleUndoLimit = message.jungleUndoLimit;
+            if (message.chessUndoLimit != null && $Object.hasOwnProperty.call(message, "chessUndoLimit"))
+                object.chessUndoLimit = message.chessUndoLimit;
+            if (message.othelloUndoLimit != null && $Object.hasOwnProperty.call(message, "othelloUndoLimit"))
+                object.othelloUndoLimit = message.othelloUndoLimit;
             return object;
         };
 
@@ -12892,6 +13096,386 @@ export const game = $root.game = (() => {
         return JungleResignRequest;
     })();
 
+    game.JungleUndoRequest = (function() {
+
+        /**
+         * Properties of a JungleUndoRequest.
+         * @typedef {Object} game.JungleUndoRequest.$Properties
+         * @property {string|null} [fromSeat] JungleUndoRequest fromSeat
+         * @property {string|null} [toSeat] JungleUndoRequest toSeat
+         * @property {number|Long|null} [createdAt] JungleUndoRequest createdAt
+         * @property {number|Long|null} [expiresAt] JungleUndoRequest expiresAt
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a JungleUndoRequest.
+         * @memberof game
+         * @interface IJungleUndoRequest
+         * @augments game.JungleUndoRequest.$Properties
+         * @deprecated Use game.JungleUndoRequest.$Properties instead.
+         */
+
+        /**
+         * Shape of a JungleUndoRequest.
+         * @typedef {game.JungleUndoRequest.$Properties} game.JungleUndoRequest.$Shape
+         */
+
+        /**
+         * Constructs a new JungleUndoRequest.
+         * @memberof game
+         * @classdesc Represents a JungleUndoRequest.
+         * @constructor
+         * @param {game.JungleUndoRequest.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const JungleUndoRequest = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * JungleUndoRequest fromSeat.
+         * @member {string} fromSeat
+         * @memberof game.JungleUndoRequest
+         * @instance
+         */
+        JungleUndoRequest.prototype.fromSeat = "";
+
+        /**
+         * JungleUndoRequest toSeat.
+         * @member {string} toSeat
+         * @memberof game.JungleUndoRequest
+         * @instance
+         */
+        JungleUndoRequest.prototype.toSeat = "";
+
+        /**
+         * JungleUndoRequest createdAt.
+         * @member {number|Long} createdAt
+         * @memberof game.JungleUndoRequest
+         * @instance
+         */
+        JungleUndoRequest.prototype.createdAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * JungleUndoRequest expiresAt.
+         * @member {number|Long} expiresAt
+         * @memberof game.JungleUndoRequest
+         * @instance
+         */
+        JungleUndoRequest.prototype.expiresAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * Creates a new JungleUndoRequest instance using the specified properties.
+         * @function create
+         * @memberof game.JungleUndoRequest
+         * @static
+         * @param {game.JungleUndoRequest.$Properties=} [properties] Properties to set
+         * @returns {game.JungleUndoRequest} JungleUndoRequest instance
+         * @type {{
+         *   (properties: game.JungleUndoRequest.$Shape): game.JungleUndoRequest & game.JungleUndoRequest.$Shape;
+         *   (properties?: game.JungleUndoRequest.$Properties): game.JungleUndoRequest;
+         * }}
+         */
+        JungleUndoRequest.create = function(properties) {
+            return new JungleUndoRequest(properties);
+        };
+
+        /**
+         * Encodes the specified JungleUndoRequest message. Does not implicitly {@link game.JungleUndoRequest.verify|verify} messages.
+         * @function encode
+         * @memberof game.JungleUndoRequest
+         * @static
+         * @param {game.JungleUndoRequest.$Properties} message JungleUndoRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        JungleUndoRequest.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat") && message.fromSeat !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.fromSeat);
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat") && message.toSeat !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.toSeat);
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt") && (typeof message.createdAt === "object" ? message.createdAt.low || message.createdAt.high : message.createdAt !== 0))
+                writer.uint32(/* id 3, wireType 0 =*/24).int64(message.createdAt);
+            if (message.expiresAt != null && $Object.hasOwnProperty.call(message, "expiresAt") && (typeof message.expiresAt === "object" ? message.expiresAt.low || message.expiresAt.high : message.expiresAt !== 0))
+                writer.uint32(/* id 4, wireType 0 =*/32).int64(message.expiresAt);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified JungleUndoRequest message, length delimited. Does not implicitly {@link game.JungleUndoRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.JungleUndoRequest
+         * @static
+         * @param {game.JungleUndoRequest.$Properties} message JungleUndoRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        JungleUndoRequest.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a JungleUndoRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.JungleUndoRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.JungleUndoRequest & game.JungleUndoRequest.$Shape} JungleUndoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        JungleUndoRequest.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.JungleUndoRequest(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.fromSeat = value;
+                        else
+                            delete message.fromSeat;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.toSeat = value;
+                        else
+                            delete message.toSeat;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 0)
+                            break;
+                        if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                            message.createdAt = value;
+                        else
+                            delete message.createdAt;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 0)
+                            break;
+                        if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                            message.expiresAt = value;
+                        else
+                            delete message.expiresAt;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a JungleUndoRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.JungleUndoRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.JungleUndoRequest & game.JungleUndoRequest.$Shape} JungleUndoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        JungleUndoRequest.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a JungleUndoRequest message.
+         * @function verify
+         * @memberof game.JungleUndoRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        JungleUndoRequest.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat"))
+                if (!$util.isString(message.fromSeat))
+                    return "fromSeat: string expected";
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat"))
+                if (!$util.isString(message.toSeat))
+                    return "toSeat: string expected";
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt"))
+                if (!$util.isInteger(message.createdAt) && !(message.createdAt && $util.isInteger(message.createdAt.low) && $util.isInteger(message.createdAt.high)))
+                    return "createdAt: integer|Long expected";
+            if (message.expiresAt != null && $Object.hasOwnProperty.call(message, "expiresAt"))
+                if (!$util.isInteger(message.expiresAt) && !(message.expiresAt && $util.isInteger(message.expiresAt.low) && $util.isInteger(message.expiresAt.high)))
+                    return "expiresAt: integer|Long expected";
+            return null;
+        };
+
+        /**
+         * Creates a JungleUndoRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.JungleUndoRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.JungleUndoRequest} JungleUndoRequest
+         */
+        JungleUndoRequest.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.JungleUndoRequest)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.JungleUndoRequest: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.JungleUndoRequest();
+            if (object.fromSeat != null)
+                if (typeof object.fromSeat !== "string" || object.fromSeat.length)
+                    message.fromSeat = $String(object.fromSeat);
+            if (object.toSeat != null)
+                if (typeof object.toSeat !== "string" || object.toSeat.length)
+                    message.toSeat = $String(object.toSeat);
+            if (object.createdAt != null)
+                if (typeof object.createdAt === "object" ? object.createdAt.low || object.createdAt.high : $Number(object.createdAt) !== 0)
+                    if ($util.Long)
+                        message.createdAt = $util.Long.fromValue(object.createdAt, false);
+                    else if (typeof object.createdAt === "string")
+                        message.createdAt = $parseInt(object.createdAt, 10);
+                    else if (typeof object.createdAt === "number")
+                        message.createdAt = object.createdAt;
+                    else if (typeof object.createdAt === "object")
+                        message.createdAt = new $util.LongBits(object.createdAt.low >>> 0, object.createdAt.high >>> 0).toNumber();
+            if (object.expiresAt != null)
+                if (typeof object.expiresAt === "object" ? object.expiresAt.low || object.expiresAt.high : $Number(object.expiresAt) !== 0)
+                    if ($util.Long)
+                        message.expiresAt = $util.Long.fromValue(object.expiresAt, false);
+                    else if (typeof object.expiresAt === "string")
+                        message.expiresAt = $parseInt(object.expiresAt, 10);
+                    else if (typeof object.expiresAt === "number")
+                        message.expiresAt = object.expiresAt;
+                    else if (typeof object.expiresAt === "object")
+                        message.expiresAt = new $util.LongBits(object.expiresAt.low >>> 0, object.expiresAt.high >>> 0).toNumber();
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a JungleUndoRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.JungleUndoRequest
+         * @static
+         * @param {game.JungleUndoRequest} message JungleUndoRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        JungleUndoRequest.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.fromSeat = "";
+                object.toSeat = "";
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.createdAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                } else
+                    object.createdAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.expiresAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                } else
+                    object.expiresAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+            }
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat"))
+                object.fromSeat = message.fromSeat;
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat"))
+                object.toSeat = message.toSeat;
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt"))
+                if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                    object.createdAt = typeof message.createdAt === "number" ? $BigInt(message.createdAt) : $util.Long.fromBits(message.createdAt.low >>> 0, message.createdAt.high >>> 0, false).toBigInt();
+                else if (typeof message.createdAt === "number")
+                    object.createdAt = options.longs === $String ? $String(message.createdAt) : message.createdAt;
+                else
+                    object.createdAt = options.longs === $String ? $util.Long.prototype.toString.call(message.createdAt) : options.longs === $Number ? new $util.LongBits(message.createdAt.low >>> 0, message.createdAt.high >>> 0).toNumber() : message.createdAt;
+            if (message.expiresAt != null && $Object.hasOwnProperty.call(message, "expiresAt"))
+                if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                    object.expiresAt = typeof message.expiresAt === "number" ? $BigInt(message.expiresAt) : $util.Long.fromBits(message.expiresAt.low >>> 0, message.expiresAt.high >>> 0, false).toBigInt();
+                else if (typeof message.expiresAt === "number")
+                    object.expiresAt = options.longs === $String ? $String(message.expiresAt) : message.expiresAt;
+                else
+                    object.expiresAt = options.longs === $String ? $util.Long.prototype.toString.call(message.expiresAt) : options.longs === $Number ? new $util.LongBits(message.expiresAt.low >>> 0, message.expiresAt.high >>> 0).toNumber() : message.expiresAt;
+            return object;
+        };
+
+        /**
+         * Converts this JungleUndoRequest to JSON.
+         * @function toJSON
+         * @memberof game.JungleUndoRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        JungleUndoRequest.prototype.toJSON = function() {
+            return JungleUndoRequest.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for JungleUndoRequest
+         * @function getTypeUrl
+         * @memberof game.JungleUndoRequest
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        JungleUndoRequest.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.JungleUndoRequest";
+        };
+
+        return JungleUndoRequest;
+    })();
+
     game.JungleState = (function() {
 
         /**
@@ -12909,6 +13493,8 @@ export const game = $root.game = (() => {
          * @property {number|Long|null} [moveDeadlineAt] JungleState moveDeadlineAt
          * @property {number|Long|null} [clockDeadlineAt] JungleState clockDeadlineAt
          * @property {Array.<game.IntPair.$Properties>|null} [clockRemaining] JungleState clockRemaining
+         * @property {Array.<game.IntPair.$Properties>|null} [undoCount] JungleState undoCount
+         * @property {game.JungleUndoRequest.$Properties|null} [undoRequest] JungleState undoRequest
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -12937,6 +13523,7 @@ export const game = $root.game = (() => {
             this.board = [];
             this.rankedDelta = [];
             this.clockRemaining = [];
+            this.undoCount = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -13040,6 +13627,22 @@ export const game = $root.game = (() => {
         JungleState.prototype.clockRemaining = $util.emptyArray;
 
         /**
+         * JungleState undoCount.
+         * @member {Array.<game.IntPair.$Properties>} undoCount
+         * @memberof game.JungleState
+         * @instance
+         */
+        JungleState.prototype.undoCount = $util.emptyArray;
+
+        /**
+         * JungleState undoRequest.
+         * @member {game.JungleUndoRequest.$Properties|null|undefined} undoRequest
+         * @memberof game.JungleState
+         * @instance
+         */
+        JungleState.prototype.undoRequest = null;
+
+        /**
          * Creates a new JungleState instance using the specified properties.
          * @function create
          * @memberof game.JungleState
@@ -13098,6 +13701,11 @@ export const game = $root.game = (() => {
             if (message.clockRemaining != null && message.clockRemaining.length)
                 for (let i = 0; i < message.clockRemaining.length; ++i)
                     $root.game.IntPair.encode(message.clockRemaining[i], writer.uint32(/* id 12, wireType 2 =*/98).fork(), _depth + 1).ldelim();
+            if (message.undoCount != null && message.undoCount.length)
+                for (let i = 0; i < message.undoCount.length; ++i)
+                    $root.game.IntPair.encode(message.undoCount[i], writer.uint32(/* id 13, wireType 2 =*/106).fork(), _depth + 1).ldelim();
+            if (message.undoRequest != null && $Object.hasOwnProperty.call(message, "undoRequest"))
+                $root.game.JungleUndoRequest.encode(message.undoRequest, writer.uint32(/* id 14, wireType 2 =*/114).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -13241,6 +13849,20 @@ export const game = $root.game = (() => {
                         message.clockRemaining.push($root.game.IntPair.decode(reader, reader.uint32(), $undefined, _depth + 1));
                         continue;
                     }
+                case 13: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.undoCount && message.undoCount.length))
+                            message.undoCount = [];
+                        message.undoCount.push($root.game.IntPair.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 14: {
+                        if (wireType !== 2)
+                            break;
+                        message.undoRequest = $root.game.JungleUndoRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.undoRequest);
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -13344,6 +13966,20 @@ export const game = $root.game = (() => {
                         return "clockRemaining." + error;
                 }
             }
+            if (message.undoCount != null && $Object.hasOwnProperty.call(message, "undoCount")) {
+                if (!$Array.isArray(message.undoCount))
+                    return "undoCount: array expected";
+                for (let i = 0; i < message.undoCount.length; ++i) {
+                    let error = $root.game.IntPair.verify(message.undoCount[i], _depth + 1);
+                    if (error)
+                        return "undoCount." + error;
+                }
+            }
+            if (message.undoRequest != null && $Object.hasOwnProperty.call(message, "undoRequest")) {
+                let error = $root.game.JungleUndoRequest.verify(message.undoRequest, _depth + 1);
+                if (error)
+                    return "undoRequest." + error;
+            }
             return null;
         };
 
@@ -13442,6 +14078,21 @@ export const game = $root.game = (() => {
                     message.clockRemaining[i] = $root.game.IntPair.fromObject(object.clockRemaining[i], _depth + 1);
                 }
             }
+            if (object.undoCount) {
+                if (!$Array.isArray(object.undoCount))
+                    throw $TypeError(".game.JungleState.undoCount: array expected");
+                message.undoCount = $Array(object.undoCount.length);
+                for (let i = 0; i < object.undoCount.length; ++i) {
+                    if (!$util.isObject(object.undoCount[i]))
+                        throw $TypeError(".game.JungleState.undoCount: object expected");
+                    message.undoCount[i] = $root.game.IntPair.fromObject(object.undoCount[i], _depth + 1);
+                }
+            }
+            if (object.undoRequest != null) {
+                if (!$util.isObject(object.undoRequest))
+                    throw $TypeError(".game.JungleState.undoRequest: object expected");
+                message.undoRequest = $root.game.JungleUndoRequest.fromObject(object.undoRequest, _depth + 1);
+            }
             return message;
         };
 
@@ -13466,6 +14117,7 @@ export const game = $root.game = (() => {
                 object.board = [];
                 object.rankedDelta = [];
                 object.clockRemaining = [];
+                object.undoCount = [];
             }
             if (options.defaults) {
                 object.turn = "";
@@ -13485,6 +14137,7 @@ export const game = $root.game = (() => {
                     object.clockDeadlineAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.clockDeadlineAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                object.undoRequest = null;
             }
             if (message.board && message.board.length) {
                 object.board = $Array(message.board.length);
@@ -13529,6 +14182,13 @@ export const game = $root.game = (() => {
                 for (let j = 0; j < message.clockRemaining.length; ++j)
                     object.clockRemaining[j] = $root.game.IntPair.toObject(message.clockRemaining[j], options, _depth + 1);
             }
+            if (message.undoCount && message.undoCount.length) {
+                object.undoCount = $Array(message.undoCount.length);
+                for (let j = 0; j < message.undoCount.length; ++j)
+                    object.undoCount[j] = $root.game.IntPair.toObject(message.undoCount[j], options, _depth + 1);
+            }
+            if (message.undoRequest != null && $Object.hasOwnProperty.call(message, "undoRequest"))
+                object.undoRequest = $root.game.JungleUndoRequest.toObject(message.undoRequest, options, _depth + 1);
             return object;
         };
 
@@ -13558,6 +14218,2065 @@ export const game = $root.game = (() => {
         };
 
         return JungleState;
+    })();
+
+    game.ChessResignRequest = (function() {
+
+        /**
+         * Properties of a ChessResignRequest.
+         * @typedef {Object} game.ChessResignRequest.$Properties
+         * @property {string|null} [fromSeat] ChessResignRequest fromSeat
+         * @property {string|null} [toSeat] ChessResignRequest toSeat
+         * @property {number|Long|null} [createdAt] ChessResignRequest createdAt
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a ChessResignRequest.
+         * @memberof game
+         * @interface IChessResignRequest
+         * @augments game.ChessResignRequest.$Properties
+         * @deprecated Use game.ChessResignRequest.$Properties instead.
+         */
+
+        /**
+         * Shape of a ChessResignRequest.
+         * @typedef {game.ChessResignRequest.$Properties} game.ChessResignRequest.$Shape
+         */
+
+        /**
+         * Constructs a new ChessResignRequest.
+         * @memberof game
+         * @classdesc Represents a ChessResignRequest.
+         * @constructor
+         * @param {game.ChessResignRequest.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const ChessResignRequest = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * ChessResignRequest fromSeat.
+         * @member {string} fromSeat
+         * @memberof game.ChessResignRequest
+         * @instance
+         */
+        ChessResignRequest.prototype.fromSeat = "";
+
+        /**
+         * ChessResignRequest toSeat.
+         * @member {string} toSeat
+         * @memberof game.ChessResignRequest
+         * @instance
+         */
+        ChessResignRequest.prototype.toSeat = "";
+
+        /**
+         * ChessResignRequest createdAt.
+         * @member {number|Long} createdAt
+         * @memberof game.ChessResignRequest
+         * @instance
+         */
+        ChessResignRequest.prototype.createdAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * Creates a new ChessResignRequest instance using the specified properties.
+         * @function create
+         * @memberof game.ChessResignRequest
+         * @static
+         * @param {game.ChessResignRequest.$Properties=} [properties] Properties to set
+         * @returns {game.ChessResignRequest} ChessResignRequest instance
+         * @type {{
+         *   (properties: game.ChessResignRequest.$Shape): game.ChessResignRequest & game.ChessResignRequest.$Shape;
+         *   (properties?: game.ChessResignRequest.$Properties): game.ChessResignRequest;
+         * }}
+         */
+        ChessResignRequest.create = function(properties) {
+            return new ChessResignRequest(properties);
+        };
+
+        /**
+         * Encodes the specified ChessResignRequest message. Does not implicitly {@link game.ChessResignRequest.verify|verify} messages.
+         * @function encode
+         * @memberof game.ChessResignRequest
+         * @static
+         * @param {game.ChessResignRequest.$Properties} message ChessResignRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ChessResignRequest.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat") && message.fromSeat !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.fromSeat);
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat") && message.toSeat !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.toSeat);
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt") && (typeof message.createdAt === "object" ? message.createdAt.low || message.createdAt.high : message.createdAt !== 0))
+                writer.uint32(/* id 3, wireType 0 =*/24).int64(message.createdAt);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ChessResignRequest message, length delimited. Does not implicitly {@link game.ChessResignRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.ChessResignRequest
+         * @static
+         * @param {game.ChessResignRequest.$Properties} message ChessResignRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ChessResignRequest.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a ChessResignRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.ChessResignRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.ChessResignRequest & game.ChessResignRequest.$Shape} ChessResignRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ChessResignRequest.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.ChessResignRequest(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.fromSeat = value;
+                        else
+                            delete message.fromSeat;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.toSeat = value;
+                        else
+                            delete message.toSeat;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 0)
+                            break;
+                        if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                            message.createdAt = value;
+                        else
+                            delete message.createdAt;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a ChessResignRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.ChessResignRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.ChessResignRequest & game.ChessResignRequest.$Shape} ChessResignRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ChessResignRequest.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ChessResignRequest message.
+         * @function verify
+         * @memberof game.ChessResignRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ChessResignRequest.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat"))
+                if (!$util.isString(message.fromSeat))
+                    return "fromSeat: string expected";
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat"))
+                if (!$util.isString(message.toSeat))
+                    return "toSeat: string expected";
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt"))
+                if (!$util.isInteger(message.createdAt) && !(message.createdAt && $util.isInteger(message.createdAt.low) && $util.isInteger(message.createdAt.high)))
+                    return "createdAt: integer|Long expected";
+            return null;
+        };
+
+        /**
+         * Creates a ChessResignRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.ChessResignRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.ChessResignRequest} ChessResignRequest
+         */
+        ChessResignRequest.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.ChessResignRequest)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.ChessResignRequest: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.ChessResignRequest();
+            if (object.fromSeat != null)
+                if (typeof object.fromSeat !== "string" || object.fromSeat.length)
+                    message.fromSeat = $String(object.fromSeat);
+            if (object.toSeat != null)
+                if (typeof object.toSeat !== "string" || object.toSeat.length)
+                    message.toSeat = $String(object.toSeat);
+            if (object.createdAt != null)
+                if (typeof object.createdAt === "object" ? object.createdAt.low || object.createdAt.high : $Number(object.createdAt) !== 0)
+                    if ($util.Long)
+                        message.createdAt = $util.Long.fromValue(object.createdAt, false);
+                    else if (typeof object.createdAt === "string")
+                        message.createdAt = $parseInt(object.createdAt, 10);
+                    else if (typeof object.createdAt === "number")
+                        message.createdAt = object.createdAt;
+                    else if (typeof object.createdAt === "object")
+                        message.createdAt = new $util.LongBits(object.createdAt.low >>> 0, object.createdAt.high >>> 0).toNumber();
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ChessResignRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.ChessResignRequest
+         * @static
+         * @param {game.ChessResignRequest} message ChessResignRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ChessResignRequest.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.fromSeat = "";
+                object.toSeat = "";
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.createdAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                } else
+                    object.createdAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+            }
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat"))
+                object.fromSeat = message.fromSeat;
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat"))
+                object.toSeat = message.toSeat;
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt"))
+                if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                    object.createdAt = typeof message.createdAt === "number" ? $BigInt(message.createdAt) : $util.Long.fromBits(message.createdAt.low >>> 0, message.createdAt.high >>> 0, false).toBigInt();
+                else if (typeof message.createdAt === "number")
+                    object.createdAt = options.longs === $String ? $String(message.createdAt) : message.createdAt;
+                else
+                    object.createdAt = options.longs === $String ? $util.Long.prototype.toString.call(message.createdAt) : options.longs === $Number ? new $util.LongBits(message.createdAt.low >>> 0, message.createdAt.high >>> 0).toNumber() : message.createdAt;
+            return object;
+        };
+
+        /**
+         * Converts this ChessResignRequest to JSON.
+         * @function toJSON
+         * @memberof game.ChessResignRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ChessResignRequest.prototype.toJSON = function() {
+            return ChessResignRequest.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for ChessResignRequest
+         * @function getTypeUrl
+         * @memberof game.ChessResignRequest
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        ChessResignRequest.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.ChessResignRequest";
+        };
+
+        return ChessResignRequest;
+    })();
+
+    game.ChessUndoRequest = (function() {
+
+        /**
+         * Properties of a ChessUndoRequest.
+         * @typedef {Object} game.ChessUndoRequest.$Properties
+         * @property {string|null} [fromSeat] ChessUndoRequest fromSeat
+         * @property {string|null} [toSeat] ChessUndoRequest toSeat
+         * @property {number|Long|null} [createdAt] ChessUndoRequest createdAt
+         * @property {number|Long|null} [expiresAt] ChessUndoRequest expiresAt
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a ChessUndoRequest.
+         * @memberof game
+         * @interface IChessUndoRequest
+         * @augments game.ChessUndoRequest.$Properties
+         * @deprecated Use game.ChessUndoRequest.$Properties instead.
+         */
+
+        /**
+         * Shape of a ChessUndoRequest.
+         * @typedef {game.ChessUndoRequest.$Properties} game.ChessUndoRequest.$Shape
+         */
+
+        /**
+         * Constructs a new ChessUndoRequest.
+         * @memberof game
+         * @classdesc Represents a ChessUndoRequest.
+         * @constructor
+         * @param {game.ChessUndoRequest.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const ChessUndoRequest = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * ChessUndoRequest fromSeat.
+         * @member {string} fromSeat
+         * @memberof game.ChessUndoRequest
+         * @instance
+         */
+        ChessUndoRequest.prototype.fromSeat = "";
+
+        /**
+         * ChessUndoRequest toSeat.
+         * @member {string} toSeat
+         * @memberof game.ChessUndoRequest
+         * @instance
+         */
+        ChessUndoRequest.prototype.toSeat = "";
+
+        /**
+         * ChessUndoRequest createdAt.
+         * @member {number|Long} createdAt
+         * @memberof game.ChessUndoRequest
+         * @instance
+         */
+        ChessUndoRequest.prototype.createdAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * ChessUndoRequest expiresAt.
+         * @member {number|Long} expiresAt
+         * @memberof game.ChessUndoRequest
+         * @instance
+         */
+        ChessUndoRequest.prototype.expiresAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * Creates a new ChessUndoRequest instance using the specified properties.
+         * @function create
+         * @memberof game.ChessUndoRequest
+         * @static
+         * @param {game.ChessUndoRequest.$Properties=} [properties] Properties to set
+         * @returns {game.ChessUndoRequest} ChessUndoRequest instance
+         * @type {{
+         *   (properties: game.ChessUndoRequest.$Shape): game.ChessUndoRequest & game.ChessUndoRequest.$Shape;
+         *   (properties?: game.ChessUndoRequest.$Properties): game.ChessUndoRequest;
+         * }}
+         */
+        ChessUndoRequest.create = function(properties) {
+            return new ChessUndoRequest(properties);
+        };
+
+        /**
+         * Encodes the specified ChessUndoRequest message. Does not implicitly {@link game.ChessUndoRequest.verify|verify} messages.
+         * @function encode
+         * @memberof game.ChessUndoRequest
+         * @static
+         * @param {game.ChessUndoRequest.$Properties} message ChessUndoRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ChessUndoRequest.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat") && message.fromSeat !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.fromSeat);
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat") && message.toSeat !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.toSeat);
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt") && (typeof message.createdAt === "object" ? message.createdAt.low || message.createdAt.high : message.createdAt !== 0))
+                writer.uint32(/* id 3, wireType 0 =*/24).int64(message.createdAt);
+            if (message.expiresAt != null && $Object.hasOwnProperty.call(message, "expiresAt") && (typeof message.expiresAt === "object" ? message.expiresAt.low || message.expiresAt.high : message.expiresAt !== 0))
+                writer.uint32(/* id 4, wireType 0 =*/32).int64(message.expiresAt);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ChessUndoRequest message, length delimited. Does not implicitly {@link game.ChessUndoRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.ChessUndoRequest
+         * @static
+         * @param {game.ChessUndoRequest.$Properties} message ChessUndoRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ChessUndoRequest.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a ChessUndoRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.ChessUndoRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.ChessUndoRequest & game.ChessUndoRequest.$Shape} ChessUndoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ChessUndoRequest.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.ChessUndoRequest(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.fromSeat = value;
+                        else
+                            delete message.fromSeat;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.toSeat = value;
+                        else
+                            delete message.toSeat;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 0)
+                            break;
+                        if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                            message.createdAt = value;
+                        else
+                            delete message.createdAt;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 0)
+                            break;
+                        if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                            message.expiresAt = value;
+                        else
+                            delete message.expiresAt;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a ChessUndoRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.ChessUndoRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.ChessUndoRequest & game.ChessUndoRequest.$Shape} ChessUndoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ChessUndoRequest.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ChessUndoRequest message.
+         * @function verify
+         * @memberof game.ChessUndoRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ChessUndoRequest.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat"))
+                if (!$util.isString(message.fromSeat))
+                    return "fromSeat: string expected";
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat"))
+                if (!$util.isString(message.toSeat))
+                    return "toSeat: string expected";
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt"))
+                if (!$util.isInteger(message.createdAt) && !(message.createdAt && $util.isInteger(message.createdAt.low) && $util.isInteger(message.createdAt.high)))
+                    return "createdAt: integer|Long expected";
+            if (message.expiresAt != null && $Object.hasOwnProperty.call(message, "expiresAt"))
+                if (!$util.isInteger(message.expiresAt) && !(message.expiresAt && $util.isInteger(message.expiresAt.low) && $util.isInteger(message.expiresAt.high)))
+                    return "expiresAt: integer|Long expected";
+            return null;
+        };
+
+        /**
+         * Creates a ChessUndoRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.ChessUndoRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.ChessUndoRequest} ChessUndoRequest
+         */
+        ChessUndoRequest.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.ChessUndoRequest)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.ChessUndoRequest: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.ChessUndoRequest();
+            if (object.fromSeat != null)
+                if (typeof object.fromSeat !== "string" || object.fromSeat.length)
+                    message.fromSeat = $String(object.fromSeat);
+            if (object.toSeat != null)
+                if (typeof object.toSeat !== "string" || object.toSeat.length)
+                    message.toSeat = $String(object.toSeat);
+            if (object.createdAt != null)
+                if (typeof object.createdAt === "object" ? object.createdAt.low || object.createdAt.high : $Number(object.createdAt) !== 0)
+                    if ($util.Long)
+                        message.createdAt = $util.Long.fromValue(object.createdAt, false);
+                    else if (typeof object.createdAt === "string")
+                        message.createdAt = $parseInt(object.createdAt, 10);
+                    else if (typeof object.createdAt === "number")
+                        message.createdAt = object.createdAt;
+                    else if (typeof object.createdAt === "object")
+                        message.createdAt = new $util.LongBits(object.createdAt.low >>> 0, object.createdAt.high >>> 0).toNumber();
+            if (object.expiresAt != null)
+                if (typeof object.expiresAt === "object" ? object.expiresAt.low || object.expiresAt.high : $Number(object.expiresAt) !== 0)
+                    if ($util.Long)
+                        message.expiresAt = $util.Long.fromValue(object.expiresAt, false);
+                    else if (typeof object.expiresAt === "string")
+                        message.expiresAt = $parseInt(object.expiresAt, 10);
+                    else if (typeof object.expiresAt === "number")
+                        message.expiresAt = object.expiresAt;
+                    else if (typeof object.expiresAt === "object")
+                        message.expiresAt = new $util.LongBits(object.expiresAt.low >>> 0, object.expiresAt.high >>> 0).toNumber();
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ChessUndoRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.ChessUndoRequest
+         * @static
+         * @param {game.ChessUndoRequest} message ChessUndoRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ChessUndoRequest.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.fromSeat = "";
+                object.toSeat = "";
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.createdAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                } else
+                    object.createdAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.expiresAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                } else
+                    object.expiresAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+            }
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat"))
+                object.fromSeat = message.fromSeat;
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat"))
+                object.toSeat = message.toSeat;
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt"))
+                if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                    object.createdAt = typeof message.createdAt === "number" ? $BigInt(message.createdAt) : $util.Long.fromBits(message.createdAt.low >>> 0, message.createdAt.high >>> 0, false).toBigInt();
+                else if (typeof message.createdAt === "number")
+                    object.createdAt = options.longs === $String ? $String(message.createdAt) : message.createdAt;
+                else
+                    object.createdAt = options.longs === $String ? $util.Long.prototype.toString.call(message.createdAt) : options.longs === $Number ? new $util.LongBits(message.createdAt.low >>> 0, message.createdAt.high >>> 0).toNumber() : message.createdAt;
+            if (message.expiresAt != null && $Object.hasOwnProperty.call(message, "expiresAt"))
+                if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                    object.expiresAt = typeof message.expiresAt === "number" ? $BigInt(message.expiresAt) : $util.Long.fromBits(message.expiresAt.low >>> 0, message.expiresAt.high >>> 0, false).toBigInt();
+                else if (typeof message.expiresAt === "number")
+                    object.expiresAt = options.longs === $String ? $String(message.expiresAt) : message.expiresAt;
+                else
+                    object.expiresAt = options.longs === $String ? $util.Long.prototype.toString.call(message.expiresAt) : options.longs === $Number ? new $util.LongBits(message.expiresAt.low >>> 0, message.expiresAt.high >>> 0).toNumber() : message.expiresAt;
+            return object;
+        };
+
+        /**
+         * Converts this ChessUndoRequest to JSON.
+         * @function toJSON
+         * @memberof game.ChessUndoRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ChessUndoRequest.prototype.toJSON = function() {
+            return ChessUndoRequest.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for ChessUndoRequest
+         * @function getTypeUrl
+         * @memberof game.ChessUndoRequest
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        ChessUndoRequest.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.ChessUndoRequest";
+        };
+
+        return ChessUndoRequest;
+    })();
+
+    game.ChessMove = (function() {
+
+        /**
+         * Properties of a ChessMove.
+         * @typedef {Object} game.ChessMove.$Properties
+         * @property {game.Pos.$Properties|null} [from] ChessMove from
+         * @property {game.Pos.$Properties|null} [to] ChessMove to
+         * @property {string|null} [promote] ChessMove promote
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a ChessMove.
+         * @memberof game
+         * @interface IChessMove
+         * @augments game.ChessMove.$Properties
+         * @deprecated Use game.ChessMove.$Properties instead.
+         */
+
+        /**
+         * Shape of a ChessMove.
+         * @typedef {game.ChessMove.$Properties} game.ChessMove.$Shape
+         */
+
+        /**
+         * Constructs a new ChessMove.
+         * @memberof game
+         * @classdesc Represents a ChessMove.
+         * @constructor
+         * @param {game.ChessMove.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const ChessMove = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * ChessMove from.
+         * @member {game.Pos.$Properties|null|undefined} from
+         * @memberof game.ChessMove
+         * @instance
+         */
+        ChessMove.prototype.from = null;
+
+        /**
+         * ChessMove to.
+         * @member {game.Pos.$Properties|null|undefined} to
+         * @memberof game.ChessMove
+         * @instance
+         */
+        ChessMove.prototype.to = null;
+
+        /**
+         * ChessMove promote.
+         * @member {string} promote
+         * @memberof game.ChessMove
+         * @instance
+         */
+        ChessMove.prototype.promote = "";
+
+        /**
+         * Creates a new ChessMove instance using the specified properties.
+         * @function create
+         * @memberof game.ChessMove
+         * @static
+         * @param {game.ChessMove.$Properties=} [properties] Properties to set
+         * @returns {game.ChessMove} ChessMove instance
+         * @type {{
+         *   (properties: game.ChessMove.$Shape): game.ChessMove & game.ChessMove.$Shape;
+         *   (properties?: game.ChessMove.$Properties): game.ChessMove;
+         * }}
+         */
+        ChessMove.create = function(properties) {
+            return new ChessMove(properties);
+        };
+
+        /**
+         * Encodes the specified ChessMove message. Does not implicitly {@link game.ChessMove.verify|verify} messages.
+         * @function encode
+         * @memberof game.ChessMove
+         * @static
+         * @param {game.ChessMove.$Properties} message ChessMove message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ChessMove.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.from != null && $Object.hasOwnProperty.call(message, "from"))
+                $root.game.Pos.encode(message.from, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
+            if (message.to != null && $Object.hasOwnProperty.call(message, "to"))
+                $root.game.Pos.encode(message.to, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
+            if (message.promote != null && $Object.hasOwnProperty.call(message, "promote") && message.promote !== "")
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.promote);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ChessMove message, length delimited. Does not implicitly {@link game.ChessMove.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.ChessMove
+         * @static
+         * @param {game.ChessMove.$Properties} message ChessMove message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ChessMove.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a ChessMove message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.ChessMove
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.ChessMove & game.ChessMove.$Shape} ChessMove
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ChessMove.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.ChessMove(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        message.from = $root.game.Pos.decode(reader, reader.uint32(), $undefined, _depth + 1, message.from);
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        message.to = $root.game.Pos.decode(reader, reader.uint32(), $undefined, _depth + 1, message.to);
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.promote = value;
+                        else
+                            delete message.promote;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a ChessMove message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.ChessMove
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.ChessMove & game.ChessMove.$Shape} ChessMove
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ChessMove.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ChessMove message.
+         * @function verify
+         * @memberof game.ChessMove
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ChessMove.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.from != null && $Object.hasOwnProperty.call(message, "from")) {
+                let error = $root.game.Pos.verify(message.from, _depth + 1);
+                if (error)
+                    return "from." + error;
+            }
+            if (message.to != null && $Object.hasOwnProperty.call(message, "to")) {
+                let error = $root.game.Pos.verify(message.to, _depth + 1);
+                if (error)
+                    return "to." + error;
+            }
+            if (message.promote != null && $Object.hasOwnProperty.call(message, "promote"))
+                if (!$util.isString(message.promote))
+                    return "promote: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a ChessMove message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.ChessMove
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.ChessMove} ChessMove
+         */
+        ChessMove.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.ChessMove)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.ChessMove: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.ChessMove();
+            if (object.from != null) {
+                if (!$util.isObject(object.from))
+                    throw $TypeError(".game.ChessMove.from: object expected");
+                message.from = $root.game.Pos.fromObject(object.from, _depth + 1);
+            }
+            if (object.to != null) {
+                if (!$util.isObject(object.to))
+                    throw $TypeError(".game.ChessMove.to: object expected");
+                message.to = $root.game.Pos.fromObject(object.to, _depth + 1);
+            }
+            if (object.promote != null)
+                if (typeof object.promote !== "string" || object.promote.length)
+                    message.promote = $String(object.promote);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ChessMove message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.ChessMove
+         * @static
+         * @param {game.ChessMove} message ChessMove
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ChessMove.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.from = null;
+                object.to = null;
+                object.promote = "";
+            }
+            if (message.from != null && $Object.hasOwnProperty.call(message, "from"))
+                object.from = $root.game.Pos.toObject(message.from, options, _depth + 1);
+            if (message.to != null && $Object.hasOwnProperty.call(message, "to"))
+                object.to = $root.game.Pos.toObject(message.to, options, _depth + 1);
+            if (message.promote != null && $Object.hasOwnProperty.call(message, "promote"))
+                object.promote = message.promote;
+            return object;
+        };
+
+        /**
+         * Converts this ChessMove to JSON.
+         * @function toJSON
+         * @memberof game.ChessMove
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ChessMove.prototype.toJSON = function() {
+            return ChessMove.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for ChessMove
+         * @function getTypeUrl
+         * @memberof game.ChessMove
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        ChessMove.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.ChessMove";
+        };
+
+        return ChessMove;
+    })();
+
+    game.ChessState = (function() {
+
+        /**
+         * Properties of a ChessState.
+         * @typedef {Object} game.ChessState.$Properties
+         * @property {Array.<game.BoardRow.$Properties>|null} [board] ChessState board
+         * @property {string|null} [turn] ChessState turn
+         * @property {string|null} [whiteSeat] ChessState whiteSeat
+         * @property {number|null} [moveCount] ChessState moveCount
+         * @property {game.Pos.$Properties|null} [lastFrom] ChessState lastFrom
+         * @property {game.Pos.$Properties|null} [lastTo] ChessState lastTo
+         * @property {Array.<game.IntPair.$Properties>|null} [rankedDelta] ChessState rankedDelta
+         * @property {game.ChessResignRequest.$Properties|null} [resignRequest] ChessState resignRequest
+         * @property {boolean|null} [ended] ChessState ended
+         * @property {string|null} [winner] ChessState winner
+         * @property {number|Long|null} [moveDeadlineAt] ChessState moveDeadlineAt
+         * @property {number|Long|null} [clockDeadlineAt] ChessState clockDeadlineAt
+         * @property {Array.<game.IntPair.$Properties>|null} [clockRemaining] ChessState clockRemaining
+         * @property {boolean|null} [castlingWhiteK] ChessState castlingWhiteK
+         * @property {boolean|null} [castlingWhiteQ] ChessState castlingWhiteQ
+         * @property {boolean|null} [castlingBlackK] ChessState castlingBlackK
+         * @property {boolean|null} [castlingBlackQ] ChessState castlingBlackQ
+         * @property {game.Pos.$Properties|null} [enPassant] ChessState enPassant
+         * @property {number|null} [halfmoveClock] ChessState halfmoveClock
+         * @property {boolean|null} [inCheck] ChessState inCheck
+         * @property {Array.<game.ChessMove.$Properties>|null} [legalMoves] ChessState legalMoves
+         * @property {Array.<game.IntPair.$Properties>|null} [undoCount] ChessState undoCount
+         * @property {game.ChessUndoRequest.$Properties|null} [undoRequest] ChessState undoRequest
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a ChessState.
+         * @memberof game
+         * @interface IChessState
+         * @augments game.ChessState.$Properties
+         * @deprecated Use game.ChessState.$Properties instead.
+         */
+
+        /**
+         * Shape of a ChessState.
+         * @typedef {game.ChessState.$Properties} game.ChessState.$Shape
+         */
+
+        /**
+         * Constructs a new ChessState.
+         * @memberof game
+         * @classdesc Represents a ChessState.
+         * @constructor
+         * @param {game.ChessState.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const ChessState = function (properties) {
+            this.board = [];
+            this.rankedDelta = [];
+            this.clockRemaining = [];
+            this.legalMoves = [];
+            this.undoCount = [];
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * ChessState board.
+         * @member {Array.<game.BoardRow.$Properties>} board
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.board = $util.emptyArray;
+
+        /**
+         * ChessState turn.
+         * @member {string} turn
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.turn = "";
+
+        /**
+         * ChessState whiteSeat.
+         * @member {string} whiteSeat
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.whiteSeat = "";
+
+        /**
+         * ChessState moveCount.
+         * @member {number} moveCount
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.moveCount = 0;
+
+        /**
+         * ChessState lastFrom.
+         * @member {game.Pos.$Properties|null|undefined} lastFrom
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.lastFrom = null;
+
+        /**
+         * ChessState lastTo.
+         * @member {game.Pos.$Properties|null|undefined} lastTo
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.lastTo = null;
+
+        /**
+         * ChessState rankedDelta.
+         * @member {Array.<game.IntPair.$Properties>} rankedDelta
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.rankedDelta = $util.emptyArray;
+
+        /**
+         * ChessState resignRequest.
+         * @member {game.ChessResignRequest.$Properties|null|undefined} resignRequest
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.resignRequest = null;
+
+        /**
+         * ChessState ended.
+         * @member {boolean} ended
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.ended = false;
+
+        /**
+         * ChessState winner.
+         * @member {string} winner
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.winner = "";
+
+        /**
+         * ChessState moveDeadlineAt.
+         * @member {number|Long} moveDeadlineAt
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.moveDeadlineAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * ChessState clockDeadlineAt.
+         * @member {number|Long} clockDeadlineAt
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.clockDeadlineAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * ChessState clockRemaining.
+         * @member {Array.<game.IntPair.$Properties>} clockRemaining
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.clockRemaining = $util.emptyArray;
+
+        /**
+         * ChessState castlingWhiteK.
+         * @member {boolean} castlingWhiteK
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.castlingWhiteK = false;
+
+        /**
+         * ChessState castlingWhiteQ.
+         * @member {boolean} castlingWhiteQ
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.castlingWhiteQ = false;
+
+        /**
+         * ChessState castlingBlackK.
+         * @member {boolean} castlingBlackK
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.castlingBlackK = false;
+
+        /**
+         * ChessState castlingBlackQ.
+         * @member {boolean} castlingBlackQ
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.castlingBlackQ = false;
+
+        /**
+         * ChessState enPassant.
+         * @member {game.Pos.$Properties|null|undefined} enPassant
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.enPassant = null;
+
+        /**
+         * ChessState halfmoveClock.
+         * @member {number} halfmoveClock
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.halfmoveClock = 0;
+
+        /**
+         * ChessState inCheck.
+         * @member {boolean} inCheck
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.inCheck = false;
+
+        /**
+         * ChessState legalMoves.
+         * @member {Array.<game.ChessMove.$Properties>} legalMoves
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.legalMoves = $util.emptyArray;
+
+        /**
+         * ChessState undoCount.
+         * @member {Array.<game.IntPair.$Properties>} undoCount
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.undoCount = $util.emptyArray;
+
+        /**
+         * ChessState undoRequest.
+         * @member {game.ChessUndoRequest.$Properties|null|undefined} undoRequest
+         * @memberof game.ChessState
+         * @instance
+         */
+        ChessState.prototype.undoRequest = null;
+
+        /**
+         * Creates a new ChessState instance using the specified properties.
+         * @function create
+         * @memberof game.ChessState
+         * @static
+         * @param {game.ChessState.$Properties=} [properties] Properties to set
+         * @returns {game.ChessState} ChessState instance
+         * @type {{
+         *   (properties: game.ChessState.$Shape): game.ChessState & game.ChessState.$Shape;
+         *   (properties?: game.ChessState.$Properties): game.ChessState;
+         * }}
+         */
+        ChessState.create = function(properties) {
+            return new ChessState(properties);
+        };
+
+        /**
+         * Encodes the specified ChessState message. Does not implicitly {@link game.ChessState.verify|verify} messages.
+         * @function encode
+         * @memberof game.ChessState
+         * @static
+         * @param {game.ChessState.$Properties} message ChessState message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ChessState.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.board != null && message.board.length)
+                for (let i = 0; i < message.board.length; ++i)
+                    $root.game.BoardRow.encode(message.board[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
+            if (message.turn != null && $Object.hasOwnProperty.call(message, "turn") && message.turn !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.turn);
+            if (message.whiteSeat != null && $Object.hasOwnProperty.call(message, "whiteSeat") && message.whiteSeat !== "")
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.whiteSeat);
+            if (message.moveCount != null && $Object.hasOwnProperty.call(message, "moveCount") && message.moveCount !== 0)
+                writer.uint32(/* id 4, wireType 0 =*/32).int32(message.moveCount);
+            if (message.lastFrom != null && $Object.hasOwnProperty.call(message, "lastFrom"))
+                $root.game.Pos.encode(message.lastFrom, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
+            if (message.lastTo != null && $Object.hasOwnProperty.call(message, "lastTo"))
+                $root.game.Pos.encode(message.lastTo, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
+            if (message.rankedDelta != null && message.rankedDelta.length)
+                for (let i = 0; i < message.rankedDelta.length; ++i)
+                    $root.game.IntPair.encode(message.rankedDelta[i], writer.uint32(/* id 7, wireType 2 =*/58).fork(), _depth + 1).ldelim();
+            if (message.resignRequest != null && $Object.hasOwnProperty.call(message, "resignRequest"))
+                $root.game.ChessResignRequest.encode(message.resignRequest, writer.uint32(/* id 8, wireType 2 =*/66).fork(), _depth + 1).ldelim();
+            if (message.ended != null && $Object.hasOwnProperty.call(message, "ended") && message.ended !== false)
+                writer.uint32(/* id 9, wireType 0 =*/72).bool(message.ended);
+            if (message.winner != null && $Object.hasOwnProperty.call(message, "winner") && message.winner !== "")
+                writer.uint32(/* id 10, wireType 2 =*/82).string(message.winner);
+            if (message.moveDeadlineAt != null && $Object.hasOwnProperty.call(message, "moveDeadlineAt") && (typeof message.moveDeadlineAt === "object" ? message.moveDeadlineAt.low || message.moveDeadlineAt.high : message.moveDeadlineAt !== 0))
+                writer.uint32(/* id 11, wireType 0 =*/88).int64(message.moveDeadlineAt);
+            if (message.clockDeadlineAt != null && $Object.hasOwnProperty.call(message, "clockDeadlineAt") && (typeof message.clockDeadlineAt === "object" ? message.clockDeadlineAt.low || message.clockDeadlineAt.high : message.clockDeadlineAt !== 0))
+                writer.uint32(/* id 12, wireType 0 =*/96).int64(message.clockDeadlineAt);
+            if (message.clockRemaining != null && message.clockRemaining.length)
+                for (let i = 0; i < message.clockRemaining.length; ++i)
+                    $root.game.IntPair.encode(message.clockRemaining[i], writer.uint32(/* id 13, wireType 2 =*/106).fork(), _depth + 1).ldelim();
+            if (message.castlingWhiteK != null && $Object.hasOwnProperty.call(message, "castlingWhiteK") && message.castlingWhiteK !== false)
+                writer.uint32(/* id 14, wireType 0 =*/112).bool(message.castlingWhiteK);
+            if (message.castlingWhiteQ != null && $Object.hasOwnProperty.call(message, "castlingWhiteQ") && message.castlingWhiteQ !== false)
+                writer.uint32(/* id 15, wireType 0 =*/120).bool(message.castlingWhiteQ);
+            if (message.castlingBlackK != null && $Object.hasOwnProperty.call(message, "castlingBlackK") && message.castlingBlackK !== false)
+                writer.uint32(/* id 16, wireType 0 =*/128).bool(message.castlingBlackK);
+            if (message.castlingBlackQ != null && $Object.hasOwnProperty.call(message, "castlingBlackQ") && message.castlingBlackQ !== false)
+                writer.uint32(/* id 17, wireType 0 =*/136).bool(message.castlingBlackQ);
+            if (message.enPassant != null && $Object.hasOwnProperty.call(message, "enPassant"))
+                $root.game.Pos.encode(message.enPassant, writer.uint32(/* id 18, wireType 2 =*/146).fork(), _depth + 1).ldelim();
+            if (message.halfmoveClock != null && $Object.hasOwnProperty.call(message, "halfmoveClock") && message.halfmoveClock !== 0)
+                writer.uint32(/* id 19, wireType 0 =*/152).int32(message.halfmoveClock);
+            if (message.inCheck != null && $Object.hasOwnProperty.call(message, "inCheck") && message.inCheck !== false)
+                writer.uint32(/* id 20, wireType 0 =*/160).bool(message.inCheck);
+            if (message.legalMoves != null && message.legalMoves.length)
+                for (let i = 0; i < message.legalMoves.length; ++i)
+                    $root.game.ChessMove.encode(message.legalMoves[i], writer.uint32(/* id 21, wireType 2 =*/170).fork(), _depth + 1).ldelim();
+            if (message.undoCount != null && message.undoCount.length)
+                for (let i = 0; i < message.undoCount.length; ++i)
+                    $root.game.IntPair.encode(message.undoCount[i], writer.uint32(/* id 22, wireType 2 =*/178).fork(), _depth + 1).ldelim();
+            if (message.undoRequest != null && $Object.hasOwnProperty.call(message, "undoRequest"))
+                $root.game.ChessUndoRequest.encode(message.undoRequest, writer.uint32(/* id 23, wireType 2 =*/186).fork(), _depth + 1).ldelim();
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ChessState message, length delimited. Does not implicitly {@link game.ChessState.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.ChessState
+         * @static
+         * @param {game.ChessState.$Properties} message ChessState message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ChessState.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a ChessState message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.ChessState
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.ChessState & game.ChessState.$Shape} ChessState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ChessState.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.ChessState(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.board && message.board.length))
+                            message.board = [];
+                        message.board.push($root.game.BoardRow.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.turn = value;
+                        else
+                            delete message.turn;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.whiteSeat = value;
+                        else
+                            delete message.whiteSeat;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.moveCount = value;
+                        else
+                            delete message.moveCount;
+                        continue;
+                    }
+                case 5: {
+                        if (wireType !== 2)
+                            break;
+                        message.lastFrom = $root.game.Pos.decode(reader, reader.uint32(), $undefined, _depth + 1, message.lastFrom);
+                        continue;
+                    }
+                case 6: {
+                        if (wireType !== 2)
+                            break;
+                        message.lastTo = $root.game.Pos.decode(reader, reader.uint32(), $undefined, _depth + 1, message.lastTo);
+                        continue;
+                    }
+                case 7: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.rankedDelta && message.rankedDelta.length))
+                            message.rankedDelta = [];
+                        message.rankedDelta.push($root.game.IntPair.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 8: {
+                        if (wireType !== 2)
+                            break;
+                        message.resignRequest = $root.game.ChessResignRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.resignRequest);
+                        continue;
+                    }
+                case 9: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.ended = value;
+                        else
+                            delete message.ended;
+                        continue;
+                    }
+                case 10: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.winner = value;
+                        else
+                            delete message.winner;
+                        continue;
+                    }
+                case 11: {
+                        if (wireType !== 0)
+                            break;
+                        if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                            message.moveDeadlineAt = value;
+                        else
+                            delete message.moveDeadlineAt;
+                        continue;
+                    }
+                case 12: {
+                        if (wireType !== 0)
+                            break;
+                        if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                            message.clockDeadlineAt = value;
+                        else
+                            delete message.clockDeadlineAt;
+                        continue;
+                    }
+                case 13: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.clockRemaining && message.clockRemaining.length))
+                            message.clockRemaining = [];
+                        message.clockRemaining.push($root.game.IntPair.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 14: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.castlingWhiteK = value;
+                        else
+                            delete message.castlingWhiteK;
+                        continue;
+                    }
+                case 15: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.castlingWhiteQ = value;
+                        else
+                            delete message.castlingWhiteQ;
+                        continue;
+                    }
+                case 16: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.castlingBlackK = value;
+                        else
+                            delete message.castlingBlackK;
+                        continue;
+                    }
+                case 17: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.castlingBlackQ = value;
+                        else
+                            delete message.castlingBlackQ;
+                        continue;
+                    }
+                case 18: {
+                        if (wireType !== 2)
+                            break;
+                        message.enPassant = $root.game.Pos.decode(reader, reader.uint32(), $undefined, _depth + 1, message.enPassant);
+                        continue;
+                    }
+                case 19: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.halfmoveClock = value;
+                        else
+                            delete message.halfmoveClock;
+                        continue;
+                    }
+                case 20: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.inCheck = value;
+                        else
+                            delete message.inCheck;
+                        continue;
+                    }
+                case 21: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.legalMoves && message.legalMoves.length))
+                            message.legalMoves = [];
+                        message.legalMoves.push($root.game.ChessMove.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 22: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.undoCount && message.undoCount.length))
+                            message.undoCount = [];
+                        message.undoCount.push($root.game.IntPair.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 23: {
+                        if (wireType !== 2)
+                            break;
+                        message.undoRequest = $root.game.ChessUndoRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.undoRequest);
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a ChessState message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.ChessState
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.ChessState & game.ChessState.$Shape} ChessState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ChessState.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ChessState message.
+         * @function verify
+         * @memberof game.ChessState
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ChessState.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.board != null && $Object.hasOwnProperty.call(message, "board")) {
+                if (!$Array.isArray(message.board))
+                    return "board: array expected";
+                for (let i = 0; i < message.board.length; ++i) {
+                    let error = $root.game.BoardRow.verify(message.board[i], _depth + 1);
+                    if (error)
+                        return "board." + error;
+                }
+            }
+            if (message.turn != null && $Object.hasOwnProperty.call(message, "turn"))
+                if (!$util.isString(message.turn))
+                    return "turn: string expected";
+            if (message.whiteSeat != null && $Object.hasOwnProperty.call(message, "whiteSeat"))
+                if (!$util.isString(message.whiteSeat))
+                    return "whiteSeat: string expected";
+            if (message.moveCount != null && $Object.hasOwnProperty.call(message, "moveCount"))
+                if (!$util.isInteger(message.moveCount))
+                    return "moveCount: integer expected";
+            if (message.lastFrom != null && $Object.hasOwnProperty.call(message, "lastFrom")) {
+                let error = $root.game.Pos.verify(message.lastFrom, _depth + 1);
+                if (error)
+                    return "lastFrom." + error;
+            }
+            if (message.lastTo != null && $Object.hasOwnProperty.call(message, "lastTo")) {
+                let error = $root.game.Pos.verify(message.lastTo, _depth + 1);
+                if (error)
+                    return "lastTo." + error;
+            }
+            if (message.rankedDelta != null && $Object.hasOwnProperty.call(message, "rankedDelta")) {
+                if (!$Array.isArray(message.rankedDelta))
+                    return "rankedDelta: array expected";
+                for (let i = 0; i < message.rankedDelta.length; ++i) {
+                    let error = $root.game.IntPair.verify(message.rankedDelta[i], _depth + 1);
+                    if (error)
+                        return "rankedDelta." + error;
+                }
+            }
+            if (message.resignRequest != null && $Object.hasOwnProperty.call(message, "resignRequest")) {
+                let error = $root.game.ChessResignRequest.verify(message.resignRequest, _depth + 1);
+                if (error)
+                    return "resignRequest." + error;
+            }
+            if (message.ended != null && $Object.hasOwnProperty.call(message, "ended"))
+                if (typeof message.ended !== "boolean")
+                    return "ended: boolean expected";
+            if (message.winner != null && $Object.hasOwnProperty.call(message, "winner"))
+                if (!$util.isString(message.winner))
+                    return "winner: string expected";
+            if (message.moveDeadlineAt != null && $Object.hasOwnProperty.call(message, "moveDeadlineAt"))
+                if (!$util.isInteger(message.moveDeadlineAt) && !(message.moveDeadlineAt && $util.isInteger(message.moveDeadlineAt.low) && $util.isInteger(message.moveDeadlineAt.high)))
+                    return "moveDeadlineAt: integer|Long expected";
+            if (message.clockDeadlineAt != null && $Object.hasOwnProperty.call(message, "clockDeadlineAt"))
+                if (!$util.isInteger(message.clockDeadlineAt) && !(message.clockDeadlineAt && $util.isInteger(message.clockDeadlineAt.low) && $util.isInteger(message.clockDeadlineAt.high)))
+                    return "clockDeadlineAt: integer|Long expected";
+            if (message.clockRemaining != null && $Object.hasOwnProperty.call(message, "clockRemaining")) {
+                if (!$Array.isArray(message.clockRemaining))
+                    return "clockRemaining: array expected";
+                for (let i = 0; i < message.clockRemaining.length; ++i) {
+                    let error = $root.game.IntPair.verify(message.clockRemaining[i], _depth + 1);
+                    if (error)
+                        return "clockRemaining." + error;
+                }
+            }
+            if (message.castlingWhiteK != null && $Object.hasOwnProperty.call(message, "castlingWhiteK"))
+                if (typeof message.castlingWhiteK !== "boolean")
+                    return "castlingWhiteK: boolean expected";
+            if (message.castlingWhiteQ != null && $Object.hasOwnProperty.call(message, "castlingWhiteQ"))
+                if (typeof message.castlingWhiteQ !== "boolean")
+                    return "castlingWhiteQ: boolean expected";
+            if (message.castlingBlackK != null && $Object.hasOwnProperty.call(message, "castlingBlackK"))
+                if (typeof message.castlingBlackK !== "boolean")
+                    return "castlingBlackK: boolean expected";
+            if (message.castlingBlackQ != null && $Object.hasOwnProperty.call(message, "castlingBlackQ"))
+                if (typeof message.castlingBlackQ !== "boolean")
+                    return "castlingBlackQ: boolean expected";
+            if (message.enPassant != null && $Object.hasOwnProperty.call(message, "enPassant")) {
+                let error = $root.game.Pos.verify(message.enPassant, _depth + 1);
+                if (error)
+                    return "enPassant." + error;
+            }
+            if (message.halfmoveClock != null && $Object.hasOwnProperty.call(message, "halfmoveClock"))
+                if (!$util.isInteger(message.halfmoveClock))
+                    return "halfmoveClock: integer expected";
+            if (message.inCheck != null && $Object.hasOwnProperty.call(message, "inCheck"))
+                if (typeof message.inCheck !== "boolean")
+                    return "inCheck: boolean expected";
+            if (message.legalMoves != null && $Object.hasOwnProperty.call(message, "legalMoves")) {
+                if (!$Array.isArray(message.legalMoves))
+                    return "legalMoves: array expected";
+                for (let i = 0; i < message.legalMoves.length; ++i) {
+                    let error = $root.game.ChessMove.verify(message.legalMoves[i], _depth + 1);
+                    if (error)
+                        return "legalMoves." + error;
+                }
+            }
+            if (message.undoCount != null && $Object.hasOwnProperty.call(message, "undoCount")) {
+                if (!$Array.isArray(message.undoCount))
+                    return "undoCount: array expected";
+                for (let i = 0; i < message.undoCount.length; ++i) {
+                    let error = $root.game.IntPair.verify(message.undoCount[i], _depth + 1);
+                    if (error)
+                        return "undoCount." + error;
+                }
+            }
+            if (message.undoRequest != null && $Object.hasOwnProperty.call(message, "undoRequest")) {
+                let error = $root.game.ChessUndoRequest.verify(message.undoRequest, _depth + 1);
+                if (error)
+                    return "undoRequest." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a ChessState message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.ChessState
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.ChessState} ChessState
+         */
+        ChessState.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.ChessState)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.ChessState: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.ChessState();
+            if (object.board) {
+                if (!$Array.isArray(object.board))
+                    throw $TypeError(".game.ChessState.board: array expected");
+                message.board = $Array(object.board.length);
+                for (let i = 0; i < object.board.length; ++i) {
+                    if (!$util.isObject(object.board[i]))
+                        throw $TypeError(".game.ChessState.board: object expected");
+                    message.board[i] = $root.game.BoardRow.fromObject(object.board[i], _depth + 1);
+                }
+            }
+            if (object.turn != null)
+                if (typeof object.turn !== "string" || object.turn.length)
+                    message.turn = $String(object.turn);
+            if (object.whiteSeat != null)
+                if (typeof object.whiteSeat !== "string" || object.whiteSeat.length)
+                    message.whiteSeat = $String(object.whiteSeat);
+            if (object.moveCount != null)
+                if ($Number(object.moveCount) !== 0)
+                    message.moveCount = object.moveCount | 0;
+            if (object.lastFrom != null) {
+                if (!$util.isObject(object.lastFrom))
+                    throw $TypeError(".game.ChessState.lastFrom: object expected");
+                message.lastFrom = $root.game.Pos.fromObject(object.lastFrom, _depth + 1);
+            }
+            if (object.lastTo != null) {
+                if (!$util.isObject(object.lastTo))
+                    throw $TypeError(".game.ChessState.lastTo: object expected");
+                message.lastTo = $root.game.Pos.fromObject(object.lastTo, _depth + 1);
+            }
+            if (object.rankedDelta) {
+                if (!$Array.isArray(object.rankedDelta))
+                    throw $TypeError(".game.ChessState.rankedDelta: array expected");
+                message.rankedDelta = $Array(object.rankedDelta.length);
+                for (let i = 0; i < object.rankedDelta.length; ++i) {
+                    if (!$util.isObject(object.rankedDelta[i]))
+                        throw $TypeError(".game.ChessState.rankedDelta: object expected");
+                    message.rankedDelta[i] = $root.game.IntPair.fromObject(object.rankedDelta[i], _depth + 1);
+                }
+            }
+            if (object.resignRequest != null) {
+                if (!$util.isObject(object.resignRequest))
+                    throw $TypeError(".game.ChessState.resignRequest: object expected");
+                message.resignRequest = $root.game.ChessResignRequest.fromObject(object.resignRequest, _depth + 1);
+            }
+            if (object.ended != null)
+                if (object.ended)
+                    message.ended = $Boolean(object.ended);
+            if (object.winner != null)
+                if (typeof object.winner !== "string" || object.winner.length)
+                    message.winner = $String(object.winner);
+            if (object.moveDeadlineAt != null)
+                if (typeof object.moveDeadlineAt === "object" ? object.moveDeadlineAt.low || object.moveDeadlineAt.high : $Number(object.moveDeadlineAt) !== 0)
+                    if ($util.Long)
+                        message.moveDeadlineAt = $util.Long.fromValue(object.moveDeadlineAt, false);
+                    else if (typeof object.moveDeadlineAt === "string")
+                        message.moveDeadlineAt = $parseInt(object.moveDeadlineAt, 10);
+                    else if (typeof object.moveDeadlineAt === "number")
+                        message.moveDeadlineAt = object.moveDeadlineAt;
+                    else if (typeof object.moveDeadlineAt === "object")
+                        message.moveDeadlineAt = new $util.LongBits(object.moveDeadlineAt.low >>> 0, object.moveDeadlineAt.high >>> 0).toNumber();
+            if (object.clockDeadlineAt != null)
+                if (typeof object.clockDeadlineAt === "object" ? object.clockDeadlineAt.low || object.clockDeadlineAt.high : $Number(object.clockDeadlineAt) !== 0)
+                    if ($util.Long)
+                        message.clockDeadlineAt = $util.Long.fromValue(object.clockDeadlineAt, false);
+                    else if (typeof object.clockDeadlineAt === "string")
+                        message.clockDeadlineAt = $parseInt(object.clockDeadlineAt, 10);
+                    else if (typeof object.clockDeadlineAt === "number")
+                        message.clockDeadlineAt = object.clockDeadlineAt;
+                    else if (typeof object.clockDeadlineAt === "object")
+                        message.clockDeadlineAt = new $util.LongBits(object.clockDeadlineAt.low >>> 0, object.clockDeadlineAt.high >>> 0).toNumber();
+            if (object.clockRemaining) {
+                if (!$Array.isArray(object.clockRemaining))
+                    throw $TypeError(".game.ChessState.clockRemaining: array expected");
+                message.clockRemaining = $Array(object.clockRemaining.length);
+                for (let i = 0; i < object.clockRemaining.length; ++i) {
+                    if (!$util.isObject(object.clockRemaining[i]))
+                        throw $TypeError(".game.ChessState.clockRemaining: object expected");
+                    message.clockRemaining[i] = $root.game.IntPair.fromObject(object.clockRemaining[i], _depth + 1);
+                }
+            }
+            if (object.castlingWhiteK != null)
+                if (object.castlingWhiteK)
+                    message.castlingWhiteK = $Boolean(object.castlingWhiteK);
+            if (object.castlingWhiteQ != null)
+                if (object.castlingWhiteQ)
+                    message.castlingWhiteQ = $Boolean(object.castlingWhiteQ);
+            if (object.castlingBlackK != null)
+                if (object.castlingBlackK)
+                    message.castlingBlackK = $Boolean(object.castlingBlackK);
+            if (object.castlingBlackQ != null)
+                if (object.castlingBlackQ)
+                    message.castlingBlackQ = $Boolean(object.castlingBlackQ);
+            if (object.enPassant != null) {
+                if (!$util.isObject(object.enPassant))
+                    throw $TypeError(".game.ChessState.enPassant: object expected");
+                message.enPassant = $root.game.Pos.fromObject(object.enPassant, _depth + 1);
+            }
+            if (object.halfmoveClock != null)
+                if ($Number(object.halfmoveClock) !== 0)
+                    message.halfmoveClock = object.halfmoveClock | 0;
+            if (object.inCheck != null)
+                if (object.inCheck)
+                    message.inCheck = $Boolean(object.inCheck);
+            if (object.legalMoves) {
+                if (!$Array.isArray(object.legalMoves))
+                    throw $TypeError(".game.ChessState.legalMoves: array expected");
+                message.legalMoves = $Array(object.legalMoves.length);
+                for (let i = 0; i < object.legalMoves.length; ++i) {
+                    if (!$util.isObject(object.legalMoves[i]))
+                        throw $TypeError(".game.ChessState.legalMoves: object expected");
+                    message.legalMoves[i] = $root.game.ChessMove.fromObject(object.legalMoves[i], _depth + 1);
+                }
+            }
+            if (object.undoCount) {
+                if (!$Array.isArray(object.undoCount))
+                    throw $TypeError(".game.ChessState.undoCount: array expected");
+                message.undoCount = $Array(object.undoCount.length);
+                for (let i = 0; i < object.undoCount.length; ++i) {
+                    if (!$util.isObject(object.undoCount[i]))
+                        throw $TypeError(".game.ChessState.undoCount: object expected");
+                    message.undoCount[i] = $root.game.IntPair.fromObject(object.undoCount[i], _depth + 1);
+                }
+            }
+            if (object.undoRequest != null) {
+                if (!$util.isObject(object.undoRequest))
+                    throw $TypeError(".game.ChessState.undoRequest: object expected");
+                message.undoRequest = $root.game.ChessUndoRequest.fromObject(object.undoRequest, _depth + 1);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ChessState message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.ChessState
+         * @static
+         * @param {game.ChessState} message ChessState
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ChessState.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.arrays || options.defaults) {
+                object.board = [];
+                object.rankedDelta = [];
+                object.clockRemaining = [];
+                object.legalMoves = [];
+                object.undoCount = [];
+            }
+            if (options.defaults) {
+                object.turn = "";
+                object.whiteSeat = "";
+                object.moveCount = 0;
+                object.lastFrom = null;
+                object.lastTo = null;
+                object.resignRequest = null;
+                object.ended = false;
+                object.winner = "";
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.moveDeadlineAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                } else
+                    object.moveDeadlineAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.clockDeadlineAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                } else
+                    object.clockDeadlineAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                object.castlingWhiteK = false;
+                object.castlingWhiteQ = false;
+                object.castlingBlackK = false;
+                object.castlingBlackQ = false;
+                object.enPassant = null;
+                object.halfmoveClock = 0;
+                object.inCheck = false;
+                object.undoRequest = null;
+            }
+            if (message.board && message.board.length) {
+                object.board = $Array(message.board.length);
+                for (let j = 0; j < message.board.length; ++j)
+                    object.board[j] = $root.game.BoardRow.toObject(message.board[j], options, _depth + 1);
+            }
+            if (message.turn != null && $Object.hasOwnProperty.call(message, "turn"))
+                object.turn = message.turn;
+            if (message.whiteSeat != null && $Object.hasOwnProperty.call(message, "whiteSeat"))
+                object.whiteSeat = message.whiteSeat;
+            if (message.moveCount != null && $Object.hasOwnProperty.call(message, "moveCount"))
+                object.moveCount = message.moveCount;
+            if (message.lastFrom != null && $Object.hasOwnProperty.call(message, "lastFrom"))
+                object.lastFrom = $root.game.Pos.toObject(message.lastFrom, options, _depth + 1);
+            if (message.lastTo != null && $Object.hasOwnProperty.call(message, "lastTo"))
+                object.lastTo = $root.game.Pos.toObject(message.lastTo, options, _depth + 1);
+            if (message.rankedDelta && message.rankedDelta.length) {
+                object.rankedDelta = $Array(message.rankedDelta.length);
+                for (let j = 0; j < message.rankedDelta.length; ++j)
+                    object.rankedDelta[j] = $root.game.IntPair.toObject(message.rankedDelta[j], options, _depth + 1);
+            }
+            if (message.resignRequest != null && $Object.hasOwnProperty.call(message, "resignRequest"))
+                object.resignRequest = $root.game.ChessResignRequest.toObject(message.resignRequest, options, _depth + 1);
+            if (message.ended != null && $Object.hasOwnProperty.call(message, "ended"))
+                object.ended = message.ended;
+            if (message.winner != null && $Object.hasOwnProperty.call(message, "winner"))
+                object.winner = message.winner;
+            if (message.moveDeadlineAt != null && $Object.hasOwnProperty.call(message, "moveDeadlineAt"))
+                if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                    object.moveDeadlineAt = typeof message.moveDeadlineAt === "number" ? $BigInt(message.moveDeadlineAt) : $util.Long.fromBits(message.moveDeadlineAt.low >>> 0, message.moveDeadlineAt.high >>> 0, false).toBigInt();
+                else if (typeof message.moveDeadlineAt === "number")
+                    object.moveDeadlineAt = options.longs === $String ? $String(message.moveDeadlineAt) : message.moveDeadlineAt;
+                else
+                    object.moveDeadlineAt = options.longs === $String ? $util.Long.prototype.toString.call(message.moveDeadlineAt) : options.longs === $Number ? new $util.LongBits(message.moveDeadlineAt.low >>> 0, message.moveDeadlineAt.high >>> 0).toNumber() : message.moveDeadlineAt;
+            if (message.clockDeadlineAt != null && $Object.hasOwnProperty.call(message, "clockDeadlineAt"))
+                if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                    object.clockDeadlineAt = typeof message.clockDeadlineAt === "number" ? $BigInt(message.clockDeadlineAt) : $util.Long.fromBits(message.clockDeadlineAt.low >>> 0, message.clockDeadlineAt.high >>> 0, false).toBigInt();
+                else if (typeof message.clockDeadlineAt === "number")
+                    object.clockDeadlineAt = options.longs === $String ? $String(message.clockDeadlineAt) : message.clockDeadlineAt;
+                else
+                    object.clockDeadlineAt = options.longs === $String ? $util.Long.prototype.toString.call(message.clockDeadlineAt) : options.longs === $Number ? new $util.LongBits(message.clockDeadlineAt.low >>> 0, message.clockDeadlineAt.high >>> 0).toNumber() : message.clockDeadlineAt;
+            if (message.clockRemaining && message.clockRemaining.length) {
+                object.clockRemaining = $Array(message.clockRemaining.length);
+                for (let j = 0; j < message.clockRemaining.length; ++j)
+                    object.clockRemaining[j] = $root.game.IntPair.toObject(message.clockRemaining[j], options, _depth + 1);
+            }
+            if (message.castlingWhiteK != null && $Object.hasOwnProperty.call(message, "castlingWhiteK"))
+                object.castlingWhiteK = message.castlingWhiteK;
+            if (message.castlingWhiteQ != null && $Object.hasOwnProperty.call(message, "castlingWhiteQ"))
+                object.castlingWhiteQ = message.castlingWhiteQ;
+            if (message.castlingBlackK != null && $Object.hasOwnProperty.call(message, "castlingBlackK"))
+                object.castlingBlackK = message.castlingBlackK;
+            if (message.castlingBlackQ != null && $Object.hasOwnProperty.call(message, "castlingBlackQ"))
+                object.castlingBlackQ = message.castlingBlackQ;
+            if (message.enPassant != null && $Object.hasOwnProperty.call(message, "enPassant"))
+                object.enPassant = $root.game.Pos.toObject(message.enPassant, options, _depth + 1);
+            if (message.halfmoveClock != null && $Object.hasOwnProperty.call(message, "halfmoveClock"))
+                object.halfmoveClock = message.halfmoveClock;
+            if (message.inCheck != null && $Object.hasOwnProperty.call(message, "inCheck"))
+                object.inCheck = message.inCheck;
+            if (message.legalMoves && message.legalMoves.length) {
+                object.legalMoves = $Array(message.legalMoves.length);
+                for (let j = 0; j < message.legalMoves.length; ++j)
+                    object.legalMoves[j] = $root.game.ChessMove.toObject(message.legalMoves[j], options, _depth + 1);
+            }
+            if (message.undoCount && message.undoCount.length) {
+                object.undoCount = $Array(message.undoCount.length);
+                for (let j = 0; j < message.undoCount.length; ++j)
+                    object.undoCount[j] = $root.game.IntPair.toObject(message.undoCount[j], options, _depth + 1);
+            }
+            if (message.undoRequest != null && $Object.hasOwnProperty.call(message, "undoRequest"))
+                object.undoRequest = $root.game.ChessUndoRequest.toObject(message.undoRequest, options, _depth + 1);
+            return object;
+        };
+
+        /**
+         * Converts this ChessState to JSON.
+         * @function toJSON
+         * @memberof game.ChessState
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ChessState.prototype.toJSON = function() {
+            return ChessState.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for ChessState
+         * @function getTypeUrl
+         * @memberof game.ChessState
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        ChessState.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.ChessState";
+        };
+
+        return ChessState;
     })();
 
     game.PunishmentProof = (function() {
@@ -15926,6 +18645,7 @@ export const game = $root.game = (() => {
          * @property {Array.<game.StringPair.$Properties>|null} [liarsDiceNames] RoundHistoryItem liarsDiceNames
          * @property {string|null} [gomokuBlackSeat] RoundHistoryItem gomokuBlackSeat
          * @property {Array.<game.Pos.$Properties>|null} [gomokuLine] RoundHistoryItem gomokuLine
+         * @property {string|null} [chessWhiteSeat] RoundHistoryItem chessWhiteSeat
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -16246,6 +18966,14 @@ export const game = $root.game = (() => {
         RoundHistoryItem.prototype.gomokuLine = $util.emptyArray;
 
         /**
+         * RoundHistoryItem chessWhiteSeat.
+         * @member {string} chessWhiteSeat
+         * @memberof game.RoundHistoryItem
+         * @instance
+         */
+        RoundHistoryItem.prototype.chessWhiteSeat = "";
+
+        /**
          * Creates a new RoundHistoryItem instance using the specified properties.
          * @function create
          * @memberof game.RoundHistoryItem
@@ -16355,6 +19083,8 @@ export const game = $root.game = (() => {
             if (message.gomokuLine != null && message.gomokuLine.length)
                 for (let i = 0; i < message.gomokuLine.length; ++i)
                     $root.game.Pos.encode(message.gomokuLine[i], writer.uint32(/* id 38, wireType 2 =*/306).fork(), _depth + 1).ldelim();
+            if (message.chessWhiteSeat != null && $Object.hasOwnProperty.call(message, "chessWhiteSeat") && message.chessWhiteSeat !== "")
+                writer.uint32(/* id 39, wireType 2 =*/314).string(message.chessWhiteSeat);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -16706,6 +19436,15 @@ export const game = $root.game = (() => {
                         message.gomokuLine.push($root.game.Pos.decode(reader, reader.uint32(), $undefined, _depth + 1));
                         continue;
                     }
+                case 39: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.chessWhiteSeat = value;
+                        else
+                            delete message.chessWhiteSeat;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -16900,6 +19639,9 @@ export const game = $root.game = (() => {
                         return "gomokuLine." + error;
                 }
             }
+            if (message.chessWhiteSeat != null && $Object.hasOwnProperty.call(message, "chessWhiteSeat"))
+                if (!$util.isString(message.chessWhiteSeat))
+                    return "chessWhiteSeat: string expected";
             return null;
         };
 
@@ -17085,6 +19827,9 @@ export const game = $root.game = (() => {
                     message.gomokuLine[i] = $root.game.Pos.fromObject(object.gomokuLine[i], _depth + 1);
                 }
             }
+            if (object.chessWhiteSeat != null)
+                if (typeof object.chessWhiteSeat !== "string" || object.chessWhiteSeat.length)
+                    message.chessWhiteSeat = $String(object.chessWhiteSeat);
             return message;
         };
 
@@ -17147,6 +19892,7 @@ export const game = $root.game = (() => {
                 object.liarsDiceBidFace = 0;
                 object.liarsDiceActualCount = 0;
                 object.gomokuBlackSeat = "";
+                object.chessWhiteSeat = "";
             }
             if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
                 object.id = message.id;
@@ -17247,6 +19993,8 @@ export const game = $root.game = (() => {
                 for (let j = 0; j < message.gomokuLine.length; ++j)
                     object.gomokuLine[j] = $root.game.Pos.toObject(message.gomokuLine[j], options, _depth + 1);
             }
+            if (message.chessWhiteSeat != null && $Object.hasOwnProperty.call(message, "chessWhiteSeat"))
+                object.chessWhiteSeat = message.chessWhiteSeat;
             return object;
         };
 
@@ -19828,6 +22576,386 @@ export const game = $root.game = (() => {
         return OthelloSurrenderRequest;
     })();
 
+    game.OthelloUndoRequest = (function() {
+
+        /**
+         * Properties of an OthelloUndoRequest.
+         * @typedef {Object} game.OthelloUndoRequest.$Properties
+         * @property {string|null} [fromSeat] OthelloUndoRequest fromSeat
+         * @property {string|null} [toSeat] OthelloUndoRequest toSeat
+         * @property {number|Long|null} [createdAt] OthelloUndoRequest createdAt
+         * @property {number|Long|null} [expiresAt] OthelloUndoRequest expiresAt
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of an OthelloUndoRequest.
+         * @memberof game
+         * @interface IOthelloUndoRequest
+         * @augments game.OthelloUndoRequest.$Properties
+         * @deprecated Use game.OthelloUndoRequest.$Properties instead.
+         */
+
+        /**
+         * Shape of an OthelloUndoRequest.
+         * @typedef {game.OthelloUndoRequest.$Properties} game.OthelloUndoRequest.$Shape
+         */
+
+        /**
+         * Constructs a new OthelloUndoRequest.
+         * @memberof game
+         * @classdesc Represents an OthelloUndoRequest.
+         * @constructor
+         * @param {game.OthelloUndoRequest.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const OthelloUndoRequest = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * OthelloUndoRequest fromSeat.
+         * @member {string} fromSeat
+         * @memberof game.OthelloUndoRequest
+         * @instance
+         */
+        OthelloUndoRequest.prototype.fromSeat = "";
+
+        /**
+         * OthelloUndoRequest toSeat.
+         * @member {string} toSeat
+         * @memberof game.OthelloUndoRequest
+         * @instance
+         */
+        OthelloUndoRequest.prototype.toSeat = "";
+
+        /**
+         * OthelloUndoRequest createdAt.
+         * @member {number|Long} createdAt
+         * @memberof game.OthelloUndoRequest
+         * @instance
+         */
+        OthelloUndoRequest.prototype.createdAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * OthelloUndoRequest expiresAt.
+         * @member {number|Long} expiresAt
+         * @memberof game.OthelloUndoRequest
+         * @instance
+         */
+        OthelloUndoRequest.prototype.expiresAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * Creates a new OthelloUndoRequest instance using the specified properties.
+         * @function create
+         * @memberof game.OthelloUndoRequest
+         * @static
+         * @param {game.OthelloUndoRequest.$Properties=} [properties] Properties to set
+         * @returns {game.OthelloUndoRequest} OthelloUndoRequest instance
+         * @type {{
+         *   (properties: game.OthelloUndoRequest.$Shape): game.OthelloUndoRequest & game.OthelloUndoRequest.$Shape;
+         *   (properties?: game.OthelloUndoRequest.$Properties): game.OthelloUndoRequest;
+         * }}
+         */
+        OthelloUndoRequest.create = function(properties) {
+            return new OthelloUndoRequest(properties);
+        };
+
+        /**
+         * Encodes the specified OthelloUndoRequest message. Does not implicitly {@link game.OthelloUndoRequest.verify|verify} messages.
+         * @function encode
+         * @memberof game.OthelloUndoRequest
+         * @static
+         * @param {game.OthelloUndoRequest.$Properties} message OthelloUndoRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        OthelloUndoRequest.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat") && message.fromSeat !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.fromSeat);
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat") && message.toSeat !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.toSeat);
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt") && (typeof message.createdAt === "object" ? message.createdAt.low || message.createdAt.high : message.createdAt !== 0))
+                writer.uint32(/* id 3, wireType 0 =*/24).int64(message.createdAt);
+            if (message.expiresAt != null && $Object.hasOwnProperty.call(message, "expiresAt") && (typeof message.expiresAt === "object" ? message.expiresAt.low || message.expiresAt.high : message.expiresAt !== 0))
+                writer.uint32(/* id 4, wireType 0 =*/32).int64(message.expiresAt);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified OthelloUndoRequest message, length delimited. Does not implicitly {@link game.OthelloUndoRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.OthelloUndoRequest
+         * @static
+         * @param {game.OthelloUndoRequest.$Properties} message OthelloUndoRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        OthelloUndoRequest.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes an OthelloUndoRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.OthelloUndoRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.OthelloUndoRequest & game.OthelloUndoRequest.$Shape} OthelloUndoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        OthelloUndoRequest.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.OthelloUndoRequest(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.fromSeat = value;
+                        else
+                            delete message.fromSeat;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.toSeat = value;
+                        else
+                            delete message.toSeat;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 0)
+                            break;
+                        if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                            message.createdAt = value;
+                        else
+                            delete message.createdAt;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 0)
+                            break;
+                        if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                            message.expiresAt = value;
+                        else
+                            delete message.expiresAt;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes an OthelloUndoRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.OthelloUndoRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.OthelloUndoRequest & game.OthelloUndoRequest.$Shape} OthelloUndoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        OthelloUndoRequest.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies an OthelloUndoRequest message.
+         * @function verify
+         * @memberof game.OthelloUndoRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        OthelloUndoRequest.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat"))
+                if (!$util.isString(message.fromSeat))
+                    return "fromSeat: string expected";
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat"))
+                if (!$util.isString(message.toSeat))
+                    return "toSeat: string expected";
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt"))
+                if (!$util.isInteger(message.createdAt) && !(message.createdAt && $util.isInteger(message.createdAt.low) && $util.isInteger(message.createdAt.high)))
+                    return "createdAt: integer|Long expected";
+            if (message.expiresAt != null && $Object.hasOwnProperty.call(message, "expiresAt"))
+                if (!$util.isInteger(message.expiresAt) && !(message.expiresAt && $util.isInteger(message.expiresAt.low) && $util.isInteger(message.expiresAt.high)))
+                    return "expiresAt: integer|Long expected";
+            return null;
+        };
+
+        /**
+         * Creates an OthelloUndoRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.OthelloUndoRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.OthelloUndoRequest} OthelloUndoRequest
+         */
+        OthelloUndoRequest.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.OthelloUndoRequest)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.OthelloUndoRequest: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.OthelloUndoRequest();
+            if (object.fromSeat != null)
+                if (typeof object.fromSeat !== "string" || object.fromSeat.length)
+                    message.fromSeat = $String(object.fromSeat);
+            if (object.toSeat != null)
+                if (typeof object.toSeat !== "string" || object.toSeat.length)
+                    message.toSeat = $String(object.toSeat);
+            if (object.createdAt != null)
+                if (typeof object.createdAt === "object" ? object.createdAt.low || object.createdAt.high : $Number(object.createdAt) !== 0)
+                    if ($util.Long)
+                        message.createdAt = $util.Long.fromValue(object.createdAt, false);
+                    else if (typeof object.createdAt === "string")
+                        message.createdAt = $parseInt(object.createdAt, 10);
+                    else if (typeof object.createdAt === "number")
+                        message.createdAt = object.createdAt;
+                    else if (typeof object.createdAt === "object")
+                        message.createdAt = new $util.LongBits(object.createdAt.low >>> 0, object.createdAt.high >>> 0).toNumber();
+            if (object.expiresAt != null)
+                if (typeof object.expiresAt === "object" ? object.expiresAt.low || object.expiresAt.high : $Number(object.expiresAt) !== 0)
+                    if ($util.Long)
+                        message.expiresAt = $util.Long.fromValue(object.expiresAt, false);
+                    else if (typeof object.expiresAt === "string")
+                        message.expiresAt = $parseInt(object.expiresAt, 10);
+                    else if (typeof object.expiresAt === "number")
+                        message.expiresAt = object.expiresAt;
+                    else if (typeof object.expiresAt === "object")
+                        message.expiresAt = new $util.LongBits(object.expiresAt.low >>> 0, object.expiresAt.high >>> 0).toNumber();
+            return message;
+        };
+
+        /**
+         * Creates a plain object from an OthelloUndoRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.OthelloUndoRequest
+         * @static
+         * @param {game.OthelloUndoRequest} message OthelloUndoRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        OthelloUndoRequest.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.fromSeat = "";
+                object.toSeat = "";
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.createdAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                } else
+                    object.createdAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.expiresAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                } else
+                    object.expiresAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+            }
+            if (message.fromSeat != null && $Object.hasOwnProperty.call(message, "fromSeat"))
+                object.fromSeat = message.fromSeat;
+            if (message.toSeat != null && $Object.hasOwnProperty.call(message, "toSeat"))
+                object.toSeat = message.toSeat;
+            if (message.createdAt != null && $Object.hasOwnProperty.call(message, "createdAt"))
+                if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                    object.createdAt = typeof message.createdAt === "number" ? $BigInt(message.createdAt) : $util.Long.fromBits(message.createdAt.low >>> 0, message.createdAt.high >>> 0, false).toBigInt();
+                else if (typeof message.createdAt === "number")
+                    object.createdAt = options.longs === $String ? $String(message.createdAt) : message.createdAt;
+                else
+                    object.createdAt = options.longs === $String ? $util.Long.prototype.toString.call(message.createdAt) : options.longs === $Number ? new $util.LongBits(message.createdAt.low >>> 0, message.createdAt.high >>> 0).toNumber() : message.createdAt;
+            if (message.expiresAt != null && $Object.hasOwnProperty.call(message, "expiresAt"))
+                if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                    object.expiresAt = typeof message.expiresAt === "number" ? $BigInt(message.expiresAt) : $util.Long.fromBits(message.expiresAt.low >>> 0, message.expiresAt.high >>> 0, false).toBigInt();
+                else if (typeof message.expiresAt === "number")
+                    object.expiresAt = options.longs === $String ? $String(message.expiresAt) : message.expiresAt;
+                else
+                    object.expiresAt = options.longs === $String ? $util.Long.prototype.toString.call(message.expiresAt) : options.longs === $Number ? new $util.LongBits(message.expiresAt.low >>> 0, message.expiresAt.high >>> 0).toNumber() : message.expiresAt;
+            return object;
+        };
+
+        /**
+         * Converts this OthelloUndoRequest to JSON.
+         * @function toJSON
+         * @memberof game.OthelloUndoRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        OthelloUndoRequest.prototype.toJSON = function() {
+            return OthelloUndoRequest.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for OthelloUndoRequest
+         * @function getTypeUrl
+         * @memberof game.OthelloUndoRequest
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        OthelloUndoRequest.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.OthelloUndoRequest";
+        };
+
+        return OthelloUndoRequest;
+    })();
+
     game.BoardRow = (function() {
 
         /**
@@ -20411,6 +23539,8 @@ export const game = $root.game = (() => {
          * @property {number|Long|null} [moveDeadlineAt] OthelloState moveDeadlineAt
          * @property {number|Long|null} [clockDeadlineAt] OthelloState clockDeadlineAt
          * @property {Array.<game.IntPair.$Properties>|null} [clockRemaining] OthelloState clockRemaining
+         * @property {Array.<game.IntPair.$Properties>|null} [undoCount] OthelloState undoCount
+         * @property {game.OthelloUndoRequest.$Properties|null} [undoRequest] OthelloState undoRequest
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -20441,6 +23571,7 @@ export const game = $root.game = (() => {
             this.rankedDelta = [];
             this.settlementEvents = [];
             this.clockRemaining = [];
+            this.undoCount = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -20576,6 +23707,22 @@ export const game = $root.game = (() => {
         OthelloState.prototype.clockRemaining = $util.emptyArray;
 
         /**
+         * OthelloState undoCount.
+         * @member {Array.<game.IntPair.$Properties>} undoCount
+         * @memberof game.OthelloState
+         * @instance
+         */
+        OthelloState.prototype.undoCount = $util.emptyArray;
+
+        /**
+         * OthelloState undoRequest.
+         * @member {game.OthelloUndoRequest.$Properties|null|undefined} undoRequest
+         * @memberof game.OthelloState
+         * @instance
+         */
+        OthelloState.prototype.undoRequest = null;
+
+        /**
          * Creates a new OthelloState instance using the specified properties.
          * @function create
          * @memberof game.OthelloState
@@ -20644,6 +23791,11 @@ export const game = $root.game = (() => {
             if (message.clockRemaining != null && message.clockRemaining.length)
                 for (let i = 0; i < message.clockRemaining.length; ++i)
                     $root.game.IntPair.encode(message.clockRemaining[i], writer.uint32(/* id 16, wireType 2 =*/130).fork(), _depth + 1).ldelim();
+            if (message.undoCount != null && message.undoCount.length)
+                for (let i = 0; i < message.undoCount.length; ++i)
+                    $root.game.IntPair.encode(message.undoCount[i], writer.uint32(/* id 17, wireType 2 =*/138).fork(), _depth + 1).ldelim();
+            if (message.undoRequest != null && $Object.hasOwnProperty.call(message, "undoRequest"))
+                $root.game.OthelloUndoRequest.encode(message.undoRequest, writer.uint32(/* id 18, wireType 2 =*/146).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -20824,6 +23976,20 @@ export const game = $root.game = (() => {
                         message.clockRemaining.push($root.game.IntPair.decode(reader, reader.uint32(), $undefined, _depth + 1));
                         continue;
                     }
+                case 17: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.undoCount && message.undoCount.length))
+                            message.undoCount = [];
+                        message.undoCount.push($root.game.IntPair.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                case 18: {
+                        if (wireType !== 2)
+                            break;
+                        message.undoRequest = $root.game.OthelloUndoRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.undoRequest);
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -20947,6 +24113,20 @@ export const game = $root.game = (() => {
                         return "clockRemaining." + error;
                 }
             }
+            if (message.undoCount != null && $Object.hasOwnProperty.call(message, "undoCount")) {
+                if (!$Array.isArray(message.undoCount))
+                    return "undoCount: array expected";
+                for (let i = 0; i < message.undoCount.length; ++i) {
+                    let error = $root.game.IntPair.verify(message.undoCount[i], _depth + 1);
+                    if (error)
+                        return "undoCount." + error;
+                }
+            }
+            if (message.undoRequest != null && $Object.hasOwnProperty.call(message, "undoRequest")) {
+                let error = $root.game.OthelloUndoRequest.verify(message.undoRequest, _depth + 1);
+                if (error)
+                    return "undoRequest." + error;
+            }
             return null;
         };
 
@@ -21066,6 +24246,21 @@ export const game = $root.game = (() => {
                     message.clockRemaining[i] = $root.game.IntPair.fromObject(object.clockRemaining[i], _depth + 1);
                 }
             }
+            if (object.undoCount) {
+                if (!$Array.isArray(object.undoCount))
+                    throw $TypeError(".game.OthelloState.undoCount: array expected");
+                message.undoCount = $Array(object.undoCount.length);
+                for (let i = 0; i < object.undoCount.length; ++i) {
+                    if (!$util.isObject(object.undoCount[i]))
+                        throw $TypeError(".game.OthelloState.undoCount: object expected");
+                    message.undoCount[i] = $root.game.IntPair.fromObject(object.undoCount[i], _depth + 1);
+                }
+            }
+            if (object.undoRequest != null) {
+                if (!$util.isObject(object.undoRequest))
+                    throw $TypeError(".game.OthelloState.undoRequest: object expected");
+                message.undoRequest = $root.game.OthelloUndoRequest.fromObject(object.undoRequest, _depth + 1);
+            }
             return message;
         };
 
@@ -21092,6 +24287,7 @@ export const game = $root.game = (() => {
                 object.rankedDelta = [];
                 object.settlementEvents = [];
                 object.clockRemaining = [];
+                object.undoCount = [];
             }
             if (options.defaults) {
                 object.turn = "";
@@ -21113,6 +24309,7 @@ export const game = $root.game = (() => {
                     object.clockDeadlineAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.clockDeadlineAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                object.undoRequest = null;
             }
             if (message.board && message.board.length) {
                 object.board = $Array(message.board.length);
@@ -21171,6 +24368,13 @@ export const game = $root.game = (() => {
                 for (let j = 0; j < message.clockRemaining.length; ++j)
                     object.clockRemaining[j] = $root.game.IntPair.toObject(message.clockRemaining[j], options, _depth + 1);
             }
+            if (message.undoCount && message.undoCount.length) {
+                object.undoCount = $Array(message.undoCount.length);
+                for (let j = 0; j < message.undoCount.length; ++j)
+                    object.undoCount[j] = $root.game.IntPair.toObject(message.undoCount[j], options, _depth + 1);
+            }
+            if (message.undoRequest != null && $Object.hasOwnProperty.call(message, "undoRequest"))
+                object.undoRequest = $root.game.OthelloUndoRequest.toObject(message.undoRequest, options, _depth + 1);
             return object;
         };
 
@@ -23315,6 +26519,7 @@ export const game = $root.game = (() => {
          * @property {game.LiarsDiceState.$Properties|null} [liarsDice] RoomSnapshot liarsDice
          * @property {game.GomokuState.$Properties|null} [gomoku] RoomSnapshot gomoku
          * @property {game.JungleState.$Properties|null} [jungle] RoomSnapshot jungle
+         * @property {game.ChessState.$Properties|null} [chess] RoomSnapshot chess
          * @property {string|null} [resultText] RoomSnapshot resultText
          * @property {Array.<string>|null} [punishedPlayerIds] RoomSnapshot punishedPlayerIds
          * @property {Array.<game.PunishmentProof.$Properties>|null} [proofs] RoomSnapshot proofs
@@ -23355,6 +26560,7 @@ export const game = $root.game = (() => {
          *   liarsDice?: game.LiarsDiceState.$Shape|null;
          *   gomoku?: game.GomokuState.$Shape|null;
          *   jungle?: game.JungleState.$Shape|null;
+         *   chess?: game.ChessState.$Shape|null;
          *   resultText?: string|null;
          *   punishedPlayerIds?: Array.<string>|null;
          *   proofs?: Array.<game.PunishmentProof.$Shape>|null;
@@ -23516,6 +26722,14 @@ export const game = $root.game = (() => {
          * @instance
          */
         RoomSnapshot.prototype.jungle = null;
+
+        /**
+         * RoomSnapshot chess.
+         * @member {game.ChessState.$Properties|null|undefined} chess
+         * @memberof game.RoomSnapshot
+         * @instance
+         */
+        RoomSnapshot.prototype.chess = null;
 
         /**
          * RoomSnapshot resultText.
@@ -23701,6 +26915,8 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 26, wireType 2 =*/210).string(message.forgiveAdvantageBeneficiaryId);
             if (message.jungle != null && $Object.hasOwnProperty.call(message, "jungle"))
                 $root.game.JungleState.encode(message.jungle, writer.uint32(/* id 27, wireType 2 =*/218).fork(), _depth + 1).ldelim();
+            if (message.chess != null && $Object.hasOwnProperty.call(message, "chess"))
+                $root.game.ChessState.encode(message.chess, writer.uint32(/* id 28, wireType 2 =*/226).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -23858,6 +27074,12 @@ export const game = $root.game = (() => {
                         if (wireType !== 2)
                             break;
                         message.jungle = $root.game.JungleState.decode(reader, reader.uint32(), $undefined, _depth + 1, message.jungle);
+                        continue;
+                    }
+                case 28: {
+                        if (wireType !== 2)
+                            break;
+                        message.chess = $root.game.ChessState.decode(reader, reader.uint32(), $undefined, _depth + 1, message.chess);
                         continue;
                     }
                 case 14: {
@@ -24082,6 +27304,11 @@ export const game = $root.game = (() => {
                 if (error)
                     return "jungle." + error;
             }
+            if (message.chess != null && $Object.hasOwnProperty.call(message, "chess")) {
+                let error = $root.game.ChessState.verify(message.chess, _depth + 1);
+                if (error)
+                    return "chess." + error;
+            }
             if (message.resultText != null && $Object.hasOwnProperty.call(message, "resultText"))
                 if (!$util.isString(message.resultText))
                     return "resultText: string expected";
@@ -24275,6 +27502,11 @@ export const game = $root.game = (() => {
                     throw $TypeError(".game.RoomSnapshot.jungle: object expected");
                 message.jungle = $root.game.JungleState.fromObject(object.jungle, _depth + 1);
             }
+            if (object.chess != null) {
+                if (!$util.isObject(object.chess))
+                    throw $TypeError(".game.RoomSnapshot.chess: object expected");
+                message.chess = $root.game.ChessState.fromObject(object.chess, _depth + 1);
+            }
             if (object.resultText != null)
                 if (typeof object.resultText !== "string" || object.resultText.length)
                     message.resultText = $String(object.resultText);
@@ -24407,6 +27639,7 @@ export const game = $root.game = (() => {
                 object.forgiveAdvantageTargetId = "";
                 object.forgiveAdvantageBeneficiaryId = "";
                 object.jungle = null;
+                object.chess = null;
             }
             if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
                 object.id = message.id;
@@ -24501,6 +27734,8 @@ export const game = $root.game = (() => {
                 object.forgiveAdvantageBeneficiaryId = message.forgiveAdvantageBeneficiaryId;
             if (message.jungle != null && $Object.hasOwnProperty.call(message, "jungle"))
                 object.jungle = $root.game.JungleState.toObject(message.jungle, options, _depth + 1);
+            if (message.chess != null && $Object.hasOwnProperty.call(message, "chess"))
+                object.chess = $root.game.ChessState.toObject(message.chess, options, _depth + 1);
             return object;
         };
 
@@ -25689,6 +28924,11 @@ export const game = $root.game = (() => {
          * @property {Array.<string>|null} [punishmentTagsIncluded] LobbyRoomInfo punishmentTagsIncluded
          * @property {Array.<string>|null} [punishmentTagsExcluded] LobbyRoomInfo punishmentTagsExcluded
          * @property {string|null} [punishmentSeriesId] LobbyRoomInfo punishmentSeriesId
+         * @property {number|null} [chessMoveSeconds] LobbyRoomInfo chessMoveSeconds
+         * @property {number|null} [chessGameMinutes] LobbyRoomInfo chessGameMinutes
+         * @property {number|null} [jungleUndoLimit] LobbyRoomInfo jungleUndoLimit
+         * @property {number|null} [chessUndoLimit] LobbyRoomInfo chessUndoLimit
+         * @property {number|null} [othelloUndoLimit] LobbyRoomInfo othelloUndoLimit
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -25990,6 +29230,46 @@ export const game = $root.game = (() => {
         LobbyRoomInfo.prototype.punishmentSeriesId = "";
 
         /**
+         * LobbyRoomInfo chessMoveSeconds.
+         * @member {number} chessMoveSeconds
+         * @memberof game.LobbyRoomInfo
+         * @instance
+         */
+        LobbyRoomInfo.prototype.chessMoveSeconds = 0;
+
+        /**
+         * LobbyRoomInfo chessGameMinutes.
+         * @member {number} chessGameMinutes
+         * @memberof game.LobbyRoomInfo
+         * @instance
+         */
+        LobbyRoomInfo.prototype.chessGameMinutes = 0;
+
+        /**
+         * LobbyRoomInfo jungleUndoLimit.
+         * @member {number} jungleUndoLimit
+         * @memberof game.LobbyRoomInfo
+         * @instance
+         */
+        LobbyRoomInfo.prototype.jungleUndoLimit = 0;
+
+        /**
+         * LobbyRoomInfo chessUndoLimit.
+         * @member {number} chessUndoLimit
+         * @memberof game.LobbyRoomInfo
+         * @instance
+         */
+        LobbyRoomInfo.prototype.chessUndoLimit = 0;
+
+        /**
+         * LobbyRoomInfo othelloUndoLimit.
+         * @member {number} othelloUndoLimit
+         * @memberof game.LobbyRoomInfo
+         * @instance
+         */
+        LobbyRoomInfo.prototype.othelloUndoLimit = 0;
+
+        /**
          * Creates a new LobbyRoomInfo instance using the specified properties.
          * @function create
          * @memberof game.LobbyRoomInfo
@@ -26092,6 +29372,16 @@ export const game = $root.game = (() => {
                     writer.uint32(/* id 35, wireType 2 =*/282).string(message.punishmentTagsExcluded[i]);
             if (message.punishmentSeriesId != null && $Object.hasOwnProperty.call(message, "punishmentSeriesId") && message.punishmentSeriesId !== "")
                 writer.uint32(/* id 36, wireType 2 =*/290).string(message.punishmentSeriesId);
+            if (message.chessMoveSeconds != null && $Object.hasOwnProperty.call(message, "chessMoveSeconds") && message.chessMoveSeconds !== 0)
+                writer.uint32(/* id 37, wireType 0 =*/296).int32(message.chessMoveSeconds);
+            if (message.chessGameMinutes != null && $Object.hasOwnProperty.call(message, "chessGameMinutes") && message.chessGameMinutes !== 0)
+                writer.uint32(/* id 38, wireType 0 =*/304).int32(message.chessGameMinutes);
+            if (message.jungleUndoLimit != null && $Object.hasOwnProperty.call(message, "jungleUndoLimit") && message.jungleUndoLimit !== 0)
+                writer.uint32(/* id 39, wireType 0 =*/312).int32(message.jungleUndoLimit);
+            if (message.chessUndoLimit != null && $Object.hasOwnProperty.call(message, "chessUndoLimit") && message.chessUndoLimit !== 0)
+                writer.uint32(/* id 40, wireType 0 =*/320).int32(message.chessUndoLimit);
+            if (message.othelloUndoLimit != null && $Object.hasOwnProperty.call(message, "othelloUndoLimit") && message.othelloUndoLimit !== 0)
+                writer.uint32(/* id 41, wireType 0 =*/328).int32(message.othelloUndoLimit);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -26431,6 +29721,51 @@ export const game = $root.game = (() => {
                             delete message.punishmentSeriesId;
                         continue;
                     }
+                case 37: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.chessMoveSeconds = value;
+                        else
+                            delete message.chessMoveSeconds;
+                        continue;
+                    }
+                case 38: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.chessGameMinutes = value;
+                        else
+                            delete message.chessGameMinutes;
+                        continue;
+                    }
+                case 39: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.jungleUndoLimit = value;
+                        else
+                            delete message.jungleUndoLimit;
+                        continue;
+                    }
+                case 40: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.chessUndoLimit = value;
+                        else
+                            delete message.chessUndoLimit;
+                        continue;
+                    }
+                case 41: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.othelloUndoLimit = value;
+                        else
+                            delete message.othelloUndoLimit;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -26595,6 +29930,21 @@ export const game = $root.game = (() => {
             if (message.punishmentSeriesId != null && $Object.hasOwnProperty.call(message, "punishmentSeriesId"))
                 if (!$util.isString(message.punishmentSeriesId))
                     return "punishmentSeriesId: string expected";
+            if (message.chessMoveSeconds != null && $Object.hasOwnProperty.call(message, "chessMoveSeconds"))
+                if (!$util.isInteger(message.chessMoveSeconds))
+                    return "chessMoveSeconds: integer expected";
+            if (message.chessGameMinutes != null && $Object.hasOwnProperty.call(message, "chessGameMinutes"))
+                if (!$util.isInteger(message.chessGameMinutes))
+                    return "chessGameMinutes: integer expected";
+            if (message.jungleUndoLimit != null && $Object.hasOwnProperty.call(message, "jungleUndoLimit"))
+                if (!$util.isInteger(message.jungleUndoLimit))
+                    return "jungleUndoLimit: integer expected";
+            if (message.chessUndoLimit != null && $Object.hasOwnProperty.call(message, "chessUndoLimit"))
+                if (!$util.isInteger(message.chessUndoLimit))
+                    return "chessUndoLimit: integer expected";
+            if (message.othelloUndoLimit != null && $Object.hasOwnProperty.call(message, "othelloUndoLimit"))
+                if (!$util.isInteger(message.othelloUndoLimit))
+                    return "othelloUndoLimit: integer expected";
             return null;
         };
 
@@ -26738,6 +30088,21 @@ export const game = $root.game = (() => {
             if (object.punishmentSeriesId != null)
                 if (typeof object.punishmentSeriesId !== "string" || object.punishmentSeriesId.length)
                     message.punishmentSeriesId = $String(object.punishmentSeriesId);
+            if (object.chessMoveSeconds != null)
+                if ($Number(object.chessMoveSeconds) !== 0)
+                    message.chessMoveSeconds = object.chessMoveSeconds | 0;
+            if (object.chessGameMinutes != null)
+                if ($Number(object.chessGameMinutes) !== 0)
+                    message.chessGameMinutes = object.chessGameMinutes | 0;
+            if (object.jungleUndoLimit != null)
+                if ($Number(object.jungleUndoLimit) !== 0)
+                    message.jungleUndoLimit = object.jungleUndoLimit | 0;
+            if (object.chessUndoLimit != null)
+                if ($Number(object.chessUndoLimit) !== 0)
+                    message.chessUndoLimit = object.chessUndoLimit | 0;
+            if (object.othelloUndoLimit != null)
+                if ($Number(object.othelloUndoLimit) !== 0)
+                    message.othelloUndoLimit = object.othelloUndoLimit | 0;
             return message;
         };
 
@@ -26794,6 +30159,11 @@ export const game = $root.game = (() => {
                 object.jungleGameMinutes = 0;
                 object.punishmentSource = "";
                 object.punishmentSeriesId = "";
+                object.chessMoveSeconds = 0;
+                object.chessGameMinutes = 0;
+                object.jungleUndoLimit = 0;
+                object.chessUndoLimit = 0;
+                object.othelloUndoLimit = 0;
             }
             if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
                 object.id = message.id;
@@ -26876,6 +30246,16 @@ export const game = $root.game = (() => {
             }
             if (message.punishmentSeriesId != null && $Object.hasOwnProperty.call(message, "punishmentSeriesId"))
                 object.punishmentSeriesId = message.punishmentSeriesId;
+            if (message.chessMoveSeconds != null && $Object.hasOwnProperty.call(message, "chessMoveSeconds"))
+                object.chessMoveSeconds = message.chessMoveSeconds;
+            if (message.chessGameMinutes != null && $Object.hasOwnProperty.call(message, "chessGameMinutes"))
+                object.chessGameMinutes = message.chessGameMinutes;
+            if (message.jungleUndoLimit != null && $Object.hasOwnProperty.call(message, "jungleUndoLimit"))
+                object.jungleUndoLimit = message.jungleUndoLimit;
+            if (message.chessUndoLimit != null && $Object.hasOwnProperty.call(message, "chessUndoLimit"))
+                object.chessUndoLimit = message.chessUndoLimit;
+            if (message.othelloUndoLimit != null && $Object.hasOwnProperty.call(message, "othelloUndoLimit"))
+                object.othelloUndoLimit = message.othelloUndoLimit;
             return object;
         };
 

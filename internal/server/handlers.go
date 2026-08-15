@@ -120,6 +120,10 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{12, 60_000, 30_000}, s.onOthelloReady
 	case "othello:move":
 		return RateLimitOptions{30, 10_000, 15_000}, s.onOthelloMove
+	case "othello:undoRequest":
+		return RateLimitOptions{6, 60_000, 15_000}, s.onOthelloUndoRequest
+	case "othello:undoRespond":
+		return RateLimitOptions{8, 60_000, 5_000}, s.onOthelloUndoRespond
 	case "othello:settleMove":
 		return RateLimitOptions{12, 60_000, 3_000}, s.onOthelloSettleMove
 	case "othello:requestSurrender", "othello:surrender":
@@ -158,12 +162,30 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{12, 60_000, 30_000}, s.onJungleReady
 	case "jungle:move":
 		return RateLimitOptions{30, 10_000, 15_000}, s.onJungleMove
+	case "jungle:undoRequest":
+		return RateLimitOptions{6, 60_000, 15_000}, s.onJungleUndoRequest
+	case "jungle:undoRespond":
+		return RateLimitOptions{8, 60_000, 5_000}, s.onJungleUndoRespond
 	case "jungle:resignRequest":
 		return RateLimitOptions{5, 60_000, 8_000}, s.onJungleResignRequest
 	case "jungle:resignRespond":
 		return RateLimitOptions{8, 60_000, 5_000}, s.onJungleResignRespond
 	case "jungle:restart":
 		return RateLimitOptions{8, 60_000, 30_000}, s.onJungleRestart
+	case "chess:ready":
+		return RateLimitOptions{12, 60_000, 30_000}, s.onChessReady
+	case "chess:move":
+		return RateLimitOptions{30, 10_000, 15_000}, s.onChessMove
+	case "chess:undoRequest":
+		return RateLimitOptions{6, 60_000, 15_000}, s.onChessUndoRequest
+	case "chess:undoRespond":
+		return RateLimitOptions{8, 60_000, 5_000}, s.onChessUndoRespond
+	case "chess:resignRequest":
+		return RateLimitOptions{5, 60_000, 8_000}, s.onChessResignRequest
+	case "chess:resignRespond":
+		return RateLimitOptions{8, 60_000, 5_000}, s.onChessResignRespond
+	case "chess:restart":
+		return RateLimitOptions{8, 60_000, 30_000}, s.onChessRestart
 	case "liarsdice:joinRoster":
 		return RateLimitOptions{12, 60_000, 15_000}, s.onLiarsDiceJoinRoster
 	case "liarsdice:leaveRoster":

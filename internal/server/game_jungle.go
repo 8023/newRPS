@@ -128,7 +128,16 @@ func freshJungleState(first types.SeatKey) *types.JungleState {
 		Turn:        first,
 		MoveCount:   0,
 		RankedDelta: map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0},
+		UndoCount:   freshUndoCount(),
 	}
+}
+
+// jungleMoveRecord：一步已走棋的回退信息。Captured 为落点被吃的子（nil=空格）；
+// 斗兽棋棋子身份不变，回退时把落点上的子放回 From、恢复 Captured 即可。
+type jungleMoveRecord struct {
+	From     types.Pos
+	To       types.Pos
+	Captured *types.JungleCell
 }
 
 func cloneJungleBoard(board [][]*types.JungleCell) [][]*types.JungleCell {
@@ -264,16 +273,11 @@ func jungleHasAnyLegalMove(board [][]*types.JungleCell, seat types.SeatKey) bool
 	return false
 }
 
-func (s *Server) clearJungleClockTimer(roomID string) {
-	if t := s.jungleClockTimers[roomID]; t != nil {
-		t.Stop()
-		delete(s.jungleClockTimers, roomID)
-	}
-}
-
 func (s *Server) resetJungleRoom(room *RoomState) {
-	s.clearJungleClockTimer(room.ID)
+	s.clearTurnBasedUndoTimer(room.ID)
+	s.clearTurnBasedClockTimer(room.ID)
 	room.Jungle = nil
+	room.jungleMoves = nil
 	s.resetTurnBasedRoom(room)
 }
 
@@ -281,104 +285,52 @@ func (s *Server) startJungleRoom(room *RoomState) {
 	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
 		return
 	}
-	s.clearJungleClockTimer(room.ID)
+	s.clearTurnBasedUndoTimer(room.ID)
+	s.clearTurnBasedClockTimer(room.ID)
 	first := randomSeat()
 	s.startTurnBasedPlaying(room)
 	room.Jungle = freshJungleState(first)
+	room.jungleMoves = nil
 	s.armJungleTimers(room, first)
 }
 
-func (s *Server) freezeJungleClock(room *RoomState, seat types.SeatKey) {
-	if room.Jungle == nil || room.Jungle.ClockRemaining == nil {
-		return
-	}
-	if room.Jungle.ClockDeadlineAt > 0 {
-		remaining := room.Jungle.ClockDeadlineAt - nowMs()
-		if remaining < 0 {
-			remaining = 0
-		}
-		room.Jungle.ClockRemaining[seat] = remaining
-	}
-	room.Jungle.ClockDeadlineAt = 0
-}
-
 func (s *Server) pauseJungleTimers(room *RoomState) {
-	if room.Jungle == nil {
-		return
+	if room.Jungle != nil {
+		s.pauseTurnBasedClock(room, room.Jungle.Turn, s.jungleClockHooks())
 	}
-	s.freezeJungleClock(room, room.Jungle.Turn)
-	room.Jungle.MoveDeadlineAt = 0
-	s.clearJungleClockTimer(room.ID)
 }
 
 func (s *Server) resumeJungleTimers(room *RoomState) {
-	if room.Jungle == nil || room.Jungle.Ended {
-		return
-	}
-	s.armJungleTimers(room, room.Jungle.Turn)
+	s.resumeTurnBasedClock(room, s.jungleClockHooks())
 }
 
 func (s *Server) armJungleTimers(room *RoomState, seat types.SeatKey) {
-	if room.Jungle == nil {
-		return
-	}
-	if room.Settings.JungleMoveSeconds > 0 {
-		room.Jungle.MoveDeadlineAt = nowMs() + int64(room.Settings.JungleMoveSeconds)*1000
-	} else {
-		room.Jungle.MoveDeadlineAt = 0
-	}
-	if room.Settings.JungleGameMinutes > 0 {
-		if room.Jungle.ClockRemaining == nil {
-			total := int64(room.Settings.JungleGameMinutes) * 60_000
-			room.Jungle.ClockRemaining = map[types.SeatKey]int64{types.SeatA: total, types.SeatB: total}
-		}
-		room.Jungle.ClockDeadlineAt = nowMs() + room.Jungle.ClockRemaining[seat]
-	} else {
-		room.Jungle.ClockDeadlineAt = 0
-	}
-	s.scheduleJungleClockTimer(room)
+	s.armTurnBasedClock(room, seat, s.jungleClockHooks())
 }
 
-func (s *Server) scheduleJungleClockTimer(room *RoomState) {
-	s.clearJungleClockTimer(room.ID)
-	if room.Jungle == nil || room.Jungle.Ended {
-		return
+func (s *Server) jungleClockHooks() turnBasedClockHooks {
+	return turnBasedClockHooks{
+		state: func(room *RoomState) (turnBasedClockState, bool) {
+			if room.Jungle == nil {
+				return turnBasedClockState{}, false
+			}
+			return turnBasedClockState{
+				turn: room.Jungle.Turn, ended: room.Jungle.Ended,
+				blocked:        room.Jungle.ResignRequest != nil || room.Jungle.UndoRequest != nil,
+				moveDeadlineAt: &room.Jungle.MoveDeadlineAt, clockDeadlineAt: &room.Jungle.ClockDeadlineAt,
+				clockRemaining: &room.Jungle.ClockRemaining,
+			}, true
+		},
+		settings: func(room *RoomState) (int, int) {
+			return room.Settings.JungleMoveSeconds, room.Settings.JungleGameMinutes
+		},
+		onTimeout: func(room *RoomState, seat types.SeatKey) {
+			winnerSeat := oppositeSeat(seat)
+			loserName := occupantName(room.Seats[seat])
+			s.roomNotice(room, loserName+" 用时已到，本局判负。")
+			s.finishJungleGame(room, types.RoundResult(winnerSeat), "超时判负")
+		},
 	}
-	deadline := earliestPositiveDeadline(room.Jungle.MoveDeadlineAt, room.Jungle.ClockDeadlineAt)
-	if deadline == 0 {
-		return
-	}
-	delay := deadline - nowMs()
-	if delay < 0 {
-		delay = 0
-	}
-	seat := room.Jungle.Turn
-	roomID := room.ID
-	timer := timeAfterFunc(time.Duration(delay)*time.Millisecond, func() {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		delete(s.jungleClockTimers, roomID)
-		current := s.rooms[roomID]
-		if current == nil || current.Jungle == nil || current.Jungle.Ended {
-			return
-		}
-		if current.Jungle.Turn != seat || current.Jungle.ResignRequest != nil {
-			return
-		}
-		now := nowMs()
-		moveExpired := current.Jungle.MoveDeadlineAt > 0 && now >= current.Jungle.MoveDeadlineAt
-		clockExpired := current.Jungle.ClockDeadlineAt > 0 && now >= current.Jungle.ClockDeadlineAt
-		if !moveExpired && !clockExpired {
-			s.scheduleJungleClockTimer(current)
-			return
-		}
-		winnerSeat := oppositeSeat(seat)
-		loserName := occupantName(current.Seats[seat])
-		s.roomNotice(current, loserName+" 用时已到，本局判负。")
-		s.finishJungleGame(current, types.RoundResult(winnerSeat), "超时判负")
-		s.broadcastRoom(current.ID, true)
-	})
-	s.jungleClockTimers[room.ID] = timer
 }
 
 func (s *Server) scheduleJungleReadyStart(room *RoomState) {
@@ -425,8 +377,10 @@ func (s *Server) finishJungleGame(room *RoomState, result types.RoundResult, not
 	if room.Jungle == nil {
 		return
 	}
-	s.clearJungleClockTimer(room.ID)
+	s.clearTurnBasedUndoTimer(room.ID)
+	s.clearTurnBasedClockTimer(room.ID)
 	room.Jungle.ResignRequest = nil
+	room.Jungle.UndoRequest = nil
 	rankedDelta := room.Jungle.RankedDelta
 	if rankedDelta == nil {
 		rankedDelta = map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}
@@ -501,6 +455,9 @@ func (s *Server) applyJungleMove(room *RoomState, seat types.SeatKey, fromRow, f
 	if room.Jungle.ResignRequest != nil {
 		return false, "认输请求处理完成前不能走子"
 	}
+	if room.Jungle.UndoRequest != nil {
+		return false, "悔棋请求处理完成前不能走子"
+	}
 	if !jungleInBounds(fromRow, fromCol) || !jungleInBounds(toRow, toCol) {
 		return false, "这个位置不能走"
 	}
@@ -525,7 +482,15 @@ func (s *Server) applyJungleMove(room *RoomState, seat types.SeatKey, fromRow, f
 
 	s.pauseJungleTimers(room)
 	board := cloneJungleBoard(room.Jungle.Board)
-	// 执行移动（吃子直接覆盖）
+	// 执行移动（吃子直接覆盖）；悔棋历史记录落点原内容
+	var captured *types.JungleCell
+	if target := board[toRow][toCol]; target != nil {
+		c := *target
+		captured = &c
+	}
+	room.jungleMoves = append(room.jungleMoves, jungleMoveRecord{
+		From: types.Pos{Row: fromRow, Col: fromCol}, To: types.Pos{Row: toRow, Col: toCol}, Captured: captured,
+	})
 	board[toRow][toCol] = board[fromRow][fromCol]
 	board[fromRow][fromCol] = nil
 	room.Jungle.Board = board
@@ -557,6 +522,9 @@ func (s *Server) applyJungleMove(room *RoomState, seat types.SeatKey, fromRow, f
 func (s *Server) requestJungleResign(room *RoomState, seat types.SeatKey) (bool, string) {
 	if room.Jungle == nil || room.Phase != types.PhaseChoosing || room.Jungle.Ended {
 		return false, "当前不能申请认输"
+	}
+	if room.Jungle.UndoRequest != nil {
+		return false, "悔棋请求处理完成前不能申请认输"
 	}
 	toSeat := oppositeSeat(seat)
 	if room.Seats[toSeat] == nil {
@@ -596,11 +564,115 @@ func (s *Server) respondJungleResign(room *RoomState, seat types.SeatKey, accept
 	return true, ""
 }
 
+// requestJungleUndo：只能由「当前轮到走子的一方」发起，回退最后 2 手（自己上一手 +
+// 对方应手），次数上限由 room.Settings.JungleUndoLimit 决定，30 秒无响应自动拒绝。
+func (s *Server) requestJungleUndo(room *RoomState, seat types.SeatKey) (bool, string) {
+	if room.Jungle == nil || room.Phase != types.PhaseChoosing || room.Jungle.Ended {
+		return false, "当前不能悔棋"
+	}
+	if room.Jungle.Turn != seat {
+		return false, "只能在轮到你走子时申请悔棋"
+	}
+	if room.Jungle.MoveCount < 2 {
+		return false, "棋局刚开始，还不能悔棋"
+	}
+	if room.Jungle.UndoRequest != nil {
+		return false, "当前已有悔棋请求，请先处理"
+	}
+	if room.Jungle.ResignRequest != nil {
+		return false, "认输请求处理完成前不能悔棋"
+	}
+	if room.Jungle.UndoCount[seat] >= room.Settings.JungleUndoLimit {
+		return false, "你本局的悔棋次数已经用完"
+	}
+	toSeat := oppositeSeat(seat)
+	if room.Seats[toSeat] == nil {
+		return false, "对手不在战斗席，不能悔棋"
+	}
+	startedAt := nowMs()
+	room.Jungle.UndoRequest = &types.JungleUndoRequest{
+		FromSeat: seat, ToSeat: toSeat, CreatedAt: startedAt, ExpiresAt: startedAt + undoRequestWindow.Milliseconds(),
+	}
+	s.pauseJungleTimers(room)
+	s.scheduleJungleUndoTimeout(room)
+	return true, ""
+}
+
+func (s *Server) scheduleJungleUndoTimeout(room *RoomState) {
+	request := room.Jungle.UndoRequest
+	if request == nil {
+		return
+	}
+	roomID := room.ID
+	createdAt := request.CreatedAt
+	s.scheduleTurnBasedUndoTimeout(roomID, createdAt,
+		func(current *RoomState) int64 {
+			if current.Jungle == nil || current.Jungle.UndoRequest == nil {
+				return 0
+			}
+			return current.Jungle.UndoRequest.CreatedAt
+		},
+		func(current *RoomState) {
+			current.Jungle.UndoRequest = nil
+			s.resumeJungleTimers(current)
+			s.roomNotice(current, fmt.Sprintf("%s 未在 30 秒内回应悔棋请求，已自动拒绝。", occupantName(current.Seats[request.ToSeat])))
+		})
+}
+
+// respondJungleUndo：accept 时按走子历史逆序回退最后 2 手，落子权回到请求方。
+func (s *Server) respondJungleUndo(room *RoomState, seat types.SeatKey, accept bool) (bool, string) {
+	if room.Jungle == nil || room.Jungle.UndoRequest == nil {
+		return false, "当前没有悔棋请求"
+	}
+	request := room.Jungle.UndoRequest
+	if request.ToSeat != seat {
+		return false, "这个悔棋请求不是发给你的"
+	}
+	s.clearTurnBasedUndoTimer(room.ID)
+	fromSeat := request.FromSeat
+	room.Jungle.UndoRequest = nil
+	if !accept {
+		s.resumeJungleTimers(room)
+		s.roomNotice(room, occupantName(room.Seats[seat])+" 拒绝悔棋，对局继续。")
+		return true, ""
+	}
+	if len(room.jungleMoves) < 2 {
+		s.resumeJungleTimers(room)
+		return false, "当前棋局状态不支持悔棋"
+	}
+	board := cloneJungleBoard(room.Jungle.Board)
+	moves := room.jungleMoves[:len(room.jungleMoves)-2]
+	for i := len(room.jungleMoves) - 1; i >= len(moves); i-- {
+		rec := room.jungleMoves[i]
+		mover := board[rec.To.Row][rec.To.Col]
+		board[rec.To.Row][rec.To.Col] = rec.Captured
+		board[rec.From.Row][rec.From.Col] = mover
+	}
+	room.Jungle.Board = board
+	room.jungleMoves = moves
+	room.Jungle.MoveCount -= 2
+	if len(moves) > 0 {
+		from := types.Pos{Row: moves[len(moves)-1].From.Row, Col: moves[len(moves)-1].From.Col}
+		to := types.Pos{Row: moves[len(moves)-1].To.Row, Col: moves[len(moves)-1].To.Col}
+		room.Jungle.LastFrom = &from
+		room.Jungle.LastTo = &to
+	} else {
+		room.Jungle.LastFrom = nil
+		room.Jungle.LastTo = nil
+	}
+	room.Jungle.Turn = fromSeat
+	room.Jungle.UndoCount[fromSeat]++
+	s.resumeJungleTimers(room)
+	s.roomNotice(room, occupantName(room.Seats[seat])+" 同意悔棋，棋局回退 2 手。")
+	return true, ""
+}
+
 func (s *Server) applyJungleDisconnectForfeit(room *RoomState, forfeit DisconnectForfeit) bool {
 	if room.Phase == types.PhaseResult || (room.Jungle != nil && room.Jungle.Ended) {
 		return true
 	}
-	s.clearJungleClockTimer(room.ID)
+	s.clearTurnBasedUndoTimer(room.ID)
+	s.clearTurnBasedClockTimer(room.ID)
 	winner := s.players[forfeit.WinnerID]
 	loser := s.players[forfeit.LoserID]
 	rankedDelta := map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0}
@@ -632,6 +704,7 @@ func (s *Server) applyJungleDisconnectForfeit(room *RoomState, forfeit Disconnec
 	room.Status = "playing"
 	if room.Jungle != nil {
 		room.Jungle.ResignRequest = nil
+		room.Jungle.UndoRequest = nil
 		room.Jungle.RankedDelta = rankedDelta
 		room.Jungle.Ended = true
 		room.Jungle.Winner = types.RoundResult(forfeit.WinnerSeat)

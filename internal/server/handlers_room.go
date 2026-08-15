@@ -26,7 +26,7 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	}
 	settings := p.Settings
 	gameID := settings.GameID
-	if gameID != types.GameOthello && gameID != types.GameTicTacToe && gameID != types.GameLiarsDice && gameID != types.GameGomoku && gameID != types.GameJungle {
+	if gameID != types.GameOthello && gameID != types.GameTicTacToe && gameID != types.GameLiarsDice && gameID != types.GameGomoku && gameID != types.GameJungle && gameID != types.GameChess {
 		gameID = types.GameRPS
 	}
 	settings.GameID = gameID
@@ -59,6 +59,7 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		default:
 			settings.OthelloBoardTheme = "classic"
 		}
+		settings.OthelloUndoLimit = clampUndoLimit(settings.OthelloUndoLimit)
 		settings.OthelloMoveSeconds = clampMoveSeconds(settings.OthelloMoveSeconds)
 		settings.OthelloGameMinutes = clampGameMinutes(settings.OthelloGameMinutes)
 	} else if settings.GameID == types.GameTicTacToe {
@@ -94,12 +95,7 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		default:
 			settings.GomokuBoardTheme = "wood"
 		}
-		switch settings.GomokuUndoLimit {
-		case 0, 1, 3, 10:
-		default:
-			// 与建房表单默认一致：非法值回退为禁止悔棋。
-			settings.GomokuUndoLimit = 0
-		}
+		settings.GomokuUndoLimit = clampUndoLimit(settings.GomokuUndoLimit)
 		settings.GomokuMoveSeconds = clampMoveSeconds(settings.GomokuMoveSeconds)
 		settings.GomokuGameMinutes = clampGameMinutes(settings.GomokuGameMinutes)
 	} else if settings.GameID == types.GameJungle {
@@ -113,8 +109,23 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		default:
 			settings.JungleBoardTheme = "forest"
 		}
+		settings.JungleUndoLimit = clampUndoLimit(settings.JungleUndoLimit)
 		settings.JungleMoveSeconds = clampMoveSeconds(settings.JungleMoveSeconds)
 		settings.JungleGameMinutes = clampGameMinutes(settings.JungleGameMinutes)
+	} else if settings.GameID == types.GameChess {
+		switch settings.Stake {
+		case 5, 10, 20:
+		default:
+			settings.Stake = 5
+		}
+		switch settings.ChessBoardTheme {
+		case "classic", "wood", "midnight", "marble", "green":
+		default:
+			settings.ChessBoardTheme = "classic"
+		}
+		settings.ChessUndoLimit = clampUndoLimit(settings.ChessUndoLimit)
+		settings.ChessMoveSeconds = clampMoveSeconds(settings.ChessMoveSeconds)
+		settings.ChessGameMinutes = clampGameMinutes(settings.ChessGameMinutes)
 	} else {
 		switch settings.Stake {
 		case 5, 10, 20:
@@ -423,6 +434,10 @@ func (s *Server) onRoomSit(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "斗兽棋对局进行中不能换座")
 		return
 	}
+	if hasOld && room.Settings.GameID == types.GameChess && room.Phase == types.PhaseChoosing {
+		client.reply(env.ID, nil, "国际象棋对局进行中不能换座")
+		return
+	}
 	if hasOld && room.Phase == types.PhaseChoosing && (room.Choices[types.SeatA] != "" || room.Choices[types.SeatB] != "") {
 		client.reply(env.ID, nil, "本局已经有人出拳，暂时不能换座")
 		return
@@ -610,6 +625,77 @@ func (s *Server) onOthelloMove(client *Client, env wsEnvelope) {
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
+type turnBasedUndoHandler struct {
+	gameID   types.GameID
+	gameName string
+	request  func(*RoomState, types.SeatKey) (bool, string)
+	respond  func(*RoomState, types.SeatKey, bool) (bool, string)
+}
+
+func (s *Server) onTurnBasedUndoRequest(client *Client, env wsEnvelope, handler turnBasedUndoHandler) {
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != handler.gameID {
+		client.reply(env.ID, nil, "当前房间不是"+handler.gameName)
+		return
+	}
+	seat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以申请悔棋")
+		return
+	}
+	ok, errMsg := handler.request(room, seat)
+	if !ok {
+		client.reply(env.ID, nil, errMsg)
+		return
+	}
+	s.roomNotice(room, playerShortName(player)+" 申请悔棋，等待对方确认。")
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	s.broadcastRoom(room.ID, true)
+}
+
+func (s *Server) onTurnBasedUndoRespond(client *Client, env wsEnvelope, handler turnBasedUndoHandler) {
+	var p struct {
+		Accept *bool `json:"accept"`
+	}
+	_ = decodeD(env, &p)
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != handler.gameID {
+		client.reply(env.ID, nil, "当前房间不是"+handler.gameName)
+		return
+	}
+	seat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以处理悔棋请求")
+		return
+	}
+	accept := p.Accept != nil && *p.Accept
+	ok, errMsg := handler.respond(room, seat, accept)
+	if !ok {
+		client.reply(env.ID, nil, errMsg)
+		return
+	}
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	s.broadcastRoom(room.ID, true)
+}
+
+func (s *Server) onOthelloUndoRequest(client *Client, env wsEnvelope) {
+	s.onTurnBasedUndoRequest(client, env, turnBasedUndoHandler{
+		gameID: types.GameOthello, gameName: "黑白棋", request: s.requestOthelloUndo, respond: s.respondOthelloUndo,
+	})
+}
+
+func (s *Server) onOthelloUndoRespond(client *Client, env wsEnvelope) {
+	s.onTurnBasedUndoRespond(client, env, turnBasedUndoHandler{
+		gameID: types.GameOthello, gameName: "黑白棋", request: s.requestOthelloUndo, respond: s.respondOthelloUndo,
+	})
+}
+
 func (s *Server) onOthelloSettleMove(client *Client, env wsEnvelope) {
 	var p struct {
 		Mode string `json:"mode"`
@@ -674,6 +760,10 @@ func (s *Server) onOthelloRequestSurrender(client *Client, env wsEnvelope) {
 	}
 	if room.Othello.PendingSettlement != nil {
 		client.reply(env.ID, nil, "本手白给/上贡结算完成前不能申请认输")
+		return
+	}
+	if room.Othello.UndoRequest != nil {
+		client.reply(env.ID, nil, "悔棋请求处理完成前不能申请认输")
 		return
 	}
 	toSeat := oppositeSeat(fromSeat)
@@ -1254,6 +1344,18 @@ func (s *Server) onJungleMove(client *Client, env wsEnvelope) {
 	s.broadcastRoom(room.ID, true)
 }
 
+func (s *Server) onJungleUndoRequest(client *Client, env wsEnvelope) {
+	s.onTurnBasedUndoRequest(client, env, turnBasedUndoHandler{
+		gameID: types.GameJungle, gameName: "斗兽棋", request: s.requestJungleUndo, respond: s.respondJungleUndo,
+	})
+}
+
+func (s *Server) onJungleUndoRespond(client *Client, env wsEnvelope) {
+	s.onTurnBasedUndoRespond(client, env, turnBasedUndoHandler{
+		gameID: types.GameJungle, gameName: "斗兽棋", request: s.requestJungleUndo, respond: s.respondJungleUndo,
+	})
+}
+
 func (s *Server) onJungleResignRequest(client *Client, env wsEnvelope) {
 	player, room, ok := s.requireRoomPlayer(client, env)
 	if !ok {
@@ -1329,6 +1431,161 @@ func (s *Server) onJungleRestart(client *Client, env wsEnvelope) {
 	}
 	s.resetJungleRoom(room)
 	s.roomNotice(room, playerShortName(player)+" 发起斗兽棋再来一局，请双方准备。")
+	s.broadcastRoom(room.ID, true)
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+}
+
+func (s *Server) onChessReady(client *Client, env wsEnvelope) {
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameChess {
+		client.reply(env.ID, nil, "当前房间不是国际象棋")
+		return
+	}
+	seat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以准备")
+		return
+	}
+	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
+		client.reply(env.ID, nil, "需要双方都坐下才能准备")
+		return
+	}
+	if room.Phase != types.PhaseReady {
+		client.reply(env.ID, nil, "当前不能准备")
+		return
+	}
+	room.Ready[seat] = true
+	s.roomNotice(room, playerShortName(player)+" 已准备国际象棋。")
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	s.scheduleChessReadyStart(room)
+	s.broadcastRoom(room.ID, true)
+}
+
+func (s *Server) onChessMove(client *Client, env wsEnvelope) {
+	var p struct {
+		FromRow int    `json:"fromRow"`
+		FromCol int    `json:"fromCol"`
+		ToRow   int    `json:"toRow"`
+		ToCol   int    `json:"toCol"`
+		Promote string `json:"promote"`
+	}
+	_ = decodeD(env, &p)
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameChess {
+		client.reply(env.ID, nil, "当前房间不是国际象棋")
+		return
+	}
+	seat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以走子")
+		return
+	}
+	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
+		client.reply(env.ID, nil, "需要双方都坐下才能开始")
+		return
+	}
+	ok2, errMsg := s.applyChessMove(room, seat, p.FromRow, p.FromCol, p.ToRow, p.ToCol, p.Promote)
+	if !ok2 {
+		client.reply(env.ID, nil, errMsg)
+		return
+	}
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	s.broadcastRoom(room.ID, true)
+}
+
+func (s *Server) onChessUndoRequest(client *Client, env wsEnvelope) {
+	s.onTurnBasedUndoRequest(client, env, turnBasedUndoHandler{
+		gameID: types.GameChess, gameName: "国际象棋", request: s.requestChessUndo, respond: s.respondChessUndo,
+	})
+}
+
+func (s *Server) onChessUndoRespond(client *Client, env wsEnvelope) {
+	s.onTurnBasedUndoRespond(client, env, turnBasedUndoHandler{
+		gameID: types.GameChess, gameName: "国际象棋", request: s.requestChessUndo, respond: s.respondChessUndo,
+	})
+}
+
+func (s *Server) onChessResignRequest(client *Client, env wsEnvelope) {
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameChess {
+		client.reply(env.ID, nil, "当前房间不是国际象棋")
+		return
+	}
+	seat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以申请认输")
+		return
+	}
+	ok2, errMsg := s.requestChessResign(room, seat)
+	if !ok2 {
+		client.reply(env.ID, nil, errMsg)
+		return
+	}
+	s.roomNotice(room, playerShortName(player)+" 申请认输，等待对方确认。")
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	s.broadcastRoom(room.ID, true)
+}
+
+func (s *Server) onChessResignRespond(client *Client, env wsEnvelope) {
+	var p struct {
+		Accept *bool `json:"accept"`
+	}
+	_ = decodeD(env, &p)
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameChess {
+		client.reply(env.ID, nil, "当前房间不是国际象棋")
+		return
+	}
+	seat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以处理认输请求")
+		return
+	}
+	accept := p.Accept != nil && *p.Accept
+	ok2, errMsg := s.respondChessResign(room, seat, accept)
+	if !ok2 {
+		client.reply(env.ID, nil, errMsg)
+		return
+	}
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+	s.broadcastRoom(room.ID, true)
+}
+
+func (s *Server) onChessRestart(client *Client, env wsEnvelope) {
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameChess {
+		client.reply(env.ID, nil, "当前房间不是国际象棋")
+		return
+	}
+	if _, ok := s.seatOf(room, player.ID); !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以重新开始")
+		return
+	}
+	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {
+		client.reply(env.ID, nil, "需要双方都坐下才能重新开始")
+		return
+	}
+	if room.Phase == types.PhasePunishment {
+		client.reply(env.ID, nil, "惩罚完成前不能重新开始")
+		return
+	}
+	s.resetChessRoom(room)
+	s.roomNotice(room, playerShortName(player)+" 发起国际象棋再来一局，请双方准备。")
 	s.broadcastRoom(room.ID, true)
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
@@ -1976,6 +2233,10 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 			}
 			s.clearOthelloSettlementTimer(p.RoomID)
 			s.clearTicTacToeGiveawayTimer(p.RoomID)
+			s.clearGomokuUndoTimer(p.RoomID)
+			s.clearTurnBasedUndoTimer(p.RoomID)
+			s.clearLiarsDiceStartTimer(p.RoomID)
+			s.clearTurnBasedClockTimer(p.RoomID)
 			s.clearRoomBroadcastTimer(p.RoomID)
 			s.dropSyncChannel(channelRoom(p.RoomID))
 			delete(s.rooms, p.RoomID)
@@ -2043,6 +2304,12 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 				return
 			}
 			s.finishJungleGame(room, p.Result, "管理员判定")
+		case types.GameChess:
+			if room.Chess == nil || room.Chess.Ended {
+				client.reply(env.ID, nil, "对局尚未开始或已经结束")
+				return
+			}
+			s.finishChessGame(room, p.Result, "管理员判定")
 		case types.GameRPS:
 			ok, errMsg := s.forceEndRpsRound(room, p.Result)
 			if !ok {

@@ -54,6 +54,8 @@ class GameSocket {
   private resyncing = new Set<string>();
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private lastPongAt = 0;
+  private serverClockOffsetMs = 0;
+  private serverClockReady = false;
   private visibilityHandler: (() => void) | null = null;
   private pageShowHandler: ((ev: PageTransitionEvent) => void) | null = null;
 
@@ -192,6 +194,7 @@ class GameSocket {
   private startHeartbeat() {
     this.stopHeartbeat();
     this.lastPongAt = Date.now();
+    this.pingServer();
     this.heartbeatTimer = setInterval(() => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
       if (Date.now() - this.lastPongAt > 70_000) {
@@ -202,11 +205,29 @@ class GameSocket {
         }
         return;
       }
-      this.emit("ping", { t: Date.now() }, (response) => {
-        this.lastPongAt = Date.now();
-        this.handlePingBuildId(response);
-      });
+      this.pingServer();
     }, 25_000);
+  }
+
+  private pingServer() {
+    const sentAt = Date.now();
+    this.emit("ping", { t: sentAt }, (response) => {
+      const receivedAt = Date.now();
+      this.lastPongAt = receivedAt;
+      const serverAt = Number(response?.t);
+      if (Number.isFinite(serverAt) && serverAt > 0) {
+        // 以请求往返的中点估算服务端时间，避免客户端系统时钟快/慢导致棋钟
+        // 超过建房设置，或明明尚未超时却直接显示 0。
+        this.serverClockOffsetMs = serverAt - (sentAt + receivedAt) / 2;
+        this.serverClockReady = true;
+      }
+      this.handlePingBuildId(response);
+    });
+  }
+
+  /** 与服务端 nowMs 对齐的当前时间；首次心跳返回前回落浏览器时间。 */
+  serverNow() {
+    return Date.now() + (this.serverClockReady ? this.serverClockOffsetMs : 0);
   }
 
   // 心跳应答里顺带的 buildId 转发成本地事件，与连接建立时的一次性 server:hello 推送
@@ -231,10 +252,7 @@ class GameSocket {
       return;
     }
     if (this.ws.readyState === WebSocket.OPEN) {
-      this.emit("ping", { t: Date.now() }, (response) => {
-        this.lastPongAt = Date.now();
-        this.handlePingBuildId(response);
-      });
+      this.pingServer();
     }
   }
 
