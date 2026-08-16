@@ -213,7 +213,7 @@ type punishmentTaskResult struct {
 // pickSystemTaskForPlayer 按玩家阵营 + 房间标签筛选 + 房间级任务难度进度，抽取一条随机任务：
 //  1. 阵营过滤（factionIds 为空或不含阵营的任务）；
 //  2. 标签过滤：任务标签与拒绝集合无交，且包含集合是任务标签的子集；
-//     包含集合为空时退化为只按拒绝集合排除；
+//     包含集合为空时退化为只按拒绝集合排除；未勾选任何标签的任务无视筛选、永远入选；
 //  3. 难度过滤：难度为 -1 的任务排除出随机候选池（仅供系列任务按 ID 引用）；
 //  4. 候选整体丢进 weightedDifficultyPick（单阶段，全局难度参数）。
 //
@@ -249,8 +249,16 @@ func (s *Server) pickSystemTaskForPlayer(room *RoomState, player *PlayerState, w
 	return &punishmentTaskResult{TaskText: taskText, TypeName: typeName, BackgroundImage: bg, BackgroundOpacity: &op}, true
 }
 
-// pickSeriesTaskForPlayer 按玩家个人系列进度取下一步，再从该步 taskIds 按阵营挑任务；
-// 成功产出后 next_index += 1 并落盘。进度越界（列表改短等）clamp 到最后一条反复执行。
+// defaultSeriesFactionFallbackText：管理员未配置兜底文案时，系列任务某一步
+// 没有覆盖受罚者阵营的下发的内置默认文案。
+const defaultSeriesFactionFallbackText = "该任务不适用于你所在的阵营"
+
+// pickSeriesTaskForPlayer 按房间共享的系列进度取下一步，再从该步 taskIds 按阵营挑任务；
+// 产出后推进房间计数器（+1）。进度是房间级的：全员共用，前一个玩家做完离开，后一个
+// 玩家从下一步继续；换房间（或房内换系列）从 0 重新计数，房间销毁即释放，不落盘。
+// 进度越界（系列步骤被改短等）clamp 到最后一条反复执行。某一步没有覆盖受罚者阵营时
+// 系列照常生效：下发管理员可配的兜底文案（见 defaultSeriesFactionFallbackText），
+// 进度同样推进。
 func (s *Server) pickSeriesTaskForPlayer(room *RoomState, player *PlayerState, seriesID, winnerName string) *punishmentTaskResult {
 	fallback := func() *punishmentTaskResult {
 		op := 0.22
@@ -262,12 +270,8 @@ func (s *Server) pickSeriesTaskForPlayer(room *RoomState, player *PlayerState, s
 		return fallback()
 	}
 	next := 0
-	if s.playerDB != nil {
-		if n, err := s.playerDB.getSeriesProgress(player.ID, seriesID); err == nil {
-			next = n
-		} else {
-			s.errorLog("series_progress_read_failed", err.Error())
-		}
+	if room.PunishmentSeriesProgressID == seriesID {
+		next = room.PunishmentSeriesProgress
 	}
 	if next < 0 {
 		next = 0
@@ -275,13 +279,30 @@ func (s *Server) pickSeriesTaskForPlayer(room *RoomState, player *PlayerState, s
 	if next >= len(series.Steps) {
 		next = len(series.Steps) - 1
 	}
+	advance := func() {
+		room.PunishmentSeriesProgressID = seriesID
+		room.PunishmentSeriesProgress = next + 1
+	}
 	taskByID := make(map[string]*types.PunishmentTaskConfig, len(s.punishmentTasksCache))
 	for i := range s.punishmentTasksCache {
 		t := &s.punishmentTasksCache[i]
 		taskByID[t.ID] = t
 	}
 	task := pickSeriesStepTask(series.Steps[next].TaskIDs, player.FactionID, taskByID)
-	if task == nil || strings.TrimSpace(task.Text) == "" {
+	if task == nil {
+		text := strings.TrimSpace(s.cfg.PunishmentRandomSettings.SeriesFactionFallbackText)
+		if text == "" {
+			text = defaultSeriesFactionFallbackText
+		}
+		op := 0.22
+		advance()
+		return &punishmentTaskResult{
+			TaskText:          applyPunishmentPlaceholders(text, playerShortName(player), winnerName),
+			TypeName:          series.Name,
+			BackgroundOpacity: &op,
+		}
+	}
+	if strings.TrimSpace(task.Text) == "" {
 		return fallback()
 	}
 	taskText := applyPunishmentPlaceholders(strings.TrimSpace(task.Text), playerShortName(player), winnerName)
@@ -293,13 +314,7 @@ func (s *Server) pickSeriesTaskForPlayer(room *RoomState, player *PlayerState, s
 	if len(task.BackgroundImages) > 0 {
 		bg = task.BackgroundImages[randIntn(len(task.BackgroundImages))]
 	}
-	// 成功产出后推进进度（即便已在最后一条，也写回 clamp 后的 next+1，便于后续仍 clamp）。
-	newNext := next + 1
-	if s.playerDB != nil {
-		if err := s.playerDB.setSeriesProgress(player.ID, seriesID, newNext); err != nil {
-			s.errorLog("series_progress_write_failed", err.Error())
-		}
-	}
+	advance()
 	return &punishmentTaskResult{
 		TaskText:          taskText,
 		TypeName:          series.Name,
@@ -309,9 +324,8 @@ func (s *Server) pickSeriesTaskForPlayer(room *RoomState, player *PlayerState, s
 }
 
 // pickSeriesStepTask：收集 taskIds 中所有 FactionIDs 精确命中 factionID 的任务，随机挑一个；
-// 未勾选任何阵营的任务永远不参与匹配；指向不存在 ID 的直接跳过；全落空返回 nil。
-// 建系列任务时应保证每一步的候选任务合起来覆盖全部已定义阵营（见 seriesIsUsable），
-// 否则该系列会被判定为不可用（findSeriesByID 返回 nil），走不到这里。
+// 未勾选任何阵营的任务永远不参与匹配；指向不存在 ID 的直接跳过；全落空返回 nil——
+// 调用方（pickSeriesTaskForPlayer）此时下发阵营兜底文案，系列照常生效。
 func pickSeriesStepTask(taskIDs []string, factionID string, taskByID map[string]*types.PunishmentTaskConfig) *types.PunishmentTaskConfig {
 	var matches []*types.PunishmentTaskConfig
 	for _, id := range taskIDs {
@@ -333,50 +347,11 @@ func pickSeriesStepTask(taskIDs []string, factionID string, taskByID map[string]
 	return matches[randIntn(len(matches))]
 }
 
-// seriesIsUsable 判断系列任务的每一步候选任务合起来是否覆盖了当前全部已定义阵营
-// （只统计任务池里真实存在的任务，悬空引用忽略）；只要有一步覆盖不全，该系列整体
-// 判定为不可用——不出现在建房面板目录里，也不能被房间选中或在运行时产出任务。
-// 未定义任何阵营时视为恒可用。调用方须持有 s.mu。
+// seriesIsUsable 判断系列任务是否可用：至少要有一步。阵营覆盖不再影响可用性——
+// 某一步没覆盖到受罚者阵营时，运行时下发兜底文案（pickSeriesTaskForPlayer），
+// 系列仍会出现在建房面板目录里。调用方须持有 s.mu。
 func (s *Server) seriesIsUsable(series types.PunishmentSeriesTaskConfig) bool {
-	taskByID := make(map[string]*types.PunishmentTaskConfig, len(s.punishmentTasksCache))
-	for i := range s.punishmentTasksCache {
-		t := &s.punishmentTasksCache[i]
-		taskByID[t.ID] = t
-	}
-	return s.seriesIsUsableWithTaskMap(series, taskByID)
-}
-
-// seriesIsUsableWithTaskMap 与 seriesIsUsable 同语义，但复用调用方已构建的任务索引。
-// publicConfig 会遍历全部系列；若每个系列都重建一次全任务 map，会退化成 O(系列数×任务数)。
-func (s *Server) seriesIsUsableWithTaskMap(series types.PunishmentSeriesTaskConfig, taskByID map[string]*types.PunishmentTaskConfig) bool {
-	if len(series.Steps) == 0 {
-		return false
-	}
-	factionIDs := make([]string, 0, len(s.cfg.GenderFactions))
-	for _, f := range s.cfg.GenderFactions {
-		factionIDs = append(factionIDs, f.ID)
-	}
-	if len(factionIDs) == 0 {
-		return true
-	}
-	for _, step := range series.Steps {
-		covered := map[string]struct{}{}
-		for _, id := range step.TaskIDs {
-			t := taskByID[strings.TrimSpace(id)]
-			if t == nil {
-				continue
-			}
-			for _, fid := range t.FactionIDs {
-				covered[fid] = struct{}{}
-			}
-		}
-		for _, fid := range factionIDs {
-			if _, ok := covered[fid]; !ok {
-				return false
-			}
-		}
-	}
-	return true
+	return len(series.Steps) > 0
 }
 
 // candidateTasksForFaction 筛出勾选了该阵营的任务；未勾选任何阵营的任务永远不参与匹配。
@@ -391,7 +366,7 @@ func candidateTasksForFaction(tasks []types.PunishmentTaskConfig, factionID stri
 }
 
 // candidateTasksForTags：T∩R=∅ 且 S⊆T；S 为空时只按 R 排除。T 为空（任务未勾选任何标签）
-// 的任务永不参与匹配，无法被随机模式抽到。
+// 的任务不受标签筛选控制——无视 S/R 永远留在候选池里，房主无法通过勾选/拒绝标签把它挡在外面。
 func candidateTasksForTags(tasks []types.PunishmentTaskConfig, included, excluded []string) []types.PunishmentTaskConfig {
 	exclSet := map[string]struct{}{}
 	for _, id := range excluded {
@@ -408,7 +383,8 @@ func candidateTasksForTags(tasks []types.PunishmentTaskConfig, included, exclude
 	out := make([]types.PunishmentTaskConfig, 0, len(tasks))
 	for _, t := range tasks {
 		if len(t.TagIDs) == 0 {
-			continue // 未勾选任何标签的任务永远不会被抽到
+			out = append(out, t) // 无标签任务无视标签筛选，永远可能被抽到
+			continue
 		}
 		tagSet := map[string]struct{}{}
 		for _, id := range t.TagIDs {
@@ -439,8 +415,8 @@ func candidateTasksForTags(tasks []types.PunishmentTaskConfig, included, exclude
 }
 
 // candidateTasksForRandomDifficulty 过滤掉难度为 -1 的任务：-1 是"仅供系列任务按 ID
-// 引用、不参与随机抽取"的唯一合法负数标记（与标签留空等效，语义见 candidateTasksForTags），
-// 不参与 weightedDifficultyPick 的难度加权计算。判断用 < 0（而非 == -1）是防御性写法——
+// 引用、不参与随机抽取"的唯一合法负数标记（现在也是把任务挡在随机池外的唯一手段，
+// 标签留空已不再排除随机候选），不参与 weightedDifficultyPick 的难度加权计算。判断用 < 0（而非 == -1）是防御性写法——
 // 保存路径（config.NormalizePunishmentTasks）保证落库值只会是 -1 或 1-99，此处多一层兜底。
 func candidateTasksForRandomDifficulty(tasks []types.PunishmentTaskConfig) []types.PunishmentTaskConfig {
 	out := make([]types.PunishmentTaskConfig, 0, len(tasks))
@@ -888,6 +864,10 @@ func (s *Server) submitSystemPunishmentProof(room *RoomState, player *PlayerStat
 
 func (s *Server) finishPunishmentIfComplete(room *RoomState) bool {
 	if room.Phase == types.PhasePunishment && s.punishmentComplete(room) {
+		if room.midGamePunishment {
+			s.resumeAfterMidGamePunishment(room)
+			return true
+		}
 		s.resetForNextRound(room)
 		return true
 	}

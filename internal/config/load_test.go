@@ -8,6 +8,32 @@ import (
 	"github.com/doumiao/newRPS/internal/types"
 )
 
+func TestNormalizeStakeTiers(t *testing.T) {
+	fallback := []int{5, 10, 20}
+	cases := []struct {
+		name  string
+		in    []int
+		want  []int
+	}{
+		{"empty falls back", nil, fallback},
+		{"all invalid falls back", []int{0, -3}, fallback},
+		{"clamped deduped sorted", []int{30, 15, 15, 0, 60}, []int{15, 30, 60}},
+		{"capped at four tiers", []int{1, 2, 3, 4, 5}, []int{1, 2, 3, 4}},
+		{"upper clamp 9999", []int{100000}, []int{9999}},
+	}
+	for _, tc := range cases {
+		got := normalizeStakeTiers(tc.in, fallback)
+		if len(got) != len(tc.want) {
+			t.Fatalf("%s: got %v want %v", tc.name, got, tc.want)
+		}
+		for i := range got {
+			if got[i] != tc.want[i] {
+				t.Fatalf("%s: got %v want %v", tc.name, got, tc.want)
+			}
+		}
+	}
+}
+
 func TestLoadConfigFromSplitJSON(t *testing.T) {
 	cfg, err := LoadConfig()
 	if err != nil {

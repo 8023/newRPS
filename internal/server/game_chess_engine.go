@@ -688,6 +688,14 @@ func chessUpdateCastling(state *types.ChessState, move types.ChessMove, color ty
 	clearRook(move.To.Row, move.To.Col)
 }
 
+func chessMoveCaptures(state *types.ChessState, move types.ChessMove) bool {
+	if state == nil || state.Board[move.To.Row][move.To.Col] != nil {
+		return state != nil
+	}
+	_, piece, ok := parseChessCellPtr(state.Board[move.From.Row][move.From.Col])
+	return ok && piece == types.ChessPawn && chessPosEqual(state.EnPassant, move.To.Row, move.To.Col)
+}
+
 func chessApplyMoveToState(state *types.ChessState, move types.ChessMove) {
 	src := state.Board[move.From.Row][move.From.Col]
 	color, piece, ok := parseChessCellPtr(src)

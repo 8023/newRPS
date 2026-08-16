@@ -162,6 +162,27 @@ func (s *Server) onPetBondForceGiveaway(client *Client, env wsEnvelope) {
 			return
 		}
 
+	case types.GameJungle:
+		if room.Phase != types.PhaseChoosing || room.Jungle == nil || room.Jungle.Ended {
+			client.reply(env.ID, nil, "当前斗兽棋对局不能强制白给")
+			return
+		}
+		if room.Jungle.UndoRequest != nil || room.Jungle.ResignRequest != nil {
+			client.reply(env.ID, nil, "请求处理期间不能强制白给")
+			return
+		}
+		if room.Jungle.Turn == petSeat {
+			if forcedGiveawayMasterName(room, petSeat) != "" {
+				client.reply(env.ID, nil, "已经强制过一次，正在等待本手跳过")
+				return
+			}
+			setForcedGiveaway(room, petSeat, masterName)
+			s.maybeJungleGiveawaySkip(room)
+			client.reply(env.ID, map[string]any{"ok": true}, "")
+			s.broadcastRoom(room.ID, true)
+			return
+		}
+
 	case types.GameGomoku:
 		if room.Phase != types.PhaseChoosing || room.Gomoku == nil || room.Gomoku.Ended {
 			client.reply(env.ID, nil, "当前五子棋对局不能强制白给")

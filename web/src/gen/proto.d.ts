@@ -3083,6 +3083,9 @@ export namespace game {
         /** RoomSettings othelloUndoLimit. */
         othelloUndoLimit: number;
 
+        /** RoomSettings enablePerPiecePunishment. */
+        enablePerPiecePunishment: boolean;
+
         /**
          * Creates a new RoomSettings instance using the specified properties.
          * @param [properties] Properties to set
@@ -3286,6 +3289,9 @@ export namespace game {
 
             /** RoomSettings othelloUndoLimit */
             othelloUndoLimit?: (number|null);
+
+            /** RoomSettings enablePerPiecePunishment */
+            enablePerPiecePunishment?: (boolean|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -11138,6 +11144,9 @@ export namespace game {
         /** PunishmentRandomSettings maxDifficultyOvershoot. */
         maxDifficultyOvershoot: number;
 
+        /** PunishmentRandomSettings seriesFactionFallbackText. */
+        seriesFactionFallbackText: string;
+
         /**
          * Creates a new PunishmentRandomSettings instance using the specified properties.
          * @param [properties] Properties to set
@@ -11230,6 +11239,9 @@ export namespace game {
 
             /** PunishmentRandomSettings maxDifficultyOvershoot */
             maxDifficultyOvershoot?: (number|null);
+
+            /** PunishmentRandomSettings seriesFactionFallbackText */
+            seriesFactionFallbackText?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -11801,6 +11813,9 @@ export namespace game {
         /** GameConfig description. */
         description: string;
 
+        /** GameConfig stakes. */
+        stakes: number[];
+
         /**
          * Creates a new GameConfig instance using the specified properties.
          * @param [properties] Properties to set
@@ -11893,6 +11908,9 @@ export namespace game {
 
             /** GameConfig description */
             description?: (string|null);
+
+            /** GameConfig stakes */
+            stakes?: (number[]|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

@@ -92,8 +92,14 @@ func TestSavePunishmentTasksAllowsSeriesOnlyMarkers(t *testing.T) {
 	if len(s.punishmentTasksCache) != 1 || s.punishmentTasksCache[0].Order != -1 || len(s.punishmentTasksCache[0].TagIDs) != 0 {
 		t.Fatalf("saved task changed series-only markers: %#v", s.punishmentTasksCache)
 	}
-	if got := candidateTasksForTags(s.punishmentTasksCache, nil, nil); len(got) != 0 {
-		t.Fatalf("tagless task entered random pool: %#v", got)
+	// 无标签任务现在会通过标签筛选（无视 S/R），把 order=-1 的系列专用任务挡在
+	// 随机池外的是难度过滤这一层。
+	pool := candidateTasksForTags(s.punishmentTasksCache, nil, nil)
+	if len(pool) != 1 {
+		t.Fatalf("tagless task should pass tag filter: %#v", pool)
+	}
+	if got := candidateTasksForRandomDifficulty(pool); len(got) != 0 {
+		t.Fatalf("series-only task entered random pool: %#v", got)
 	}
 	taskByID := map[string]*types.PunishmentTaskConfig{"series_only": &s.punishmentTasksCache[0]}
 	if got := pickSeriesStepTask([]string{"series_only"}, "female_faction", taskByID); got == nil {

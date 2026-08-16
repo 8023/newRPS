@@ -313,6 +313,10 @@ func (s *Server) buildMatchHistoryShell(room *RoomState, result types.RoundResul
 // finalizeMatch 写入 history 并进入惩罚或下一局。
 func (s *Server) finalizeMatch(room *RoomState, result types.RoundResult, item types.RoundHistoryItem) {
 	s.addRoundHistory(room, item)
+	if room.skipEndPunishment {
+		room.skipEndPunishment = false
+		return
+	}
 	s.setupPunishmentOrNext(room, result)
 }
 

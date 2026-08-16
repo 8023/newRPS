@@ -9786,6 +9786,7 @@ export const game = $root.game = (() => {
          * @property {number|null} [jungleUndoLimit] RoomSettings jungleUndoLimit
          * @property {number|null} [chessUndoLimit] RoomSettings chessUndoLimit
          * @property {number|null} [othelloUndoLimit] RoomSettings othelloUndoLimit
+         * @property {boolean|null} [enablePerPiecePunishment] RoomSettings enablePerPiecePunishment
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -10142,6 +10143,14 @@ export const game = $root.game = (() => {
         RoomSettings.prototype.othelloUndoLimit = 0;
 
         /**
+         * RoomSettings enablePerPiecePunishment.
+         * @member {boolean} enablePerPiecePunishment
+         * @memberof game.RoomSettings
+         * @instance
+         */
+        RoomSettings.prototype.enablePerPiecePunishment = false;
+
+        /**
          * Creates a new RoomSettings instance using the specified properties.
          * @function create
          * @memberof game.RoomSettings
@@ -10257,6 +10266,8 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 42, wireType 0 =*/336).int32(message.chessUndoLimit);
             if (message.othelloUndoLimit != null && $Object.hasOwnProperty.call(message, "othelloUndoLimit") && message.othelloUndoLimit !== 0)
                 writer.uint32(/* id 43, wireType 0 =*/344).int32(message.othelloUndoLimit);
+            if (message.enablePerPiecePunishment != null && $Object.hasOwnProperty.call(message, "enablePerPiecePunishment") && message.enablePerPiecePunishment !== false)
+                writer.uint32(/* id 44, wireType 0 =*/352).bool(message.enablePerPiecePunishment);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -10660,6 +10671,15 @@ export const game = $root.game = (() => {
                             delete message.othelloUndoLimit;
                         continue;
                     }
+                case 44: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.enablePerPiecePunishment = value;
+                        else
+                            delete message.enablePerPiecePunishment;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -10839,6 +10859,9 @@ export const game = $root.game = (() => {
             if (message.othelloUndoLimit != null && $Object.hasOwnProperty.call(message, "othelloUndoLimit"))
                 if (!$util.isInteger(message.othelloUndoLimit))
                     return "othelloUndoLimit: integer expected";
+            if (message.enablePerPiecePunishment != null && $Object.hasOwnProperty.call(message, "enablePerPiecePunishment"))
+                if (typeof message.enablePerPiecePunishment !== "boolean")
+                    return "enablePerPiecePunishment: boolean expected";
             return null;
         };
 
@@ -10996,6 +11019,9 @@ export const game = $root.game = (() => {
             if (object.othelloUndoLimit != null)
                 if ($Number(object.othelloUndoLimit) !== 0)
                     message.othelloUndoLimit = object.othelloUndoLimit | 0;
+            if (object.enablePerPiecePunishment != null)
+                if (object.enablePerPiecePunishment)
+                    message.enablePerPiecePunishment = $Boolean(object.enablePerPiecePunishment);
             return message;
         };
 
@@ -11059,6 +11085,7 @@ export const game = $root.game = (() => {
                 object.jungleUndoLimit = 0;
                 object.chessUndoLimit = 0;
                 object.othelloUndoLimit = 0;
+                object.enablePerPiecePunishment = false;
             }
             if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
                 object.name = message.name;
@@ -11152,6 +11179,8 @@ export const game = $root.game = (() => {
                 object.chessUndoLimit = message.chessUndoLimit;
             if (message.othelloUndoLimit != null && $Object.hasOwnProperty.call(message, "othelloUndoLimit"))
                 object.othelloUndoLimit = message.othelloUndoLimit;
+            if (message.enablePerPiecePunishment != null && $Object.hasOwnProperty.call(message, "enablePerPiecePunishment"))
+                object.enablePerPiecePunishment = message.enablePerPiecePunishment;
             return object;
         };
 
@@ -35375,6 +35404,7 @@ export const game = $root.game = (() => {
          * @property {number|null} [orderStep] PunishmentRandomSettings orderStep
          * @property {number|null} [orderSpread] PunishmentRandomSettings orderSpread
          * @property {number|null} [maxDifficultyOvershoot] PunishmentRandomSettings maxDifficultyOvershoot
+         * @property {string|null} [seriesFactionFallbackText] PunishmentRandomSettings seriesFactionFallbackText
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -35431,6 +35461,14 @@ export const game = $root.game = (() => {
         PunishmentRandomSettings.prototype.maxDifficultyOvershoot = 0;
 
         /**
+         * PunishmentRandomSettings seriesFactionFallbackText.
+         * @member {string} seriesFactionFallbackText
+         * @memberof game.PunishmentRandomSettings
+         * @instance
+         */
+        PunishmentRandomSettings.prototype.seriesFactionFallbackText = "";
+
+        /**
          * Creates a new PunishmentRandomSettings instance using the specified properties.
          * @function create
          * @memberof game.PunishmentRandomSettings
@@ -35468,6 +35506,8 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 2, wireType 1 =*/17).double(message.orderSpread);
             if (message.maxDifficultyOvershoot != null && $Object.hasOwnProperty.call(message, "maxDifficultyOvershoot") && !$Object.is(message.maxDifficultyOvershoot, 0))
                 writer.uint32(/* id 3, wireType 1 =*/25).double(message.maxDifficultyOvershoot);
+            if (message.seriesFactionFallbackText != null && $Object.hasOwnProperty.call(message, "seriesFactionFallbackText") && message.seriesFactionFallbackText !== "")
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.seriesFactionFallbackText);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -35542,6 +35582,15 @@ export const game = $root.game = (() => {
                             delete message.maxDifficultyOvershoot;
                         continue;
                     }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.seriesFactionFallbackText = value;
+                        else
+                            delete message.seriesFactionFallbackText;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -35594,6 +35643,9 @@ export const game = $root.game = (() => {
             if (message.maxDifficultyOvershoot != null && $Object.hasOwnProperty.call(message, "maxDifficultyOvershoot"))
                 if (typeof message.maxDifficultyOvershoot !== "number")
                     return "maxDifficultyOvershoot: number expected";
+            if (message.seriesFactionFallbackText != null && $Object.hasOwnProperty.call(message, "seriesFactionFallbackText"))
+                if (!$util.isString(message.seriesFactionFallbackText))
+                    return "seriesFactionFallbackText: string expected";
             return null;
         };
 
@@ -35624,6 +35676,9 @@ export const game = $root.game = (() => {
             if (object.maxDifficultyOvershoot != null)
                 if (!$Object.is($Number(object.maxDifficultyOvershoot), 0))
                     message.maxDifficultyOvershoot = $Number(object.maxDifficultyOvershoot);
+            if (object.seriesFactionFallbackText != null)
+                if (typeof object.seriesFactionFallbackText !== "string" || object.seriesFactionFallbackText.length)
+                    message.seriesFactionFallbackText = $String(object.seriesFactionFallbackText);
             return message;
         };
 
@@ -35648,6 +35703,7 @@ export const game = $root.game = (() => {
                 object.orderStep = 0;
                 object.orderSpread = 0;
                 object.maxDifficultyOvershoot = 0;
+                object.seriesFactionFallbackText = "";
             }
             if (message.orderStep != null && $Object.hasOwnProperty.call(message, "orderStep"))
                 object.orderStep = options.json && !$isFinite(message.orderStep) ? $String(message.orderStep) : message.orderStep;
@@ -35655,6 +35711,8 @@ export const game = $root.game = (() => {
                 object.orderSpread = options.json && !$isFinite(message.orderSpread) ? $String(message.orderSpread) : message.orderSpread;
             if (message.maxDifficultyOvershoot != null && $Object.hasOwnProperty.call(message, "maxDifficultyOvershoot"))
                 object.maxDifficultyOvershoot = options.json && !$isFinite(message.maxDifficultyOvershoot) ? $String(message.maxDifficultyOvershoot) : message.maxDifficultyOvershoot;
+            if (message.seriesFactionFallbackText != null && $Object.hasOwnProperty.call(message, "seriesFactionFallbackText"))
+                object.seriesFactionFallbackText = message.seriesFactionFallbackText;
             return object;
         };
 
@@ -37145,6 +37203,7 @@ export const game = $root.game = (() => {
          * @property {string|null} [id] GameConfig id
          * @property {string|null} [name] GameConfig name
          * @property {string|null} [description] GameConfig description
+         * @property {Array.<number>|null} [stakes] GameConfig stakes
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -37170,6 +37229,7 @@ export const game = $root.game = (() => {
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const GameConfig = function (properties) {
+            this.stakes = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -37199,6 +37259,14 @@ export const game = $root.game = (() => {
          * @instance
          */
         GameConfig.prototype.description = "";
+
+        /**
+         * GameConfig stakes.
+         * @member {Array.<number>} stakes
+         * @memberof game.GameConfig
+         * @instance
+         */
+        GameConfig.prototype.stakes = $util.emptyArray;
 
         /**
          * Creates a new GameConfig instance using the specified properties.
@@ -37238,6 +37306,8 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
             if (message.description != null && $Object.hasOwnProperty.call(message, "description") && message.description !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.description);
+            if (message.stakes != null && message.stakes.length)
+                writer.uint32(/* id 4, wireType 2 =*/34).int32s(message.stakes);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -37312,6 +37382,20 @@ export const game = $root.game = (() => {
                             delete message.description;
                         continue;
                     }
+                case 4: {
+                        if (wireType === 2) {
+                            if (!(message.stakes && message.stakes.length))
+                                message.stakes = [];
+                            reader.int32s(message.stakes);
+                            continue;
+                        }
+                        if (wireType !== 0)
+                            break;
+                        if (!(message.stakes && message.stakes.length))
+                            message.stakes = [];
+                        message.stakes.push(reader.int32());
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -37364,6 +37448,13 @@ export const game = $root.game = (() => {
             if (message.description != null && $Object.hasOwnProperty.call(message, "description"))
                 if (!$util.isString(message.description))
                     return "description: string expected";
+            if (message.stakes != null && $Object.hasOwnProperty.call(message, "stakes")) {
+                if (!$Array.isArray(message.stakes))
+                    return "stakes: array expected";
+                for (let i = 0; i < message.stakes.length; ++i)
+                    if (!$util.isInteger(message.stakes[i]))
+                        return "stakes: integer[] expected";
+            }
             return null;
         };
 
@@ -37394,6 +37485,13 @@ export const game = $root.game = (() => {
             if (object.description != null)
                 if (typeof object.description !== "string" || object.description.length)
                     message.description = $String(object.description);
+            if (object.stakes) {
+                if (!$Array.isArray(object.stakes))
+                    throw $TypeError(".game.GameConfig.stakes: array expected");
+                message.stakes = $Array(object.stakes.length);
+                for (let i = 0; i < object.stakes.length; ++i)
+                    message.stakes[i] = object.stakes[i] | 0;
+            }
             return message;
         };
 
@@ -37414,6 +37512,8 @@ export const game = $root.game = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let object = {};
+            if (options.arrays || options.defaults)
+                object.stakes = [];
             if (options.defaults) {
                 object.id = "";
                 object.name = "";
@@ -37425,6 +37525,11 @@ export const game = $root.game = (() => {
                 object.name = message.name;
             if (message.description != null && $Object.hasOwnProperty.call(message, "description"))
                 object.description = message.description;
+            if (message.stakes && message.stakes.length) {
+                object.stakes = $Array(message.stakes.length);
+                for (let j = 0; j < message.stakes.length; ++j)
+                    object.stakes[j] = message.stakes[j];
+            }
             return object;
         };
 

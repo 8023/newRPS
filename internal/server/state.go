@@ -229,6 +229,12 @@ type RoomState struct {
 	// 与玩家、与具体任务类型均无关——房间内任意败者抽到任意类型都会推进同一计数；且每完成一局
 	// 只 +1，即便平局双罚/双败一局同时惩罚两名玩家也不例外。随房间建立初始化为 0，随房间销毁释放。
 	PunishmentTaskProgress int
+	// PunishmentSeriesProgressID/PunishmentSeriesProgress：系列任务模式的房间级共享进度——
+	// 房间内全员共用一个步数计数器，谁挨罚都推进同一步；前一个玩家做完离开，后一个玩家
+	// 从下一步继续。不落盘：换房间（或房内换成另一个系列，ID 对不上时）从 0 重新计数，
+	// 房间销毁即释放。见 punishment.go 的 pickSeriesTaskForPlayer。
+	PunishmentSeriesProgressID string
+	PunishmentSeriesProgress   int
 	Score                  map[types.SeatKey]int
 	SeatedScore            map[types.SeatKey]int
 	SeatStats              map[types.SeatKey]types.SeatStats
@@ -246,6 +252,10 @@ type RoomState struct {
 	ForcedGiveawayBySeat  map[types.SeatKey]string
 	DisconnectForfeits    map[string]DisconnectForfeit
 	CreatedAt             int64
+	// midGamePunishment：国际象棋/斗兽棋「每子惩罚」进行中；完成后恢复对局而不是开新局。
+	midGamePunishment bool
+	skipEndPunishment bool
+	pendingPieceEnd   *pendingPieceEnd
 }
 
 type forgiveAdvantage struct {

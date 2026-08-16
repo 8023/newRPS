@@ -30,8 +30,10 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		gameID = types.GameRPS
 	}
 	settings.GameID = gameID
-	if settings.Stake == 0 {
-		settings.Stake = 5
+	// 排位档位按游戏从 games.json 读取（后台可调），不在档位内回退默认档。
+	stakeTiers := s.stakeTiersFor(gameID)
+	if !containsInt(stakeTiers, int(settings.Stake)) {
+		settings.Stake = types.RankStake(stakeTiers[0])
 	}
 	if settings.AllowProofImage == nil {
 		settings.AllowProofImage = boolPtr(true)
@@ -49,11 +51,6 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	}
 	settings.EnableExtremeRanked = settings.EnableRanked && settings.EnableExtremeRanked
 	if settings.GameID == types.GameOthello {
-		switch settings.Stake {
-		case 1, 2, 5, 10:
-		default:
-			settings.Stake = 5
-		}
 		switch settings.OthelloBoardTheme {
 		case "classic", "pastel", "midnight", "wood", "neon":
 		default:
@@ -63,33 +60,18 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		settings.OthelloMoveSeconds = clampMoveSeconds(settings.OthelloMoveSeconds)
 		settings.OthelloGameMinutes = clampGameMinutes(settings.OthelloGameMinutes)
 	} else if settings.GameID == types.GameTicTacToe {
-		switch settings.Stake {
-		case 5, 10, 20:
-		default:
-			settings.Stake = 5
-		}
 		switch settings.TicTacToeBoardTheme {
 		case "paper", "mint", "midnight", "candy", "arcade":
 		default:
 			settings.TicTacToeBoardTheme = "paper"
 		}
 	} else if settings.GameID == types.GameLiarsDice {
-		switch settings.Stake {
-		case 5, 10, 20:
-		default:
-			settings.Stake = 5
-		}
 		minP, maxP := liarsDiceRosterBounds(settings)
 		settings.LiarsDiceMinPlayers = minP
 		settings.LiarsDiceMaxPlayers = maxP
 		// 大话骰每局永远 1 胜 1 负，旁观者记平但不触发「平局双罚」；强制关闭以免歧义。
 		settings.TieDoublePunish = false
 	} else if settings.GameID == types.GameGomoku {
-		switch settings.Stake {
-		case 5, 10, 20:
-		default:
-			settings.Stake = 5
-		}
 		switch settings.GomokuBoardTheme {
 		case "classic", "pastel", "midnight", "wood", "neon":
 		default:
@@ -99,11 +81,6 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		settings.GomokuMoveSeconds = clampMoveSeconds(settings.GomokuMoveSeconds)
 		settings.GomokuGameMinutes = clampGameMinutes(settings.GomokuGameMinutes)
 	} else if settings.GameID == types.GameJungle {
-		switch settings.Stake {
-		case 5, 10, 20:
-		default:
-			settings.Stake = 5
-		}
 		switch settings.JungleBoardTheme {
 		case "forest", "bamboo", "river", "dusk", "night":
 		default:
@@ -113,11 +90,6 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		settings.JungleMoveSeconds = clampMoveSeconds(settings.JungleMoveSeconds)
 		settings.JungleGameMinutes = clampGameMinutes(settings.JungleGameMinutes)
 	} else if settings.GameID == types.GameChess {
-		switch settings.Stake {
-		case 5, 10, 20:
-		default:
-			settings.Stake = 5
-		}
 		switch settings.ChessBoardTheme {
 		case "classic", "wood", "midnight", "marble", "green":
 		default:
@@ -126,12 +98,6 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		settings.ChessUndoLimit = clampUndoLimit(settings.ChessUndoLimit)
 		settings.ChessMoveSeconds = clampMoveSeconds(settings.ChessMoveSeconds)
 		settings.ChessGameMinutes = clampGameMinutes(settings.ChessGameMinutes)
-	} else {
-		switch settings.Stake {
-		case 5, 10, 20:
-		default:
-			settings.Stake = 5
-		}
 	}
 	if !settings.EnableRanked {
 		settings.EnableRankMultiplier = false
@@ -181,6 +147,9 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		settings.PunishmentTagsIncluded = []string{}
 		settings.PunishmentTagsExcluded = []string{}
 		settings.PunishmentSeriesID = ""
+	}
+	if !settings.EnablePunishment || (settings.GameID != types.GameChess && settings.GameID != types.GameJungle) {
+		settings.EnablePerPiecePunishment = false
 	}
 	settings.Tags = s.normalizeRoomTags(settings)
 	settings.EnableTags = len(settings.Tags) > 0
@@ -2102,7 +2071,6 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 		Message            string                             `json:"message"`
 		DurationSeconds    *float64                           `json:"durationSeconds"`
 		Result             types.RoundResult                  `json:"result"`
-		SeriesID           string                             `json:"seriesId"`
 		Tasks              []types.PunishmentTaskConfig       `json:"tasks"`
 		Series             []types.PunishmentSeriesTaskConfig `json:"series"`
 		Refs               []chatMessageRef                   `json:"refs"`
@@ -2140,26 +2108,6 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 		}
 		client.reply(env.ID, map[string]any{"series": sanitizePunishmentSeries(s.punishmentSeriesCache)}, "")
 		s.emitConfigUpdate() // 摘要变化同步给建房面板
-		return
-	}
-	if p.Action == "resetPunishmentSeriesProgress" {
-		seriesID := strings.TrimSpace(p.SeriesID)
-		if seriesID == "" {
-			client.reply(env.ID, nil, "缺少系列任务 ID")
-			return
-		}
-		if s.findSeriesByID(seriesID) == nil {
-			client.reply(env.ID, nil, "系列任务不存在")
-			return
-		}
-		if s.playerDB != nil {
-			if err := s.playerDB.resetSeriesProgress(seriesID); err != nil {
-				s.errorLog("series_progress_reset_failed", err.Error())
-				client.reply(env.ID, nil, "重置进度失败")
-				return
-			}
-		}
-		client.reply(env.ID, map[string]any{"ok": true}, "")
 		return
 	}
 	// 聊天管理走软删除，不再有"一键清空大厅/房间聊天"——只能针对检索出的具体消息

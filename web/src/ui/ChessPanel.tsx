@@ -7,14 +7,9 @@ import { GameClockBar, occupantDisplay, useNow } from "./AppViews";
 
 const SIZE = 8;
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
-// 双方都用实心字形，颜色交给 CSS，避免空心白子在浅格上几乎看不见。
+// U+FE0E 强制使用可重着色的文本字形，避免 Safari 把部分棋子回退成黑色彩色字体。
 const PIECE_GLYPH: Record<string, string> = {
-  king: "♚",
-  queen: "♛",
-  rook: "♜",
-  bishop: "♝",
-  knight: "♞",
-  pawn: "♟"
+  king: "♚︎", queen: "♛︎", rook: "♜︎", bishop: "♝︎", knight: "♞︎", pawn: "♟︎"
 };
 const PIECE_LABEL: Record<string, string> = {
   king: "王", queen: "后", rook: "车", bishop: "象", knight: "马", pawn: "兵"
@@ -415,11 +410,6 @@ export function ChessPanel({ room, me, onError }: { room: RoomSnapshot; me: Publ
             <span key={i}>{FILES[i]}</span>
           ))}
         </div>
-      </div>
-      <div className="chess-legend">
-        <span>{chessSideLabel(state, "A")}：{occupantDisplay(room.seats.A)}</span>
-        <span>{chessSideLabel(state, "B")}：{occupantDisplay(room.seats.B)}</span>
-        <span>{mySeat ? `你在战斗席 ${mySeat}（${chessSideLabel(state, mySeat)}）` : "你正在观战"}</span>
       </div>
       <div className="chess-rules-hint hint">
         <p>白方先走。王车易位、吃过路兵、兵到底线升变都按常规规则。将死对方的王即胜；逼和、子力不足、五十步或三次重复局面算平局。</p>

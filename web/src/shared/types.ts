@@ -16,7 +16,8 @@ export type RoundResult = "A" | "B" | "draw" | "doubleLoss";
 export type GamePhase = "waiting" | "ready" | "choosing" | "result" | "punishment";
 export type SeatKey = "A" | "B";
 export type GameId = "rps" | "othello" | "tictactoe" | "liarsdice" | "gomoku" | "jungle" | "chess";
-export type RankStake = 1 | 2 | 5 | 10 | 20;
+/** 排位赌分；档位由后台按游戏配置（games.json stakes），不再限定固定枚举。 */
+export type RankStake = number;
 export type OthelloCell = "black" | "white" | null;
 export type TicTacToeCell = "X" | "O" | null;
 export type TicTacToeState = {
@@ -188,10 +189,10 @@ export type RoomInfoTagStyle = GenderColors & {
   label: string;
 };
 
-// PunishmentTaskConfig：拍平的任务池任务。tagIds 可选 0/1/多个，留空则该任务永远不会被
-// 随机模式抽到（仍可被系列任务引用）；factionIds 为空时永不匹配任何阵营；order 合法取值仅 -1 或
-// 1-99：-1 是另一种"不参与随机抽取"的显式标记（与 tagIds 留空等效，仍可被系列任务按 ID
-// 引用），1-99 为难度档位。
+// PunishmentTaskConfig：拍平的任务池任务。tagIds 可选 0/1/多个，留空则该任务不受标签
+// 筛选控制、任何随机房间都可能抽到（房主无法用选中/拒绝标签挡住它）；factionIds 为空时
+// 永不匹配任何阵营；order 合法取值仅 -1 或 1-99：-1 是"不参与随机抽取"的显式标记
+// （仍可被系列任务按 ID 引用），1-99 为难度档位。
 export type PunishmentTaskConfig = {
   id: string;
   name: string;
@@ -215,6 +216,8 @@ export type PunishmentTagConfig = {
 export type PunishmentRandomSettings = {
   orderStep: number;
   maxDifficultyOvershoot: number;
+  /** 系列任务某一步没有覆盖受罚者阵营时下发的兜底文案；空串用服务端内置默认。 */
+  seriesFactionFallbackText?: string;
 };
 
 /** 系列任务一步：有序引用任务池任务 ID。 */
@@ -482,6 +485,7 @@ export type RoomSettings = {
   password?: string;
   gameId: GameId;
   enablePunishment: boolean;
+  enablePerPiecePunishment?: boolean;
   /** random=随机任务（原 system）| series=系列任务 | player=玩家发布 */
   punishmentSource?: "random" | "series" | "player" | "system";
   /** @deprecated 旧任务类型多选 */
@@ -853,6 +857,8 @@ export type AppConfig = {
     id: GameId;
     name: string;
     description: string;
+    /** 建房可选排位档位，升序，第一个为默认档；黑白棋按每子、其余按整局结算。 */
+    stakes: number[];
   }>;
   messages: Record<string, string>;
 };

@@ -3,7 +3,18 @@
  * - 服务端 jsonsafe 已保证出站 slice/map 非 null。
  * - 此处负责：DELTA 合并后的薄兜底、lobby chat 本地保留、history 按 id 合并、配置缺字段补全。
  */
-import type { AppConfig, LobbySnapshot, PublicPlayer, PunishmentSeriesTaskConfig, PunishmentTaskConfig, RoomSnapshot, SeatKey } from "../shared/types";
+import type { AppConfig, GameId, LobbySnapshot, PublicPlayer, PunishmentSeriesTaskConfig, PunishmentTaskConfig, RoomSnapshot, SeatKey } from "../shared/types";
+
+/** 游戏缺省排位档位（与服务端 types.DefaultStakeTiers 镜像）：黑白棋按每子，其余整局。 */
+export function defaultStakeTiers(gameId: GameId): number[] {
+  return gameId === "othello" ? [1, 2, 5, 10] : [5, 10, 20];
+}
+
+/** 取某游戏可选排位档位；旧后端 config.games 无 stakes 字段时回退默认表。 */
+export function stakeTiersFor(config: Pick<AppConfig, "games">, gameId: GameId): number[] {
+  const tiers = config.games?.find((game) => game.id === gameId)?.stakes;
+  return tiers?.length ? tiers : defaultStakeTiers(gameId);
+}
 
 export function playerSyncKey(player: PublicPlayer) {
   return [
@@ -671,7 +682,8 @@ export function normalizeConfig(config: AppConfig): AppConfig {
     })),
     punishmentRandomSettings: {
       orderStep: config.punishmentRandomSettings?.orderStep ?? 2,
-      maxDifficultyOvershoot: config.punishmentRandomSettings?.maxDifficultyOvershoot ?? 5
+      maxDifficultyOvershoot: config.punishmentRandomSettings?.maxDifficultyOvershoot ?? 5,
+      seriesFactionFallbackText: config.punishmentRandomSettings?.seriesFactionFallbackText ?? ""
     },
     roomTags: config.roomTags || [],
     roomInfoTags: config.roomInfoTags || {},
@@ -684,7 +696,7 @@ export function normalizeConfig(config: AppConfig): AppConfig {
     },
     giveaway: withGiveawayDefaults(config.giveaway),
     petBond: withPetBondDefaults(config.petBond),
-    games: config.games || [],
+    games: (config.games || []).map((game) => ({ ...game, stakes: game.stakes?.length ? game.stakes : defaultStakeTiers(game.id) })),
     messages: config.messages || {},
     // 与 extremeMode 同模式：整段对象 + 内部 map 缺省，保证业务代码可直接点字段。
     extremeMode: {

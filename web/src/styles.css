@@ -115,7 +115,10 @@ button:disabled {
   padding: 7px 10px;
 }
 
-input,
+/* 复选框/单选框必须排除：它们常在 inline-flex 标签里当 flex 项目用，width:100% 是循环百分比，
+   WebKit（Safari）会把它解析成撑满容器导致复选框错位（Chrome 按 auto 处理所以看似正常），
+   padding 也会把原生勾选框撑变形。 */
+input:not([type="checkbox"]):not([type="radio"]),
 select,
 textarea {
   width: 100%;
@@ -420,17 +423,6 @@ main {
   border-color: color-mix(in srgb, var(--border-strong) 70%, var(--pink-border));
 }
 
-.danger-soft {
-  color: #a9344f;
-  background: color-mix(in srgb, var(--button-bg) 72%, #ff8faf);
-  border-color: color-mix(in srgb, var(--border-strong) 58%, #ff8faf);
-}
-
-:root[data-theme="dark"] .danger-soft {
-  color: #ffc2d0;
-  background: color-mix(in srgb, var(--panel-solid) 72%, #7c2840);
-  border-color: #b65b73;
-}
 
 .notice,
 .loading {
@@ -557,7 +549,7 @@ main {
   flex-wrap: wrap;
 }
 
-.version-update-popup > div:first-child {
+.version-update-popup>div:first-child {
   flex: 1 1 260px;
   min-width: 0;
 }
@@ -1447,10 +1439,6 @@ main {
   align-items: center;
   gap: 8px;
   min-height: 34px;
-}
-
-.toggle input {
-  width: auto;
 }
 
 .room-list {
@@ -2737,6 +2725,7 @@ main {
 
 .othello-board {
   width: min(100%, 680px, 72dvh);
+  margin-bottom: 8px;
   aspect-ratio: 1;
   display: grid;
   grid-template-columns: repeat(8, 1fr);
@@ -2961,6 +2950,7 @@ main {
 
 .tictactoe-board {
   width: min(100%, 560px, 66dvh);
+  margin-bottom: 8px;
   aspect-ratio: 1;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -3201,6 +3191,7 @@ main {
 
 .gomoku-board {
   width: min(100%, 620px, 78dvh);
+  margin-bottom: 8px;
   aspect-ratio: 1;
   display: grid;
   grid-template-columns: repeat(15, 1fr);
@@ -3335,7 +3326,14 @@ main {
   gap: 8px;
 }
 
-.gomoku-legend span {
+.chess-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gomoku-legend span,
+.chess-legend span {
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--panel-soft);
@@ -3501,6 +3499,7 @@ main {
 
 .jungle-board {
   width: min(100%, var(--jungle-content-max), 78dvh);
+  margin-bottom: 8px;
   aspect-ratio: 7 / 9;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -3513,7 +3512,7 @@ main {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 18px 36px color-mix(in srgb, var(--jungle-border, #2f5c3a) 28%, transparent);
 }
 
-/* 电脑端：面板内容区与棋盘统一加宽 25%，棋子上限同步放大 */
+/* 电脑端：面板内容区与棋盘统一加宽 25% */
 @media (min-width: 921px) {
   .jungle-panel {
     --jungle-content-max: 575px;
@@ -3526,17 +3525,6 @@ main {
     padding: 6.25px;
   }
 
-  .jungle-piece {
-    --jungle-piece-size: clamp(35px, 92cqmin, 80px);
-    font-size: clamp(20px, 58cqmin, 45px);
-  }
-
-  @supports not (width: 1cqmin) {
-    .jungle-piece {
-      --jungle-piece-size: min(92%, 70px);
-      font-size: clamp(20px, 5.2vw, 37.5px);
-    }
-  }
 }
 
 .jungle-cell {
@@ -3553,9 +3541,7 @@ main {
   cursor: pointer;
   background: var(--jungle-land, #4e9a5e);
   color: inherit;
-  /* 用容器查询按格子短边定棋子直径，保证正圆且尽量铺满 */
-  container-type: size;
-  /* 穴/陷的 em 基准（格子自身不能查自己的 cqmin，用 rem/vw 作安全基准） */
+  /* 穴/陷的 em 基准，兼顾手机端尺寸 */
   font-size: clamp(0.55rem, 2.6vw, 0.78rem);
 }
 
@@ -3622,16 +3608,15 @@ main {
 }
 
 .jungle-piece {
-  position: relative;
+  position: absolute;
+  left: 50%;
+  top: 50%;
   z-index: 1;
-  /* 短边 92%，并设上下限；width/height 同值强制正圆 */
-  --jungle-piece-size: clamp(28px, 92cqmin, 64px);
-  width: var(--jungle-piece-size);
-  height: var(--jungle-piece-size);
-  min-width: var(--jungle-piece-size);
-  min-height: var(--jungle-piece-size);
-  max-width: var(--jungle-piece-size);
-  max-height: var(--jungle-piece-size);
+  width: 92%;
+  height: 92%;
+  max-width: 64px;
+  max-height: 64px;
+  transform: translate(-50%, -50%);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -3639,25 +3624,10 @@ main {
   flex-shrink: 0;
   overflow: hidden;
   line-height: 1;
-  font-size: clamp(16px, 58cqmin, 36px);
+  font-size: clamp(16px, min(7vw, 5dvh), 36px);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.35);
   border: 2px solid rgba(0, 0, 0, 0.12);
-  /* 无容器查询回退时仍尽量正圆 */
   aspect-ratio: 1 / 1;
-}
-
-@supports not (width: 1cqmin) {
-  .jungle-piece {
-    --jungle-piece-size: min(92%, 56px);
-    width: var(--jungle-piece-size);
-    height: auto;
-    min-width: 0;
-    min-height: 0;
-    max-width: none;
-    max-height: none;
-    aspect-ratio: 1 / 1;
-    font-size: clamp(16px, 5.2vw, 30px);
-  }
 }
 
 .jungle-piece.side-A {
@@ -3688,7 +3658,7 @@ main {
 
 .jungle-rules-hint {
   width: min(100%, var(--jungle-content-max));
-  margin: 0;
+  margin: 8px 0 0;
   display: grid;
   gap: 6px;
   text-align: center;
@@ -3869,6 +3839,7 @@ main {
 
 .chess-board-wrap {
   width: min(100%, var(--chess-content-max), 78dvh);
+  margin-bottom: 8px;
   display: grid;
   grid-template-columns: 16px 1fr;
   grid-template-rows: 1fr 16px;
@@ -3925,7 +3896,6 @@ main {
   background: var(--chess-dark, #b58863);
   transform: none;
   cursor: pointer;
-  container-type: size;
 }
 
 .chess-cell:hover:not(:disabled)::before {
@@ -3964,8 +3934,8 @@ main {
   content: "";
   position: relative;
   z-index: 1;
-  width: 28%;
-  height: 28%;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--chess-cell-move);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--chess-cell-move) 42%, transparent);
@@ -4002,7 +3972,8 @@ main {
 .chess-piece {
   position: relative;
   z-index: 1;
-  font-size: clamp(22px, 72cqmin, 46px);
+  font-family: "Arial Unicode MS", "Noto Sans Symbols 2", "Segoe UI Symbol", sans-serif;
+  font-size: clamp(22px, min(8vw, 7dvh), 46px);
   line-height: 1;
 }
 
@@ -4020,12 +3991,12 @@ main {
     -1px -1px 0 #2a1a0c;
 }
 
-.chess-legend,
 .chess-rules-hint {
   text-align: center;
   font-size: 12px;
   display: grid;
   gap: 4px;
+  margin-top: 8px;
 }
 
 .chess-theme-preview i:nth-child(1),
@@ -5043,12 +5014,17 @@ main {
   flex-wrap: wrap;
   gap: 8px;
   margin: 12px 0;
+  align-items: center;
 }
 
 .admin-subtab-row button.active {
   background: var(--primary);
   border-color: var(--primary-hover);
   color: #fff;
+}
+
+.admin-subtab-row .subtab-save {
+  margin-left: auto;
 }
 
 .punishment-choice-card {
@@ -5650,7 +5626,7 @@ main {
   text-align: left;
 }
 
-.admin-management-nav button > span {
+.admin-management-nav button>span {
   display: grid;
   gap: 3px;
   min-width: 0;
@@ -5825,7 +5801,7 @@ main {
   padding: 3px 8px;
 }
 
-/* 全局 input { width:100%; padding:10px } 会把复选框撑成巨型输入框 */
+/* 聊天管理里的复选框统一调大为 18px 并上主题色（全局 input 规则已排除 checkbox，这里只管外观） */
 .admin-chat-manager input[type="checkbox"] {
   width: 18px;
   height: 18px;
@@ -6449,21 +6425,6 @@ main {
   padding: 10px;
 }
 
-/* 任务池/系列任务子 Tab 各自独立保存，视觉上呼应 .admin-sticky-actions（同色系边框/圆角/
-   阴影），但不 sticky——它就停在子 Tab 内容顶部，不需要在页面里悬浮。 */
-.admin-subtab-save-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--panel-solid) 92%, var(--primary));
-  box-shadow: 0 12px 32px color-mix(in srgb, var(--shadow) 70%, transparent);
-  padding: 10px;
-  margin-bottom: 12px;
-}
-
 .visual-config {
   display: grid;
   gap: 14px;
@@ -6548,6 +6509,10 @@ main {
 
 .faction-gender-label-input {
   flex: none;
+  width: 12em;
+}
+
+.faction-gender-row > input.faction-gender-label-input {
   width: 12em;
 }
 
@@ -6661,7 +6626,7 @@ main {
 }
 
 .punishment-index-list {
-  max-height: 520px;
+  max-height: 860px;
   overflow: auto;
   display: grid;
   grid-auto-rows: min-content;

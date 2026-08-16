@@ -810,12 +810,32 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
       return (
         <>
           <div className="config-section admin-section-card">
-            <AdminSectionHeader title="排位分设置" subtitle="控制排行榜/个人资料等展示时的封顶值，及每日衰减比例。数据库中的存储值无限制；" />
+            <AdminSectionHeader title="排位分显示" subtitle="控制排行榜/个人资料等展示时的封顶值，及每日衰减比例。数据库中的存储值无限制。" />
             <div className="config-row">
               <label className="field-label"><span>展示上限</span><input type="number" min={1} value={rankedScore.max} onChange={(event) => patchRankedScore({ max: Number(event.target.value) })} /></label>
               <label className="field-label"><span>普通玩家展示下限</span><input type="number" max={-1} value={rankedScore.min} onChange={(event) => patchRankedScore({ min: Number(event.target.value) })} /></label>
               <label className="field-label"><span>名字争夺战展示下限</span><input type="number" value={rankedScore.nameWarMin} onChange={(event) => patchRankedScore({ nameWarMin: Number(event.target.value) })} /></label>
               <label className="field-label"><span>每日衰减比例</span><input type="number" min={0.01} max={1} step={0.01} value={rankedScore.dailyDecayRatio} onChange={(event) => patchRankedScore({ dailyDecayRatio: Number(event.target.value) })} /></label>
+            </div>
+          </div>
+          <div className="config-section admin-section-card">
+            <AdminSectionHeader title="游戏排位分值" subtitle="不同游戏创建房间时可选的积分档位（逗号分隔，最多 4 个，升序，第一个为默认档）。黑白棋按每子结算、其余按整局结算。" />
+            <div className="config-row">
+              {(draft.games || []).map((game, index) => (
+                <label className="field-label" key={game.id}>
+                  <span>{game.name}</span>
+                  <input
+                    value={(game.stakes ?? []).join(",")}
+                    placeholder="如 5,10,20"
+                    onChange={(event) => {
+                      const stakes = event.target.value.split(/[,，\s]+/).map((part) => Number(part)).filter((n) => Number.isInteger(n) && n >= 1);
+                      const games = [...(draft.games || [])];
+                      games[index] = { ...game, stakes };
+                      patch({ games });
+                    }}
+                  />
+                </label>
+              ))}
             </div>
           </div>
           <div className="config-section admin-section-card">
@@ -937,6 +957,16 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
             <button type="button" className={punishmentTab === "config" ? "active" : ""} onClick={() => setPunishmentTab("config")}>惩罚配置</button>
             <button type="button" className={punishmentTab === "series" ? "active" : ""} onClick={() => { setPunishmentTab("series"); void ensureSeriesLoaded(); }}>系列任务</button>
             <button type="button" className={punishmentTab === "pool" ? "active" : ""} onClick={() => { setPunishmentTab("pool"); void ensureTaskPoolLoaded(); }}>任务池</button>
+            {punishmentTab === "series" && (
+              <button type="button" className="primary subtab-save" disabled={!seriesLoaded || !seriesDirty} onClick={() => void saveSeriesPool()}>
+                <Save size={16} /> 保存系列任务{seriesDirty ? " *" : ""}
+              </button>
+            )}
+            {punishmentTab === "pool" && (
+              <button type="button" className="primary subtab-save" disabled={!taskPoolLoaded || !taskPoolDirty} onClick={() => void saveTaskPool()}>
+                <Save size={16} /> 保存任务池{taskPoolDirty ? " *" : ""}
+              </button>
+            )}
           </div>
           <input value={punishmentSearch} onChange={(event) => setPunishmentSearch(event.target.value)} placeholder="搜索名称 / ID / 文案" style={{ marginBottom: 12 }} />
 
@@ -1002,6 +1032,13 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                   </label>
                 </div>
               </div>
+              <div className="mini-card">
+                <div className="admin-card-title"><strong>系列任务兜底文案</strong><small>某一步的候选任务没覆盖到的阵营会收到这段文案</small></div>
+                <label className="field-label">
+                  <span>兜底文案（可用 {"{loser}"}/{"{winner}"}，留空用默认「该任务不适用于你所在的阵营」）</span>
+                  <input value={rs.seriesFactionFallbackText ?? ""} onChange={(event) => patch({ punishmentRandomSettings: { ...rs, seriesFactionFallbackText: event.target.value } })} />
+                </label>
+              </div>
             </>
           )}
 
@@ -1020,7 +1057,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                             <button className={item.id === activeTask?.id ? "active" : ""} key={item.id} onClick={() => setActiveTaskId(item.id)}>
                               <span>{item.name || item.id}</span>
                               <small>
-                                难度 {item.order}{excludedByOrder ? "（不参与随机）" : ""} · {(item.tagIds || []).map(tagName).join("、") || (noTags ? "无标签，不会被抽到" : "")}
+                                难度 {item.order}{excludedByOrder ? "（不参与随机）" : ""} · {(item.tagIds || []).map(tagName).join("、") || (noTags ? "无标签，不受筛选" : "")}
                               </small>
                             </button>
                           );
@@ -1039,7 +1076,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                           <strong>{activeTask.name || activeTask.id}</strong>
                           <small>{taskIndex + 1} / {taskPoolDraft.length} · {factionSummaryLabel(activeTask.factionIds || [], draft.genderFactions)}</small>
                         </div>
-                        {!(activeTask.tagIds || []).length && <p className="hint">ℹ 这条任务未勾选标签，随机模式下不会被抽到（仍可被系列任务按 ID 引用）。</p>}
+                        {!(activeTask.tagIds || []).length && <p className="hint">ℹ 这条任务未勾选标签：不受建房标签筛选影响，任何随机房间都可能抽到它。</p>}
                         {activeTask.order === -1 && <p className="hint">ℹ 这条任务难度为 -1，随机模式下不会被抽到（仍可被系列任务按 ID 引用）。</p>}
                         <div className="config-row">
                           <label className="field-label"><span>任务名称</span><input value={activeTask.name} onChange={(event) => patchTaskPool(taskPoolDraft.map((t, i) => i === taskIndex ? { ...activeTask, name: event.target.value } : t))} /></label>
@@ -1108,12 +1145,6 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                       </div>
                     )}
                   </div>
-                  <div className="admin-subtab-save-row">
-                    <button type="button" className="primary" disabled={!taskPoolDirty} onClick={() => void saveTaskPool()}>
-                      <Save size={16} /> 保存任务池{taskPoolDirty ? " *" : ""}
-                    </button>
-                    <small className="hint">任务池独立保存，不影响下方配置保存。</small>
-                  </div>
                 </>
               )}
             </>
@@ -1129,11 +1160,12 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                     <aside className="punishment-index-panel">
                       <div className="punishment-index-list">
                         {filteredSeries.map((item) => {
-                          const usable = seriesIsUsable(item, taskPoolDraft, draft.genderFactions);
+                          const hasSteps = (item.steps || []).length > 0;
+                          const uncovered = (item.steps || []).some((step) => seriesStepMissingFactionLabels(step.taskIds || [], taskPoolDraft, draft.genderFactions).length > 0);
                           return (
                             <button className={item.id === activeSeries?.id ? "active" : ""} key={item.id} onClick={() => setActiveSeriesId(item.id)}>
-                              <span className={usable ? undefined : "danger-hint"}>{item.name}{usable ? "" : " ⚠"}</span>
-                              <small>{(item.steps || []).length} 步{usable ? "" : " · 阵营覆盖不全，不会生效"}</small>
+                              <span className={hasSteps ? undefined : "danger-hint"}>{item.name}{!hasSteps || uncovered ? " ⚠" : ""}</span>
+                              <small>{(item.steps || []).length} 步{!hasSteps ? " · 没有步骤，不会生效" : uncovered ? " · 有未覆盖阵营，走兜底文案" : ""}</small>
                             </button>
                           );
                         })}
@@ -1158,15 +1190,6 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                             setActiveSeriesId(next[Math.max(0, seriesIndex - 1)]?.id || next[0]?.id || "");
                             patchSeriesDraft(next);
                           }}>删除这个系列</button>
-                          <button type="button" className="danger-soft" onClick={async () => {
-                            if (!window.confirm(`重置所有人在系列「${activeSeries.name}」上的进度？`)) return;
-                            try {
-                              await ask("admin:action", { action: "resetPunishmentSeriesProgress", seriesId: activeSeries.id });
-                              onError("已重置该系列的所有人进度。");
-                            } catch (error) {
-                              onError(error instanceof Error ? error.message : "重置失败");
-                            }
-                          }}>重置所有人进度</button>
                         </div>
                         <label className="field-label"><span>玩家可见名称</span><input value={activeSeries.name} onChange={(event) => patchSeriesDraft(seriesDraft.map((s, i) => i === seriesIndex ? { ...activeSeries, name: event.target.value } : s))} /></label>
                         <AdminBackgroundImageField label="房间信息卡图库" values={activeSeries.roomBackgroundImages || []} upload={uploadAdminImage} onError={onError} onChange={(roomBackgroundImages) => patchSeriesDraft(seriesDraft.map((s, i) => i === seriesIndex ? { ...activeSeries, roomBackgroundImages } : s))} />
@@ -1176,11 +1199,11 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                             const pickerOpen = taskPickerStep?.seriesId === activeSeries.id && taskPickerStep.stepIndex === subIndex;
                             const missing = seriesStepMissingFactionLabels(step.taskIds || [], taskPoolDraft, draft.genderFactions);
                             return (
-                              <details className="mini-card punishment-task-editor" key={subIndex} open={subIndex === 0}>
+                              <details className="mini-card punishment-task-editor" key={subIndex} open={subIndex === 0 || pickerOpen}>
                                 <summary>
                                   <span className="punishment-step-summary-title">
                                     <strong>第 {subIndex + 1} 步</strong>
-                                    <small className={missing.length > 0 ? "danger-hint" : ""} title={missing.length > 0 ? `没有覆盖到：${missing.join("、")}——命中这些阵营的玩家跑到这一步会被判定失效，整个系列都不会生效。` : undefined}>
+                                    <small className={missing.length > 0 ? "danger-hint" : ""} title={missing.length > 0 ? `没有覆盖到：${missing.join("、")}——这些阵营的玩家跑到这一步会收到兜底文案。` : undefined}>
                                       {(step.taskIds || []).length} 个候选{missing.length > 0 ? " ⚠" : ""}
                                     </small>
                                   </span>
@@ -1280,12 +1303,6 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                         }}>添加子任务步骤</button>
                       </div>
                     )}
-                  </div>
-                  <div className="admin-subtab-save-row">
-                    <button type="button" className="primary" disabled={!seriesDirty} onClick={() => void saveSeriesPool()}>
-                      <Save size={16} /> 保存系列任务
-                    </button>
-                    <small className="hint">系列任务独立保存，不影响下方配置保存。</small>
                   </div>
                 </>
               )}
@@ -1825,7 +1842,8 @@ export function factionSummaryLabel(factionIds: string[], genderFactions: Gender
 }
 
 // seriesStepMissingFactionLabels：某一步的候选任务合起来未覆盖到的阵营展示名列表
-// （与后端 seriesIsUsable 判定逻辑保持一致：未勾选阵营的任务不计入覆盖）。
+// （未勾选阵营的任务不计入覆盖）。未覆盖不再导致系列失效——这些阵营的玩家
+// 跑到该步会收到管理员可配的兜底文案，这里只用于编辑器里的提示。
 export function seriesStepMissingFactionLabels(taskIds: string[], taskPool: PunishmentTaskConfig[], genderFactions: GenderFaction[]) {
   if (!genderFactions.length) return [];
   const taskById = new Map(taskPool.map((t) => [t.id, t]));
@@ -1836,15 +1854,6 @@ export function seriesStepMissingFactionLabels(taskIds: string[], taskPool: Puni
     for (const fid of t.factionIds || []) covered.add(fid);
   }
   return genderFactions.filter((f) => !covered.has(f.id)).map((f) => f.label);
-}
-
-// seriesIsUsable：系列每一步候选任务合起来是否都覆盖了全部已定义阵营。覆盖不全时
-// 后端会把该系列当"不存在"处理（建房面板选不到、运行时也不产出任务），这里同步
-// 判定用于编辑器里标红提示，帮助管理员在保存前发现问题。
-export function seriesIsUsable(series: PunishmentSeriesTaskConfig, taskPool: PunishmentTaskConfig[], genderFactions: GenderFaction[]) {
-  const steps = series.steps || [];
-  if (!steps.length) return false;
-  return steps.every((step) => seriesStepMissingFactionLabels(step.taskIds || [], taskPool, genderFactions).length === 0);
 }
 
 export function newFlatPunishmentTask(id: string, defaultTagId?: string): PunishmentTaskConfig {

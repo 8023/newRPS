@@ -19,7 +19,7 @@ import (
 //
 // 是 var 不是 const，只是为了让测试能临时替换掉去验证迁移机制本身；正常代码路径里
 // 把它当常量对待，不要在业务逻辑里修改它。
-var currentSchemaVersion = 31
+var currentSchemaVersion = 32
 
 // schemaVersionSchema：只有一行的版本表，openDatabase 每次启动都会先确保它存在。
 const schemaVersionSchema = `
@@ -397,6 +397,11 @@ CREATE TABLE IF NOT EXISTS punishment_series (
 			return err
 		}
 		return addColumnIfMissing(db, "players", "chess_draws", "INTEGER NOT NULL DEFAULT 0")
+	}},
+	// v32：系列任务进度改为房间级共享（RoomState 内存字段），按玩家落盘的进度表废弃删除。
+	{version: 32, migrate: func(db sqlExecer) error {
+		_, err := db.Exec(`DROP TABLE IF EXISTS player_punishment_series_progress`)
+		return err
 	}},
 }
 

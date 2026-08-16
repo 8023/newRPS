@@ -289,10 +289,10 @@ func (s *Server) startJungleRoom(room *RoomState) {
 	s.clearTurnBasedClockTimer(room.ID)
 	first := randomSeat()
 	s.startTurnBasedPlaying(room)
-	room.Jungle = freshJungleState(first)
-	room.jungleMoves = nil
-	s.armJungleTimers(room, first)
-}
+		room.Jungle = freshJungleState(first)
+		room.jungleMoves = nil
+		s.maybeJungleGiveawaySkip(room)
+	}
 
 func (s *Server) pauseJungleTimers(room *RoomState) {
 	if room.Jungle != nil {
@@ -316,7 +316,7 @@ func (s *Server) jungleClockHooks() turnBasedClockHooks {
 			}
 			return turnBasedClockState{
 				turn: room.Jungle.Turn, ended: room.Jungle.Ended,
-				blocked:        room.Jungle.ResignRequest != nil || room.Jungle.UndoRequest != nil,
+					blocked:        room.Phase == types.PhasePunishment || room.Jungle.ResignRequest != nil || room.Jungle.UndoRequest != nil,
 				moveDeadlineAt: &room.Jungle.MoveDeadlineAt, clockDeadlineAt: &room.Jungle.ClockDeadlineAt,
 				clockRemaining: &room.Jungle.ClockRemaining,
 			}, true
@@ -501,23 +501,31 @@ func (s *Server) applyJungleMove(room *RoomState, seat types.SeatKey, fromRow, f
 	room.Jungle.LastTo = &to
 	room.Jungle.ResignRequest = nil
 
-	// 进入对方兽穴 → 胜
-	if denOwner, ok := jungleDenOwner(toRow, toCol); ok && denOwner != seat {
-		s.finishJungleGame(room, types.RoundResult(seat), "攻入兽穴")
+		ending := ""
+		if denOwner, ok := jungleDenOwner(toRow, toCol); ok && denOwner != seat {
+			ending = "攻入兽穴"
+		} else {
+			next := oppositeSeat(seat)
+			room.Jungle.Turn = next
+			if !jungleHasAnyLegalMove(board, next) {
+				ending = "对方无子可走"
+			}
+		}
+		if captured != nil && perPiecePunishmentEnabled(room) {
+			if ending != "" {
+				room.pendingPieceEnd = &pendingPieceEnd{result: types.RoundResult(seat), note: ending}
+			}
+			s.beginMidGamePiecePunishment(room, oppositeSeat(seat), seat, "棋子被吃")
+			return true, ""
+		}
+		if ending != "" {
+			s.finishJungleGame(room, types.RoundResult(seat), ending)
+			return true, ""
+		}
+		room.ResultText = ""
+		s.maybeJungleGiveawaySkip(room)
 		return true, ""
 	}
-
-	next := oppositeSeat(seat)
-	room.Jungle.Turn = next
-	if !jungleHasAnyLegalMove(board, next) {
-		s.finishJungleGame(room, types.RoundResult(seat), "对方无子可走")
-		return true, ""
-	}
-	room.ResultText = ""
-	s.armJungleTimers(room, next)
-	s.notifyOpponentTurn(room, next)
-	return true, ""
-}
 
 func (s *Server) requestJungleResign(room *RoomState, seat types.SeatKey) (bool, string) {
 	if room.Jungle == nil || room.Phase != types.PhaseChoosing || room.Jungle.Ended {

@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/doumiao/newRPS/internal/types"
@@ -207,6 +208,34 @@ func normalizeRoomNamePool(pool *types.RoomNamePool) *types.RoomNamePool {
 	}
 }
 
+// normalizeStakeTiers 规范化游戏排位档位：钳到 1~9999、去重升序、最多 4 档；
+// 全部无效时回退 fallback。第一个元素是建房默认档。
+func normalizeStakeTiers(tiers []int, fallback []int) []int {
+	seen := map[int]bool{}
+	out := make([]int, 0, len(tiers))
+	for _, t := range tiers {
+		if t < 1 {
+			continue
+		}
+		if t > 9999 {
+			t = 9999
+		}
+		if seen[t] {
+			continue
+		}
+		seen[t] = true
+		out = append(out, t)
+	}
+	if len(out) == 0 {
+		return fallback
+	}
+	sort.Ints(out)
+	if len(out) > 4 {
+		out = out[:4]
+	}
+	return out
+}
+
 func normalizeNumberRecord(input map[string]float64, min, max float64) map[string]float64 {
 	if input == nil {
 		return map[string]float64{}
@@ -319,6 +348,7 @@ func normalizePunishmentRandomSettings(rs types.PunishmentRandomSettings) types.
 	if rs.MaxDifficultyOvershoot < 0 {
 		rs.MaxDifficultyOvershoot = 0
 	}
+	rs.SeriesFactionFallbackText = strings.TrimSpace(rs.SeriesFactionFallbackText)
 	return rs
 }
 
@@ -326,9 +356,10 @@ func normalizePunishmentRandomSettings(rs types.PunishmentRandomSettings) types.
 // 任务池/系列任务已迁到 SQLite；旧文件里的 tasks/seriesTasks 字段由标准
 // encoding/json 忽略（unknown field 默认丢弃），并由 server 一次性导入。
 type punishmentsFileData struct {
-	Tags                   []types.PunishmentTagConfig `json:"tags"`
-	OrderStep              float64                     `json:"orderStep"`
-	MaxDifficultyOvershoot float64                     `json:"maxDifficultyOvershoot"`
+	Tags                      []types.PunishmentTagConfig `json:"tags"`
+	OrderStep                 float64                     `json:"orderStep"`
+	MaxDifficultyOvershoot    float64                     `json:"maxDifficultyOvershoot"`
+	SeriesFactionFallbackText string                      `json:"seriesFactionFallbackText"`
 }
 
 // punishmentsLegacyDiskData 仅用于磁盘迁移路径：旧 punishments.json 顶层数组拍平、
@@ -344,9 +375,10 @@ type punishmentsLegacyDiskData struct {
 
 func punishmentsFileFromConfig(cfg types.AppConfig) punishmentsFileData {
 	return punishmentsFileData{
-		Tags:                   cfg.PunishmentTags,
-		OrderStep:              cfg.PunishmentRandomSettings.OrderStep,
-		MaxDifficultyOvershoot: cfg.PunishmentRandomSettings.MaxDifficultyOvershoot,
+		Tags:                      cfg.PunishmentTags,
+		OrderStep:                 cfg.PunishmentRandomSettings.OrderStep,
+		MaxDifficultyOvershoot:    cfg.PunishmentRandomSettings.MaxDifficultyOvershoot,
+		SeriesFactionFallbackText: cfg.PunishmentRandomSettings.SeriesFactionFallbackText,
 	}
 }
 
@@ -357,11 +389,12 @@ func punishmentsFileFromConfig(cfg types.AppConfig) punishmentsFileData {
 // 磁盘文件；写盘时无条件保留能读到的旧字段，多写不多余（迁移完成后就是纯死数据，
 // 但比"抢在迁移之前被写没"安全）。
 type punishmentsFileWriteData struct {
-	Tags                   []types.PunishmentTagConfig `json:"tags"`
-	OrderStep              float64                     `json:"orderStep"`
-	MaxDifficultyOvershoot float64                     `json:"maxDifficultyOvershoot"`
-	Tasks                  json.RawMessage             `json:"tasks,omitempty"`
-	SeriesTasks            json.RawMessage             `json:"seriesTasks,omitempty"`
+	Tags                      []types.PunishmentTagConfig `json:"tags"`
+	OrderStep                 float64                     `json:"orderStep"`
+	MaxDifficultyOvershoot    float64                     `json:"maxDifficultyOvershoot"`
+	SeriesFactionFallbackText string                      `json:"seriesFactionFallbackText"`
+	Tasks                     json.RawMessage             `json:"tasks,omitempty"`
+	SeriesTasks               json.RawMessage             `json:"seriesTasks,omitempty"`
 }
 
 // preserveLegacyPunishmentPoolJSON 从磁盘现有 punishments.json 原样读出 tasks/seriesTasks
@@ -384,8 +417,9 @@ func preserveLegacyPunishmentPoolJSON(path string) (tasks, seriesTasks json.RawM
 func applyPunishmentsFile(cfg *types.AppConfig, file punishmentsFileData) {
 	cfg.PunishmentTags = file.Tags
 	cfg.PunishmentRandomSettings = types.PunishmentRandomSettings{
-		OrderStep:              file.OrderStep,
-		MaxDifficultyOvershoot: file.MaxDifficultyOvershoot,
+		OrderStep:                 file.OrderStep,
+		MaxDifficultyOvershoot:    file.MaxDifficultyOvershoot,
+		SeriesFactionFallbackText: file.SeriesFactionFallbackText,
 	}
 	// 清空旧字段，避免下发/写回时混入。
 	cfg.Punishments = nil
@@ -488,6 +522,7 @@ func normalizeConfig(input types.AppConfig) types.AppConfig {
 		}
 		g.Name = sliceRunes(g.Name, 18)
 		g.Description = sliceRunes(g.Description, 120)
+		g.Stakes = normalizeStakeTiers(g.Stakes, types.DefaultStakeTiers(types.GameID(g.ID)))
 		games = append(games, g)
 	}
 
@@ -1579,11 +1614,12 @@ func writeSplitConfig(cfg types.AppConfig) error {
 	}
 	legacyTasks, legacySeries := preserveLegacyPunishmentPoolJSON(configPath("punishments.json"))
 	punishmentsOut := punishmentsFileWriteData{
-		Tags:                   punishmentsFile.Tags,
-		OrderStep:              punishmentsFile.OrderStep,
-		MaxDifficultyOvershoot: punishmentsFile.MaxDifficultyOvershoot,
-		Tasks:                  legacyTasks,
-		SeriesTasks:            legacySeries,
+		Tags:                      punishmentsFile.Tags,
+		OrderStep:                 punishmentsFile.OrderStep,
+		MaxDifficultyOvershoot:    punishmentsFile.MaxDifficultyOvershoot,
+		SeriesFactionFallbackText: punishmentsFile.SeriesFactionFallbackText,
+		Tasks:                     legacyTasks,
+		SeriesTasks:               legacySeries,
 	}
 	parts := []struct {
 		file  string

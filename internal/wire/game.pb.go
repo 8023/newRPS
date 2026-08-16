@@ -1972,11 +1972,12 @@ type RoomSettings struct {
 	ChessMoveSeconds   int32  `protobuf:"varint,39,opt,name=chess_move_seconds,json=chessMoveSeconds,proto3" json:"chess_move_seconds,omitempty"`
 	ChessGameMinutes   int32  `protobuf:"varint,40,opt,name=chess_game_minutes,json=chessGameMinutes,proto3" json:"chess_game_minutes,omitempty"`
 	// 各游戏悔棋次数上限：0=禁止（与 gomoku_undo_limit 同一套 0/1/3/10 取值）
-	JungleUndoLimit  int32 `protobuf:"varint,41,opt,name=jungle_undo_limit,json=jungleUndoLimit,proto3" json:"jungle_undo_limit,omitempty"`
-	ChessUndoLimit   int32 `protobuf:"varint,42,opt,name=chess_undo_limit,json=chessUndoLimit,proto3" json:"chess_undo_limit,omitempty"`
-	OthelloUndoLimit int32 `protobuf:"varint,43,opt,name=othello_undo_limit,json=othelloUndoLimit,proto3" json:"othello_undo_limit,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	JungleUndoLimit          int32 `protobuf:"varint,41,opt,name=jungle_undo_limit,json=jungleUndoLimit,proto3" json:"jungle_undo_limit,omitempty"`
+	ChessUndoLimit           int32 `protobuf:"varint,42,opt,name=chess_undo_limit,json=chessUndoLimit,proto3" json:"chess_undo_limit,omitempty"`
+	OthelloUndoLimit         int32 `protobuf:"varint,43,opt,name=othello_undo_limit,json=othelloUndoLimit,proto3" json:"othello_undo_limit,omitempty"`
+	EnablePerPiecePunishment bool  `protobuf:"varint,44,opt,name=enable_per_piece_punishment,json=enablePerPiecePunishment,proto3" json:"enable_per_piece_punishment,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *RoomSettings) Reset() {
@@ -2289,6 +2290,13 @@ func (x *RoomSettings) GetOthelloUndoLimit() int32 {
 		return x.OthelloUndoLimit
 	}
 	return 0
+}
+
+func (x *RoomSettings) GetEnablePerPiecePunishment() bool {
+	if x != nil {
+		return x.EnablePerPiecePunishment
+	}
+	return false
 }
 
 type GomokuUndoRequest struct {
@@ -7048,8 +7056,10 @@ type PunishmentRandomSettings struct {
 	// 历史字段，倒伽马下不参与计算，保留以免旧配置/控件报错。
 	OrderSpread            float64 `protobuf:"fixed64,2,opt,name=order_spread,json=orderSpread,proto3" json:"order_spread,omitempty"`
 	MaxDifficultyOvershoot float64 `protobuf:"fixed64,3,opt,name=max_difficulty_overshoot,json=maxDifficultyOvershoot,proto3" json:"max_difficulty_overshoot,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// 系列任务某一步没有覆盖受罚者阵营时下发的兜底文案（空则用内置默认）。
+	SeriesFactionFallbackText string `protobuf:"bytes,4,opt,name=series_faction_fallback_text,json=seriesFactionFallbackText,proto3" json:"series_faction_fallback_text,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *PunishmentRandomSettings) Reset() {
@@ -7101,6 +7111,13 @@ func (x *PunishmentRandomSettings) GetMaxDifficultyOvershoot() float64 {
 		return x.MaxDifficultyOvershoot
 	}
 	return 0
+}
+
+func (x *PunishmentRandomSettings) GetSeriesFactionFallbackText() string {
+	if x != nil {
+		return x.SeriesFactionFallbackText
+	}
+	return ""
 }
 
 type PunishmentSubtaskVariant struct {
@@ -7371,10 +7388,13 @@ func (x *PunishmentSeriesSummary) GetStepCount() int32 {
 }
 
 type GameConfig struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name        string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	// stakes 该游戏建房可选的排位赌分档位，升序；第一个元素为默认档。
+	// 黑白棋按每子结算、其余按整局结算，管理员可借不同档位平衡各游戏耗时差异。
+	Stakes        []int32 `protobuf:"varint,4,rep,packed,name=stakes,proto3" json:"stakes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7428,6 +7448,13 @@ func (x *GameConfig) GetDescription() string {
 		return x.Description
 	}
 	return ""
+}
+
+func (x *GameConfig) GetStakes() []int32 {
+	if x != nil {
+		return x.Stakes
+	}
+	return nil
 }
 
 type AnnouncementBoard struct {
@@ -9636,7 +9663,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x06author\x18\x03 \x01(\tR\x06author\x127\n" +
 	"\rauthor_player\x18\x04 \x01(\v2\x12.game.PublicPlayerR\fauthorPlayer\x12\x12\n" +
 	"\x04text\x18\x05 \x01(\tR\x04text\x12\x0e\n" +
-	"\x02at\x18\x06 \x01(\x03R\x02at\"\xa2\x0e\n" +
+	"\x02at\x18\x06 \x01(\x03R\x02at\"\xe1\x0e\n" +
 	"\fRoomSettings\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x17\n" +
@@ -9679,7 +9706,8 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x12chess_game_minutes\x18( \x01(\x05R\x10chessGameMinutes\x12*\n" +
 	"\x11jungle_undo_limit\x18) \x01(\x05R\x0fjungleUndoLimit\x12(\n" +
 	"\x10chess_undo_limit\x18* \x01(\x05R\x0echessUndoLimit\x12,\n" +
-	"\x12othello_undo_limit\x18+ \x01(\x05R\x10othelloUndoLimitJ\x04\b\x04\x10\x05J\x04\b\x05\x10\x06R\n" +
+	"\x12othello_undo_limit\x18+ \x01(\x05R\x10othelloUndoLimit\x12=\n" +
+	"\x1benable_per_piece_punishment\x18, \x01(\bR\x18enablePerPiecePunishmentJ\x04\b\x04\x10\x05J\x04\b\x05\x10\x06R\n" +
 	"enable_botR\x0ebot_difficulty\"\x87\x01\n" +
 	"\x11GomokuUndoRequest\x12\x1b\n" +
 	"\tfrom_seat\x18\x01 \x01(\tR\bfromSeat\x12\x17\n" +
@@ -10191,12 +10219,13 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x128\n" +
 	"\x0eroom_name_pool\x18\x03 \x01(\v2\x12.game.RoomNamePoolR\froomNamePool\x124\n" +
-	"\x16room_background_images\x18\x04 \x03(\tR\x14roomBackgroundImages\"\x96\x01\n" +
+	"\x16room_background_images\x18\x04 \x03(\tR\x14roomBackgroundImages\"\xd7\x01\n" +
 	"\x18PunishmentRandomSettings\x12\x1d\n" +
 	"\n" +
 	"order_step\x18\x01 \x01(\x01R\torderStep\x12!\n" +
 	"\forder_spread\x18\x02 \x01(\x01R\vorderSpread\x128\n" +
-	"\x18max_difficulty_overshoot\x18\x03 \x01(\x01R\x16maxDifficultyOvershoot\"\xab\x01\n" +
+	"\x18max_difficulty_overshoot\x18\x03 \x01(\x01R\x16maxDifficultyOvershoot\x12?\n" +
+	"\x1cseries_faction_fallback_text\x18\x04 \x01(\tR\x19seriesFactionFallbackText\"\xab\x01\n" +
 	"\x18PunishmentSubtaskVariant\x12\x1f\n" +
 	"\vfaction_ids\x18\x01 \x03(\tR\n" +
 	"factionIds\x12\x12\n" +
@@ -10217,12 +10246,13 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x0eroom_name_pool\x18\x03 \x01(\v2\x12.game.RoomNamePoolR\froomNamePool\x124\n" +
 	"\x16room_background_images\x18\x04 \x03(\tR\x14roomBackgroundImages\x12\x1d\n" +
 	"\n" +
-	"step_count\x18\x05 \x01(\x05R\tstepCount\"R\n" +
+	"step_count\x18\x05 \x01(\x05R\tstepCount\"j\n" +
 	"\n" +
 	"GameConfig\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription\"]\n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x16\n" +
+	"\x06stakes\x18\x04 \x03(\x05R\x06stakes\"]\n" +
 	"\x11AnnouncementBoard\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x18\n" +

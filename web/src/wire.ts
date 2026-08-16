@@ -340,6 +340,7 @@ function fillRoomSettingsDefaults(settings: any): any {
     punishmentTagsExcluded: Array.isArray(settings.punishmentTagsExcluded) ? settings.punishmentTagsExcluded : [],
     punishmentSeriesId: typeof settings.punishmentSeriesId === "string" ? settings.punishmentSeriesId : "",
     allowProofImage: settings.allowProofImage ?? false,
+    enablePerPiecePunishment: settings.enablePerPiecePunishment ?? false,
     gomokuUndoLimit: numOr(settings.gomokuUndoLimit, 0),
     jungleUndoLimit: numOr(settings.jungleUndoLimit, 0),
     chessUndoLimit: numOr(settings.chessUndoLimit, 0),
@@ -724,11 +725,12 @@ function materializeConfig(cfg: any): any {
   c.punishmentTags = Array.isArray(c.punishmentTags) ? c.punishmentTags : [];
   c.punishmentSeriesSummaries = Array.isArray(c.punishmentSeriesSummaries) ? c.punishmentSeriesSummaries : [];
   if (!c.punishmentRandomSettings || typeof c.punishmentRandomSettings !== "object") {
-    c.punishmentRandomSettings = { orderStep: 2, maxDifficultyOvershoot: 5 };
+    c.punishmentRandomSettings = { orderStep: 2, maxDifficultyOvershoot: 5, seriesFactionFallbackText: "" };
   } else {
     c.punishmentRandomSettings = {
       orderStep: numOr(c.punishmentRandomSettings.orderStep, 2),
-      maxDifficultyOvershoot: numOr(c.punishmentRandomSettings.maxDifficultyOvershoot, 5)
+      maxDifficultyOvershoot: numOr(c.punishmentRandomSettings.maxDifficultyOvershoot, 5),
+      seriesFactionFallbackText: typeof c.punishmentRandomSettings.seriesFactionFallbackText === "string" ? c.punishmentRandomSettings.seriesFactionFallbackText : ""
     };
   }
   // 旧版 punishments 字段只保留安全解码默认值；任务池/系列详情已迁 SQLite，

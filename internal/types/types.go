@@ -87,12 +87,12 @@ type RoomInfoTagStyle struct {
 }
 
 // PunishmentTaskConfig 是一条拍平的任务池任务：
-// TagIDs 可选 0/1/多个，决定标签过滤，留空表示这条任务永远不会被随机模式抽到（但仍可被
-// 系列任务按 ID 直接引用）；FactionIDs 为具体阵营 ID（GenderFaction.ID）多选，
-// 留空表示永不匹配任何阵营；Order（1-99，语义为任务难度）决定抽取时房间级"目标难度"的靠拢方向，
-// 具体算法见 internal/server/punishment.go。Order 合法取值仅 -1 或 1-99：-1 是另一种
-// "不参与随机抽取"的显式标记（与 TagIDs 留空等效，二者可任选其一或同时使用），仍可被
-// 系列任务按 ID 引用，不参与难度加权计算；保存时其余负数会被归一化为 -1
+// TagIDs 可选 0/1/多个，决定标签过滤，留空表示这条任务不受标签筛选控制、任何随机房间
+// 都可能抽到它（房主无法用选中/拒绝标签把它挡在外面）；FactionIDs 为具体阵营 ID
+// （GenderFaction.ID）多选，留空表示永不匹配任何阵营；Order（1-99，语义为任务难度）
+// 决定抽取时房间级"目标难度"的靠拢方向，具体算法见 internal/server/punishment.go。
+// Order 合法取值仅 -1 或 1-99：-1 是"不参与随机抽取"的显式标记（仅供系列任务按 ID
+// 引用），不参与难度加权计算；保存时其余负数会被归一化为 -1
 // （见 config.NormalizePunishmentTasks），不保留具体负值。
 type PunishmentTaskConfig struct {
 	ID                string   `json:"id"`
@@ -117,10 +117,14 @@ type PunishmentTagConfig struct {
 	RoomBackgroundImages []string      `json:"roomBackgroundImages,omitempty"`
 }
 
-// PunishmentRandomSettings 是随机任务全局难度参数（不再按标签/类型区分）。
+// PunishmentRandomSettings 是随机任务全局难度参数（不再按标签/类型区分），
+// 兼存系列任务的阵营兜底文案。
 type PunishmentRandomSettings struct {
 	OrderStep              float64 `json:"orderStep"`
 	MaxDifficultyOvershoot float64 `json:"maxDifficultyOvershoot"`
+	// SeriesFactionFallbackText：系列任务某一步没有覆盖受罚者阵营时下发的兜底文案；
+	// 空串时运行时用内置默认文案。
+	SeriesFactionFallbackText string `json:"seriesFactionFallbackText"`
 }
 
 // PunishmentSeriesStep 是系列任务中的一步：引用任务池里的任务 ID。
@@ -131,7 +135,7 @@ type PunishmentSeriesStep struct {
 }
 
 // PunishmentSeriesTaskConfig 是一个系列任务的管理详情（SQLite 存储，走 admin:action，
-// 不进 AppConfig）：步骤严格按数组下标顺序执行，进度按玩家个人持久化（跨房间/跨对手）。
+// 不进 AppConfig）：步骤严格按数组下标顺序执行，进度由运行中的房间共享，不落盘、不跨房间。
 type PunishmentSeriesTaskConfig struct {
 	ID                   string                 `json:"id"`
 	Name                 string                 `json:"name"`
@@ -339,7 +343,9 @@ type RoomSettings struct {
 	Name             string `json:"name"`
 	Password         string `json:"password,omitempty"`
 	GameID           GameID `json:"gameId"`
-	EnablePunishment bool   `json:"enablePunishment"`
+	EnablePunishment bool `json:"enablePunishment"`
+	// EnablePerPiecePunishment：国际象棋/斗兽棋在对局中每次被吃子都触发惩罚（不加分、不改白给值）。
+	EnablePerPiecePunishment bool `json:"enablePerPiecePunishment"`
 	// PunishmentSource：random（随机任务，原 system）| series（系列任务）| player（玩家发布）。
 	// 空串与历史值 "system" 在服务端归一化为 "random"。
 	PunishmentSource string `json:"punishmentSource,omitempty"`
@@ -908,6 +914,17 @@ type GameConfig struct {
 	ID          GameID `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	// Stakes 该游戏建房可选的排位赌分档位，升序，第一个为默认档。
+	// 黑白棋按每子结算档位语义不同，其余游戏整局结算；档位差异化用于平衡各游戏耗时。
+	Stakes []int `json:"stakes"`
+}
+
+// DefaultStakeTiers 游戏缺省排位档位：黑白棋按每子小额，其余整局。
+func DefaultStakeTiers(gameID GameID) []int {
+	if gameID == GameOthello {
+		return []int{1, 2, 5, 10}
+	}
+	return []int{5, 10, 20}
 }
 
 type AnnouncementBoard struct {

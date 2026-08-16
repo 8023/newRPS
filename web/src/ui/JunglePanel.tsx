@@ -364,11 +364,6 @@ export function JunglePanel({ room, me, onError }: { room: RoomSnapshot; me: Pub
           );
         }))}
       </div>
-      <div className="jungle-legend">
-        <span>{jungleSideLabel("A")}：{occupantDisplay(room.seats.A)}</span>
-        <span>{jungleSideLabel("B")}：{occupantDisplay(room.seats.B)}</span>
-        <span>{mySeat ? `你在战斗席 ${mySeat}（${jungleSideLabel(mySeat)}）` : "你正在观战"}</span>
-      </div>
       <div className="jungle-rules-hint hint">
         <p className="jungle-rank-line" aria-label="等级：象大于狮大于虎大于豹大于狼大于狗大于猫大于鼠">
           <span className="jungle-rank-label">等级</span>

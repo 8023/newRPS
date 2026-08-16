@@ -1274,9 +1274,12 @@ func fillRoomSettingsDefaults(s any) any {
 	if !ok {
 		return s
 	}
-	if _, exists := sm["allowProofImage"]; !exists {
-		sm["allowProofImage"] = false
-	}
+		if _, exists := sm["allowProofImage"]; !exists {
+			sm["allowProofImage"] = false
+		}
+		if _, exists := sm["enablePerPiecePunishment"]; !exists {
+			sm["enablePerPiecePunishment"] = false
+		}
 	if _, exists := sm["gomokuUndoLimit"]; !exists {
 		sm["gomokuUndoLimit"] = float64(0)
 	}

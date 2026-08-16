@@ -30,16 +30,11 @@ func (s *Server) publicConfig() types.AppConfig {
 }
 
 // buildPunishmentSeriesSummaries 从系列缓存生成建房用公开目录（无任务文案/taskIds）。
-// 阵营覆盖不全（seriesIsUsable==false）的系列不出现在目录里，等同不可选。
+// 只要有步骤就入选；阵营覆盖不全不再拦截（运行时未覆盖阵营会拿到兜底文案）。
 func (s *Server) buildPunishmentSeriesSummaries() []types.PunishmentSeriesSummary {
 	out := make([]types.PunishmentSeriesSummary, 0, len(s.punishmentSeriesCache))
-	taskByID := make(map[string]*types.PunishmentTaskConfig, len(s.punishmentTasksCache))
-	for i := range s.punishmentTasksCache {
-		task := &s.punishmentTasksCache[i]
-		taskByID[task.ID] = task
-	}
 	for _, series := range s.punishmentSeriesCache {
-		if !s.seriesIsUsableWithTaskMap(series, taskByID) {
+		if !s.seriesIsUsable(series) {
 			continue
 		}
 		out = append(out, types.PunishmentSeriesSummary{
@@ -1121,6 +1116,25 @@ func rankMultiplierFor(settings types.RoomSettings) types.RankMultiplier {
 
 func effectiveRankedStake(settings types.RoomSettings) int {
 	return int(settings.Stake) * int(rankMultiplierFor(settings))
+}
+
+// stakeTiersFor 该游戏允许的排位档位：优先取 games.json 配置，缺省回退默认表。
+func (s *Server) stakeTiersFor(gameID types.GameID) []int {
+	for _, g := range s.cfg.Games {
+		if g.ID == gameID && len(g.Stakes) > 0 {
+			return g.Stakes
+		}
+	}
+	return types.DefaultStakeTiers(gameID)
+}
+
+func containsInt(list []int, v int) bool {
+	for _, x := range list {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) extremeHourlyDecayAmount(player *PlayerState) int {

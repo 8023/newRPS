@@ -374,9 +374,9 @@ func (s *Server) firstTagWithBackground(included []string) *types.PunishmentTagC
 	return nil
 }
 
-// findSeriesByID 只返回"可用"的系列（seriesIsUsable：每一步候选任务合起来覆盖全部
-// 已定义阵营）——阵营覆盖不全的系列即便已保存到库里，对外也视为不存在：建房面板选不到，
-// 房间设置校验拒绝，运行时也不会产出任务。
+// findSeriesByID 只返回"可用"的系列（seriesIsUsable：至少要有一步）。没有步骤的
+// 系列即便已保存到库里，对外也视为不存在：建房面板选不到，房间设置校验拒绝，
+// 运行时也不会产出任务。阵营覆盖不全不再拦截（运行时走兜底文案）。
 func (s *Server) findSeriesByID(id string) *types.PunishmentSeriesTaskConfig {
 	id = strings.TrimSpace(id)
 	if id == "" {

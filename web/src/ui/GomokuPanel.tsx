@@ -249,11 +249,6 @@ export function GomokuPanel({ room, me, onError }: { room: RoomSnapshot; me: Pub
           );
         }))}
       </div>
-      <div className="gomoku-legend">
-        <span>⚫ 黑棋：{blackSeat ? occupantDisplay(room.seats[blackSeat]) : "准备后随机"}</span>
-        <span>⚪ 白棋：{whiteSeat ? occupantDisplay(room.seats[whiteSeat]) : "准备后随机"}</span>
-        <span>{mySeat ? `你在战斗席 ${mySeat}` : "你正在观战"}</span>
-      </div>
     </div>
   );
 }

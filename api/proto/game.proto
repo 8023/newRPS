@@ -310,7 +310,8 @@ message RoomSettings {
   // 各游戏悔棋次数上限：0=禁止（与 gomoku_undo_limit 同一套 0/1/3/10 取值）
   int32 jungle_undo_limit = 41;
   int32 chess_undo_limit = 42;
-  int32 othello_undo_limit = 43;
+	int32 othello_undo_limit = 43;
+	bool enable_per_piece_punishment = 44;
 }
 
 message GomokuUndoRequest {
@@ -863,6 +864,8 @@ message PunishmentRandomSettings {
   // 历史字段，倒伽马下不参与计算，保留以免旧配置/控件报错。
   double order_spread = 2;
   double max_difficulty_overshoot = 3;
+  // 系列任务某一步没有覆盖受罚者阵营时下发的兜底文案（空则用内置默认）。
+  string series_faction_fallback_text = 4;
 }
 
 message PunishmentSubtaskVariant {
@@ -899,6 +902,9 @@ message GameConfig {
   string id = 1;
   string name = 2;
   string description = 3;
+  // stakes 该游戏建房可选的排位赌分档位，升序；第一个元素为默认档。
+  // 黑白棋按每子结算、其余按整局结算，管理员可借不同档位平衡各游戏耗时差异。
+  repeated int32 stakes = 4;
 }
 
 message AnnouncementBoard {

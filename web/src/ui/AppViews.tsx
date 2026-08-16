@@ -4,7 +4,7 @@ import type {
   AppConfig, ChatMessage, GenderColors, GenderFaction, GiveawayVoteQuota, LobbySnapshot, Move, PetBondBadgeFields, PetBondState, PublicPlayer,
   RoomInfoTagStyle, RoomNamePool, RoomSettings, RoomSnapshot, RoundResult, SeatKey, SeatOccupant
 } from "../shared/types";
-import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, DEFAULT_NAME_WAR_RENAME_MIN_POINTS, normalizePublicPlayer, withPetBondDefaults, withRankedScoreDefaults } from "../lib/normalize";
+import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, DEFAULT_NAME_WAR_RENAME_MIN_POINTS, normalizePublicPlayer, stakeTiersFor, withPetBondDefaults, withRankedScoreDefaults } from "../lib/normalize";
 import { socket } from "../ws";
 import {
   defaultChessRoomName, defaultGomokuRoomName, defaultJungleRoomName, defaultLiarsDiceRoomName, defaultOthelloRoomName, defaultRoomName, defaultTicTacToeRoomName,
@@ -655,6 +655,7 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
     name: defaultRoomName,
     gameId: "rps",
     enablePunishment: false,
+    enablePerPiecePunishment: false,
     punishmentSource: "random",
     punishmentTagsIncluded: initialPrefs.included,
     punishmentTagsExcluded: initialPrefs.excluded,
@@ -752,6 +753,9 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
         merged.chessBoardTheme = merged.chessBoardTheme || "classic";
         merged.chessUndoLimit = merged.chessUndoLimit ?? 0;
       }
+      if (next.gameId && next.gameId !== "chess" && next.gameId !== "jungle") {
+        merged.enablePerPiecePunishment = false;
+      }
       for (const keys of Object.values(timedGameSettingKeys)) {
         const moveSeconds = next[keys.move];
         if (moveSeconds !== undefined && !moveSecondsOptions.includes(moveSeconds as typeof moveSecondsOptions[number])) {
@@ -799,24 +803,14 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
       if (!merged.enableRanked) {
         merged.enableExtremeRanked = false;
       }
+      // 档位按游戏从服务端配置读取；不在档位内回退默认档（首个）。
+      const tiers = stakeTiersFor(config, merged.gameId);
+      if (!tiers.includes(merged.stake)) merged.stake = tiers[0];
       if (merged.gameId === "othello") {
-        if (!([1, 2, 5, 10] as const).includes(merged.stake as 1 | 2 | 5 | 10)) merged.stake = 5;
         if (merged.enableExtremeRanked) {
           merged.enableRankMultiplier = false;
           merged.rankMultiplier = 1;
         }
-      } else if (merged.gameId === "tictactoe") {
-        if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) merged.stake = 5;
-      } else if (merged.gameId === "liarsdice") {
-        if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) merged.stake = 5;
-      } else if (merged.gameId === "gomoku") {
-        if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) merged.stake = 5;
-      } else if (merged.gameId === "jungle") {
-        if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) merged.stake = 5;
-      } else if (merged.gameId === "chess") {
-        if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) merged.stake = 5;
-      } else if (!([5, 10, 20] as const).includes(merged.stake as 5 | 10 | 20)) {
-        merged.stake = 5;
       }
       const src = merged.punishmentSource === "system" ? "random" : (merged.punishmentSource || "random");
       merged.punishmentSource = src;
@@ -938,7 +932,7 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
               {settings.gameId === "tictactoe" && <p className="hint">井字棋支持真人 1v1、观战、聊天、排位和惩罚；双方准备后随机 X/O 先手。</p>}
               {settings.gameId === "liarsdice" && <p className="hint">大话骰支持 2-8 人参战，进房默认观战，可自由加入/离开参战席；全员准备且名单 5 秒无变动后自动开局。</p>}
               {settings.gameId === "gomoku" && <p className="hint">五子棋支持真人 1v1、观战、聊天、排位和惩罚；15x15 棋盘先连成五子者胜，可向对方请求悔棋或认输。</p>}
-              {settings.gameId === "jungle" && <p className="hint">斗兽棋支持真人 1v1、观战、聊天、排位和惩罚；7×9 棋盘，先入对方兽穴或令对方无子可走者胜，可向对方请求悔棋或认输。</p>}
+              {settings.gameId === "jungle" && <p className="hint">斗兽棋支持真人 1v1、观战、聊天、排位和惩罚；7×9 棋盘，先入对方兽穴或令对方无子可走者胜，可向对方请求悔棋或认输。开启白给后，轮到你时按白给值一半的概率跳过本手。</p>}
               {settings.gameId === "chess" && <p className="hint">国际象棋支持真人 1v1、观战、聊天、排位和惩罚；8×8 棋盘白方先走，将死对方的王获胜，可向对方请求悔棋或认输。</p>}
               {isTimedGame(settings.gameId) && (
                 <GameTimerSettings gameId={settings.gameId} settings={settings} onPatch={patch} />
@@ -1141,9 +1135,9 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
                   <span>🎮 普通局</span>
                   <small>不增加/减少排位积分，适合随意对战。</small>
                 </button>
-                {(settings.gameId === "othello" ? ([1, 2, 5, 10] as const) : ([5, 10, 20] as const)).map((stake) => (
+                {stakeTiersFor(config, settings.gameId).map((stake) => (
                   <button type="button" className={`ranked-choice-card ${settings.enableRanked && settings.stake === stake ? "active" : ""}`} key={stake} onClick={() => patch({ enableRanked: true, stake, enableExtremeRanked: Boolean(me.extremeModeEnabled) })}>
-                    <span>{settings.gameId === "othello" ? "🏆 黑白棋排位" : settings.gameId === "tictactoe" ? "🏆 井字棋排位" : settings.gameId === "gomoku" ? "🏆 五子棋排位" : settings.gameId === "jungle" ? "🏆 斗兽棋排位" : settings.gameId === "chess" ? "🏆 国际象棋排位" : me.extremeModeEnabled ? "⚡ 极限排位" : "🏆 排位"} {stake}{settings.gameId === "othello" ? " 分/子" : " 分"}</span>
+                    <span>{settings.gameId === "othello" ? "🏆 排位" : settings.gameId === "tictactoe" ? "🏆 排位" : settings.gameId === "gomoku" ? "🏆 排位" : settings.gameId === "jungle" ? "🏆 排位" : settings.gameId === "chess" ? "🏆 排位" : me.extremeModeEnabled ? "⚡ 极限排位" : "🏆 排位"} {stake}{settings.gameId === "othello" ? " 分/子" : " 分"}</span>
                     <small>{
                       settings.gameId === "othello"
                         ? `每翻掉对方 1 子立即结算 ${stake} 分，终局不重复结算。`
@@ -1156,11 +1150,9 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
                   </button>
                 ))}
               </div>
-              {settings.gameId === "othello" && <p className="hint">黑白棋排位按实时翻子结算，可选 1/2/5/10 分/子；支持倍率和极限模式，但两者不能同时开启。</p>}
-              {settings.gameId === "tictactoe" && <p className="hint">井字棋排位按胜负固定分结算，可选 5/10/20 分；支持倍率和极限模式。</p>}
-              {settings.gameId === "gomoku" && <p className="hint">五子棋排位按胜负固定分结算，可选 5/10/20 分；支持倍率和极限模式。</p>}
-              {settings.gameId === "jungle" && <p className="hint">斗兽棋排位按胜负固定分结算，可选 5/10/20 分；支持倍率和极限模式。</p>}
-              {settings.gameId === "chess" && <p className="hint">国际象棋排位按胜负固定分结算，可选 5/10/20 分；支持倍率和极限模式。</p>}
+              {settings.gameId === "othello" && <p className="hint">黑白棋排位按实时翻子结算，可选 {stakeTiersFor(config, "othello").join("/")} 分/子；支持倍率和极限模式，但两者不能同时开启。</p>}
+              {settings.gameId !== "othello" && settings.gameId !== "liarsdice" && <p className="hint">{config.games.find((game) => game.id === settings.gameId)?.name ?? "本游戏"}排位按胜负固定分结算，可选 {stakeTiersFor(config, settings.gameId).join("/")} 分；支持倍率和极限模式。</p>}
+              {settings.gameId === "liarsdice" && <p className="hint">大话骰排位按胜负固定分结算，可选 {stakeTiersFor(config, "liarsdice").join("/")} 分；支持倍率和极限模式。</p>}
               {settings.enableRanked && me.extremeModeEnabled && (
                 <div className="multiplier-box extreme-mode-box">
                   <div className="multiplier-head">
@@ -1210,16 +1202,10 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
             </div>
             <div className="create-section">
               <h3>惩罚</h3>
-              {settings.gameId === "othello" && <p className="hint">黑白棋惩罚会在终局、认输、逃跑或断线判负后触发；平局双罚开启时黑白棋平局双方都要惩罚。</p>}
-              {settings.gameId === "tictactoe" && <p className="hint">井字棋惩罚会在终局或断线判负后触发；平局双罚开启时井字棋平局双方都要惩罚。</p>}
-              {settings.gameId === "gomoku" && <p className="hint">五子棋惩罚会在终局、认输或断线判负后触发；平局双罚开启时五子棋平局双方都要惩罚。</p>}
-              {settings.gameId === "jungle" && <p className="hint">斗兽棋惩罚会在终局、认输或断线判负后触发；平局双罚开启时斗兽棋平局双方都要惩罚。</p>}
-              {settings.gameId === "chess" && <p className="hint">国际象棋惩罚会在终局、认输或断线判负后触发；平局双罚开启时国际象棋平局双方都要惩罚。</p>}
-              {settings.gameId === "liarsdice" && <p className="hint">大话骰惩罚仅对败者触发（叫点/开牌对决中的负方，或断线判负方）；其余参战玩家记平但不计分、不受罚。</p>}
               <Select
                 value={!settings.enablePunishment ? "none" : ((settings.punishmentSource === "system" ? "random" : settings.punishmentSource) || "random")}
                 onChange={(value) => {
-                  if (value === "none") patch({ enablePunishment: false });
+                  if (value === "none") patch({ enablePunishment: false, enablePerPiecePunishment: false });
                   else patch({ punishmentSource: value as RoomSettings["punishmentSource"], enablePunishment: true });
                 }}
                 options={[
@@ -1229,11 +1215,17 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
                   { value: "player", label: "自定义惩罚任务" }
                 ]}
               />
+              {settings.gameId === "othello" && <p className="hint">黑白棋惩罚会在终局、认输、逃跑或断线判负后触发。</p>}
+              {settings.gameId === "tictactoe" && <p className="hint">井字棋惩罚会在终局或断线判负后触发。</p>}
+              {settings.gameId === "gomoku" && <p className="hint">五子棋惩罚会在终局、认输或断线判负后触发。</p>}
+              {settings.gameId === "jungle" && <p className="hint">斗兽棋惩罚会在终局、认输或断线判负后触发；开启每子惩罚时，被吃子也会立刻受罚（棋钟暂停，不计积分/白给）。</p>}
+              {settings.gameId === "chess" && <p className="hint">国际象棋惩罚会在终局、认输或断线判负后触发；开启每子惩罚时，被吃子也会立刻受罚（棋钟暂停，不计积分/白给）。</p>}
+              {settings.gameId === "liarsdice" && <p className="hint">大话骰惩罚仅对败者触发（叫点/开牌对决中的负方，或断线判负方）；其余参战玩家记平但不计分、不受罚。</p>}
               {settings.enablePunishment && (
                 <>
                   {((settings.punishmentSource || "random") === "random" || settings.punishmentSource === "system") ? (
                     <>
-                      <p className="hint">点一下标签循环：缺省 → 选中 → 拒绝。选中的标签任务必须全部命中，拒绝的标签一律排除；全缺省时只按拒绝集合过滤。难度与房间绑定：本房间抽任务次数越多目标难度越高，更难一侧不会达到或超过「目标 + 上浮硬顶」。</p>
+                      <p className="hint">点击选择任务标签：蓝色为必须包含，红色为拒绝，不选则随机出现。惩罚难度会随游戏进度增加。</p>
                       <div className="punishment-tag-tri-grid">
                         {(config.punishmentTags || []).map((tag) => {
                           const state = tagTriState(tag.id);
@@ -1253,7 +1245,7 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
                     </>
                   ) : settings.punishmentSource === "series" ? (
                     <>
-                      <p className="hint">系列任务按你个人进度严格顺序推进，与房间/对手无关；做完最后一条后会反复执行最后一条。</p>
+                      <p className="hint">系列任务房间内玩家共享进度、顺序推进，系列任务完成后需开新房间重置进度。</p>
                       <div className="punishment-choice-grid">
                         {(config.punishmentSeriesSummaries || []).map((series) => {
                           const active = settings.punishmentSeriesId === series.id;
@@ -1288,6 +1280,12 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
                   )}
                   <Toggle label="惩罚需对手确认" value={settings.requireOpponentConfirm} onChange={(value) => patch({ requireOpponentConfirm: value })} />
                   <Toggle label="允许图片证明" value={settings.allowProofImage ?? true} onChange={(value) => patch({ allowProofImage: value })} />
+                  {(settings.gameId === "chess" || settings.gameId === "jungle") && (
+                    <>
+                      <Toggle label="每子惩罚" value={Boolean(settings.enablePerPiecePunishment)} onChange={(value) => patch({ enablePerPiecePunishment: value })} />
+                      <p className="hint">勾选后，对局中每次被吃子都会立刻受罚并暂停棋钟；积分和白给值值仍按每局结算。</p>
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -1837,7 +1835,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
       <div className="room-content-grid">
         <div className="actions-panel panel">
           {room.settings.gameId === "othello" ? (
-          <OthelloPanel room={room} me={me} onMove={playOthello} onSettle={settleOthelloMove} onRestart={restartOthello} onReady={readyOthello} onRequestUndo={requestOthelloUndo} onRespondUndo={respondOthelloUndo} onRequestSurrender={requestOthelloSurrender} onRespondSurrender={respondOthelloSurrender} onEscape={escapeOthello} />
+            <OthelloPanel room={room} me={me} onMove={playOthello} onSettle={settleOthelloMove} onRestart={restartOthello} onReady={readyOthello} onRequestUndo={requestOthelloUndo} onRespondUndo={respondOthelloUndo} onRequestSurrender={requestOthelloSurrender} onRespondSurrender={respondOthelloSurrender} onEscape={escapeOthello} />
           ) : room.settings.gameId === "tictactoe" ? (
             <TicTacToePanel room={room} me={me} onMove={playTicTacToe} onReady={readyTicTacToe} onRestart={restartTicTacToe} onGiveawayChoice={chooseTicTacToeGiveaway} />
           ) : room.settings.gameId === "liarsdice" ? (
@@ -2130,8 +2128,6 @@ export function TicTacToePanel({ room, me, onMove, onReady, onRestart, onGiveawa
   const now = useNow(1000, Boolean(giveawayPrompt));
   const giveawaySecondsLeft = giveawayPrompt ? Math.max(0, Math.ceil((giveawayPrompt.expiresAt - now) / 1000)) : 0;
   const tictactoeGiveawayGain = formatGiveawayValue(0.3);
-  const xSeat = state?.xSeat;
-  const oSeat = xSeat ? xSeat === "A" ? "B" : "A" : null;
   const winningKeys = new Set((state?.winningLine || []).map((cell) => `${cell.row}-${cell.col}`));
   const board = state?.board || Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => null));
   const boardTheme = tictactoeThemeStyle(room.settings.tictactoeBoardTheme);
@@ -2228,11 +2224,6 @@ export function TicTacToePanel({ room, me, onMove, onReady, onRestart, onGiveawa
           );
         }))}
       </div>
-      <div className="tictactoe-legend">
-        <span>❌ X：{xSeat ? occupantDisplay(room.seats[xSeat]) : "准备后随机"}</span>
-        <span>⭕ O：{oSeat ? occupantDisplay(room.seats[oSeat]) : "准备后随机"}</span>
-        <span>{mySeat ? `你在战斗席 ${mySeat}` : "你正在观战"}</span>
-      </div>
     </div>
   );
 }
@@ -2328,8 +2319,6 @@ export function OthelloPanel({ room, me, onMove, onSettle, onRestart, onReady, o
   const surrenderFromMe = Boolean(mySeat && surrenderRequest?.fromSeat === mySeat);
   const surrenderToMe = Boolean(mySeat && surrenderRequest?.toSeat === mySeat);
   const surrenderFromName = surrenderRequest ? occupantDisplay(room.seats[surrenderRequest.fromSeat]) : "";
-  const blackSeat = state?.blackSeat;
-  const whiteSeat = blackSeat ? (blackSeat === "A" ? "B" : "A") : null;
   return (
     <div className="othello-panel">
       <div className="othello-head">
@@ -2436,11 +2425,6 @@ export function OthelloPanel({ room, me, onMove, onSettle, onRestart, onReady, o
             </div>
           );
         }))}
-      </div>
-      <div className="othello-legend">
-        <span>⚫ 黑棋：{blackSeat ? occupantDisplay(room.seats[blackSeat]) : "准备后随机"}</span>
-        <span>⚪ 白棋：{whiteSeat ? occupantDisplay(room.seats[whiteSeat]) : "准备后随机"}</span>
-        <span>{mySeat ? `你在战斗席 ${mySeat}` : "你正在观战"}</span>
       </div>
     </div>
   );

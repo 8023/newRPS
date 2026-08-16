@@ -111,7 +111,7 @@ func (s *Server) chessClockHooks() turnBasedClockHooks {
 			}
 			return turnBasedClockState{
 				turn: room.Chess.Turn, ended: room.Chess.Ended,
-				blocked:        room.Chess.ResignRequest != nil || room.Chess.UndoRequest != nil,
+					blocked:        room.Phase == types.PhasePunishment || room.Chess.ResignRequest != nil || room.Chess.UndoRequest != nil,
 				moveDeadlineAt: &room.Chess.MoveDeadlineAt, clockDeadlineAt: &room.Chess.ClockDeadlineAt,
 				clockRemaining: &room.Chess.ClockRemaining,
 			}, true
@@ -306,26 +306,37 @@ func (s *Server) applyChessMove(room *RoomState, seat types.SeatKey, fromRow, fr
 		return false, "这步棋不合法"
 	}
 
-	s.pauseChessTimers(room)
-	room.chessUndoStack = append(room.chessUndoStack, snapshotChessState(room.Chess, len(room.chessRepetition)))
-	chessApplyMoveToState(room.Chess, move)
-	room.Chess.ResignRequest = nil
-	room.chessRepetition = append(room.chessRepetition, chessPositionKey(room.Chess))
+		captured := chessMoveCaptures(room.Chess, move)
+		s.pauseChessTimers(room)
+		room.chessUndoStack = append(room.chessUndoStack, snapshotChessState(room.Chess, len(room.chessRepetition)))
+		chessApplyMoveToState(room.Chess, move)
+		room.Chess.ResignRequest = nil
+		room.chessRepetition = append(room.chessRepetition, chessPositionKey(room.Chess))
 
-	outcome := chessEvaluateOutcome(room.Chess, room.chessRepetition)
-	note := chessOutcomeNote(outcome)
-	switch outcome {
-	case chessCheckmate:
-		s.finishChessGame(room, types.RoundResult(seat), note)
-	case chessStalemate, chessFiftyMove, chessInsufficient, chessRepetition:
-		s.finishChessGame(room, types.ResultDraw, note)
-	default:
-		room.ResultText = ""
-		s.armChessTimers(room, room.Chess.Turn)
-		s.notifyOpponentTurn(room, room.Chess.Turn)
+		outcome := chessEvaluateOutcome(room.Chess, room.chessRepetition)
+		note := chessOutcomeNote(outcome)
+		if captured && perPiecePunishmentEnabled(room) {
+			switch outcome {
+			case chessCheckmate:
+				room.pendingPieceEnd = &pendingPieceEnd{result: types.RoundResult(seat), note: note}
+			case chessStalemate, chessFiftyMove, chessInsufficient, chessRepetition:
+				room.pendingPieceEnd = &pendingPieceEnd{result: types.ResultDraw, note: note}
+			}
+			s.beginMidGamePiecePunishment(room, oppositeSeat(seat), seat, "棋子被吃")
+			return true, ""
+		}
+		switch outcome {
+		case chessCheckmate:
+			s.finishChessGame(room, types.RoundResult(seat), note)
+		case chessStalemate, chessFiftyMove, chessInsufficient, chessRepetition:
+			s.finishChessGame(room, types.ResultDraw, note)
+		default:
+			room.ResultText = ""
+			s.armChessTimers(room, room.Chess.Turn)
+			s.notifyOpponentTurn(room, room.Chess.Turn)
+		}
+		return true, ""
 	}
-	return true, ""
-}
 
 func (s *Server) requestChessResign(room *RoomState, seat types.SeatKey) (bool, string) {
 	if room.Chess == nil || room.Phase != types.PhaseChoosing || room.Chess.Ended {
