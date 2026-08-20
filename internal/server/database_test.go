@@ -123,7 +123,7 @@ func TestOpenDatabaseMigratedPunishmentEventsAcceptsInserts(t *testing.T) {
 	defer db.Close()
 
 	store := newEventStore(db)
-	if err := store.insertPunishmentTask("id1", 100, "src", "r1", "pub", "发布者", "t1", "目标", "任务文本"); err != nil {
+	if err := store.insertPunishmentTask("id1", 100, "src", "r1", "pub", "发布者", "t1", "目标", "任务文本", punishmentEventMeta{}); err != nil {
 		t.Fatalf("insert into migrated punishment_events: %v", err)
 	}
 }

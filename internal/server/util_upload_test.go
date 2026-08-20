@@ -8,6 +8,7 @@ func TestSafeUploadURLAllowsBase64URLChars(t *testing.T) {
 		"/uploads/proofs/1710000000000-A_GwoEDr.webp",
 		"/uploads/proofs/1710000000000-abc-def.webp",
 		"/uploads/admin/1-xY9.webp",
+		"/uploads/contributions/1710000000000-abc.webp",
 	}
 	for _, u := range ok {
 		if safeUploadURL(u) != u {

@@ -51,6 +51,15 @@ const (
 	metricActivity           = "activity"
 	metricPetbondNew         = "petbond_new"
 	metricPetbondTotal       = "petbond_total"
+	// metricPunishTaskPoolNew/Total「随机任务」增长：punishment_tasks 里 difficulty_order<>-1
+	// （会真正进入随机候选池，含"同时发布到随机任务"的系列步骤）的 task_group_id 去重计数，
+	// 与 punishmentStore.randomTaskGroupCount 同口径。
+	metricPunishTaskPoolNew   = "punish_task_pool_new"
+	metricPunishTaskPoolTotal = "punish_task_pool_total"
+	// metricPunishSeriesPoolNew/Total「系列任务」增长：punishment_series 行数，
+	// 与 punishmentStore.seriesGroupCount 同口径。
+	metricPunishSeriesPoolNew   = "punish_series_pool_new"
+	metricPunishSeriesPoolTotal = "punish_series_pool_total"
 	metricChatLobby          = "chat_lobby"
 	metricChatRoom           = "chat_room"
 	metricChatSpeakers       = "chat_speakers"      // 大厅发言去重人数（历史字段名）
@@ -72,6 +81,8 @@ type analyticsSnapshot struct {
 	PunishPublish, PunishDone, PunishReject                             int64Slice
 	PetbondNew, PetbondTotal, ChatLobby, ChatRoom, ChatSpeakers         int64Slice
 	ChatRoomSpeakers, RoomRoundsMax, RoomRoundsAvg                      int64Slice
+	PunishTaskPoolNew, PunishTaskPoolTotal                              int64Slice
+	PunishSeriesPoolNew, PunishSeriesPoolTotal                          int64Slice
 	// 分维度：metric -> key -> 按天 values（与 Days 等长，缺日补 0）
 	ByKey map[string]map[string]int64Slice // metric -> key -> series
 	// 留存矩阵（用户维度）：cohortDay -> offset -> count
@@ -151,7 +162,11 @@ type analyticsRangeView struct {
 	// NewOldUsers「新老用户」：按用户（playerId）维度，区别于设备维度的 NewVsReturning。
 	NewOldUsers analyticsNewOldUsers  `json:"newOldUsers"`
 	PetBond     analyticsPetBondBlock `json:"petBond"`
-	Chat        analyticsChatBlock    `json:"chat"`
+	// RandomTaskPool/SeriesTaskPool「随机任务」「系列任务」增长：与 PetBond 同构
+	// （总量存量 + 当日新增），仅统计源表/口径不同，见上面两组 metricPunish*Pool* 常量注释。
+	RandomTaskPool analyticsGrowthBlock `json:"randomTaskPool"`
+	SeriesTaskPool analyticsGrowthBlock `json:"seriesTaskPool"`
+	Chat           analyticsChatBlock   `json:"chat"`
 	// RoomRounds「单房对局」：当日有对局的房间里，单房局数 max 与均值 avg。
 	RoomRounds analyticsRoomRoundsBlock `json:"roomRounds"`
 
@@ -221,6 +236,14 @@ type analyticsPunishmentBlock struct {
 }
 
 type analyticsPetBondBlock struct {
+	Total []int64 `json:"total"`
+	New   []int64 `json:"new"`
+}
+
+// analyticsGrowthBlock 是与 analyticsPetBondBlock 同构的"总量存量 + 当日新增"两件套，
+// 复用给随机任务池 / 系列任务两张增长图（RandomTaskPool / SeriesTaskPool），避免为
+// 结构完全相同的两个字段各自定义一遍。
+type analyticsGrowthBlock struct {
 	Total []int64 `json:"total"`
 	New   []int64 `json:"new"`
 }
@@ -454,6 +477,8 @@ func (snap *analyticsSnapshot) forRange(days int) *analyticsRangeView {
 		NameWarGiveaway:    namedSeriesForKeys(snap, metricActivity, []string{"nameWar_enable", "giveaway_enable", "giveaway_board_submit", "nameWar_rename", "extreme_enable"}, start, n),
 		NewOldUsers:        analyticsNewOldUsers{New: newAccounts, OldLogin: oldLogin},
 		PetBond:            analyticsPetBondBlock{Total: slice(snap.PetbondTotal), New: slice(snap.PetbondNew)},
+		RandomTaskPool:     analyticsGrowthBlock{Total: slice(snap.PunishTaskPoolTotal), New: slice(snap.PunishTaskPoolNew)},
+		SeriesTaskPool:     analyticsGrowthBlock{Total: slice(snap.PunishSeriesPoolTotal), New: slice(snap.PunishSeriesPoolNew)},
 		Chat: analyticsChatBlock{
 			Lobby: slice(snap.ChatLobby), Room: slice(snap.ChatRoom),
 			Speakers: slice(snap.ChatSpeakers), SpeakersRoom: slice(snap.ChatRoomSpeakers),
@@ -1064,6 +1089,27 @@ func (s *Server) rebuildDay(day int64, tz int) ([]analyticsDailyRow, error) {
 	_ = db.QueryRow(`SELECT COUNT(*) FROM pet_bonds WHERE created_at < ?`, dayEnd).Scan(&pbTotal)
 	add(metricPetbondTotal, "", pbTotal.Int64)
 
+	// 随机任务池增长：口径与 punishmentStore.randomTaskGroupCount 一致——按 task_group_id
+	// 去重，只算 difficulty_order<>-1（真正进入随机候选池）的行。存量迁移行 created_at=0，
+	// 恒计入「总量」但不会落进任何一天的「新增」区间（见 v36 迁移注释）。
+	var taskPoolNew, taskPoolTotal sql.NullInt64
+	_ = db.QueryRow(`
+		SELECT COUNT(DISTINCT task_group_id) FROM punishment_tasks
+		WHERE difficulty_order <> -1 AND task_group_id != '' AND created_at >= ? AND created_at < ?`, dayStart, dayEnd).Scan(&taskPoolNew)
+	add(metricPunishTaskPoolNew, "", taskPoolNew.Int64)
+	_ = db.QueryRow(`
+		SELECT COUNT(DISTINCT task_group_id) FROM punishment_tasks
+		WHERE difficulty_order <> -1 AND task_group_id != '' AND created_at < ?`, dayEnd).Scan(&taskPoolTotal)
+	add(metricPunishTaskPoolTotal, "", taskPoolTotal.Int64)
+
+	// 系列任务增长：punishment_series 一行一系列，直接计数，口径与
+	// punishmentStore.seriesGroupCount 一致。
+	var seriesPoolNew, seriesPoolTotal sql.NullInt64
+	_ = db.QueryRow(`SELECT COUNT(*) FROM punishment_series WHERE created_at >= ? AND created_at < ?`, dayStart, dayEnd).Scan(&seriesPoolNew)
+	add(metricPunishSeriesPoolNew, "", seriesPoolNew.Int64)
+	_ = db.QueryRow(`SELECT COUNT(*) FROM punishment_series WHERE created_at < ?`, dayEnd).Scan(&seriesPoolTotal)
+	add(metricPunishSeriesPoolTotal, "", seriesPoolTotal.Int64)
+
 	// chat：消息条数 + 发言去重人数（大厅 / 房间分开）
 	var lobbyN, lobbySp, roomN, roomSp sql.NullInt64
 	_ = db.QueryRow(`SELECT COUNT(*), COUNT(DISTINCT player_id) FROM lobby_messages WHERE at >= ? AND at < ?`, dayStart, dayEnd).Scan(&lobbyN, &lobbySp)
@@ -1540,6 +1586,8 @@ func (s *Server) buildSnapshot(tz, liveOnline, liveRooms, liveBonds int) (*analy
 		Connections: scalar(), OnlineMs: scalar(), LoggedDAU: scalar(), Register: scalar(),
 		PunishPublish: scalar(), PunishDone: scalar(), PunishReject: scalar(),
 		PetbondNew: scalar(), PetbondTotal: scalar(),
+		PunishTaskPoolNew: scalar(), PunishTaskPoolTotal: scalar(),
+		PunishSeriesPoolNew: scalar(), PunishSeriesPoolTotal: scalar(),
 		ChatLobby: scalar(), ChatRoom: scalar(), ChatSpeakers: scalar(),
 		ChatRoomSpeakers: scalar(), RoomRoundsMax: scalar(), RoomRoundsAvg: scalar(),
 		ByKey:      map[string]map[string]int64Slice{},
@@ -1603,6 +1651,14 @@ func (s *Server) buildSnapshot(tz, liveOnline, liveRooms, liveBonds int) (*analy
 			setScalar(&snap.PetbondNew, c.day, c.value)
 		case metricPetbondTotal:
 			setScalar(&snap.PetbondTotal, c.day, c.value)
+		case metricPunishTaskPoolNew:
+			setScalar(&snap.PunishTaskPoolNew, c.day, c.value)
+		case metricPunishTaskPoolTotal:
+			setScalar(&snap.PunishTaskPoolTotal, c.day, c.value)
+		case metricPunishSeriesPoolNew:
+			setScalar(&snap.PunishSeriesPoolNew, c.day, c.value)
+		case metricPunishSeriesPoolTotal:
+			setScalar(&snap.PunishSeriesPoolTotal, c.day, c.value)
 		case metricChatLobby:
 			setScalar(&snap.ChatLobby, c.day, c.value)
 		case metricChatRoom:

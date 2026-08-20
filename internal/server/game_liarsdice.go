@@ -507,10 +507,6 @@ func (s *Server) buildLiarsDicePunishmentTasks(room *RoomState, punishedPlayers 
 	if winner != nil {
 		winnerName = playerShortName(winner)
 	}
-	// 房间级难度进度整局只 +1，与 buildPunishmentTasksWithWinnerName 同构（大话骰目前每局只罚一名
-	// 叫点失败者，但仍走同一套累加规则，避免将来受罚人数变化时又出现整局重复推进的问题）。
-	baseCount := room.PunishmentTaskProgress
-	advancedRound := false
 	for _, player := range punishedPlayers {
 		var assigner *PlayerState
 		var systemTask *punishmentTaskResult
@@ -520,11 +516,7 @@ func (s *Server) buildLiarsDicePunishmentTasks(room *RoomState, punishedPlayers 
 		} else if src == "series" {
 			systemTask = s.pickSeriesTaskForPlayer(room, player, room.Settings.PunishmentSeriesID, winnerName)
 		} else {
-			var advanced bool
-			systemTask, advanced = s.pickSystemTaskForPlayer(room, player, winnerName, baseCount)
-			if advanced {
-				advancedRound = true
-			}
+			systemTask = s.pickSystemTaskForPlayerAdvancing(room, player, winnerName)
 		}
 		task := types.PunishmentTask{
 			PlayerID: player.ID, PlayerName: playerShortName(player),
@@ -538,9 +530,11 @@ func (s *Server) buildLiarsDicePunishmentTasks(room *RoomState, punishedPlayers 
 				task.BackgroundOpacity = systemTask.BackgroundOpacity
 			}
 			if s.eventDB != nil {
-				task.EventID = randomID()
-				if err := s.eventDB.insertPunishmentTask(task.EventID, nowMs(), "system", room.ID, "", "", player.ID, task.PlayerName, task.TaskText); err != nil {
+				eventID := randomID()
+				if err := s.eventDB.insertPunishmentTask(eventID, nowMs(), "system", room.ID, "", "", player.ID, task.PlayerName, task.TaskText, systemTask.EventMeta); err != nil {
 					s.errorLog("punishment_event_insert_failed", err.Error())
+				} else {
+					task.EventID = eventID
 				}
 			}
 		}
@@ -549,9 +543,6 @@ func (s *Server) buildLiarsDicePunishmentTasks(room *RoomState, punishedPlayers 
 			task.AssignedByName = assigner.Name
 		}
 		out = append(out, task)
-	}
-	if advancedRound {
-		room.PunishmentTaskProgress = baseCount + 1
 	}
 	return out
 }

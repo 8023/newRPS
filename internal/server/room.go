@@ -114,6 +114,7 @@ func (s *Server) cleanupRoomIfEmpty(room *RoomState) bool {
 	s.dropSyncChannel(channelRoom(room.ID))
 	delete(s.rooms, room.ID)
 	s.dropProofImageRoomEntries(room.ID)
+	s.recordSeriesRunProgressOnClose(room)
 	if s.eventDB != nil {
 		if err := s.eventDB.insertRoomEvent(roomEventInput{
 			At: nowMs(), RoomID: room.ID, RoomName: room.Settings.Name, GameID: string(room.Settings.GameID),
@@ -376,11 +377,18 @@ func (s *Server) firstTagWithBackground(included []string) *types.PunishmentTagC
 
 // findSeriesByID 只返回"可用"的系列（seriesIsUsable：至少要有一步）。没有步骤的
 // 系列即便已保存到库里，对外也视为不存在：建房面板选不到，房间设置校验拒绝，
-// 运行时也不会产出任务。阵营覆盖不全不再拦截（运行时走兜底文案）。
+// 运行时也不会产出任务。阵营覆盖不全不再拦截（运行时从随机池抽替补）。
 func (s *Server) findSeriesByID(id string) *types.PunishmentSeriesTaskConfig {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil
+	}
+	if s.punishmentSeriesByID != nil {
+		series := s.punishmentSeriesByID[id]
+		if series == nil || !s.seriesIsUsable(*series) {
+			return nil
+		}
+		return series
 	}
 	for i := range s.punishmentSeriesCache {
 		if s.punishmentSeriesCache[i].ID == id {

@@ -195,7 +195,6 @@ export type RoomInfoTagStyle = GenderColors & {
 // （仍可被系列任务按 ID 引用），1-99 为难度档位。
 export type PunishmentTaskConfig = {
   id: string;
-  name: string;
   text: string;
   tagIds: string[];
   factionIds: string[];
@@ -216,8 +215,10 @@ export type PunishmentTagConfig = {
 export type PunishmentRandomSettings = {
   orderStep: number;
   maxDifficultyOvershoot: number;
-  /** 系列任务某一步没有覆盖受罚者阵营时下发的兜底文案；空串用服务端内置默认。 */
-  seriesFactionFallbackText?: string;
+  /** 系列投稿最低步数；<=0 时按 10 兜底。 */
+  minSeriesSteps?: number;
+  /** 系列投稿最高步数；<=0 或超过技术硬顶（MAX_SERIES_STEPS，见 contributeSeries.ts）时按硬顶兜底。 */
+  maxSeriesSteps?: number;
 };
 
 /** 系列任务一步：有序引用任务池任务 ID。 */
@@ -225,7 +226,7 @@ export type PunishmentSeriesStep = {
   taskIds: string[];
 };
 
-/** 系列任务管理详情（admin:action，不进 AppConfig）。 */
+/** 系列任务管理详情（SQLite 存储，不进 AppConfig）。 */
 export type PunishmentSeriesTaskConfig = {
   id: string;
   name: string;
@@ -241,6 +242,57 @@ export type PunishmentSeriesSummary = {
   roomNamePool?: RoomNamePool;
   roomBackgroundImages?: string[];
   stepCount: number;
+  publishedVersion?: number;
+  /** 供进战斗席本地校验，不在建房面板展示。 */
+  targetFactionIds?: string[];
+};
+
+export type ContributionStatus =
+  | "draft"
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "withdrawn"
+  | "revision_draft"
+  | "revision_pending"
+  | "revision_rejected"
+  | "unpublish_pending";
+
+export type ContributionKind = "gender" | "task" | "series";
+
+export type ContributionSubmission = {
+  id: string;
+  kind: ContributionKind;
+  submitterPlayerId: string;
+  submitterNameSnapshot: string;
+  anonymous: boolean;
+  status: ContributionStatus;
+  publishedTargetId: string;
+  publishedVersion: number;
+  activeVersion: number;
+  createdAt: number;
+  updatedAt: number;
+  submittedAt: number;
+  reviewedAt: number;
+  reviewedBy: string;
+  reviewComment: string;
+  unpublishRequestedAt?: number;
+  title?: string;
+};
+
+export type VoteCard = {
+  eventId: string;
+  roundId: string;
+  targetKind: ContributionKind;
+  targetId: string;
+  canVote: boolean;
+  cannotVoteReason?: string;
+  myVote: number;
+  displayRatio?: number | null;
+  voteCount: number;
+  hasVotes: boolean;
+  contributorDisplayName: string;
+  contributorAnonymous: boolean;
 };
 
 export type PublicStats = {
@@ -618,6 +670,7 @@ export type RoundHistoryItem = {
     assignedBy?: string;
     assignedByName?: string;
     typeName?: string;
+    eventId?: string;
   }>;
   punishedNames: string[];
   proofs: Array<{
@@ -739,6 +792,7 @@ export type AppConfig = {
     name: string;
     description: string;
     adminPassword: string;
+    anonymousContributorLabel?: string;
   };
   announcementBoard: {
     enabled?: boolean;
@@ -959,6 +1013,10 @@ export type AnalyticsRangeView = {
   /** 新老用户：按用户（playerId）维度，区别于 newVsReturning 的设备维度。 */
   newOldUsers: { new: number[]; oldLogin: number[] };
   petBond: { total: number[]; new: number[] };
+  /** 随机任务总量/新增：含系列任务里同时进随机池的步骤，均以审批通过为准。 */
+  randomTaskPool: { total: number[]; new: number[] };
+  /** 系列任务总量/新增，均以审批通过为准。 */
+  seriesTaskPool: { total: number[]; new: number[] };
   chat: {
     lobby: number[];
     room: number[];

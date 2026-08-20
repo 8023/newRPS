@@ -28,6 +28,7 @@ func newTurnBasedUndoTestRoom(gameID types.GameID) (*Server, *RoomState) {
 		turnBasedUndoTimers:  map[string]*time.Timer{},
 		turnBasedClockTimers: map[string]*turnBasedClockTimer{},
 		roomBroadcastTimers:  map[string]*roomBroadcastPending{},
+		playerUpdateDelay:    time.Hour,
 	}
 	return server, room
 }

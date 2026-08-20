@@ -192,6 +192,12 @@ type HumanSeat struct {
 
 func (h *HumanSeat) GetID() string { return h.Player.ID }
 
+// seriesPlayerProgress：见 RoomState.PunishmentSeriesPlayerProgress 字段注释。
+type seriesPlayerProgress struct {
+	SeriesID string
+	Step     int
+}
+
 type RoomState struct {
 	ID string
 
@@ -224,22 +230,25 @@ type RoomState struct {
 	ResultText                  string
 	PunishedPlayerIDs           []string
 	Proofs                      []types.PunishmentProof
-	// PunishmentTaskProgress：本房间内已完成的系统任务惩罚局数，用于按任务难度递增抽取
-	// （见 punishment.go 的 pickSystemTaskForPlayer/buildPunishmentTasksWithWinnerName）。
-	// 与玩家、与具体任务类型均无关——房间内任意败者抽到任意类型都会推进同一计数；且每完成一局
-	// 只 +1，即便平局双罚/双败一局同时惩罚两名玩家也不例外。随房间建立初始化为 0，随房间销毁释放。
-	PunishmentTaskProgress int
-	// PunishmentSeriesProgressID/PunishmentSeriesProgress：系列任务模式的房间级共享进度——
-	// 房间内全员共用一个步数计数器，谁挨罚都推进同一步；前一个玩家做完离开，后一个玩家
-	// 从下一步继续。不落盘：换房间（或房内换成另一个系列，ID 对不上时）从 0 重新计数，
-	// 房间销毁即释放。见 punishment.go 的 pickSeriesTaskForPlayer。
-	PunishmentSeriesProgressID string
-	PunishmentSeriesProgress   int
-	Score                  map[types.SeatKey]int
-	SeatedScore            map[types.SeatKey]int
-	SeatStats              map[types.SeatKey]types.SeatStats
-	RoundHistory           []types.RoundHistoryItem
-	OwnerID                string
+	// PunishmentTaskProgress：随机任务模式下，房间内每个玩家各自独立的难度进度——键是玩家的
+	// 持久 playerId，谁挨罚就推进谁自己的计数器（与具体任务类型无关，同一玩家抽到任意类型都
+	// 推进同一个数），房间里其他人挨罚不影响自己。与 PunishmentSeriesPlayerProgress 同构：
+	// 随房间存活期累积（退座位/进观众席/断线重连/退房再进同一房间都保留），换成另一个房间
+	// 从 0 重新开始，房间销毁即释放，不落盘。见 punishment.go 的
+	// pickSystemTaskForPlayer/pickSystemTaskForPlayerAdvancing。
+	PunishmentTaskProgress map[string]int
+	// PunishmentSeriesPlayerProgress：系列任务模式下，房间内每个玩家各自独立的步数进度——
+	// 键是玩家的持久 playerId，谁输就推进谁自己的计数器，互不影响（a 输两次走系列第 1、2 步，
+	// 期间 b 输一次仍从系列第 1 步开始）。只要还在同一个 *RoomState 存活期内就保留：退座位/
+	// 进观众席/断线重连、退房再进同一房间都不受影响；换成另一个房间（哪怕用的是同一个系列）
+	// 或房内切换到另一个系列（存的 SeriesID 对不上）都视为从 0 重新开始。不落盘，房间销毁
+	// 即释放。见 punishment.go 的 pickSeriesTaskForPlayer。
+	PunishmentSeriesPlayerProgress map[string]*seriesPlayerProgress
+	Score                          map[types.SeatKey]int
+	SeatedScore                    map[types.SeatKey]int
+	SeatStats                      map[types.SeatKey]types.SeatStats
+	RoundHistory                   []types.RoundHistoryItem
+	OwnerID                        string
 	// CreatorName：创建者的展示名快照（创建时的 playerShortName），供房间关闭时写入
 	// rooms 表用；不能在关闭时现取，届时创建者可能已改名甚至不在房间里了。
 	CreatorName      string
@@ -361,11 +370,18 @@ type Server struct {
 	pushDB   *pushStore
 	playerDB *playerStore
 	// punishmentStore：任务池 + 系列任务 SQLite 持久化；运行时读路径走下方缓存。
-	punishmentStore *punishmentStore
+	punishmentStore   *punishmentStore
+	genderStore       *genderStore
+	contributionStore *contributionStore
+	contribUploadsDir string
 	// punishmentTasksCache / punishmentSeriesCache：启动 list 一次，admin save 后刷新，
 	// 与 s.cfg 同锁（s.mu）保护；选任务逻辑一律读缓存，不直接查 SQLite。
 	punishmentTasksCache  []types.PunishmentTaskConfig
 	punishmentSeriesCache []types.PunishmentSeriesTaskConfig
+	// 由 reloadPunishmentCaches 与上面两份切片同时重建；避免系列每次抽取任务都把整个
+	// 任务池重新扫一遍建 map。测试里若只直接注入切片，读取辅助函数会安全回退到临时索引。
+	punishmentTaskByID   map[string]*types.PunishmentTaskConfig
+	punishmentSeriesByID map[string]*types.PunishmentSeriesTaskConfig
 	// petBondDB / petBonds / petBondRequests：认主关系与待办申请（内存权威 + SQLite 写穿）
 	petBondDB       *petBondStore
 	petBonds        map[string]*petBond        // bondKey(master,pet) -> bond
@@ -410,6 +426,7 @@ type Server struct {
 
 	// 玩家更新 100ms 聚合
 	pendingPlayerUpdates map[string]*PlayerState
+	playerUpdateDelay    time.Duration
 	playerUpdateTimer    *time.Timer
 
 	// dirtyPlayerIDs：待写盘的持久化玩家（s.mu 保护）。writeSnapshot 只 UPSERT 这些 ID；

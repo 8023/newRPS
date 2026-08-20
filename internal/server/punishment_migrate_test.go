@@ -18,9 +18,9 @@ func TestMigrateSeriesVariantsToTasks(t *testing.T) {
 
 	// 模拟 migrate 写入结果：原 tasks + 系列变体打散任务 + steps 引用
 	tasks := []types.PunishmentTaskConfig{
-		{ID: "t1", Name: "原", Text: "原任务", TagIDs: []string{"truth"}, Order: 50, BackgroundImages: []string{}, BackgroundOpacity: 0.22},
-		{ID: "s1_s0_v0", Name: "试炼 · 第1步变体1", Text: "女变体", TagIDs: []string{"series:s1"}, FactionIDs: []string{"female_faction"}, Order: 50, BackgroundImages: []string{}, BackgroundOpacity: 0.3},
-		{ID: "s1_s0_v1", Name: "试炼 · 第1步变体2", Text: "通用变体", TagIDs: []string{"series:s1"}, FactionIDs: []string{}, Order: 50, BackgroundImages: []string{}, BackgroundOpacity: 0.22},
+		{ID: "t1", Text: "原任务", TagIDs: []string{"truth"}, Order: 50, BackgroundImages: []string{}, BackgroundOpacity: 0.22},
+		{ID: "s1_s0_v0", Text: "女变体", TagIDs: []string{"series:s1"}, FactionIDs: []string{"female_faction"}, Order: 50, BackgroundImages: []string{}, BackgroundOpacity: 0.3},
+		{ID: "s1_s0_v1", Text: "通用变体", TagIDs: []string{"series:s1"}, FactionIDs: []string{}, Order: 50, BackgroundImages: []string{}, BackgroundOpacity: 0.22},
 	}
 	series := []types.PunishmentSeriesTaskConfig{{
 		ID: "s1", Name: "试炼",
@@ -69,5 +69,17 @@ func TestMigrateSeriesVariantsToTasks(t *testing.T) {
 	}
 	if len(got) != 3 {
 		t.Fatalf("idempotent count=%d want 3", len(got))
+	}
+}
+
+func TestStampLegacyPunishmentAttribution_when_importRunsAfterSchemaMigrations_then_fillsMetadata(t *testing.T) {
+	tasks := []types.PunishmentTaskConfig{{ID: "legacy_task"}}
+	series := []types.PunishmentSeriesTaskConfig{{ID: "legacy_series"}}
+	stampLegacyPunishmentAttribution(tasks, series)
+	if tasks[0].ContributorPlayerID != legacyPunishmentContributorID || tasks[0].VoteVersion != 1 || tasks[0].ContentVersion != 1 || tasks[0].TaskGroupID != tasks[0].ID {
+		t.Fatalf("legacy task metadata incomplete: %+v", tasks[0])
+	}
+	if series[0].ContributorPlayerID != legacyPunishmentContributorID || series[0].VoteVersion != 1 || series[0].ContentVersion != 1 {
+		t.Fatalf("legacy series metadata incomplete: %+v", series[0])
 	}
 }

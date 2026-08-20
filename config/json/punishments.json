@@ -123,7 +123,8 @@
   ],
   "orderStep": 2,
   "maxDifficultyOvershoot": 5,
-  "seriesFactionFallbackText": "",
+  "minSeriesSteps": 10,
+  "maxSeriesSteps": 20,
   "tasks": [
     {
       "id": "truth_task1_default",

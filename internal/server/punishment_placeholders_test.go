@@ -63,10 +63,10 @@ func TestPickSystemTaskForPlayerPlaceholders(t *testing.T) {
 			{ID: "male_faction", Label: "顺性别男", TaskGroup: "male"},
 			{ID: "female_faction", Label: "顺性别女", TaskGroup: "female"},
 		},
-		PunishmentTags: []types.PunishmentTagConfig{{ID: "hug", Name: "拥抱"}},
+		PunishmentTags:           []types.PunishmentTagConfig{{ID: "hug", Name: "拥抱"}},
 		PunishmentRandomSettings: types.PunishmentRandomSettings{OrderStep: 2, MaxDifficultyOvershoot: 5},
 	}, punishmentTasksCache: []types.PunishmentTaskConfig{
-		{ID: "t1", Name: "默认", Text: "{loser} 需要拥抱 {winner}", TagIDs: []string{"hug"}, FactionIDs: []string{"female_faction"}, Order: 50},
+		{ID: "t1", Text: "{loser} 需要拥抱 {winner}", TagIDs: []string{"hug"}, FactionIDs: []string{"female_faction"}, Order: 50},
 	}}
 	winner := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "w1", Name: "Alice", FactionID: "male_faction", FactionLabel: "顺性别男"}}
 	loser := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "l1", Name: "Bob", FactionID: "female_faction", FactionLabel: "顺性别女"}}
@@ -99,7 +99,7 @@ func TestPickSystemTaskForPlayerExcludesNegativeOrder(t *testing.T) {
 		PunishmentTags:           []types.PunishmentTagConfig{{ID: "hug", Name: "拥抱"}},
 		PunishmentRandomSettings: types.PunishmentRandomSettings{OrderStep: 2, MaxDifficultyOvershoot: 5},
 	}, punishmentTasksCache: []types.PunishmentTaskConfig{
-		{ID: "series_only", Name: "系列专用", Text: "系列专用任务", TagIDs: []string{"hug"}, FactionIDs: []string{"female_faction"}, Order: -1},
+		{ID: "series_only", Text: "系列专用任务", TagIDs: []string{"hug"}, FactionIDs: []string{"female_faction"}, Order: -1},
 	}}
 	player := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "p1", Name: "小败", FactionID: "female_faction"}}
 	s.players[player.ID] = player
@@ -115,7 +115,7 @@ func TestPickSystemTaskForPlayerExcludesNegativeOrder(t *testing.T) {
 
 	// 混入一条正常正数难度任务后，随机模式应只可能抽到它，负数任务始终不出现。
 	s.punishmentTasksCache = append(s.punishmentTasksCache, types.PunishmentTaskConfig{
-		ID: "normal", Name: "普通", Text: "普通任务", TagIDs: []string{"hug"}, FactionIDs: []string{"female_faction"}, Order: 50,
+		ID: "normal", Text: "普通任务", TagIDs: []string{"hug"}, FactionIDs: []string{"female_faction"}, Order: 50,
 	})
 	for i := 0; i < 50; i++ {
 		res, advanced = s.pickSystemTaskForPlayer(room, player, "胜者", 0)
@@ -132,12 +132,12 @@ func TestPickSystemTaskForPlayerExcludesNegativeOrder(t *testing.T) {
 func TestWeightedDifficultyPickHardCap(t *testing.T) {
 	// target = (count+1)*step；count=24, step=2 → target=50；硬顶 55（不含）。
 	candidates := []types.PunishmentTaskConfig{
-		{ID: "easy", Name: "easy", Text: "e", Order: 10},
-		{ID: "near", Name: "near", Text: "n", Order: 50},
-		{ID: "edge", Name: "edge", Text: "e54", Order: 54},
-		{ID: "cap", Name: "cap", Text: "c", Order: 55},
-		{ID: "over", Name: "over", Text: "o", Order: 56},
-		{ID: "hard", Name: "hard", Text: "h", Order: 90},
+		{ID: "easy", Text: "e", Order: 10},
+		{ID: "near", Text: "n", Order: 50},
+		{ID: "edge", Text: "e54", Order: 54},
+		{ID: "cap", Text: "c", Order: 55},
+		{ID: "over", Text: "o", Order: 56},
+		{ID: "hard", Text: "h", Order: 90},
 	}
 	seen := map[string]int{}
 	for i := 0; i < 500; i++ {
@@ -155,8 +155,8 @@ func TestWeightedDifficultyPickHardCap(t *testing.T) {
 	}
 	// 更简单的题不受硬顶剔除：当池里只剩"简单 + 超顶难题"时，必中简单题。
 	onlyEasyVsOver := []types.PunishmentTaskConfig{
-		{ID: "easy", Name: "easy", Text: "e", Order: 10},
-		{ID: "over", Name: "over", Text: "o", Order: 90},
+		{ID: "easy", Text: "e", Order: 10},
+		{ID: "over", Text: "o", Order: 90},
 	}
 	for i := 0; i < 50; i++ {
 		got := weightedDifficultyPick(onlyEasyVsOver, 24, 2, 5)
@@ -177,12 +177,12 @@ func TestWeightedDifficultyPickHardCap(t *testing.T) {
 func TestWeightedDifficultyPickHardCapEarlyRoom(t *testing.T) {
 	// count=0, step=2 → target=2，硬顶 7（不含）。
 	candidates := []types.PunishmentTaskConfig{
-		{ID: "t2", Name: "t2", Text: "2", Order: 2},
-		{ID: "t5", Name: "t5", Text: "5", Order: 5},
-		{ID: "t6", Name: "t6", Text: "6", Order: 6},
-		{ID: "t7", Name: "t7", Text: "7", Order: 7},
-		{ID: "t8", Name: "t8", Text: "8", Order: 8},
-		{ID: "t50", Name: "t50", Text: "50", Order: 50},
+		{ID: "t2", Text: "2", Order: 2},
+		{ID: "t5", Text: "5", Order: 5},
+		{ID: "t6", Text: "6", Order: 6},
+		{ID: "t7", Text: "7", Order: 7},
+		{ID: "t8", Text: "8", Order: 8},
+		{ID: "t50", Text: "50", Order: 50},
 	}
 	for i := 0; i < 400; i++ {
 		got := weightedDifficultyPick(candidates, 0, 2, 5)
@@ -192,9 +192,9 @@ func TestWeightedDifficultyPickHardCapEarlyRoom(t *testing.T) {
 	}
 }
 
-// TestPunishmentTaskProgressIsRoomLevel：系统任务难度进度绑定房间，与玩家、与任务类型均无关；
-// 且每完成一局只推进一个单位——即便一局内有多名玩家受罚（平局双罚/双败），也只 +1，不按受罚人数累加。
-func TestPunishmentTaskProgressIsRoomLevel(t *testing.T) {
+// TestPunishmentTaskProgressIsPerPlayer：系统任务难度进度按玩家在房间内各自独立计数——
+// 谁挨罚就推进谁自己的计数器，房间里其他人挨罚不影响自己；与具体任务类型无关。
+func TestPunishmentTaskProgressIsPerPlayer(t *testing.T) {
 	s := &Server{players: map[string]*PlayerState{}, cfg: types.AppConfig{
 		GenderFactions: []types.GenderFaction{
 			{ID: "male_faction", Label: "顺性别男", TaskGroup: "male"},
@@ -207,10 +207,10 @@ func TestPunishmentTaskProgressIsRoomLevel(t *testing.T) {
 		PunishmentRandomSettings: types.PunishmentRandomSettings{OrderStep: 2, MaxDifficultyOvershoot: 5},
 	}, punishmentTasksCache: []types.PunishmentTaskConfig{
 		// 阵营需覆盖 p1（male_faction）与 p2（female_faction）——未勾选阵营的任务永远不参与匹配。
-		{ID: "a1", Name: "a1", Text: "A1", TagIDs: []string{"type-a"}, FactionIDs: []string{"male_faction", "female_faction"}, Order: 10},
-		{ID: "a2", Name: "a2", Text: "A2", TagIDs: []string{"type-a"}, FactionIDs: []string{"male_faction", "female_faction"}, Order: 50},
-		{ID: "b1", Name: "b1", Text: "B1", TagIDs: []string{"type-b"}, FactionIDs: []string{"male_faction", "female_faction"}, Order: 20},
-		{ID: "b2", Name: "b2", Text: "B2", TagIDs: []string{"type-b"}, FactionIDs: []string{"male_faction", "female_faction"}, Order: 80},
+		{ID: "a1", Text: "A1", TagIDs: []string{"type-a"}, FactionIDs: []string{"male_faction", "female_faction"}, Order: 10},
+		{ID: "a2", Text: "A2", TagIDs: []string{"type-a"}, FactionIDs: []string{"male_faction", "female_faction"}, Order: 50},
+		{ID: "b1", Text: "B1", TagIDs: []string{"type-b"}, FactionIDs: []string{"male_faction", "female_faction"}, Order: 20},
+		{ID: "b2", Text: "B2", TagIDs: []string{"type-b"}, FactionIDs: []string{"male_faction", "female_faction"}, Order: 80},
 	}}
 	p1 := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "p1", Name: "甲", FactionID: "male_faction"}}
 	p2 := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "p2", Name: "乙", FactionID: "female_faction"}}
@@ -224,37 +224,49 @@ func TestPunishmentTaskProgressIsRoomLevel(t *testing.T) {
 			PunishmentTagsIncluded: []string{},
 		},
 	}
-	if room.PunishmentTaskProgress != 0 {
-		t.Fatalf("new room progress should be 0, got %d", room.PunishmentTaskProgress)
+	if len(room.PunishmentTaskProgress) != 0 {
+		t.Fatalf("new room progress should be empty, got %#v", room.PunishmentTaskProgress)
 	}
-	// 单人受罚的一局：进度 +1。
+	// p1 单人受罚的一局：只推进 p1 自己的计数，p2 不受影响。
 	if tasks := s.buildPunishmentTasksWithWinnerName(room, []*PlayerState{p1}, "胜"); len(tasks) != 1 || tasks[0].TaskText == "" {
 		t.Fatalf("first round tasks=%#v", tasks)
 	}
-	if room.PunishmentTaskProgress != 1 {
-		t.Fatalf("after 1 round progress=%d want 1", room.PunishmentTaskProgress)
+	if got := room.PunishmentTaskProgress["p1"]; got != 1 {
+		t.Fatalf("after 1 round p1 progress=%d want 1", got)
 	}
-	// 换另一个玩家的一局：进度继续 +1，而不是按玩家各自从 0 起算。
+	if got := room.PunishmentTaskProgress["p2"]; got != 0 {
+		t.Fatalf("p2 progress should stay 0 while only p1 is punished, got %d", got)
+	}
+	// 换 p2 受罚的一局：p2 从自己的 0 起算 +1，p1 的进度不受影响。
 	if tasks := s.buildPunishmentTasksWithWinnerName(room, []*PlayerState{p2}, "胜"); len(tasks) != 1 || tasks[0].TaskText == "" {
 		t.Fatalf("second round tasks=%#v", tasks)
 	}
-	if room.PunishmentTaskProgress != 2 {
-		t.Fatalf("after 2 rounds (different players) progress=%d want 2", room.PunishmentTaskProgress)
+	if got := room.PunishmentTaskProgress["p2"]; got != 1 {
+		t.Fatalf("after 1 round p2 progress=%d want 1 (own counter starts fresh)", got)
 	}
-	// 平局双罚/双败：一局内同时惩罚两名玩家，整局进度仍只 +1（不是 +2）。
+	if got := room.PunishmentTaskProgress["p1"]; got != 1 {
+		t.Fatalf("p1 progress should stay at 1 while p2 is punished, got %d", got)
+	}
+	// 平局双罚/双败：一局内同时惩罚两名玩家，二人各自的计数都 +1。
 	if tasks := s.buildPunishmentTasksWithWinnerName(room, []*PlayerState{p1, p2}, ""); len(tasks) != 2 || tasks[0].TaskText == "" || tasks[1].TaskText == "" {
 		t.Fatalf("double-punish round tasks=%#v", tasks)
 	}
-	if room.PunishmentTaskProgress != 3 {
-		t.Fatalf("after double-punish round progress=%d want 3 (only +1 per round)", room.PunishmentTaskProgress)
+	if got := room.PunishmentTaskProgress["p1"]; got != 2 {
+		t.Fatalf("after double-punish round p1 progress=%d want 2", got)
 	}
-	// 再抽几局单人受罚，确认只存在房间级单一计数。
+	if got := room.PunishmentTaskProgress["p2"]; got != 2 {
+		t.Fatalf("after double-punish round p2 progress=%d want 2", got)
+	}
+	// 再抽几局只罚 p1，确认 p2 的进度维持不变（各自独立，不共用房间级计数）。
 	for i := 0; i < 3; i++ {
 		if tasks := s.buildPunishmentTasksWithWinnerName(room, []*PlayerState{p1}, "胜"); len(tasks) != 1 {
 			t.Fatalf("round %d failed", i+4)
 		}
 	}
-	if room.PunishmentTaskProgress != 6 {
-		t.Fatalf("after 6 rounds progress=%d want 6", room.PunishmentTaskProgress)
+	if got := room.PunishmentTaskProgress["p1"]; got != 5 {
+		t.Fatalf("after 5 rounds total p1 progress=%d want 5", got)
+	}
+	if got := room.PunishmentTaskProgress["p2"]; got != 2 {
+		t.Fatalf("p2 progress should still be 2 (untouched by p1-only rounds), got %d", got)
 	}
 }

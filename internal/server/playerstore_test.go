@@ -3,6 +3,7 @@ package server
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/doumiao/newRPS/internal/types"
 )
@@ -35,7 +36,19 @@ func TestPlayerStoreUpsertAndLoadRoundTrip(t *testing.T) {
 		PushBondEnabled:    boolPtr(true),
 		GiveawayValue:      floatPtr(1.5),
 		RankedLastDecayDay: int64Ptr(42),
-		CreatedAt:          100, LastSeenAt: 200,
+		// 白给自救板 + 极限强关改名标记：均是此前只在内存、进程重启即丢失，
+		// 本次补落库的字段（见 v38 迁移），一并纳入往返验证。
+		GiveawayBoardText:           "我错了",
+		GiveawayBoardSubmitted:      int64Ptr(1000),
+		GiveawayBoardExpires:        int64Ptr(2000),
+		GiveawayBoardLikes:          intPtr(3),
+		GiveawayBoardDislikes:       intPtr(1),
+		ExtremeForceClosed:          boolPtr(true),
+		ExtremeForceClosedAt:        int64Ptr(3000),
+		ExtremeRenameProtectedUntil: int64Ptr(4000),
+		ExtremeRenamedBy:            "actor1",
+		ExtremeRenamedByName:        "Bob",
+		CreatedAt:                   100, LastSeenAt: 200,
 	}
 	if err := store.upsert(item); err != nil {
 		t.Fatal(err)
@@ -71,6 +84,14 @@ func TestPlayerStoreUpsertAndLoadRoundTrip(t *testing.T) {
 		t.Fatalf("push preferences round trip: mention=%v turn=%v seat=%v bond=%v",
 			got.PushMentionEnabled, got.PushTurnEnabled, got.PushSeatEnabled, got.PushBondEnabled)
 	}
+	if got.GiveawayBoardText != "我错了" || ptrInt64(got.GiveawayBoardSubmitted) != 1000 || ptrInt64(got.GiveawayBoardExpires) != 2000 ||
+		ptrInt(got.GiveawayBoardLikes) != 3 || ptrInt(got.GiveawayBoardDislikes) != 1 {
+		t.Fatalf("giveaway board round trip: %+v", got)
+	}
+	if !ptrBool(got.ExtremeForceClosed) || ptrInt64(got.ExtremeForceClosedAt) != 3000 || ptrInt64(got.ExtremeRenameProtectedUntil) != 4000 ||
+		got.ExtremeRenamedBy != "actor1" || got.ExtremeRenamedByName != "Bob" {
+		t.Fatalf("extreme force-closed round trip: %+v", got)
+	}
 	// 更新密钥列表
 	item.PlayerSecrets = []string{"sec-b", "sec-c"}
 	item.Name = "Alice2"
@@ -94,6 +115,54 @@ func TestPlayerStoreUpsertAndLoadRoundTrip(t *testing.T) {
 	}
 	if !has["sec-b"] || !has["sec-c"] || has["sec-a"] {
 		t.Fatalf("secret rotation failed: %v", got.PlayerSecrets)
+	}
+}
+
+func TestRefreshAllPlayersForConfig_whenGenderDeleted_thenResetsAndPersistsDefault(t *testing.T) {
+	dir := t.TempDir()
+	db, err := openDatabase(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := newPlayerStore(db)
+	if err := store.upsert(persistedPlayer{ID: "p1", PlayerID: "identity-1", Name: "玩家", GenderID: "deleted", FactionID: "f2"}); err != nil {
+		t.Fatal(err)
+	}
+	factions := []types.GenderFaction{{
+		ID: "f1", Label: "默认阵营", TaskGroup: "default",
+		GenderColors: types.GenderColors{TextColor: "#111111", BackgroundColor: "#222222", BorderColor: "#333333"},
+	}}
+	s := &Server{
+		players:     map[string]*PlayerState{},
+		rooms:       map[string]*RoomState{},
+		playerDB:    store,
+		dataDir:     dir,
+		playersFile: filepath.Join(dir, "players.json"),
+		cfg: types.AppConfig{
+			Genders:        []types.GenderOption{{ID: "default", Label: "默认性别", FactionID: "f1"}},
+			GenderFactions: factions,
+		},
+	}
+	p := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "p1", Name: "玩家", GenderID: "deleted", FactionID: "f2", NameWarPunished: boolPtr(true)}, Persistent: true, PlayerID: "identity-1"}
+	s.players[p.ID] = p
+	s.refreshAllPlayersForConfig()
+	if p.GenderID != "default" || p.FactionID != "f1" {
+		t.Fatalf("in-memory fallback=%s/%s", p.GenderID, p.FactionID)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		rows, err := store.loadAll()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rows) == 1 && rows[0].item.GenderID == "default" && rows[0].item.FactionID == "f1" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("deleted gender fallback was not persisted: %+v", rows)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

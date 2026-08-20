@@ -2,6 +2,7 @@ package server
 
 import (
 	"testing"
+	"time"
 
 	"github.com/doumiao/newRPS/internal/types"
 )
@@ -20,7 +21,7 @@ func TestProofRejectionPenaltyPoints(t *testing.T) {
 
 func TestApplyProofRejectionPenaltyEscalatesFromThirdReject(t *testing.T) {
 	player := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "loser"}}
-	s := &Server{players: map[string]*PlayerState{"loser": player}}
+	s := &Server{players: map[string]*PlayerState{"loser": player}, playerUpdateDelay: time.Hour}
 	room := &RoomState{
 		Settings: types.RoomSettings{EnablePunishment: true},
 		RoundHistory: []types.RoundHistoryItem{{
@@ -52,7 +53,7 @@ func TestApplyProofRejectionPenaltyEscalatesFromThirdReject(t *testing.T) {
 
 func TestApplyProofRejectionPenaltyResetsPerRound(t *testing.T) {
 	player := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "loser"}}
-	s := &Server{players: map[string]*PlayerState{"loser": player}}
+	s := &Server{players: map[string]*PlayerState{"loser": player}, playerUpdateDelay: time.Hour}
 	room := &RoomState{
 		Settings: types.RoomSettings{EnablePunishment: true},
 		RoundHistory: []types.RoundHistoryItem{{

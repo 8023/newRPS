@@ -23,7 +23,11 @@ import {
   type PushSubscriptionStatus
 } from "../lib/pushNotify";
 import type { MeState } from "../lib/types";
+import { ContributionVote } from "./ContributionVote";
+import { contributionStatusLabel } from "./contributeSeries";
+import type { VoteCard } from "../shared/types";
 import { LiarsDicePanel } from "./LiarsDicePanel";
+import { seriesFactionWarning } from "./seriesFaction";
 import { GomokuPanel, GomokuScore } from "./GomokuPanel";
 import { JunglePanel, JungleScore, jungleSideLabel } from "./JunglePanel";
 import { ChessPanel, ChessScore, chessSideLabel } from "./ChessPanel";
@@ -301,6 +305,13 @@ export function ModeChip({ player }: { player: PublicPlayer }) {
   return null;
 }
 
+// 投稿状态药丸徽标：待审批/已通过/已驳回等，颜色走 styles.css 里既有的 .status-chip +
+// .status-xxx 约定色（DESIGN.md「状态徽标」一节）。玩家端「参与共建」与后台共建审核
+// 现在统一复用它，放在投稿列表/详情第二行的开头（如「待审批 · 26/08/20」），不再各写一份。
+export function ContributionStatusChip({ status }: { status: string }) {
+  return <span className={`status-chip status-${status}`}>{contributionStatusLabel[status] || status}</span>;
+}
+
 export function shouldShowGiveawayValue(player: PublicPlayer) {
   return Boolean(player.giveawayEnabled || (player.giveawayValue || 0) > 0);
 }
@@ -486,7 +497,7 @@ export function totalOnlineMsOf(player: PublicPlayer) {
   return safePlayerStats(player).totalOnlineMs || 0;
 }
 
-export function Lobby({ config, lobby, me, punishmentTagPrefs, onError, onGoRoom, onPunishmentTagPrefsChange }: { config: AppConfig; lobby: LobbySnapshot; me: PublicPlayer; punishmentTagPrefs?: Record<string, string>; onError: (message: string) => void; onGoRoom: (room?: RoomSnapshot) => void; onPunishmentTagPrefsChange?: (prefs: Record<string, string>) => void }) {
+export function Lobby({ config, lobby, me, punishmentTagPrefs, onError, onGoRoom, onContribute, onPunishmentTagPrefsChange }: { config: AppConfig; lobby: LobbySnapshot; me: PublicPlayer; punishmentTagPrefs?: Record<string, string>; onError: (message: string) => void; onGoRoom: (room?: RoomSnapshot) => void; onContribute?: () => void; onPunishmentTagPrefsChange?: (prefs: Record<string, string>) => void }) {
   const [showCreate, setShowCreate] = useState(false);
   const [passwords, setPasswords] = useState<Record<string, string>>({});
   const [now, setNow] = useState(Date.now());
@@ -532,7 +543,10 @@ export function Lobby({ config, lobby, me, punishmentTagPrefs, onError, onGoRoom
       <div className="panel lobby-main">
         <div className="panel-title lobby-title">
           <h2><Users size={20} /> 大厅</h2>
-          <button type="button" className="primary small" onClick={() => setShowCreate((value) => !value)}>创建房间</button>
+          <div className="lobby-title-actions">
+            <button type="button" className="small" onClick={onContribute}>参与共建</button>
+            <button type="button" className="primary small" onClick={() => setShowCreate((value) => !value)}>创建房间</button>
+          </div>
         </div>
         <div className="room-list">
           {lobby.rooms.map((room) => (
@@ -692,6 +706,21 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
     chessGameMinutes: 0
   });
   const [customRoomName, setCustomRoomName] = useState(false);
+  const [seriesSearch, setSeriesSearch] = useState("");
+  // 搜索框留空＝不启用筛选，下拉里能选任何系列任务；填了关键字则只在标题命中的条目里选。
+  const filteredSeries = useMemo(() => {
+    const all = config.punishmentSeriesSummaries || [];
+    const keyword = seriesSearch.trim().toLowerCase();
+    return keyword ? all.filter((series) => (series.name || "").toLowerCase().includes(keyword)) : all;
+  }, [config.punishmentSeriesSummaries, seriesSearch]);
+
+  // 搜索结果变化后，当前选中项若不再在结果里，自动改选第一条；没有结果就清空选择
+  // （对应下面把 <select> 禁用、创建房间也一并挡住，而不是留着一个选不中的旧值）。
+  useEffect(() => {
+    if (settings.punishmentSource !== "series") return;
+    if (filteredSeries.some((series) => series.id === settings.punishmentSeriesId)) return;
+    setSettings((old) => ({ ...old, punishmentSeriesId: filteredSeries[0]?.id || "" }));
+  }, [filteredSeries, settings.punishmentSource, settings.punishmentSeriesId]);
 
   useEffect(() => {
     setSettings((old) => {
@@ -706,13 +735,7 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
           changed = true;
         }
       }
-      if (next.punishmentSource === "series") {
-        const seriesIds = (config.punishmentSeriesSummaries || []).map((s) => s.id);
-        if (next.punishmentSeriesId && !seriesIds.includes(next.punishmentSeriesId)) {
-          next.punishmentSeriesId = seriesIds[0] || "";
-          changed = true;
-        }
-      }
+      // 系列任务的有效性交给上面按 filteredSeries 联动的 effect 统一处理（它还要顾及搜索关键字）。
       if (next.tags?.some((tag) => !config.roomTags.includes(tag))) {
         next.tags = next.tags.filter((tag) => config.roomTags.includes(tag));
         next.enableTags = Boolean(next.tags.length);
@@ -1245,26 +1268,24 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
                     </>
                   ) : settings.punishmentSource === "series" ? (
                     <>
-                      <p className="hint">系列任务房间内玩家共享进度、顺序推进，系列任务完成后需开新房间重置进度。</p>
-                      <div className="punishment-choice-grid">
-                        {(config.punishmentSeriesSummaries || []).map((series) => {
-                          const active = settings.punishmentSeriesId === series.id;
-                          return (
-                            <button
-                              type="button"
-                              className={`punishment-choice-card ${active ? "active" : ""}`}
-                              key={series.id}
-                              onClick={() => patch({ punishmentSeriesId: series.id })}
-                            >
-                              <div className="punishment-choice-meta">
-                                <em>{active ? "已选" : "可选"}</em>
-                                <em>{series.stepCount ?? 0} 步</em>
-                              </div>
-                              <span>{series.name}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
+                      <p className="hint">系列进度按玩家分别推进；你在当前房间里的进度会保留，换房或房内更换系列后从头开始。</p>
+                      <input
+                        type="text"
+                        value={seriesSearch}
+                        onChange={(event) => setSeriesSearch(event.target.value)}
+                        placeholder="搜索系列任务标题（留空显示全部）"
+                        style={{ marginBottom: 8 }}
+                      />
+                      <select
+                        value={settings.punishmentSeriesId || ""}
+                        onChange={(event) => patch({ punishmentSeriesId: event.target.value })}
+                        disabled={filteredSeries.length === 0}
+                      >
+                        {filteredSeries.length === 0 && <option value="">没有匹配的系列任务</option>}
+                        {filteredSeries.map((series) => (
+                          <option key={series.id} value={series.id}>{series.name}（{series.stepCount ?? 0} 步）</option>
+                        ))}
+                      </select>
                       {(config.punishmentSeriesSummaries || []).length === 0 && <p className="hint">后台还没有配置系列任务。</p>}
                     </>
                   ) : (
@@ -1293,7 +1314,12 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
         </div>
         <div className="modal-actions">
           <button type="button" onClick={onCancel}>取消</button>
-          <button type="button" className="primary" onClick={create}>创建房间</button>
+          <button
+            type="button"
+            className="primary"
+            disabled={settings.enablePunishment && settings.punishmentSource === "series" && !settings.punishmentSeriesId}
+            onClick={create}
+          >创建房间</button>
         </div>
       </section>
     </div>
@@ -1823,13 +1849,21 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
       </div>
       {room.settings.gameId !== "liarsdice" && (
         <div className="battle-panel">
-          <SeatView seat="A" room={room} me={me} onSit={() => act("room:sit", { seat: "A" })} />
+          <SeatView seat="A" room={room} me={me} onSit={() => {
+            const warn = seriesFactionWarning(room, config, me);
+            if (warn && !window.confirm(warn)) return;
+            void act("room:sit", { seat: "A" });
+          }} />
           <div className="versus">
             <span className="versus-label">⚔️ 对战比分</span>
             <strong className="score-number">{room.score.A} : {room.score.B}</strong>
             {room.settings.gameId === "othello" ? <OthelloScore room={room} /> : room.settings.gameId === "tictactoe" ? <TicTacToeScore room={room} /> : room.settings.gameId === "gomoku" ? <GomokuScore room={room} /> : room.settings.gameId === "jungle" ? <JungleScore room={room} /> : room.settings.gameId === "chess" ? <ChessScore room={room} /> : <Settlement room={room} />}
           </div>
-          <SeatView seat="B" room={room} me={me} onSit={() => act("room:sit", { seat: "B" })} />
+          <SeatView seat="B" room={room} me={me} onSit={() => {
+            const warn = seriesFactionWarning(room, config, me);
+            if (warn && !window.confirm(warn)) return;
+            void act("room:sit", { seat: "B" });
+          }} />
         </div>
       )}
       <div className="room-content-grid">
@@ -1839,7 +1873,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
           ) : room.settings.gameId === "tictactoe" ? (
             <TicTacToePanel room={room} me={me} onMove={playTicTacToe} onReady={readyTicTacToe} onRestart={restartTicTacToe} onGiveawayChoice={chooseTicTacToeGiveaway} />
           ) : room.settings.gameId === "liarsdice" ? (
-            <LiarsDicePanel room={room} me={me} onError={onError} />
+            <LiarsDicePanel room={room} me={me} config={config} onError={onError} />
           ) : room.settings.gameId === "gomoku" ? (
             <GomokuPanel room={room} me={me} onError={onError} />
           ) : room.settings.gameId === "jungle" ? (
@@ -1906,6 +1940,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
                           <b>{isMine ? "你的任务" : "对方任务"}</b>
                           <p>{taskTextOnly(taskText, task.factionLabel)}</p>
                           {(taskAssignerPlayer || task.assignedByName) && <small>发布者：{taskAssignerPlayer ? displayPlayerName(taskAssignerPlayer) : task.assignedByName}</small>}
+                          {task.eventId && <div className="task-card-vote-row"><ContributionVoteLazy eventId={task.eventId} onError={onError} /></div>}
                         </div>
                       )}
                       {!taskAssigned && room.settings.punishmentSource === "player" && (
@@ -2057,7 +2092,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
             <div className="chat-scroll-shell">
               <div className="round-history-list" ref={historyListRef} onScroll={handleHistoryScroll}>
                 {hasMoreHistory && <div className="chat-more-hint">{historyLoading ? "加载中…" : "↑ 上滑加载更早记录"}</div>}
-                {orderedRoundHistory.map((item) => <RoundHistoryCard key={item.id} item={item} onOpenImage={setPreviewImage} />)}
+                {orderedRoundHistory.map((item) => <RoundHistoryCard key={item.id} item={item} onOpenImage={setPreviewImage} onError={onError} />)}
                 {visibleRoundHistory.length === 0 && <p className="empty">还没有对局记录</p>}
               </div>
               {!historyStick && visibleRoundHistory.length > 0 && (
@@ -2510,7 +2545,7 @@ export function occupantDisplay(occupant: SeatOccupant) {
   return displayPlayerName(occupant);
 }
 
-export function RoundHistoryCard({ item, onOpenImage }: { item: RoomSnapshot["roundHistory"][number]; onOpenImage: (imageUrl: string) => void }) {
+export function RoundHistoryCard({ item, onOpenImage, onError }: { item: RoomSnapshot["roundHistory"][number]; onOpenImage: (imageUrl: string) => void; onError?: (message: string) => void }) {
   const safe = normalizeRoundHistoryItem(item);
   const proofByPlayer = new Map(safe.proofs.map((proof) => [proof.playerId, proof]));
   const taskPlayerIds = new Set(safe.punishmentTasks.map((task) => task.playerId));
@@ -2564,7 +2599,7 @@ export function RoundHistoryCard({ item, onOpenImage }: { item: RoomSnapshot["ro
               >
                 <small>{task.playerName} 的任务{task.assignedByName ? ` · ${task.assignedByName} 发布` : ""}</small>
                 <p>{task.taskText ? taskTextOnly(task.taskText, task.factionLabel) : "等待玩家发布任务"}</p>
-                {proof ? (
+                 {proof ? (
                   <div className="history-proof inline">
                     <span>完成证明 · {historyProofStatusLabel(proof)}</span>
                     {proof.taskText && proof.taskText !== task.taskText && <small>对应任务：{proof.taskText}</small>}
@@ -5020,6 +5055,21 @@ export const titleTagStyleOrder = [
   { key: "master", label: "主人赋予" },
   { key: "admin", label: "管理员赋予" }
 ];
+
+function ContributionVoteLazy({ eventId, onError }: { eventId: string; onError?: (message: string) => void }) {
+  const [card, setCard] = useState<VoteCard | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    ask<VoteCard>("contribution:votePreview", { eventId }).then((next) => {
+      if (!cancelled) setCard(next);
+    }).catch(() => {
+      if (!cancelled) setCard(null);
+    });
+    return () => { cancelled = true; };
+  }, [eventId]);
+  if (!card || !card.targetId) return null;
+  return <ContributionVote card={card} onError={onError ?? (() => undefined)} />;
+}
 
 export function Toggle({ label, value, onChange, disabled = false }: { label: string; value: boolean; onChange: (value: boolean) => void; disabled?: boolean }) {
   return <label className="toggle"><input type="checkbox" checked={value} disabled={disabled} onChange={(event) => onChange(event.target.checked)} /> {label}</label>;

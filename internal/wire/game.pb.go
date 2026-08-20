@@ -3540,6 +3540,7 @@ type PunishmentTask struct {
 	AssignedByName    string                 `protobuf:"bytes,10,opt,name=assigned_by_name,json=assignedByName,proto3" json:"assigned_by_name,omitempty"`
 	// type_name：该任务抽取自哪个任务类型（如"真心话"），玩家发布任务模式下为空。
 	TypeName      string `protobuf:"bytes,11,opt,name=type_name,json=typeName,proto3" json:"type_name,omitempty"`
+	EventId       string `protobuf:"bytes,12,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3640,6 +3641,13 @@ func (x *PunishmentTask) GetAssignedByName() string {
 func (x *PunishmentTask) GetTypeName() string {
 	if x != nil {
 		return x.TypeName
+	}
+	return ""
+}
+
+func (x *PunishmentTask) GetEventId() string {
+	if x != nil {
+		return x.EventId
 	}
 	return ""
 }
@@ -7056,10 +7064,12 @@ type PunishmentRandomSettings struct {
 	// 历史字段，倒伽马下不参与计算，保留以免旧配置/控件报错。
 	OrderSpread            float64 `protobuf:"fixed64,2,opt,name=order_spread,json=orderSpread,proto3" json:"order_spread,omitempty"`
 	MaxDifficultyOvershoot float64 `protobuf:"fixed64,3,opt,name=max_difficulty_overshoot,json=maxDifficultyOvershoot,proto3" json:"max_difficulty_overshoot,omitempty"`
-	// 系列任务某一步没有覆盖受罚者阵营时下发的兜底文案（空则用内置默认）。
-	SeriesFactionFallbackText string `protobuf:"bytes,4,opt,name=series_faction_fallback_text,json=seriesFactionFallbackText,proto3" json:"series_faction_fallback_text,omitempty"`
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+	// 系列投稿最低步数；<=0 时前后端都按 10 兜底。
+	MinSeriesSteps int32 `protobuf:"varint,5,opt,name=min_series_steps,json=minSeriesSteps,proto3" json:"min_series_steps,omitempty"`
+	// 系列投稿最高步数；<=0 时前后端都按 20 兜底。
+	MaxSeriesSteps int32 `protobuf:"varint,6,opt,name=max_series_steps,json=maxSeriesSteps,proto3" json:"max_series_steps,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *PunishmentRandomSettings) Reset() {
@@ -7113,11 +7123,18 @@ func (x *PunishmentRandomSettings) GetMaxDifficultyOvershoot() float64 {
 	return 0
 }
 
-func (x *PunishmentRandomSettings) GetSeriesFactionFallbackText() string {
+func (x *PunishmentRandomSettings) GetMinSeriesSteps() int32 {
 	if x != nil {
-		return x.SeriesFactionFallbackText
+		return x.MinSeriesSteps
 	}
-	return ""
+	return 0
+}
+
+func (x *PunishmentRandomSettings) GetMaxSeriesSteps() int32 {
+	if x != nil {
+		return x.MaxSeriesSteps
+	}
+	return 0
 }
 
 type PunishmentSubtaskVariant struct {
@@ -7318,8 +7335,11 @@ type PunishmentSeriesSummary struct {
 	RoomNamePool         *RoomNamePool          `protobuf:"bytes,3,opt,name=room_name_pool,json=roomNamePool,proto3" json:"room_name_pool,omitempty"`
 	RoomBackgroundImages []string               `protobuf:"bytes,4,rep,name=room_background_images,json=roomBackgroundImages,proto3" json:"room_background_images,omitempty"`
 	StepCount            int32                  `protobuf:"varint,5,opt,name=step_count,json=stepCount,proto3" json:"step_count,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	PublishedVersion     int32                  `protobuf:"varint,6,opt,name=published_version,json=publishedVersion,proto3" json:"published_version,omitempty"`
+	// 系列声明的目标阵营；供进战斗席本地校验，不在建房面板展示。
+	TargetFactionIds []string `protobuf:"bytes,10,rep,name=target_faction_ids,json=targetFactionIds,proto3" json:"target_faction_ids,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *PunishmentSeriesSummary) Reset() {
@@ -7385,6 +7405,20 @@ func (x *PunishmentSeriesSummary) GetStepCount() int32 {
 		return x.StepCount
 	}
 	return 0
+}
+
+func (x *PunishmentSeriesSummary) GetPublishedVersion() int32 {
+	if x != nil {
+		return x.PublishedVersion
+	}
+	return 0
+}
+
+func (x *PunishmentSeriesSummary) GetTargetFactionIds() []string {
+	if x != nil {
+		return x.TargetFactionIds
+	}
+	return nil
 }
 
 type GameConfig struct {
@@ -7750,9 +7784,10 @@ type SiteConfig struct {
 	Name        string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Description string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
 	// admin password never sent to clients; keep empty on wire
-	AdminPassword string `protobuf:"bytes,3,opt,name=admin_password,json=adminPassword,proto3" json:"admin_password,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	AdminPassword             string `protobuf:"bytes,3,opt,name=admin_password,json=adminPassword,proto3" json:"admin_password,omitempty"`
+	AnonymousContributorLabel string `protobuf:"bytes,4,opt,name=anonymous_contributor_label,json=anonymousContributorLabel,proto3" json:"anonymous_contributor_label,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *SiteConfig) Reset() {
@@ -7802,6 +7837,13 @@ func (x *SiteConfig) GetDescription() string {
 func (x *SiteConfig) GetAdminPassword() string {
 	if x != nil {
 		return x.AdminPassword
+	}
+	return ""
+}
+
+func (x *SiteConfig) GetAnonymousContributorLabel() string {
+	if x != nil {
+		return x.AnonymousContributorLabel
 	}
 	return ""
 }
@@ -9842,7 +9884,7 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\vpunishments\x18\x04 \x01(\x05R\vpunishments\":\n" +
 	"\fOthelloScore\x12\x14\n" +
 	"\x05black\x18\x01 \x01(\x05R\x05black\x12\x14\n" +
-	"\x05white\x18\x02 \x01(\x05R\x05white\"\xf1\x02\n" +
+	"\x05white\x18\x02 \x01(\x05R\x05white\"\x8c\x03\n" +
 	"\x0ePunishmentTask\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x12\x1f\n" +
 	"\vplayer_name\x18\x02 \x01(\tR\n" +
@@ -9857,7 +9899,8 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"assignedBy\x12(\n" +
 	"\x10assigned_by_name\x18\n" +
 	" \x01(\tR\x0eassignedByName\x12\x1b\n" +
-	"\ttype_name\x18\v \x01(\tR\btypeName\"\xe2\x02\n" +
+	"\ttype_name\x18\v \x01(\tR\btypeName\x12\x19\n" +
+	"\bevent_id\x18\f \x01(\tR\aeventId\"\xe2\x02\n" +
 	"\fHistoryProof\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x12\x1f\n" +
 	"\vplayer_name\x18\x02 \x01(\tR\n" +
@@ -10219,13 +10262,14 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x128\n" +
 	"\x0eroom_name_pool\x18\x03 \x01(\v2\x12.game.RoomNamePoolR\froomNamePool\x124\n" +
-	"\x16room_background_images\x18\x04 \x03(\tR\x14roomBackgroundImages\"\xd7\x01\n" +
+	"\x16room_background_images\x18\x04 \x03(\tR\x14roomBackgroundImages\"\x8e\x02\n" +
 	"\x18PunishmentRandomSettings\x12\x1d\n" +
 	"\n" +
 	"order_step\x18\x01 \x01(\x01R\torderStep\x12!\n" +
 	"\forder_spread\x18\x02 \x01(\x01R\vorderSpread\x128\n" +
-	"\x18max_difficulty_overshoot\x18\x03 \x01(\x01R\x16maxDifficultyOvershoot\x12?\n" +
-	"\x1cseries_faction_fallback_text\x18\x04 \x01(\tR\x19seriesFactionFallbackText\"\xab\x01\n" +
+	"\x18max_difficulty_overshoot\x18\x03 \x01(\x01R\x16maxDifficultyOvershoot\x12(\n" +
+	"\x10min_series_steps\x18\x05 \x01(\x05R\x0eminSeriesSteps\x12(\n" +
+	"\x10max_series_steps\x18\x06 \x01(\x05R\x0emaxSeriesStepsJ\x04\b\x04\x10\x05R\x1cseries_faction_fallback_text\"\xab\x01\n" +
 	"\x18PunishmentSubtaskVariant\x12\x1f\n" +
 	"\vfaction_ids\x18\x01 \x03(\tR\n" +
 	"factionIds\x12\x12\n" +
@@ -10239,14 +10283,17 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x128\n" +
 	"\x0eroom_name_pool\x18\x03 \x01(\v2\x12.game.RoomNamePoolR\froomNamePool\x124\n" +
 	"\x16room_background_images\x18\x04 \x03(\tR\x14roomBackgroundImages\x123\n" +
-	"\bsubtasks\x18\x05 \x03(\v2\x17.game.PunishmentSubtaskR\bsubtasks\"\xcc\x01\n" +
+	"\bsubtasks\x18\x05 \x03(\v2\x17.game.PunishmentSubtaskR\bsubtasks\"\xa7\x02\n" +
 	"\x17PunishmentSeriesSummary\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x128\n" +
 	"\x0eroom_name_pool\x18\x03 \x01(\v2\x12.game.RoomNamePoolR\froomNamePool\x124\n" +
 	"\x16room_background_images\x18\x04 \x03(\tR\x14roomBackgroundImages\x12\x1d\n" +
 	"\n" +
-	"step_count\x18\x05 \x01(\x05R\tstepCount\"j\n" +
+	"step_count\x18\x05 \x01(\x05R\tstepCount\x12+\n" +
+	"\x11published_version\x18\x06 \x01(\x05R\x10publishedVersion\x12,\n" +
+	"\x12target_faction_ids\x18\n" +
+	" \x03(\tR\x10targetFactionIds\"j\n" +
 	"\n" +
 	"GameConfig\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
@@ -10276,12 +10323,13 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x13force_close_warning\x18\n" +
 	" \x01(\tR\x11forceCloseWarning\x125\n" +
 	"\x17force_rename_min_points\x18\v \x01(\x05R\x14forceRenameMinPoints\x12;\n" +
-	"\x1aforce_rename_protect_hours\x18\f \x01(\x05R\x17forceRenameProtectHours\"i\n" +
+	"\x1aforce_rename_protect_hours\x18\f \x01(\x05R\x17forceRenameProtectHours\"\xa9\x01\n" +
 	"\n" +
 	"SiteConfig\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12%\n" +
-	"\x0eadmin_password\x18\x03 \x01(\tR\radminPassword\"\xa9\x04\n" +
+	"\x0eadmin_password\x18\x03 \x01(\tR\radminPassword\x12>\n" +
+	"\x1banonymous_contributor_label\x18\x04 \x01(\tR\x19anonymousContributorLabel\"\xa9\x04\n" +
 	"\x13AccessControlConfig\x12)\n" +
 	"\x11max_online_per_ip\x18\x01 \x01(\x05R\x0emaxOnlinePerIp\x122\n" +
 	"\x16max_creates_per_10_min\x18\x02 \x01(\x05R\x12maxCreatesPer10Min\x124\n" +

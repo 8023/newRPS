@@ -280,7 +280,11 @@ func (s *Server) broadcastPlayerUpdate(player *PlayerState) {
 	if s.playerUpdateTimer != nil {
 		return
 	}
-	s.playerUpdateTimer = timeAfterFunc(100*time.Millisecond, func() {
+	delay := s.playerUpdateDelay
+	if delay <= 0 {
+		delay = 100 * time.Millisecond
+	}
+	s.playerUpdateTimer = timeAfterFunc(delay, func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		s.flushPlayerUpdates()

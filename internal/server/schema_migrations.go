@@ -19,7 +19,7 @@ import (
 //
 // 是 var 不是 const，只是为了让测试能临时替换掉去验证迁移机制本身；正常代码路径里
 // 把它当常量对待，不要在业务逻辑里修改它。
-var currentSchemaVersion = 32
+var currentSchemaVersion = 40
 
 // schemaVersionSchema：只有一行的版本表，openDatabase 每次启动都会先确保它存在。
 const schemaVersionSchema = `
@@ -398,10 +398,107 @@ CREATE TABLE IF NOT EXISTS punishment_series (
 		}
 		return addColumnIfMissing(db, "players", "chess_draws", "INTEGER NOT NULL DEFAULT 0")
 	}},
-	// v32：系列任务进度改为房间级共享（RoomState 内存字段），按玩家落盘的进度表废弃删除。
+	// v32：删除按玩家落盘的系列进度表。此后进度只存在房间内存里
+	// （见 RoomState.PunishmentSeriesPlayerProgress：房间内按玩家独立计数）。
 	{version: 32, migrate: func(db sqlExecer) error {
 		_, err := db.Exec(`DROP TABLE IF EXISTS player_punishment_series_progress`)
 		return err
+	}},
+	// v33：共建——性别/阵营迁 SQLite；投稿/版本/赞踩；惩罚事件补评价字段。
+	{version: 33, migrate: migrateContributionV33},
+	// v34：系列任务声明目标阵营，供进战斗席前端校验与发布覆盖校验。
+	{version: 34, migrate: func(db sqlExecer) error {
+		return addColumnIfMissing(db, "punishment_series", "target_faction_ids", "TEXT NOT NULL DEFAULT '[]'")
+	}},
+	// v35：投票粒度从"整份投稿/整个系列"下沉到"一个具体任务"（同一次投稿/同一个系列步骤
+	// 生成的所有阵营变体行共享一个 task_group_id，系列不同步骤各不相同）——新增
+	// task_group_id 列；已有行没有这个概念，先按 submission_id 回填当兜底（等价于旧行为，
+	// 后续重新发布会按新规则各步骤独立分组）。
+	{version: 35, migrate: func(db sqlExecer) error {
+		if err := addColumnIfMissing(db, "punishment_tasks", "task_group_id", "TEXT NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
+		// 走过投稿流程的行用 submission_id 兜底（旧行为：一份投稿一个组）；共建上线前的
+		// 存量行 submission_id 为空，不能整表折成同一个空组，改用各自的任务 id。
+		_, err := db.Exec(`
+			UPDATE punishment_tasks SET task_group_id = CASE
+				WHEN submission_id <> '' THEN submission_id
+				ELSE id
+			END WHERE task_group_id = ''`)
+		return err
+	}},
+	// v36：随机任务池 / 系列任务新增 created_at，供数据分析「随机任务」「系列任务」增长图
+	// 与后台共建审核总览统计池子大小（见 punishmentstore.go / analytics_agg.go）。存量行
+	// 没有这个概念，一律回填 0（视为"早于统计起点"，不计入任何一天的「新增」，但仍会被
+	// 计入所有日期的「总量」——与 pet_bonds.created_at 的既有口径一致）。
+	{version: 36, migrate: func(db sqlExecer) error {
+		if err := addColumnIfMissing(db, "punishment_tasks", "created_at", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+			return err
+		}
+		return addColumnIfMissing(db, "punishment_series", "created_at", "INTEGER NOT NULL DEFAULT 0")
+	}},
+	// v37：删除示例系列任务"撸管废物改造手册"（id=series1）及其专属的 5 个子任务
+	// （id=truth_task1_default/task1/task2/task5/task6，其 task_group_id 均等于自身
+	// id，即从未经过投稿流程、系列内独占，删除前已核实没有其它系列的步骤引用这 5 个 id，
+	// 也没有历史 punishment_events 行以 formal_series_id/formal_task_id 指向它们）。
+	// 这批 id 是早期从 config/json/punishments.json 一次性迁移进 SQLite 时使用的固定
+	// 字面量种子 id（见 internal/config/config.go 的迁移逻辑），共建投稿流程生成的新
+	// 任务/系列 id 一律带 "ct_"/"cs_" 前缀，不会与之冲突，按字面量精确匹配删除是安全的。
+	// DELETE 对不存在的行是空操作，天然幂等。
+	{version: 37, migrate: func(db sqlExecer) error {
+		if _, err := db.Exec(`DELETE FROM punishment_series WHERE id = 'series1'`); err != nil {
+			return err
+		}
+		_, err := db.Exec(`DELETE FROM punishment_tasks WHERE id IN ('truth_task1_default', 'task1', 'task2', 'task5', 'task6')`)
+		return err
+	}},
+	// v38：补两块此前只在内存里、进程重启即丢失的玩家状态：
+	//  1. 白给自救板当前挂着的内容（文本+过期时间+赞踩计数），此前 ingestPersistedPlayer
+	//     加载时硬编码 likes/dislikes 为 0、文本压根不读，重启后大厅"白给自救板"栏目清空；
+	//  2. 极限模式"强行关闭"在"通用改名处"留下的可改名标记与改名保护期/记录——
+	//     这批字段（extreme_force_closed 等）此前从未落库，与已经完整持久化的名争
+	//     （name_war_* 全套字段）不是一回事，容易被误以为"通用改名处的内容都会丢"。
+	{version: 38, migrate: func(db sqlExecer) error {
+		for _, col := range []struct{ name, decl string }{
+			{"extreme_force_closed", "INTEGER"},
+			{"extreme_force_closed_at", "INTEGER"},
+			{"extreme_rename_protected_until", "INTEGER"},
+			{"extreme_renamed_by", "TEXT NOT NULL DEFAULT ''"},
+			{"extreme_renamed_by_name", "TEXT NOT NULL DEFAULT ''"},
+			{"giveaway_board_text", "TEXT NOT NULL DEFAULT ''"},
+			{"giveaway_board_submitted_at", "INTEGER"},
+			{"giveaway_board_expires_at", "INTEGER"},
+			{"giveaway_board_likes", "INTEGER"},
+			{"giveaway_board_dislikes", "INTEGER"},
+		} {
+			if err := addColumnIfMissing(db, "players", col.name, col.decl); err != nil {
+				return err
+			}
+		}
+		return nil
+	}},
+	// v39：随机任务/系列每一步都去掉"名称"输入——玩家和管理员都不会看到它：游戏内展示的
+	// 分类文字来自惩罚标签名，系列本身的展示名是系列自己的 name，与每条任务/每一步各自
+	// 的名称无关（见 punishment.go 的 punishmentRoundLabel/tagNamesForTask）。发布后每份
+	// 变体行的 id 本就是全局唯一标识，不需要再额外维护一个人肉起的标题。
+	{version: 39, migrate: func(db sqlExecer) error {
+		return dropColumnIfExists(db, "punishment_tasks", "name")
+	}},
+	// v40：共建详情与数据分析会按 submission/version/task_group、随机池难度/创建时间、
+	// 系列创建时间查询。没有这些索引时，投稿池增长后每次详情/聚合都会全表扫描；尤其详情
+	// RPC 运行在全局游戏锁内，会直接放大成对实时对局的停顿。
+	{version: 40, migrate: func(db sqlExecer) error {
+		for _, stmt := range []string{
+			`CREATE INDEX IF NOT EXISTS idx_punishment_tasks_submission_vote_group ON punishment_tasks(submission_id, vote_version, task_group_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_punishment_tasks_pool_created ON punishment_tasks(difficulty_order, created_at, task_group_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_punishment_series_created ON punishment_series(created_at)`,
+			`CREATE INDEX IF NOT EXISTS idx_punishment_events_formal_task ON punishment_events(formal_task_id, formal_task_version)`,
+		} {
+			if _, err := db.Exec(stmt); err != nil {
+				return err
+			}
+		}
+		return nil
 	}},
 }
 

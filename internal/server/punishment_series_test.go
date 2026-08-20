@@ -6,12 +6,15 @@ import (
 	"github.com/doumiao/newRPS/internal/types"
 )
 
+// TestPickSeriesTaskProgressAndClamp 覆盖「每个玩家在本房间内各自独立计数」——房间内其他
+// 玩家挨罚不影响自己的步数，换房间（哪怕系列相同）从 0 重来，房内切系列对该玩家也重来。
 func TestPickSeriesTaskProgressAndClamp(t *testing.T) {
 	s := &Server{
 		players: map[string]*PlayerState{},
 		punishmentTasksCache: []types.PunishmentTaskConfig{
 			{ID: "t_step1", Text: "第一步 {loser}", FactionIDs: []string{"female_faction"}, Order: 50},
 			{ID: "t_step2", Text: "第二步 {loser}", FactionIDs: []string{"female_faction"}, Order: 50},
+			{ID: "t_step3", Text: "第三步 {loser}", FactionIDs: []string{"female_faction"}, Order: 50},
 		},
 		punishmentSeriesCache: []types.PunishmentSeriesTaskConfig{{
 			ID:   "s1",
@@ -19,6 +22,7 @@ func TestPickSeriesTaskProgressAndClamp(t *testing.T) {
 			Steps: []types.PunishmentSeriesStep{
 				{TaskIDs: []string{"t_step1"}},
 				{TaskIDs: []string{"t_step2"}},
+				{TaskIDs: []string{"t_step3"}},
 			},
 		}},
 	}
@@ -28,46 +32,66 @@ func TestPickSeriesTaskProgressAndClamp(t *testing.T) {
 	s.players[pb.ID] = pb
 	room := &RoomState{Settings: types.RoomSettings{PunishmentSource: "series", PunishmentSeriesID: "s1"}}
 
-	// 房间内全员共享：小甲做完第 1 步，小乙接着从第 2 步开始。
+	// a 自己输两次，走自己的第 1、2 步。
 	r1 := s.pickSeriesTaskForPlayer(room, pa, "s1", "胜者")
 	if r1 == nil || r1.TaskText != "第一步 小甲" {
 		t.Fatalf("pa step1: %#v", r1)
 	}
-	r2 := s.pickSeriesTaskForPlayer(room, pb, "s1", "胜者")
-	if r2 == nil || r2.TaskText != "第二步 小乙" {
-		t.Fatalf("pb should continue at step2 after pa did step1: %#v", r2)
-	}
-	if room.PunishmentSeriesProgress != 2 || room.PunishmentSeriesProgressID != "s1" {
-		t.Fatalf("room progress = %d (%s) want 2 (s1)", room.PunishmentSeriesProgress, room.PunishmentSeriesProgressID)
+	r2 := s.pickSeriesTaskForPlayer(room, pa, "s1", "胜者")
+	if r2 == nil || r2.TaskText != "第二步 小甲" {
+		t.Fatalf("pa step2: %#v", r2)
 	}
 
-	// 越界 clamp 到最后一条反复执行
+	// 期间 b 输掉一次：b 是自己第一次抽这个系列，从第 1 步开始，不受 a 进度影响。
 	r3 := s.pickSeriesTaskForPlayer(room, pb, "s1", "胜者")
-	if r3 == nil || r3.TaskText != "第二步 小乙" {
-		t.Fatalf("clamp last: %#v", r3)
+	if r3 == nil || r3.TaskText != "第一步 小乙" {
+		t.Fatalf("pb should start fresh at her own step1 regardless of pa: %#v", r3)
 	}
 
-	// 同一玩家换个房间：进度从头开始，与老房间互不影响。
-	room2 := &RoomState{Settings: types.RoomSettings{PunishmentSource: "series", PunishmentSeriesID: "s1"}}
-	r4 := s.pickSeriesTaskForPlayer(room2, pa, "s1", "胜者")
-	if r4 == nil || r4.TaskText != "第一步 小甲" {
-		t.Fatalf("new room should restart from step1: %#v", r4)
+	// a 再输一次：是 a 自己第 3 次轮到，走第 3 步——跟房间里发生过多少次别人的事件无关。
+	r4 := s.pickSeriesTaskForPlayer(room, pa, "s1", "胜者")
+	if r4 == nil || r4.TaskText != "第三步 小甲" {
+		t.Fatalf("pa's own 3rd turn should be step3: %#v", r4)
 	}
 
-	// 老房间进度不被新房间影响
+	// 越界 clamp 到最后一条反复执行（a 自己的进度）。
 	r5 := s.pickSeriesTaskForPlayer(room, pa, "s1", "胜者")
-	if r5 == nil || r5.TaskText != "第二步 小甲" {
-		t.Fatalf("old room keeps its progress: %#v", r5)
+	if r5 == nil || r5.TaskText != "第三步 小甲" {
+		t.Fatalf("clamp last: %#v", r5)
 	}
 
-	// 房间换成另一个系列：计数器重新从 0 开始。
+	// 同一玩家换个房间（哪怕用的是同一个系列）：进度从头开始，与老房间互不影响。
+	room2 := &RoomState{Settings: types.RoomSettings{PunishmentSource: "series", PunishmentSeriesID: "s1"}}
+	r6 := s.pickSeriesTaskForPlayer(room2, pa, "s1", "胜者")
+	if r6 == nil || r6.TaskText != "第一步 小甲" {
+		t.Fatalf("new room should restart from step1: %#v", r6)
+	}
+
+	// 老房间进度不受新房间影响：a 在老房间仍卡在（clamp 到）第三步——等价于「退房再进同一
+	// 房间/去观众席再回来」进度保持，因为进度就挂在同一个 *RoomState 上，与座位状态无关。
+	r7 := s.pickSeriesTaskForPlayer(room, pa, "s1", "胜者")
+	if r7 == nil || r7.TaskText != "第三步 小甲" {
+		t.Fatalf("old room keeps its own progress: %#v", r7)
+	}
+
+	// b 也不受 a 影响，继续她自己的第 2 步。
+	r8 := s.pickSeriesTaskForPlayer(room, pb, "s1", "胜者")
+	if r8 == nil || r8.TaskText != "第二步 小乙" {
+		t.Fatalf("pb continues at her own step2: %#v", r8)
+	}
+
+	// 房间换成另一个系列：a 对新系列的计数器重新从 0 开始。
 	s.punishmentSeriesCache = append(s.punishmentSeriesCache, types.PunishmentSeriesTaskConfig{
 		ID: "s2", Name: "另一条", Steps: []types.PunishmentSeriesStep{{TaskIDs: []string{"t_step2"}}},
 	})
 	room.Settings.PunishmentSeriesID = "s2"
-	r6 := s.pickSeriesTaskForPlayer(room, pa, "s2", "胜者")
-	if r6 == nil || r6.TaskText != "第二步 小甲" || room.PunishmentSeriesProgressID != "s2" || room.PunishmentSeriesProgress != 1 {
-		t.Fatalf("switch series should reset counter: %#v progress=%d(%s)", r6, room.PunishmentSeriesProgress, room.PunishmentSeriesProgressID)
+	r9 := s.pickSeriesTaskForPlayer(room, pa, "s2", "胜者")
+	if r9 == nil || r9.TaskText != "第二步 小甲" {
+		t.Fatalf("switch series should reset pa's counter: %#v", r9)
+	}
+	prog := room.PunishmentSeriesPlayerProgress[pa.ID]
+	if prog == nil || prog.SeriesID != "s2" || prog.Step != 1 {
+		t.Fatalf("pa's progress on s2 should be step=1, got %#v", prog)
 	}
 }
 
@@ -131,7 +155,7 @@ func TestPickSeriesStepTaskRandomAmongMatches(t *testing.T) {
 
 // TestSeriesUsableRequiresSteps：系列只要有步骤就可用——阵营覆盖不全不再拦截，
 // findSeriesByID / buildPunishmentSeriesSummaries 都会放行，运行时未覆盖阵营
-// 拿兜底文案（见 TestSeriesFactionFallback）。
+// 从随机池抽替补（见 TestSeriesFactionReplacement）。
 func TestSeriesUsableRequiresSteps(t *testing.T) {
 	s := &Server{
 		cfg: types.AppConfig{
@@ -172,25 +196,24 @@ func TestSeriesUsableRequiresSteps(t *testing.T) {
 	}
 }
 
-// TestSeriesFactionFallback：受罚者阵营没有被当前步候选任务覆盖时，系列照常生效——
-// 下发可配置的兜底文案（未配置用内置默认），且房间共享进度照常推进到下一步。
-func TestSeriesFactionFallback(t *testing.T) {
+// TestSeriesFactionReplacement：受罚者阵营没有被当前步候选任务覆盖时，从随机池抽替补，
+// 进度照常推进；票记到替补任务自己的投稿，不记到系列头上。
+func TestSeriesFactionReplacement(t *testing.T) {
 	s := &Server{
 		players: map[string]*PlayerState{},
 		cfg: types.AppConfig{
-			PunishmentRandomSettings: types.PunishmentRandomSettings{
-				OrderStep: 2, MaxDifficultyOvershoot: 5, SeriesFactionFallbackText: "这一步没准备 {loser} 的任务",
-			},
+			PunishmentRandomSettings: types.PunishmentRandomSettings{OrderStep: 2, MaxDifficultyOvershoot: 5},
+			PunishmentTags:           []types.PunishmentTagConfig{{ID: "truth", Name: "真心话"}},
 		},
 		punishmentTasksCache: []types.PunishmentTaskConfig{
-			{ID: "male_only", Text: "男向第一步", FactionIDs: []string{"male_faction"}, Order: 50},
+			{ID: "male_only", Text: "男向第一步", FactionIDs: []string{"male_faction"}, Order: 50, TagIDs: []string{"truth"}},
 			{ID: "female_only", Text: "女向第二步", FactionIDs: []string{"female_faction"}, Order: 50},
+			{ID: "random_f", Text: "随机替补 {loser}", FactionIDs: []string{"female_faction"}, Order: 40, SubmissionID: "sub_rand", TaskGroupID: "sub_rand", ContributorPlayerID: "c1"},
 		},
 		punishmentSeriesCache: []types.PunishmentSeriesTaskConfig{{
-			ID:   "s1",
-			Name: "试炼",
+			ID: "s1", Name: "试炼", ContributorPlayerID: "series_author", VoteVersion: 1,
 			Steps: []types.PunishmentSeriesStep{
-				{TaskIDs: []string{"male_only"}}, // 女玩家无命中
+				{TaskIDs: []string{"male_only"}},
 				{TaskIDs: []string{"female_only"}},
 			},
 		}},
@@ -200,26 +223,90 @@ func TestSeriesFactionFallback(t *testing.T) {
 	room := &RoomState{Settings: types.RoomSettings{PunishmentSource: "series", PunishmentSeriesID: "s1"}}
 
 	r1 := s.pickSeriesTaskForPlayer(room, player, "s1", "胜者")
-	if r1 == nil || r1.TaskText != "这一步没准备 小败 的任务" {
-		t.Fatalf("step1 fallback with configured text: %#v", r1)
+	if r1 == nil || r1.TaskText != "随机替补 小败" {
+		t.Fatalf("step1 should pick random replacement: %#v", r1)
 	}
-	if r1.TypeName != "试炼" {
-		t.Fatalf("fallback should carry series name as TypeName: %#v", r1)
+	if r1.EventMeta.FormalSeriesID != "" {
+		t.Fatalf("replacement must not vote on the series: %#v", r1.EventMeta)
 	}
-	if room.PunishmentSeriesProgress != 1 {
-		t.Fatalf("room progress after fallback step = %d want 1", room.PunishmentSeriesProgress)
+	if r1.EventMeta.FormalTaskID != "sub_rand" {
+		t.Fatalf("replacement vote should use its own task group id: %#v", r1.EventMeta)
+	}
+	prog := room.PunishmentSeriesPlayerProgress[player.ID]
+	if prog == nil || prog.Step != 1 {
+		t.Fatalf("player progress after replacement = %#v want step=1", prog)
 	}
 
 	r2 := s.pickSeriesTaskForPlayer(room, player, "s1", "胜者")
 	if r2 == nil || r2.TaskText != "女向第二步" {
-		t.Fatalf("step2 should resume normal task: %#v", r2)
+		t.Fatalf("step2 should resume series task: %#v", r2)
 	}
+}
 
-	// 未配置兜底文案时回落到内置默认。
-	s.cfg.PunishmentRandomSettings.SeriesFactionFallbackText = ""
-	room2 := &RoomState{Settings: types.RoomSettings{PunishmentSource: "series", PunishmentSeriesID: "s1"}}
-	r3 := s.pickSeriesTaskForPlayer(room2, player, "s1", "胜者")
-	if r3 == nil || r3.TaskText != defaultSeriesFactionFallbackText {
-		t.Fatalf("builtin fallback text: %#v", r3)
+func TestSeriesTagTriState(t *testing.T) {
+	s := &Server{
+		cfg: types.AppConfig{
+			PunishmentTags: []types.PunishmentTagConfig{
+				{ID: "truth", Name: "真心话"},
+				{ID: "dare", Name: "冒险"},
+				{ID: "sing", Name: "唱歌"},
+			},
+		},
+		punishmentTasksCache: []types.PunishmentTaskConfig{
+			{ID: "a", TagIDs: []string{"truth", "dare"}},
+			{ID: "b", TagIDs: []string{"truth"}},
+			{ID: "c", TagIDs: []string{"dare"}},
+		},
+	}
+	series := types.PunishmentSeriesTaskConfig{Steps: []types.PunishmentSeriesStep{
+		{TaskIDs: []string{"a", "b"}},
+		{TaskIDs: []string{"c"}},
+	}}
+	incl, excl := s.seriesTagTriState(series)
+	if len(incl) != 1 || incl[0] != "dare" && incl[0] != "truth" {
+		t.Fatalf("included=%v", incl)
+	}
+	// truth 出现 2 次，dare 出现 2 次，并列按 ID 字典序取 dare 之前的… dare < truth，应取 dare？
+	// a: truth,dare  b: truth  c: dare  → truth=2, dare=2。并列按 ID 字典序取第一个：dare < truth，所以 dare。
+	if incl[0] != "dare" {
+		t.Fatalf("tie should pick lexicographically first, got %v", incl)
+	}
+	if len(excl) != 1 || excl[0] != "sing" {
+		t.Fatalf("excluded=%v", excl)
+	}
+}
+
+// TestRecordSeriesRunProgressOnCloseAveragesPercent 覆盖「完成率」的房间销毁结算：只统计
+// 至少走完 1 步的玩家，样本值是各自「已走步数/系列总步数」的百分比，最终落库为这些样本的
+// 算术平均，而不是「是否走到最后一步」的二元判定。
+func TestRecordSeriesRunProgressOnCloseAveragesPercent(t *testing.T) {
+	dir := t.TempDir()
+	db, err := openDatabase(dir)
+	if err != nil {
+		t.Fatalf("openDatabase: %v", err)
+	}
+	defer db.Close()
+	ps := newPunishmentStore(db)
+	s := &Server{punishmentStore: ps}
+
+	series := types.PunishmentSeriesTaskConfig{ID: "s1", VoteVersion: 1, Steps: make([]types.PunishmentSeriesStep, 4)}
+	s.punishmentSeriesCache = []types.PunishmentSeriesTaskConfig{series}
+
+	room := &RoomState{PunishmentSeriesPlayerProgress: map[string]*seriesPlayerProgress{
+		"pa": {SeriesID: "s1", Step: 3}, // 3/4 = 75%
+		"pb": {SeriesID: "s1", Step: 1}, // 1/4 = 25%
+		"pc": {SeriesID: "s1", Step: 0}, // 一步没走，不计入样本
+	}}
+	s.recordSeriesRunProgressOnClose(room)
+
+	participants, percentSum, err := ps.seriesRunStats("s1", 1)
+	if err != nil {
+		t.Fatalf("seriesRunStats: %v", err)
+	}
+	if participants != 2 || percentSum != 100 {
+		t.Fatalf("got participants=%d percentSum=%d, want 2/100 (75+25)", participants, percentSum)
+	}
+	if avg := float64(percentSum) / float64(participants); avg != 50 {
+		t.Fatalf("average completion rate = %v, want 50", avg)
 	}
 }

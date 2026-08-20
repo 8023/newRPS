@@ -11,9 +11,9 @@ import (
 func TestNormalizeStakeTiers(t *testing.T) {
 	fallback := []int{5, 10, 20}
 	cases := []struct {
-		name  string
-		in    []int
-		want  []int
+		name string
+		in   []int
+		want []int
 	}{
 		{"empty falls back", nil, fallback},
 		{"all invalid falls back", []int{0, -3}, fallback},
@@ -31,6 +31,36 @@ func TestNormalizeStakeTiers(t *testing.T) {
 				t.Fatalf("%s: got %v want %v", tc.name, got, tc.want)
 			}
 		}
+	}
+}
+
+func TestNormalizePunishmentRandomSettingsPreservesExplicitInvalidSeriesBounds(t *testing.T) {
+	got := normalizePunishmentRandomSettings(types.PunishmentRandomSettings{
+		MinSeriesSteps: contributionSeriesTechnicalMax + 500,
+		MaxSeriesSteps: contributionSeriesTechnicalMax + 1000,
+	})
+	if got.MinSeriesSteps != contributionSeriesTechnicalMax+500 || got.MaxSeriesSteps != contributionSeriesTechnicalMax+1000 {
+		t.Fatalf("explicit oversized bounds must survive normalization for validation: min=%d max=%d", got.MinSeriesSteps, got.MaxSeriesSteps)
+	}
+	got = normalizePunishmentRandomSettings(types.PunishmentRandomSettings{MinSeriesSteps: 30, MaxSeriesSteps: 20})
+	if got.MinSeriesSteps != 30 || got.MaxSeriesSteps != 20 {
+		t.Fatalf("max below min must survive normalization for validation: min=%d max=%d", got.MinSeriesSteps, got.MaxSeriesSteps)
+	}
+}
+
+func TestValidateConfigRejectsInvalidSeriesBounds(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.PunishmentRandomSettings.MaxSeriesSteps = contributionSeriesTechnicalMax + 1
+	if _, err := ValidateConfig(cfg); err == nil {
+		t.Fatal("maxSeriesSteps above the technical ceiling must be rejected")
+	}
+	cfg.PunishmentRandomSettings.MaxSeriesSteps = 20
+	cfg.PunishmentRandomSettings.MinSeriesSteps = 21
+	if _, err := ValidateConfig(cfg); err == nil {
+		t.Fatal("maxSeriesSteps below minSeriesSteps must be rejected")
 	}
 }
 
@@ -121,6 +151,34 @@ func TestFixGiveawayVoteLimitsPreservesExplicitNegative(t *testing.T) {
 	}
 }
 
+func TestSaveConfigDoesNotRewriteGenderJSON(t *testing.T) {
+	dir := copyConfigDirForTest(t)
+	withRootDir(t, dir)
+	gendersPath := filepath.Join(dir, "config", "json", "genders.json")
+	before, err := os.ReadFile(gendersPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Genders = append([]types.GenderOption(nil), cfg.Genders...)
+	if len(cfg.Genders) > 0 {
+		cfg.Genders[0].Label = cfg.Genders[0].Label + "改"
+	}
+	if _, err := SaveConfig(cfg); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(gendersPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Fatal("SaveConfig must not rewrite genders.json")
+	}
+}
+
 func TestSaveConfigRoundTrip(t *testing.T) {
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -202,7 +260,7 @@ func TestSaveConfigMigratesLegacyPunishments(t *testing.T) {
 			"female":  "回答一个心情问题。",
 		},
 		Tasks: []types.PunishmentTaskConfig{{
-			ID: "legacy-task", Name: "旧任务", Variants: map[string]string{
+			ID: "legacy-task", Variants: map[string]string{
 				"default": "回答一个默认问题。",
 				"male":    "回答一个勇气问题。",
 				"female":  "回答一个心情问题。",

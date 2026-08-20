@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/doumiao/newRPS/internal/config"
 )
 
 func (s *Server) securityHeaders(next http.Handler) http.Handler {
@@ -239,6 +241,8 @@ func (s *Server) saveVerifiedImage(buf []byte, contentType, bucket string) (stri
 		targetDir = s.adminUploadsDir
 	} else if bucket == "avatars" {
 		targetDir = s.avatarUploadsDir
+	} else if bucket == "contributions" {
+		targetDir = s.contribUploadsDir
 	}
 	path := filepath.Join(targetDir, filename)
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
@@ -505,6 +509,91 @@ func (s *Server) handleAdminImage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"imageUrl": url})
 }
 
+func (s *Server) handleContributionImage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 2*1024*1024+1024)
+	if err := r.ParseMultipartForm(2 * 1024 * 1024); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片过大或格式错误，仅支持 webp 且不超过 2MB"})
+		return
+	}
+	token := r.FormValue("token")
+	s.mu.Lock()
+	session := s.verifySessionToken(token)
+	var player *PlayerState
+	if session != nil {
+		if pid := s.tokenToPlayer[token]; pid != "" {
+			player = s.players[pid]
+		}
+		if player != nil && s.sidToPlayerID[session.SID] != player.ID {
+			player = nil
+		}
+	}
+	if session == nil || player == nil || !player.Persistent {
+		s.securityLog("upload_denied", map[string]any{"sid": "", "ip": clientIP(r), "event": "contribution-image", "userAgent": r.UserAgent()})
+		s.mu.Unlock()
+		writeJSON(w, http.StatusForbidden, map[string]string{"message": "请先登录后再上传"})
+		return
+	}
+	if !s.checkRateLimit("contribution-image:player:"+player.ID, RateLimitOptions{Limit: 12, WindowMs: 600_000, CooldownMs: 60_000}) {
+		s.mu.Unlock()
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{"message": "上传过于频繁，请稍后再试"})
+		return
+	}
+	playerID := player.ID
+	s.mu.Unlock()
+	file, header, err := r.FormFile("image")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片格式不支持或图片为空"})
+		return
+	}
+	defer file.Close()
+	if !strings.HasSuffix(strings.ToLower(header.Filename), ".webp") {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "仅支持 webp 格式"})
+		return
+	}
+	buf, err := io.ReadAll(file)
+	if err != nil || len(buf) == 0 || len(buf) > 2*1024*1024 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片不能超过 2MB"})
+		return
+	}
+	mime, _, ok := imageKind(buf)
+	if !ok || mime != "image/webp" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "图片内容不是有效的 webp"})
+		return
+	}
+	url, err := s.saveVerifiedImage(buf, "image/webp", "contributions")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "保存失败"})
+		return
+	}
+	if s.contributionStore == nil {
+		removeUnrecordedContributionUpload(s.uploadsDir, url)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"message": "共建存储不可用"})
+		return
+	}
+	if err := s.contributionStore.recordImage(url, playerID, ""); err != nil {
+		removeUnrecordedContributionUpload(s.uploadsDir, url)
+		s.errorLog("contribution_image_record_failed", err.Error())
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "保存失败"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"imageUrl": url})
+}
+
+// removeUnrecordedContributionUpload 只回滚“文件写入成功、但审计数据库登记失败”的 HTTP
+// 失败请求；客户端拿到的是错误而不是 imageUrl，因此它不属于已经成功上传的永久审计材料。
+// 一旦 recordImage 成功，业务服务没有任何删除共建图片的路径。
+func removeUnrecordedContributionUpload(uploadsDir, imageURL string) {
+	rel := strings.TrimPrefix(imageURL, "/uploads/")
+	if rel == "" || rel == imageURL {
+		return
+	}
+	_ = os.Remove(filepath.Join(uploadsDir, filepath.FromSlash(rel)))
+}
+
 func (s *Server) handleConfigExport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -522,7 +611,7 @@ func (s *Server) handleConfigExport(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"message": "Admin password is required"})
 		return
 	}
-	text, err := exportConfigText()
+	text, err := s.exportConfigText()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
 		return
@@ -531,8 +620,20 @@ func (s *Server) handleConfigExport(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(text))
 }
 
-// exportConfigText is wired in persist/server from config package
-var exportConfigText = func() (string, error) { return "", fmt.Errorf("not wired") }
+func (s *Server) exportConfigText() (string, error) {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return "", fmt.Errorf("导出配置失败: %w", err)
+	}
+	if err := s.loadGendersIntoConfig(&cfg); err != nil {
+		return "", fmt.Errorf("导出性别与阵营失败: %w", err)
+	}
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("导出配置失败: %w", err)
+	}
+	return string(data) + "\n", nil
+}
 
 // noDirListingFS 禁止目录列表：只允许打开具体文件，访问 /uploads/ 或子目录本身返回 404。
 type noDirListingFS struct{ root http.FileSystem }
@@ -556,8 +657,9 @@ func (fs noDirListingFS) Open(name string) (http.File, error) {
 
 func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/uploads/") {
-		// 上传目录（尤其证明图，可能涉及真人隐私内容）目前唯一的访问门槛是文件名不可猜测，
-		// 没有任何会话/房间归属校验——文件名一旦泄露（截图分享、粘贴到站外）就永久可访问。
+		// 上传目录（尤其证明图，可能涉及真人隐私内容）的通用访问门槛是文件名不可猜测；
+		// 共建图又因监管审计要求永久留存，因此文件名一旦泄露就可能被长期访问。证明图另有
+		// 下方的房间存活校验，但两类文件都不能把随机文件名当成真正的身份鉴权。
 		// 这里加一层 Referer 校验作为纵深防御：要求请求带着"来自本站页面"的 Referer，
 		// 复用 isAllowedOrigin 同一套白名单/本地开发判断（Referer 缺失按空 Origin 处理，
 		// 直接拒绝）。正常使用场景下图片都是站内 <img> 子资源加载，同源请求下浏览器默认
@@ -601,7 +703,11 @@ func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 		// 把"链接泄露后经共享缓存仍可访问"的窗口从原来的 30 天大幅收窄；证明图这一路还额外
 		// 有上面那层"房间已销毁则拒绝"的校验兜底——只是那层校验只在缓存未命中、真正回源时才
 		// 会执行，6 小时内命中共享缓存的请求仍绕得开它，两者是互补而非互相替代的关系。
-		w.Header().Set("Cache-Control", "public, max-age=21600, immutable")
+		cache := "public, max-age=21600, immutable"
+		if strings.HasPrefix(r.URL.Path, "/uploads/contributions/") {
+			cache = "public, max-age=2592000, immutable"
+		}
+		w.Header().Set("Cache-Control", cache)
 		// 禁止目录列出：只能用已知文件名访问单文件（证明图/头像 URL）。
 		http.StripPrefix("/uploads/", http.FileServer(noDirListingFS{root: http.Dir(s.uploadsDir)})).ServeHTTP(w, r)
 		return
@@ -687,6 +793,7 @@ func (s *Server) routes() http.Handler {
 	mux.Handle("/api/proof-image", s.httpRateLimit("proof-image", 60_000, 20)(http.HandlerFunc(s.handleProofImage)))
 	mux.Handle("/api/avatar-image", s.httpRateLimit("avatar-image", 60_000, 12)(http.HandlerFunc(s.handleAvatarImage)))
 	mux.Handle("/api/admin-image", s.httpRateLimit("admin-image", 60_000, 12)(http.HandlerFunc(s.handleAdminImage)))
+	mux.Handle("/api/contribution-image", s.httpRateLimit("contribution-image", 60_000, 12)(http.HandlerFunc(s.handleContributionImage)))
 	mux.Handle("/api/config/export", s.httpRateLimit("config-export", 60_000, 12)(http.HandlerFunc(s.handleConfigExport)))
 	mux.HandleFunc("/ws", s.handleWS)
 	mux.HandleFunc("/", s.serveStatic)

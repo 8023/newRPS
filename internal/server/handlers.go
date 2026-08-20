@@ -212,6 +212,22 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{30, 60_000, 10_000}, s.onChatLoad
 	case "chat:loadOlder":
 		return RateLimitOptions{40, 60_000, 10_000}, s.onChatLoadOlder
+	case "contribution:list":
+		return RateLimitOptions{20, 60_000, 15_000}, s.onContributionList
+	case "contribution:get":
+		return RateLimitOptions{20, 60_000, 15_000}, s.onContributionGet
+	case "contribution:saveDraft":
+		return RateLimitOptions{12, 60_000, 30_000}, s.onContributionSaveDraft
+	case "contribution:submit":
+		return RateLimitOptions{8, 60_000, 60_000}, s.onContributionSubmit
+	case "contribution:withdraw":
+		return RateLimitOptions{8, 60_000, 30_000}, s.onContributionWithdraw
+	case "contribution:requestUnpublish":
+		return RateLimitOptions{6, 60_000, 60_000}, s.onContributionRequestUnpublish
+	case "contribution:vote":
+		return RateLimitOptions{20, 60_000, 15_000}, s.onContributionVote
+	case "contribution:votePreview":
+		return RateLimitOptions{30, 60_000, 10_000}, s.onContributionVotePreview
 	case "admin:action":
 		return RateLimitOptions{30, 60_000, 60_000}, s.onAdminAction
 	case "admin:listPlayers":
@@ -1095,10 +1111,18 @@ func (s *Server) onConfigSave(client *Client, env wsEnvelope) {
 	if strings.TrimSpace(next.Site.AdminPassword) == "" {
 		next.Site.AdminPassword = s.cfg.Site.AdminPassword
 	}
+	if err := s.loadGendersIntoConfig(&next); err != nil {
+		client.reply(env.ID, nil, "读取性别与阵营失败")
+		return
+	}
 	oldTags := append([]types.PunishmentTagConfig(nil), s.cfg.PunishmentTags...)
 	valid, err := config.SaveConfig(next)
 	if err != nil {
 		client.reply(env.ID, nil, err.Error())
+		return
+	}
+	if err := s.loadGendersIntoConfig(&valid); err != nil {
+		client.reply(env.ID, nil, "读取性别与阵营失败")
 		return
 	}
 	s.cfg = valid
@@ -1122,6 +1146,10 @@ func (s *Server) onConfigReset(client *Client, env wsEnvelope) {
 	valid, err := config.ResetConfig()
 	if err != nil {
 		client.reply(env.ID, nil, err.Error())
+		return
+	}
+	if err := s.loadGendersIntoConfig(&valid); err != nil {
+		client.reply(env.ID, nil, "读取性别与阵营失败")
 		return
 	}
 	s.cfg = valid

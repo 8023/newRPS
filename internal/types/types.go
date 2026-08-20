@@ -86,17 +86,17 @@ type RoomInfoTagStyle struct {
 	Label string `json:"label"`
 }
 
-// PunishmentTaskConfig 是一条拍平的任务池任务：
+// PunishmentTaskConfig 是一条拍平的任务池任务（一行 = 一份文案变体）：
+// 一条共建投稿的多个变体会落成多行，靠 SubmissionID 归属同一份投稿。
 // TagIDs 可选 0/1/多个，决定标签过滤，留空表示这条任务不受标签筛选控制、任何随机房间
 // 都可能抽到它（房主无法用选中/拒绝标签把它挡在外面）；FactionIDs 为具体阵营 ID
 // （GenderFaction.ID）多选，留空表示永不匹配任何阵营；Order（1-99，语义为任务难度）
 // 决定抽取时房间级"目标难度"的靠拢方向，具体算法见 internal/server/punishment.go。
 // Order 合法取值仅 -1 或 1-99：-1 是"不参与随机抽取"的显式标记（仅供系列任务按 ID
-// 引用），不参与难度加权计算；保存时其余负数会被归一化为 -1
-// （见 config.NormalizePunishmentTasks），不保留具体负值。
+// 引用），不参与难度加权计算；由 s.validatePunishmentTask 在投稿发布/审批时校验，
+// 不合法的值直接拒绝落库（不做归一化/夹紧）。创作者侧用 InRandomPool 开关表达，看不到 -1。
 type PunishmentTaskConfig struct {
 	ID                string   `json:"id"`
-	Name              string   `json:"name"`
 	Text              string   `json:"text"`
 	TagIDs            []string `json:"tagIds"`
 	FactionIDs        []string `json:"factionIds"`
@@ -106,6 +106,23 @@ type PunishmentTaskConfig struct {
 	// Variants：旧版按任务分组保存的文案。仅用于旧单体配置迁移，
 	// 新版任务运行时使用 Text + FactionIDs。
 	Variants map[string]string `json:"variants,omitempty"`
+	// 共建发布元数据：管理员直接创建时 ContributorPlayerID 为空。
+	ContributorPlayerID  string `json:"contributorPlayerId,omitempty"`
+	ContributorAnonymous bool   `json:"contributorAnonymous,omitempty"`
+	ContentVersion       int    `json:"contentVersion,omitempty"`
+	VoteVersion          int    `json:"voteVersion,omitempty"`
+	SubmissionID         string `json:"submissionId,omitempty"`
+	// TaskGroupID：投票目标的分组键——同一次发布（独立任务的一整份投稿，或系列的某一步）
+	// 生成的所有阵营变体行共享同一个 TaskGroupID；系列的不同步骤各自拥有不同的 TaskGroupID，
+	// 从而做到"系列里每一步独立计票"而不是整份系列/整份投稿合并计票。见
+	// contribution_codec.go 的 tasksFromStepDraft 与 punishment.go 的 metaForFormalTask。
+	TaskGroupID string `json:"taskGroupId,omitempty"`
+	// CreatedAt：该行首次写入 punishment_tasks 的时间（毫秒）。仅用于数据分析「随机任务」
+	// 增长图与后台共建审核总览的池子大小统计（见 analytics_agg.go / contribution_admin.go），
+	// 不随内容修订更新——task_group_id 在每次审批通过（含修订重审）时都会重新生成，
+	// 所以修订会让 CreatedAt 一并刷新，这是有意的简化（与 pet_bonds 的 created_at 口径
+	// 一致：反映"这一行何时开始存在"，而不追踪跨版本的连续血统）。存量迁移行为 0。
+	CreatedAt int64 `json:"-"`
 }
 
 // PunishmentTagConfig 是惩罚标签（替代原"任务类型"容器）：开房时的三态筛选维度，
@@ -118,13 +135,16 @@ type PunishmentTagConfig struct {
 }
 
 // PunishmentRandomSettings 是随机任务全局难度参数（不再按标签/类型区分），
-// 兼存系列任务的阵营兜底文案。
+// 兼存系列任务的最低步数门槛。
 type PunishmentRandomSettings struct {
 	OrderStep              float64 `json:"orderStep"`
 	MaxDifficultyOvershoot float64 `json:"maxDifficultyOvershoot"`
-	// SeriesFactionFallbackText：系列任务某一步没有覆盖受罚者阵营时下发的兜底文案；
-	// 空串时运行时用内置默认文案。
-	SeriesFactionFallbackText string `json:"seriesFactionFallbackText"`
+	// MinSeriesSteps：系列投稿提交审批/批准时的最低步数；<=0 时按 10 兜底。
+	// 保存草稿允许未写完；不回溯已发布的短系列。
+	MinSeriesSteps int `json:"minSeriesSteps"`
+	// MaxSeriesSteps：系列投稿提交审批/批准/保存草稿时的最高步数上限；<=0 时按 20 兜底。
+	// 已发布的系列不会被追溯下架。
+	MaxSeriesSteps int `json:"maxSeriesSteps"`
 }
 
 // PunishmentSeriesStep 是系列任务中的一步：引用任务池里的任务 ID。
@@ -134,14 +154,25 @@ type PunishmentSeriesStep struct {
 	TaskIDs []string `json:"taskIds"`
 }
 
-// PunishmentSeriesTaskConfig 是一个系列任务的管理详情（SQLite 存储，走 admin:action，
-// 不进 AppConfig）：步骤严格按数组下标顺序执行，进度由运行中的房间共享，不落盘、不跨房间。
+// PunishmentSeriesTaskConfig 是一个系列任务的管理详情（SQLite 存储，不进 AppConfig）：
+// 步骤严格按数组下标顺序执行；进度是房间内按玩家各自独立的内存态，不落盘、不跨房间。
 type PunishmentSeriesTaskConfig struct {
 	ID                   string                 `json:"id"`
 	Name                 string                 `json:"name"`
 	RoomNamePool         *RoomNamePool          `json:"roomNamePool,omitempty"`
 	RoomBackgroundImages []string               `json:"roomBackgroundImages,omitempty"`
 	Steps                []PunishmentSeriesStep `json:"steps"`
+	ContributorPlayerID  string                 `json:"contributorPlayerId,omitempty"`
+	ContributorAnonymous bool                   `json:"contributorAnonymous,omitempty"`
+	ContentVersion       int                    `json:"contentVersion,omitempty"`
+	VoteVersion          int                    `json:"voteVersion,omitempty"`
+	SubmissionID         string                 `json:"submissionId,omitempty"`
+	TargetFactionIDs     []string               `json:"targetFactionIds,omitempty"`
+	// CreatedAt：首次审批通过时写入 punishment_series 的时间（毫秒），后续修订重审（同一个
+	// series ID 原地 UPDATE）不会更新它——与 PunishmentTaskConfig.CreatedAt 的口径刻意不同：
+	// 系列 ID 跨版本稳定，所以能真正做到"记录首次发布日期"。仅用于数据分析「系列任务」
+	// 增长图与后台共建审核总览统计。存量迁移行为 0。
+	CreatedAt int64 `json:"-"`
 }
 
 // PunishmentSeriesSummary 是建房面板用的系列任务目录摘要（随 AppConfig 公开广播）：
@@ -152,6 +183,9 @@ type PunishmentSeriesSummary struct {
 	RoomNamePool         *RoomNamePool `json:"roomNamePool,omitempty"`
 	RoomBackgroundImages []string      `json:"roomBackgroundImages,omitempty"`
 	StepCount            int           `json:"stepCount"`
+	PublishedVersion     int           `json:"publishedVersion,omitempty"`
+	// TargetFactionIDs 供客户端进战斗席时本地判断阵营是否匹配；不在建房面板渲染。
+	TargetFactionIDs []string `json:"targetFactionIds,omitempty"`
 }
 
 type PublicStats struct {
@@ -343,7 +377,7 @@ type RoomSettings struct {
 	Name             string `json:"name"`
 	Password         string `json:"password,omitempty"`
 	GameID           GameID `json:"gameId"`
-	EnablePunishment bool `json:"enablePunishment"`
+	EnablePunishment bool   `json:"enablePunishment"`
 	// EnablePerPiecePunishment：国际象棋/斗兽棋在对局中每次被吃子都触发惩罚（不加分、不改白给值）。
 	EnablePerPiecePunishment bool `json:"enablePerPiecePunishment"`
 	// PunishmentSource：random（随机任务，原 system）| series（系列任务）| player（玩家发布）。
@@ -475,8 +509,7 @@ type PunishmentTask struct {
 	AssignedByName    string   `json:"assignedByName,omitempty"`
 	// TypeName：该任务抽取自哪个任务类型（如"真心话"），玩家发布任务模式下为空。
 	TypeName string `json:"typeName,omitempty"`
-	// EventID：punishment_events 表里对应行的 id，仅服务端用于后续 update，不下发前端。
-	EventID string `json:"-"`
+	EventID  string `json:"eventId,omitempty"`
 	// RejectCount：本局（本条任务）已被胜方连续审核不通过的次数，仅服务端用于额外扣分判定，不下发前端。
 	RejectCount int `json:"-"`
 }
@@ -964,9 +997,10 @@ type RankedScoreConfig struct {
 
 type AppConfig struct {
 	Site struct {
-		Name          string `json:"name"`
-		Description   string `json:"description"`
-		AdminPassword string `json:"adminPassword"`
+		Name                      string `json:"name"`
+		Description               string `json:"description"`
+		AdminPassword             string `json:"adminPassword"`
+		AnonymousContributorLabel string `json:"anonymousContributorLabel"`
 	} `json:"site"`
 	AnnouncementBoard  AnnouncementBoard        `json:"announcementBoard"`
 	SecurityDisclaimer SecurityDisclaimerConfig `json:"securityDisclaimer"`

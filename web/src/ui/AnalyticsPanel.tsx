@@ -233,6 +233,61 @@ function ChartCard({
   );
 }
 
+// TotalNewChartCard「总量存量 + 当日新增」双 Y 轴折线图：与「主宠关系」同一套样式，
+// 复用给「随机任务」「系列任务」两张增长图（见 analyticsGrowthBlock，Go 端同构）。
+function TotalNewChartCard({ title, days, total, new: newCounts }: {
+  title: string; days: string[]; total: number[]; new: number[];
+}) {
+  return (
+    <ChartCard title={title} table={
+      <table className="analytics-data-table">
+        <thead><tr><th>日期</th><th>总数</th><th>新增</th></tr></thead>
+        <tbody>
+          {days.map((d, i) => (
+            <tr key={d}>
+              <td>{d}</td>
+              <td>{total[i] || 0}</td>
+              <td>{newCounts[i] || 0}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    }>
+      {/* 总数（存量）与新增（日增量）量级不同，双 Y 轴各自缩放。 */}
+      <ResponsiveContainer width="100%" height={220}>
+        <LineChart
+          data={days.map((day, i) => ({
+            day,
+            total: total[i] || 0,
+            new: newCounts[i] || 0
+          }))}
+          margin={{ left: 4, right: 4 }}
+        >
+          <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
+          <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
+          <YAxis
+            yAxisId="left"
+            tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }}
+            stroke="var(--chart-axis)"
+            width={40}
+          />
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }}
+            stroke="var(--chart-axis)"
+            width={40}
+          />
+          <Tooltip content={<AnalyticsTooltip />} />
+          <Legend />
+          <Line yAxisId="left" type="monotone" dataKey="new" name="新增" stroke="var(--chart-2)" strokeWidth={2} dot={false} isAnimationActive={false} />
+          <Line yAxisId="right" type="monotone" dataKey="total" name="总数" stroke="var(--chart-1)" strokeWidth={2} dot={false} isAnimationActive={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </ChartCard>
+  );
+}
+
 function BucketTable({ rows, valueLabel = "数量" }: { rows: AnalyticsBucket[]; valueLabel?: string }) {
   if (!rows.length) return <p className="empty">暂无数据</p>;
   return (
@@ -669,6 +724,21 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
           </div>
 
           <div className="analytics-row-2">
+            <TotalNewChartCard
+              title="随机任务"
+              days={data.series.days}
+              total={data.randomTaskPool?.total || []}
+              new={data.randomTaskPool?.new || []}
+            />
+            <TotalNewChartCard
+              title="系列任务"
+              days={data.series.days}
+              total={data.seriesTaskPool?.total || []}
+              new={data.seriesTaskPool?.new || []}
+            />
+          </div>
+
+          <div className="analytics-row-2">
             <ChartCard
               title="对局数"
               table={<SeriesTable days={data.series.days} series={data.gameRounds || []} labels={GAME_LABELS} />}
@@ -719,52 +789,12 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
             <ChartCard title="名争·白给" table={<SeriesTable days={data.series.days} series={data.nameWarGiveaway || []} labels={ACTIVITY_LABELS} />}>
               <StackedGameChart days={data.series.days} series={data.nameWarGiveaway || []} asLine labels={ACTIVITY_LABELS} />
             </ChartCard>
-            <ChartCard title="主宠关系" table={
-              <table className="analytics-data-table">
-                <thead><tr><th>日期</th><th>总数</th><th>新增</th></tr></thead>
-                <tbody>
-                  {data.series.days.map((d, i) => (
-                    <tr key={d}>
-                      <td>{d}</td>
-                      <td>{data.petBond?.total?.[i] || 0}</td>
-                      <td>{data.petBond?.new?.[i] || 0}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            }>
-              {/* 总数（存量）与新增（日增量）量级不同，双 Y 轴各自缩放。 */}
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart
-                  data={data.series.days.map((day, i) => ({
-                    day,
-                    total: data.petBond?.total?.[i] || 0,
-                    new: data.petBond?.new?.[i] || 0
-                  }))}
-                  margin={{ left: 4, right: 4 }}
-                >
-                  <CartesianGrid stroke="var(--chart-grid)" vertical={false} strokeDasharray="" />
-                  <XAxis dataKey="day" tickFormatter={formatDayTick} tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />
-                  <YAxis
-                    yAxisId="left"
-                    tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }}
-                    stroke="var(--chart-axis)"
-                    width={40}
-                  />
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }}
-                    stroke="var(--chart-axis)"
-                    width={40}
-                  />
-                  <Tooltip content={<AnalyticsTooltip />} />
-                  <Legend />
-                  <Line yAxisId="left" type="monotone" dataKey="new" name="新增" stroke="var(--chart-2)" strokeWidth={2} dot={false} isAnimationActive={false} />
-                  <Line yAxisId="right" type="monotone" dataKey="total" name="总数" stroke="var(--chart-1)" strokeWidth={2} dot={false} isAnimationActive={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartCard>
+            <TotalNewChartCard
+              title="主宠关系"
+              days={data.series.days}
+              total={data.petBond?.total || []}
+              new={data.petBond?.new || []}
+            />
           </div>
 
           <div className="analytics-row-2">

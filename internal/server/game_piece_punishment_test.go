@@ -106,6 +106,44 @@ func TestJungleMidGamePunishmentResumeKeepsBoard(t *testing.T) {
 	}
 }
 
+// TestJungleMidGamePunishmentConfirmRPCResumesGameNotNewRound 复现真实反馈：棋类「每子惩罚」
+// 走 onPunishmentConfirm/onPunishmentReview/onPunishmentSubmit 这些真实 RPC 入口审批通过时，
+// 之前直接 `if s.punishmentComplete(room) { s.resetForNextRound(room) }`，完全没检查
+// room.midGamePunishment，导致每子惩罚一结算就把进行中的对局强行开新局。
+// 之前的测试（approveMidGamePunishment）都是直接调用 finishPunishmentIfComplete，绕过了这几个
+// RPC handler 里的重复代码，所以没能测出这个问题——这里改为走真实的 onPunishmentConfirm 入口。
+func TestJungleMidGamePunishmentConfirmRPCResumesGameNotNewRound(t *testing.T) {
+	s, room, winner, loser := setupJunglePieceRoom(t, true)
+	if ok, errMsg := s.applyJungleMove(room, types.SeatA, 4, 0, 5, 0); !ok {
+		t.Fatalf("capture move: %s", errMsg)
+	}
+	if room.Phase != types.PhasePunishment {
+		t.Fatalf("capture should enter punishment, got %s", room.Phase)
+	}
+	room.Proofs = []types.PunishmentProof{{PlayerID: loser.ID, Status: "pending", TaskText: "任务"}}
+	winner.SocketID, winner.RoomID = "sock-w", room.ID
+	loser.SocketID, loser.RoomID = "sock-l", room.ID
+	s.clients = map[string]*Client{
+		"sock-w": {id: "sock-w", playerID: winner.ID, sendCh: make(chan []byte, 8), done: make(chan struct{})},
+		"sock-l": {id: "sock-l", playerID: loser.ID, sendCh: make(chan []byte, 8), done: make(chan struct{})},
+	}
+	s.roomBroadcastTimers = map[string]*roomBroadcastPending{}
+
+	env := wsEnvelope{ID: 1, D: map[string]any{"playerId": loser.ID}}
+	s.onPunishmentConfirm(s.clients["sock-w"], env)
+
+	if room.Jungle == nil || room.Jungle.Ended {
+		t.Fatal("mid-game punishment approval via RPC must resume the same game, not end it")
+	}
+	if room.Phase != types.PhaseChoosing {
+		t.Fatalf("after RPC approval should resume choosing, got %s", room.Phase)
+	}
+	cell := room.Jungle.Board[5][0]
+	if cell == nil || *cell != jungleCellOf(types.SeatA, types.JungleElephant) {
+		t.Fatalf("captured square should keep attacker (board must not reset), got %v", cell)
+	}
+}
+
 func TestJungleCaptureEndingSkipsSecondPunishment(t *testing.T) {
 	s, room, _, loser := setupJunglePieceRoom(t, true)
 	room.Jungle.Board[0][6] = nil

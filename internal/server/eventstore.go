@@ -77,7 +77,16 @@ CREATE TABLE IF NOT EXISTS punishment_events (
 	image_file     TEXT,
 	proof_at       INTEGER,
 	status         TEXT NOT NULL,
-	redo_id        TEXT
+	redo_id        TEXT,
+	round_id       TEXT NOT NULL DEFAULT '',
+	formal_task_id TEXT NOT NULL DEFAULT '',
+	formal_task_version INTEGER NOT NULL DEFAULT 0,
+	formal_series_id TEXT NOT NULL DEFAULT '',
+	formal_series_version INTEGER NOT NULL DEFAULT 0,
+	contributor_player_id TEXT NOT NULL DEFAULT '',
+	contributor_name_snapshot TEXT NOT NULL DEFAULT '',
+	contributor_anonymous INTEGER NOT NULL DEFAULT 0,
+	completed_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_punishment_events_room   ON punishment_events(room_id, task_at);
 CREATE INDEX IF NOT EXISTS idx_punishment_events_target ON punishment_events(target_id, task_at);
@@ -122,16 +131,32 @@ func (e *eventStore) insertRoomEvent(in roomEventInput) error {
 
 // insertPunishmentTask 在任务发布时插入一行；id 由调用方生成（randomID()），后续
 // updatePunishmentProof/updatePunishmentStatus/markPunishmentRedo 都按这个 id 定位同一行。
-func (e *eventStore) insertPunishmentTask(id string, taskAt int64, source, roomID, publisherID, publisherName, targetID, targetName, taskText string) error {
+type punishmentEventMeta struct {
+	RoundID              string
+	FormalTaskID         string
+	FormalTaskVersion    int
+	FormalSeriesID       string
+	FormalSeriesVersion  int
+	ContributorPlayerID  string
+	ContributorNameSnap  string
+	ContributorAnonymous bool
+}
+
+func (e *eventStore) insertPunishmentTask(id string, taskAt int64, source, roomID, publisherID, publisherName, targetID, targetName, taskText string, meta punishmentEventMeta) error {
 	if e == nil || e.db == nil {
 		return nil
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	_, err := e.db.Exec(
-		`INSERT INTO punishment_events (id, room_id, task_source, publisher_id, publisher_name, target_id, target_name, task_text, task_at, status)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO punishment_events (
+			id, room_id, task_source, publisher_id, publisher_name, target_id, target_name, task_text, task_at, status,
+			round_id, formal_task_id, formal_task_version, formal_series_id, formal_series_version,
+			contributor_player_id, contributor_name_snapshot, contributor_anonymous
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, roomID, source, publisherID, publisherName, targetID, targetName, taskText, taskAt, "assigned",
+		meta.RoundID, meta.FormalTaskID, meta.FormalTaskVersion, meta.FormalSeriesID, meta.FormalSeriesVersion,
+		meta.ContributorPlayerID, meta.ContributorNameSnap, boolInt(meta.ContributorAnonymous),
 	)
 	return err
 }
@@ -158,8 +183,57 @@ func (e *eventStore) updatePunishmentStatus(id, status string) error {
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	// 只有 approved 才写 completed_at（且用 COALESCE 避免重复批准覆盖首次完成时间）；
+	// 非 approved 状态不带 completed 参数，避免把 completed_at 从 NULL 误固化成 0。
+	if status == "approved" {
+		_, err := e.db.Exec(`UPDATE punishment_events SET status = ?, completed_at = COALESCE(completed_at, ?) WHERE id = ?`, status, nowMs(), id)
+		return err
+	}
 	_, err := e.db.Exec(`UPDATE punishment_events SET status = ? WHERE id = ?`, status, id)
 	return err
+}
+
+func (e *eventStore) bindEventRound(id, roundID string) error {
+	if e == nil || e.db == nil || id == "" || roundID == "" {
+		return nil
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	_, err := e.db.Exec(`UPDATE punishment_events SET round_id = ? WHERE id = ?`, roundID, id)
+	return err
+}
+
+func (e *eventStore) getPunishmentEvent(id string) (punishmentEventRow, error) {
+	var row punishmentEventRow
+	if e == nil || e.db == nil {
+		return row, sql.ErrNoRows
+	}
+	err := e.db.QueryRow(`
+		SELECT id, room_id, task_source, status, redo_id, round_id, formal_task_id, formal_task_version,
+			formal_series_id, formal_series_version, contributor_player_id, contributor_name_snapshot, contributor_anonymous, completed_at
+		FROM punishment_events WHERE id = ?`, id).Scan(
+		&row.ID, &row.RoomID, &row.Source, &row.Status, &row.RedoID, &row.RoundID,
+		&row.FormalTaskID, &row.FormalTaskVersion, &row.FormalSeriesID, &row.FormalSeriesVersion,
+		&row.ContributorPlayerID, &row.ContributorNameSnap, &row.ContributorAnonymous, &row.CompletedAt,
+	)
+	return row, err
+}
+
+type punishmentEventRow struct {
+	ID                   string
+	RoomID               string
+	Source               string
+	Status               string
+	RedoID               sql.NullString
+	RoundID              string
+	FormalTaskID         string
+	FormalTaskVersion    int
+	FormalSeriesID       string
+	FormalSeriesVersion  int
+	ContributorPlayerID  string
+	ContributorNameSnap  string
+	ContributorAnonymous int
+	CompletedAt          sql.NullInt64
 }
 
 // markPunishmentRedo 驳回重做时收尾旧行：status 置为 rejected，redo_id 指向新插入的

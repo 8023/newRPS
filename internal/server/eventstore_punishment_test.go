@@ -1,6 +1,10 @@
 package server
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/doumiao/newRPS/internal/types"
+)
 
 func TestPunishmentEventInsertUpdateRedo(t *testing.T) {
 	dir := t.TempDir()
@@ -13,7 +17,7 @@ func TestPunishmentEventInsertUpdateRedo(t *testing.T) {
 
 	// 任务发布：insert 一行，status 应为 assigned，proof 相关字段为空。
 	taskID := randomID()
-	if err := store.insertPunishmentTask(taskID, 1000, "system", "room1", "", "", "p1", "小明", "去阳台大喊三声"); err != nil {
+	if err := store.insertPunishmentTask(taskID, 1000, "system", "room1", "", "", "p1", "小明", "去阳台大喊三声", punishmentEventMeta{}); err != nil {
 		t.Fatalf("insertPunishmentTask: %v", err)
 	}
 	row := db.QueryRow(`SELECT task_text, status, proof_text, proof_at, redo_id FROM punishment_events WHERE id = ?`, taskID)
@@ -54,7 +58,7 @@ func TestPunishmentEventInsertUpdateRedo(t *testing.T) {
 	if err := store.markPunishmentRedo(taskID, newTaskID); err != nil {
 		t.Fatalf("markPunishmentRedo: %v", err)
 	}
-	if err := store.insertPunishmentTask(newTaskID, 3000, "player", "room1", "reviewer1", "审核员", "p1", "小明", "重新去阳台大喊十声"); err != nil {
+	if err := store.insertPunishmentTask(newTaskID, 3000, "player", "room1", "reviewer1", "审核员", "p1", "小明", "重新去阳台大喊十声", punishmentEventMeta{}); err != nil {
 		t.Fatalf("insertPunishmentTask redo: %v", err)
 	}
 	row = db.QueryRow(`SELECT status, redo_id FROM punishment_events WHERE id = ?`, taskID)
@@ -92,5 +96,57 @@ func TestPunishmentEventInsertUpdateRedo(t *testing.T) {
 	}
 	if count != 2 {
 		t.Fatalf("final row count = %d, want 2 (original rejected row + one redo row)", count)
+	}
+}
+
+func TestSystemAutoFinishMarksPunishmentEventApproved(t *testing.T) {
+	dir := t.TempDir()
+	db, err := openDatabase(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	s := &Server{eventDB: newEventStore(db)}
+	eventID := randomID()
+	if err := s.eventDB.insertPunishmentTask(eventID, nowMs(), "system", "r1", "", "", "p1", "甲", "任务", punishmentEventMeta{
+		ContributorPlayerID: "c1", FormalTaskID: "tg1", FormalTaskVersion: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	room := &RoomState{
+		Proofs: []types.PunishmentProof{{PlayerID: "p1", Status: "pending"}},
+		RoundHistory: []types.RoundHistoryItem{{
+			PunishmentTasks: []types.PunishmentTask{{PlayerID: "p1", EventID: eventID}},
+		}},
+	}
+	if !s.approveProofBySystem(room, "p1", "审核方离开") {
+		t.Fatal("expected system approve")
+	}
+	row, err := s.eventDB.getPunishmentEvent(eventID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row.Status != "approved" {
+		t.Fatalf("auto-forgive must mark event approved for voting, got %q", row.Status)
+	}
+
+	eventID2 := randomID()
+	if err := s.eventDB.insertPunishmentTask(eventID2, nowMs(), "system", "r1", "", "", "p2", "乙", "任务2", punishmentEventMeta{
+		ContributorPlayerID: "c1", FormalTaskID: "tg1", FormalTaskVersion: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	room2 := &RoomState{
+		RoundHistory: []types.RoundHistoryItem{{
+			PunishmentTasks: []types.PunishmentTask{{PlayerID: "p2", EventID: eventID2, TaskText: "任务2"}},
+		}},
+	}
+	s.submitSystemPunishmentProof(room2, &PlayerState{PublicPlayer: types.PublicPlayer{ID: "p2", Name: "乙"}}, "受罚方超时")
+	row2, err := s.eventDB.getPunishmentEvent(eventID2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row2.Status != "approved" {
+		t.Fatalf("timeout auto-proof must mark event approved for voting, got %q", row2.Status)
 	}
 }

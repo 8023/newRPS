@@ -2,6 +2,7 @@ package server
 
 import (
 	"testing"
+	"time"
 
 	"github.com/doumiao/newRPS/internal/types"
 )
@@ -9,8 +10,9 @@ import (
 func newRankedScoreTestServer(t *testing.T) *Server {
 	t.Helper()
 	s := &Server{
-		players: map[string]*PlayerState{},
-		rooms:   map[string]*RoomState{},
+		players:           map[string]*PlayerState{},
+		rooms:             map[string]*RoomState{},
+		playerUpdateDelay: time.Hour,
 		cfg: types.AppConfig{
 			RankedScore: types.RankedScoreConfig{
 				Max: 4999, Min: -4999, NameWarMin: -9999, DailyDecayRatio: 0.98,

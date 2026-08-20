@@ -96,15 +96,15 @@ func TestCheckpointOnlineMsAdvancesCreditedAt(t *testing.T) {
 // 否则重启后内存从 0 起算并写回覆盖库。
 func TestIngestPersistedPlayerLoadsTotalOnlineMs(t *testing.T) {
 	s := &Server{
-		players:      map[string]*PlayerState{},
-		playerIdToID: map[string]string{},
+		players:       map[string]*PlayerState{},
+		playerIdToID:  map[string]string{},
 		tokenToPlayer: map[string]string{},
-		cfg:          types.AppConfig{},
+		cfg:           types.AppConfig{},
 	}
 	ok := s.ingestPersistedPlayer(persistedPlayer{
 		ID: "pub1", PlayerID: "ident1", ClaimKey: "claim", Name: "Alice",
 		GenderID: "male", FactionID: "male",
-		Stats: types.PublicStats{TotalOnlineMs: 9_876_543, RankedPoints: 10},
+		Stats:     types.PublicStats{TotalOnlineMs: 9_876_543, RankedPoints: 10},
 		CreatedAt: 1, LastSeenAt: 2,
 	})
 	if !ok {
@@ -116,6 +116,42 @@ func TestIngestPersistedPlayerLoadsTotalOnlineMs(t *testing.T) {
 	}
 	if p.Stats.TotalOnlineMs != 9_876_543 {
 		t.Fatalf("TotalOnlineMs=%d want 9876543 (must load from disk)", p.Stats.TotalOnlineMs)
+	}
+}
+
+// TestIngestPersistedPlayerLoadsGiveawayBoardAndExtremeForceClosed 回归：白给自救板内容
+// 与极限强关改名标记此前从未落库/加载，重启后大厅"白给自救板"和"通用改名处"的极限强关
+// 目标会凭空消失（名争一侧的改名状态早已完整持久化，不受影响）。
+func TestIngestPersistedPlayerLoadsGiveawayBoardAndExtremeForceClosed(t *testing.T) {
+	s := &Server{
+		players:       map[string]*PlayerState{},
+		playerIdToID:  map[string]string{},
+		tokenToPlayer: map[string]string{},
+		cfg:           types.AppConfig{},
+	}
+	ok := s.ingestPersistedPlayer(persistedPlayer{
+		ID: "pub1", PlayerID: "ident1", ClaimKey: "claim", Name: "Alice",
+		GenderID: "male", FactionID: "male",
+		GiveawayBoardText: "我错了", GiveawayBoardSubmitted: int64Ptr(1000),
+		GiveawayBoardExpires: int64Ptr(2000), GiveawayBoardLikes: intPtr(3), GiveawayBoardDislikes: intPtr(1),
+		ExtremeForceClosed: boolPtr(true), ExtremeForceClosedAt: int64Ptr(3000),
+		ExtremeRenameProtectedUntil: int64Ptr(4000), ExtremeRenamedBy: "actor1", ExtremeRenamedByName: "Bob",
+		CreatedAt: 1, LastSeenAt: 2,
+	})
+	if !ok {
+		t.Fatal("ingest failed")
+	}
+	p := s.players["pub1"]
+	if p == nil {
+		t.Fatal("player missing")
+	}
+	if p.GiveawayBoardText != "我错了" || ptrInt64(p.GiveawayBoardSubmittedAt) != 1000 || ptrInt64(p.GiveawayBoardExpiresAt) != 2000 ||
+		ptrInt(p.GiveawayBoardLikes) != 3 || ptrInt(p.GiveawayBoardDislikes) != 1 {
+		t.Fatalf("giveaway board not restored from disk: %+v", p.PublicPlayer)
+	}
+	if !ptrBool(p.ExtremeForceClosed) || ptrInt64(p.ExtremeForceClosedAt) != 3000 || ptrInt64(p.ExtremeRenameProtectedUntil) != 4000 ||
+		p.ExtremeRenamedBy != "actor1" || p.ExtremeRenamedByName != "Bob" {
+		t.Fatalf("extreme force-closed state not restored from disk: %+v", p.PublicPlayer)
 	}
 }
 

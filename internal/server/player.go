@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/doumiao/newRPS/internal/config"
 	"github.com/doumiao/newRPS/internal/types"
 )
 
@@ -30,20 +29,23 @@ func (s *Server) publicConfig() types.AppConfig {
 }
 
 // buildPunishmentSeriesSummaries 从系列缓存生成建房用公开目录（无任务文案/taskIds）。
-// 只要有步骤就入选；阵营覆盖不全不再拦截（运行时未覆盖阵营会拿到兜底文案）。
+// 只要有步骤就入选；阵营覆盖不全不再拦截（运行时未覆盖阵营会从随机池抽替补）。
 func (s *Server) buildPunishmentSeriesSummaries() []types.PunishmentSeriesSummary {
 	out := make([]types.PunishmentSeriesSummary, 0, len(s.punishmentSeriesCache))
 	for _, series := range s.punishmentSeriesCache {
 		if !s.seriesIsUsable(series) {
 			continue
 		}
-		out = append(out, types.PunishmentSeriesSummary{
+		sum := types.PunishmentSeriesSummary{
 			ID:                   series.ID,
 			Name:                 series.Name,
 			RoomNamePool:         series.RoomNamePool,
 			RoomBackgroundImages: series.RoomBackgroundImages,
 			StepCount:            len(series.Steps),
-		})
+			PublishedVersion:     series.ContentVersion,
+			TargetFactionIDs:     append([]string(nil), series.TargetFactionIDs...),
+		}
+		out = append(out, sum)
 	}
 	return out
 }
@@ -54,6 +56,7 @@ func (s *Server) reloadPunishmentCaches() {
 	if s.punishmentStore == nil {
 		s.punishmentTasksCache = []types.PunishmentTaskConfig{}
 		s.punishmentSeriesCache = []types.PunishmentSeriesTaskConfig{}
+		s.rebuildPunishmentCacheIndexes()
 		return
 	}
 	if tasks, err := s.punishmentStore.listTasks(); err != nil {
@@ -68,21 +71,36 @@ func (s *Server) reloadPunishmentCaches() {
 	} else {
 		s.punishmentSeriesCache = series
 	}
+	s.rebuildPunishmentCacheIndexes()
 }
 
-// savePunishmentTasks 清洗/校验后全量替换任务池，并刷新缓存。调用方须持有 s.mu。
-func (s *Server) savePunishmentTasks(tasks []types.PunishmentTaskConfig) error {
-	tasks = config.NormalizePunishmentTasks(tasks)
-	if len(tasks) == 0 {
-		return fmt.Errorf("至少需要一条任务")
+func (s *Server) rebuildPunishmentCacheIndexes() {
+	s.punishmentTaskByID = make(map[string]*types.PunishmentTaskConfig, len(s.punishmentTasksCache))
+	for i := range s.punishmentTasksCache {
+		task := &s.punishmentTasksCache[i]
+		s.punishmentTaskByID[task.ID] = task
 	}
-	ids := make([]string, len(tasks))
-	for i, t := range tasks {
-		ids[i] = t.ID
+	s.punishmentSeriesByID = make(map[string]*types.PunishmentSeriesTaskConfig, len(s.punishmentSeriesCache))
+	for i := range s.punishmentSeriesCache {
+		series := &s.punishmentSeriesCache[i]
+		s.punishmentSeriesByID[series.ID] = series
 	}
-	if err := assertUniqueIDs(ids, "任务 ID"); err != nil {
-		return err
+}
+
+func (s *Server) taskIndexForRead() map[string]*types.PunishmentTaskConfig {
+	if s.punishmentTaskByID != nil {
+		return s.punishmentTaskByID
 	}
+	// 单元测试和少量构造型调用会只注入切片而不走 reload；返回临时索引且不缓存，避免测试
+	// 随后 append/替换切片时留下悬空指针。生产路径始终使用上面的持久索引。
+	out := make(map[string]*types.PunishmentTaskConfig, len(s.punishmentTasksCache))
+	for i := range s.punishmentTasksCache {
+		out[s.punishmentTasksCache[i].ID] = &s.punishmentTasksCache[i]
+	}
+	return out
+}
+
+func (s *Server) validatePunishmentTask(t types.PunishmentTaskConfig) error {
 	tagSet := map[string]struct{}{}
 	for _, tag := range s.cfg.PunishmentTags {
 		tagSet[tag.ID] = struct{}{}
@@ -91,92 +109,38 @@ func (s *Server) savePunishmentTasks(tasks []types.PunishmentTaskConfig) error {
 	for _, f := range s.cfg.GenderFactions {
 		factionSet[f.ID] = struct{}{}
 	}
-	for _, t := range tasks {
-		label := t.Name
-		if label == "" {
-			label = t.ID
+	label := t.ID
+	if strings.TrimSpace(t.Text) == "" {
+		return fmt.Errorf("随机任务 %s 的文案不能为空", label)
+	}
+	for _, tid := range t.TagIDs {
+		if strings.HasPrefix(tid, "series:") {
+			continue
 		}
-		if strings.TrimSpace(t.Text) == "" {
-			return fmt.Errorf("随机任务 %s 的文案不能为空", label)
-		}
-		for _, tid := range t.TagIDs {
-			// series:<id> 内部标签（迁移产物）不在标签管理里，放行；其余须存在。
-			if strings.HasPrefix(tid, "series:") {
-				continue
-			}
-			if _, ok := tagSet[tid]; !ok {
-				return fmt.Errorf("随机任务 %s 引用了不存在的标签 %s", label, tid)
-			}
-		}
-		if t.Order != -1 && (t.Order < 1 || t.Order > 99) {
-			return fmt.Errorf("随机任务 %s 的任务难度必须是 -1（不参与随机抽取）或在 1 到 99 之间", label)
-		}
-		for _, fid := range t.FactionIDs {
-			if _, ok := factionSet[fid]; !ok {
-				return fmt.Errorf("随机任务 %s 勾选了不存在的阵营 %s", label, fid)
-			}
-		}
-		if t.BackgroundImages == nil {
-			return fmt.Errorf("随机任务 %s 的背景图库格式不正确", label)
-		}
-		if t.BackgroundOpacity < 0 || t.BackgroundOpacity > 1 {
-			return fmt.Errorf("随机任务 %s 的背景透明率必须在 0 到 1 之间", label)
+		if _, ok := tagSet[tid]; !ok {
+			return fmt.Errorf("随机任务 %s 引用了不存在的标签 %s", label, tid)
 		}
 	}
-	if s.punishmentStore == nil {
-		return fmt.Errorf("任务池存储不可用")
+	if t.Order != -1 && (t.Order < 1 || t.Order > 99) {
+		return fmt.Errorf("随机任务 %s 的任务难度必须是 -1（不参与随机抽取）或在 1 到 99 之间", label)
 	}
-	if err := s.punishmentStore.replaceTasks(tasks); err != nil {
-		s.errorLog("punishment_tasks_save_failed", err.Error())
-		return fmt.Errorf("保存任务池失败")
-	}
-	s.punishmentTasksCache = tasks
-	return nil
-}
-
-// savePunishmentSeries 清洗/校验后全量替换系列任务，并刷新缓存。调用方须持有 s.mu。
-// 不校验 TaskIDs 是否指向存在任务（允许悬空引用，运行时跳过）。
-func (s *Server) savePunishmentSeries(series []types.PunishmentSeriesTaskConfig) error {
-	series = config.NormalizePunishmentSeriesTasks(series)
-	ids := make([]string, len(series))
-	for i, ser := range series {
-		ids[i] = ser.ID
-	}
-	if err := assertUniqueIDs(ids, "系列任务 ID"); err != nil {
-		return err
-	}
-	for _, ser := range series {
-		if ser.Name == "" {
-			return fmt.Errorf("系列任务 %s 的名称不能为空", ser.ID)
-		}
-		if ser.RoomBackgroundImages == nil {
-			return fmt.Errorf("%s 的房间背景图库格式不正确", ser.Name)
-		}
-		if ser.RoomNamePool == nil || len(ser.RoomNamePool.Subjects) == 0 || len(ser.RoomNamePool.RoomWords) == 0 {
-			return fmt.Errorf("%s 的随机房名至少需要名词/动词和房间词", ser.Name)
-		}
-		if len(ser.Steps) == 0 {
-			return fmt.Errorf("%s 至少需要一个子任务", ser.Name)
-		}
-		for si, step := range ser.Steps {
-			if len(step.TaskIDs) == 0 {
-				return fmt.Errorf("%s 第 %d 步至少需要一个任务", ser.Name, si+1)
-			}
+	for _, fid := range t.FactionIDs {
+		if _, ok := factionSet[fid]; !ok {
+			return fmt.Errorf("随机任务 %s 勾选了不存在的阵营 %s", label, fid)
 		}
 	}
-	if s.punishmentStore == nil {
-		return fmt.Errorf("系列任务存储不可用")
+	if t.BackgroundImages == nil {
+		return fmt.Errorf("随机任务 %s 的背景图库格式不正确", label)
 	}
-	if err := s.punishmentStore.replaceSeries(series); err != nil {
-		s.errorLog("punishment_series_save_failed", err.Error())
-		return fmt.Errorf("保存系列任务失败")
+	if t.BackgroundOpacity < 0 || t.BackgroundOpacity > 1 {
+		return fmt.Errorf("随机任务 %s 的背景透明率必须在 0 到 1 之间", label)
 	}
-	s.punishmentSeriesCache = series
 	return nil
 }
 
 // cascadeRemovedTagsFromTasks 在惩罚配置保存后：从任务池 tagIds 里摘除已删除的标签 ID。
-// 不阻断保存；空标签任务合法保留，可继续供系列按 ID 引用，但不会进入随机候选池。
+// 不阻断保存；空标签任务合法保留，可继续供系列按 ID 引用，也仍会进入随机候选池
+// （未勾选标签的任务无视标签筛选，见 candidateTasksForTags）。
 func (s *Server) cascadeRemovedTagsFromTasks(oldTags, newTags []types.PunishmentTagConfig) {
 	if s.punishmentStore == nil || len(s.punishmentTasksCache) == 0 {
 		return
@@ -218,20 +182,7 @@ func (s *Server) cascadeRemovedTagsFromTasks(oldTags, newTags []types.Punishment
 		return
 	}
 	s.punishmentTasksCache = next
-}
-
-func assertUniqueIDs(ids []string, label string) error {
-	seen := map[string]struct{}{}
-	for _, id := range ids {
-		if id == "" {
-			return fmt.Errorf("%s 不能为空", label)
-		}
-		if _, ok := seen[id]; ok {
-			return fmt.Errorf("%s 重复: %s", label, id)
-		}
-		seen[id] = struct{}{}
-	}
-	return nil
+	s.rebuildPunishmentCacheIndexes()
 }
 
 // adminLoginFailure* 常量：管理员口令校验失败的锁定阈值。只统计失败次数（正确口令的
@@ -802,10 +753,22 @@ func (s *Server) refreshPlayerSnapshots(player *PlayerState) {
 }
 
 func (s *Server) refreshAllPlayersForConfig() {
+	persistChanged := false
 	for _, player := range s.players {
+		oldGenderID, oldFactionID := player.GenderID, player.FactionID
 		s.applyGender(player, player.GenderID)
+		// 后台允许删除性别。resolveGender 会把引用已删除 ID 的玩家统一重置到列表第一个
+		// 性别；性别仍存在但被管理员移到另一阵营时也会同步新的 faction_id。两种变化都必须
+		// 标脏写回 SQLite，不能只改内存后让重启又读回旧 ID。
+		if player.Persistent && (player.GenderID != oldGenderID || player.FactionID != oldFactionID) {
+			s.markPlayerDirty(player)
+			persistChanged = true
+		}
 		s.refreshNameWarState(player, nowMs())
 		s.refreshPlayerSnapshots(player)
+	}
+	if persistChanged {
+		s.requestPersist("important")
 	}
 }
 

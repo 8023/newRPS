@@ -5363,6 +5363,9 @@ export namespace game {
         /** PunishmentTask typeName. */
         typeName: string;
 
+        /** PunishmentTask eventId. */
+        eventId: string;
+
         /**
          * Creates a new PunishmentTask instance using the specified properties.
          * @param [properties] Properties to set
@@ -5476,6 +5479,9 @@ export namespace game {
 
             /** PunishmentTask typeName */
             typeName?: (string|null);
+
+            /** PunishmentTask eventId */
+            eventId?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -11144,8 +11150,11 @@ export namespace game {
         /** PunishmentRandomSettings maxDifficultyOvershoot. */
         maxDifficultyOvershoot: number;
 
-        /** PunishmentRandomSettings seriesFactionFallbackText. */
-        seriesFactionFallbackText: string;
+        /** PunishmentRandomSettings minSeriesSteps. */
+        minSeriesSteps: number;
+
+        /** PunishmentRandomSettings maxSeriesSteps. */
+        maxSeriesSteps: number;
 
         /**
          * Creates a new PunishmentRandomSettings instance using the specified properties.
@@ -11240,8 +11249,11 @@ export namespace game {
             /** PunishmentRandomSettings maxDifficultyOvershoot */
             maxDifficultyOvershoot?: (number|null);
 
-            /** PunishmentRandomSettings seriesFactionFallbackText */
-            seriesFactionFallbackText?: (string|null);
+            /** PunishmentRandomSettings minSeriesSteps */
+            minSeriesSteps?: (number|null);
+
+            /** PunishmentRandomSettings maxSeriesSteps */
+            maxSeriesSteps?: (number|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -11678,6 +11690,12 @@ export namespace game {
         /** PunishmentSeriesSummary stepCount. */
         stepCount: number;
 
+        /** PunishmentSeriesSummary publishedVersion. */
+        publishedVersion: number;
+
+        /** PunishmentSeriesSummary targetFactionIds. */
+        targetFactionIds: string[];
+
         /**
          * Creates a new PunishmentSeriesSummary instance using the specified properties.
          * @param [properties] Properties to set
@@ -11776,6 +11794,12 @@ export namespace game {
 
             /** PunishmentSeriesSummary stepCount */
             stepCount?: (number|null);
+
+            /** PunishmentSeriesSummary publishedVersion */
+            publishedVersion?: (number|null);
+
+            /** PunishmentSeriesSummary targetFactionIds */
+            targetFactionIds?: (string[]|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -12500,6 +12524,9 @@ export namespace game {
         /** SiteConfig adminPassword. */
         adminPassword: string;
 
+        /** SiteConfig anonymousContributorLabel. */
+        anonymousContributorLabel: string;
+
         /**
          * Creates a new SiteConfig instance using the specified properties.
          * @param [properties] Properties to set
@@ -12592,6 +12619,9 @@ export namespace game {
 
             /** SiteConfig adminPassword */
             adminPassword?: (string|null);
+
+            /** SiteConfig anonymousContributorLabel */
+            anonymousContributorLabel?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

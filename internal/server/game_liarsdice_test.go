@@ -17,6 +17,9 @@ func newLiarsDiceTestServer(t *testing.T) *Server {
 		clients:              map[string]*Client{},
 		socketToClient:       map[string]*Client{},
 		liarsDiceStartTimers: map[string]*time.Timer{},
+		lobbyBroadcastDelay:  time.Hour,
+		roomBroadcastDelay:   time.Hour,
+		playerUpdateDelay:    time.Hour,
 		dataDir:              dir,
 		playersFile:          filepath.Join(dir, "players.json"),
 	}

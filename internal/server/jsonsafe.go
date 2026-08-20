@@ -14,45 +14,6 @@ func emptyStrings(s []string) []string {
 	return s
 }
 
-// sanitizePunishmentTasks 清洗任务池列表，供 admin:action 回复用。
-func sanitizePunishmentTasks(tasks []types.PunishmentTaskConfig) []types.PunishmentTaskConfig {
-	if tasks == nil {
-		return []types.PunishmentTaskConfig{}
-	}
-	out := make([]types.PunishmentTaskConfig, len(tasks))
-	for i, t := range tasks {
-		t.TagIDs = emptyStrings(t.TagIDs)
-		t.FactionIDs = emptyStrings(t.FactionIDs)
-		t.BackgroundImages = emptyStrings(t.BackgroundImages)
-		out[i] = t
-	}
-	return out
-}
-
-// sanitizePunishmentSeries 清洗系列任务列表，供 admin:action 回复用。
-func sanitizePunishmentSeries(series []types.PunishmentSeriesTaskConfig) []types.PunishmentSeriesTaskConfig {
-	if series == nil {
-		return []types.PunishmentSeriesTaskConfig{}
-	}
-	out := make([]types.PunishmentSeriesTaskConfig, len(series))
-	for i, s := range series {
-		s.RoomBackgroundImages = emptyStrings(s.RoomBackgroundImages)
-		if s.RoomNamePool != nil {
-			s.RoomNamePool.Adjectives = emptyStrings(s.RoomNamePool.Adjectives)
-			s.RoomNamePool.Subjects = emptyStrings(s.RoomNamePool.Subjects)
-			s.RoomNamePool.RoomWords = emptyStrings(s.RoomNamePool.RoomWords)
-		}
-		if s.Steps == nil {
-			s.Steps = []types.PunishmentSeriesStep{}
-		}
-		for j := range s.Steps {
-			s.Steps[j].TaskIDs = emptyStrings(s.Steps[j].TaskIDs)
-		}
-		out[i] = s
-	}
-	return out
-}
-
 func emptyPlayers(s []types.PublicPlayer) []types.PublicPlayer {
 	if s == nil {
 		return []types.PublicPlayer{}
@@ -422,6 +383,7 @@ func sanitizePublicConfig(cfg types.AppConfig) types.AppConfig {
 	}
 	for i := range cfg.PunishmentSeriesSummaries {
 		sm := &cfg.PunishmentSeriesSummaries[i]
+		sm.TargetFactionIDs = emptyStrings(sm.TargetFactionIDs)
 		sm.RoomBackgroundImages = emptyStrings(sm.RoomBackgroundImages)
 		if sm.RoomNamePool != nil {
 			sm.RoomNamePool.Adjectives = emptyStrings(sm.RoomNamePool.Adjectives)

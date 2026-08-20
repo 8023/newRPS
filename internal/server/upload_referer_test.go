@@ -79,6 +79,41 @@ func TestServeStaticUploadsRequiresAllowedReferer(t *testing.T) {
 	}
 }
 
+func TestServeStaticContributionCacheIsThirtyDays(t *testing.T) {
+	dir := t.TempDir()
+	contrib := filepath.Join(dir, "contributions")
+	if err := os.MkdirAll(contrib, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(contrib, "bg.webp"), []byte("bg"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{host: "rps.rbq.io", uploadsDir: dir}
+	for _, referer := range []string{"", "https://evil.example/hotlink"} {
+		req := httptest.NewRequest("GET", "/uploads/contributions/bg.webp", nil)
+		req.Host = "rps.rbq.io"
+		if referer != "" {
+			req.Header.Set("Referer", referer)
+		}
+		rec := httptest.NewRecorder()
+		s.serveStatic(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("referer %q: status %d, want 404", referer, rec.Code)
+		}
+	}
+	req := httptest.NewRequest("GET", "/uploads/contributions/bg.webp", nil)
+	req.Host = "rps.rbq.io"
+	req.Header.Set("Referer", "https://rps.rbq.io/")
+	rec := httptest.NewRecorder()
+	s.serveStatic(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("status %d", rec.Code)
+	}
+	if cc := rec.Header().Get("Cache-Control"); !strings.Contains(cc, "public") || !strings.Contains(cc, "max-age=2592000") || !strings.Contains(cc, "immutable") {
+		t.Fatalf("Cache-Control = %q, want public max-age=2592000 immutable", cc)
+	}
+}
+
 // TestServeStaticProofImageRequiresLiveRoom 覆盖"证明图所属房间已销毁则一律拒绝访问"这道
 // 额外限制：即使 Referer 合法，s.proofImageRooms 记录的房间必须还在 s.rooms 里才放行；房间
 // 被清理（cleanupRoomIfEmpty/管理员关房/优雅关停）或压根没有映射（如进程重启后，房间本就

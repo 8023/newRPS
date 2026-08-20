@@ -81,7 +81,6 @@ func (s *Server) migratePunishmentPoolFromJSONIfNeeded() {
 				}
 				extraTasks = append(extraTasks, types.PunishmentTaskConfig{
 					ID:                tid,
-					Name:              fmt.Sprintf("%s · 第%d步变体%d", strings.TrimSpace(ser.Name), si+1, vi+1),
 					Text:              strings.TrimSpace(v.Text),
 					TagIDs:            []string{"series:" + sid},
 					FactionIDs:        append([]string(nil), v.FactionIDs...),
@@ -105,6 +104,7 @@ func (s *Server) migratePunishmentPoolFromJSONIfNeeded() {
 	allTasks := make([]types.PunishmentTaskConfig, 0, len(tasks)+len(extraTasks))
 	allTasks = append(allTasks, tasks...)
 	allTasks = append(allTasks, extraTasks...)
+	stampLegacyPunishmentAttribution(allTasks, seriesOut)
 
 	// 先写系列、最后写作为幂等哨兵的 tasks。若系列写入成功而 tasks 失败，下一次
 	// 启动仍会因 tasks 为空而完整重试；反过来会造成系列永久漏迁。
@@ -118,6 +118,40 @@ func (s *Server) migratePunishmentPoolFromJSONIfNeeded() {
 		if err := s.punishmentStore.replaceTasks(allTasks); err != nil {
 			s.errorLog("punishment_migrate_tasks_failed", err.Error())
 			return
+		}
+	}
+}
+
+// stampLegacyPunishmentAttribution 补齐“迁移执行后才从 JSON 导入”的旧内容元数据。
+// schema v33/v35 的 SQL 回填只能看见打开数据库时已经在表里的行，无法覆盖随后由
+// migratePunishmentPoolFromJSONIfNeeded 插入的数据；导入入口必须镜像补上贡献者、版本和
+// task_group_id，否则旧任务会丢贡献者署名、无法稳定计票，也不会进入按组统计口径。
+func stampLegacyPunishmentAttribution(tasks []types.PunishmentTaskConfig, series []types.PunishmentSeriesTaskConfig) {
+	for i := range tasks {
+		if tasks[i].ContributorPlayerID == "" {
+			tasks[i].ContributorPlayerID = legacyPunishmentContributorID
+			tasks[i].ContributorAnonymous = false
+		}
+		if tasks[i].ContentVersion <= 0 {
+			tasks[i].ContentVersion = 1
+		}
+		if tasks[i].VoteVersion <= 0 {
+			tasks[i].VoteVersion = 1
+		}
+		if strings.TrimSpace(tasks[i].TaskGroupID) == "" {
+			tasks[i].TaskGroupID = tasks[i].ID
+		}
+	}
+	for i := range series {
+		if series[i].ContributorPlayerID == "" {
+			series[i].ContributorPlayerID = legacyPunishmentContributorID
+			series[i].ContributorAnonymous = false
+		}
+		if series[i].ContentVersion <= 0 {
+			series[i].ContentVersion = 1
+		}
+		if series[i].VoteVersion <= 0 {
+			series[i].VoteVersion = 1
 		}
 	}
 }

@@ -3,7 +3,7 @@
 //
 // 文件一览（相对 config/json/）：
 //
-//	site.json, announcement-board.json, security-disclaimer.json, genders.json, gender-factions.json,
+//	site.json, announcement-board.json, security-disclaimer.json,
 //	titles.json, punishments.json, player-punishment-room-name-pool.json, room-tags.json,
 //	room-info-tags.json, title-tag-styles.json, access-control.json, name-war.json, giveaway.json,
 //	pet-bond.json, extreme-mode.json, ranked-score.json, games.json, messages.json
@@ -30,8 +30,6 @@ var splitConfigFiles = []string{
 	"site.json",
 	"announcement-board.json",
 	"security-disclaimer.json",
-	"genders.json",
-	"gender-factions.json",
 	"titles.json",
 	"punishments.json",
 	"player-punishment-room-name-pool.json",
@@ -274,61 +272,6 @@ func distinctTaskGroups(factions []types.GenderFaction) []string {
 	return out
 }
 
-// NormalizePunishmentTasks 清洗任务池列表：trim 文案/ID，任务难度夹紧到 1-99，
-// 标签/阵营去重去空（不在此处校验标签 ID 是否存在——那是调用方的事）。
-// -1 是"不参与随机抽取，仅供系列任务按 ID 引用"的显式标记，唯一合法取值即 -1，
-// 其余负数一律归一化为 -1（不保留具体负值，避免被误解为有额外含义）；
-// 0 及正数才是真实难度，夹紧到 1-99。
-// 导出给 server 包的 punishmentTasksSave 复用。
-func NormalizePunishmentTasks(tasks []types.PunishmentTaskConfig) []types.PunishmentTaskConfig {
-	out := make([]types.PunishmentTaskConfig, 0, len(tasks))
-	for i, task := range tasks {
-		id := strings.TrimSpace(task.ID)
-		if id == "" {
-			id = fmt.Sprintf("task%d", i+1)
-		}
-		order := task.Order
-		if order < 0 {
-			order = -1
-		} else {
-			order = clampNumber(float64(order), 1, 99)
-		}
-		out = append(out, types.PunishmentTaskConfig{
-			ID:                id,
-			Name:              strings.TrimSpace(task.Name),
-			Text:              strings.TrimSpace(task.Text),
-			TagIDs:            dedupStrings(cleanLines(task.TagIDs)),
-			FactionIDs:        dedupStrings(cleanLines(task.FactionIDs)),
-			Order:             order,
-			BackgroundImages:  cleanLines(task.BackgroundImages),
-			BackgroundOpacity: clampOpacity(task.BackgroundOpacity),
-		})
-	}
-	return out
-}
-
-// NormalizePunishmentSeriesTasks 清洗系列任务列表：trim、房名/背景规范化，
-// 每步 TaskIDs 去重去空（不校验任务 ID 是否存在——允许悬空引用）。
-// 导出给 server 包的 punishmentSeriesSave 复用。
-func NormalizePunishmentSeriesTasks(series []types.PunishmentSeriesTaskConfig) []types.PunishmentSeriesTaskConfig {
-	out := make([]types.PunishmentSeriesTaskConfig, 0, len(series))
-	for _, s := range series {
-		s.ID = strings.TrimSpace(s.ID)
-		s.Name = strings.TrimSpace(s.Name)
-		s.RoomBackgroundImages = cleanLines(s.RoomBackgroundImages)
-		s.RoomNamePool = normalizeRoomNamePool(s.RoomNamePool)
-		steps := make([]types.PunishmentSeriesStep, 0, len(s.Steps))
-		for _, step := range s.Steps {
-			steps = append(steps, types.PunishmentSeriesStep{
-				TaskIDs: dedupStrings(cleanLines(step.TaskIDs)),
-			})
-		}
-		s.Steps = steps
-		out = append(out, s)
-	}
-	return out
-}
-
 func normalizePunishmentTags(tags []types.PunishmentTagConfig) []types.PunishmentTagConfig {
 	out := make([]types.PunishmentTagConfig, 0, len(tags))
 	for _, tag := range tags {
@@ -341,6 +284,10 @@ func normalizePunishmentTags(tags []types.PunishmentTagConfig) []types.Punishmen
 	return out
 }
 
+// contributionSeriesTechnicalMax 必须与 server.maxSeriesSteps / 前端 MAX_SERIES_STEPS
+// 保持一致。config 包不能反向依赖 server，因此在配置入口独立校验同值上限。
+const contributionSeriesTechnicalMax = 1000
+
 func normalizePunishmentRandomSettings(rs types.PunishmentRandomSettings) types.PunishmentRandomSettings {
 	if rs.OrderStep < 0 {
 		rs.OrderStep = 0
@@ -348,7 +295,15 @@ func normalizePunishmentRandomSettings(rs types.PunishmentRandomSettings) types.
 	if rs.MaxDifficultyOvershoot < 0 {
 		rs.MaxDifficultyOvershoot = 0
 	}
-	rs.SeriesFactionFallbackText = strings.TrimSpace(rs.SeriesFactionFallbackText)
+	if rs.MinSeriesSteps <= 0 {
+		rs.MinSeriesSteps = 10
+	}
+	if rs.MaxSeriesSteps <= 0 {
+		rs.MaxSeriesSteps = 20
+	}
+	// 显式填写的越界值不能在 normalize 阶段静默夹紧：管理员保存超过 1000、或最高值
+	// 小于最低值时，必须由 ValidateConfig 返回可见错误，避免界面显示“保存成功”但实际值
+	// 已被服务器悄悄改写。
 	return rs
 }
 
@@ -356,10 +311,11 @@ func normalizePunishmentRandomSettings(rs types.PunishmentRandomSettings) types.
 // 任务池/系列任务已迁到 SQLite；旧文件里的 tasks/seriesTasks 字段由标准
 // encoding/json 忽略（unknown field 默认丢弃），并由 server 一次性导入。
 type punishmentsFileData struct {
-	Tags                      []types.PunishmentTagConfig `json:"tags"`
-	OrderStep                 float64                     `json:"orderStep"`
-	MaxDifficultyOvershoot    float64                     `json:"maxDifficultyOvershoot"`
-	SeriesFactionFallbackText string                      `json:"seriesFactionFallbackText"`
+	Tags                   []types.PunishmentTagConfig `json:"tags"`
+	OrderStep              float64                     `json:"orderStep"`
+	MaxDifficultyOvershoot float64                     `json:"maxDifficultyOvershoot"`
+	MinSeriesSteps         int                         `json:"minSeriesSteps"`
+	MaxSeriesSteps         int                         `json:"maxSeriesSteps"`
 }
 
 // punishmentsLegacyDiskData 仅用于磁盘迁移路径：旧 punishments.json 顶层数组拍平、
@@ -375,10 +331,11 @@ type punishmentsLegacyDiskData struct {
 
 func punishmentsFileFromConfig(cfg types.AppConfig) punishmentsFileData {
 	return punishmentsFileData{
-		Tags:                      cfg.PunishmentTags,
-		OrderStep:                 cfg.PunishmentRandomSettings.OrderStep,
-		MaxDifficultyOvershoot:    cfg.PunishmentRandomSettings.MaxDifficultyOvershoot,
-		SeriesFactionFallbackText: cfg.PunishmentRandomSettings.SeriesFactionFallbackText,
+		Tags:                   cfg.PunishmentTags,
+		OrderStep:              cfg.PunishmentRandomSettings.OrderStep,
+		MaxDifficultyOvershoot: cfg.PunishmentRandomSettings.MaxDifficultyOvershoot,
+		MinSeriesSteps:         cfg.PunishmentRandomSettings.MinSeriesSteps,
+		MaxSeriesSteps:         cfg.PunishmentRandomSettings.MaxSeriesSteps,
 	}
 }
 
@@ -389,12 +346,13 @@ func punishmentsFileFromConfig(cfg types.AppConfig) punishmentsFileData {
 // 磁盘文件；写盘时无条件保留能读到的旧字段，多写不多余（迁移完成后就是纯死数据，
 // 但比"抢在迁移之前被写没"安全）。
 type punishmentsFileWriteData struct {
-	Tags                      []types.PunishmentTagConfig `json:"tags"`
-	OrderStep                 float64                     `json:"orderStep"`
-	MaxDifficultyOvershoot    float64                     `json:"maxDifficultyOvershoot"`
-	SeriesFactionFallbackText string                      `json:"seriesFactionFallbackText"`
-	Tasks                     json.RawMessage             `json:"tasks,omitempty"`
-	SeriesTasks               json.RawMessage             `json:"seriesTasks,omitempty"`
+	Tags                   []types.PunishmentTagConfig `json:"tags"`
+	OrderStep              float64                     `json:"orderStep"`
+	MaxDifficultyOvershoot float64                     `json:"maxDifficultyOvershoot"`
+	MinSeriesSteps         int                         `json:"minSeriesSteps"`
+	MaxSeriesSteps         int                         `json:"maxSeriesSteps"`
+	Tasks                  json.RawMessage             `json:"tasks,omitempty"`
+	SeriesTasks            json.RawMessage             `json:"seriesTasks,omitempty"`
 }
 
 // preserveLegacyPunishmentPoolJSON 从磁盘现有 punishments.json 原样读出 tasks/seriesTasks
@@ -417,9 +375,10 @@ func preserveLegacyPunishmentPoolJSON(path string) (tasks, seriesTasks json.RawM
 func applyPunishmentsFile(cfg *types.AppConfig, file punishmentsFileData) {
 	cfg.PunishmentTags = file.Tags
 	cfg.PunishmentRandomSettings = types.PunishmentRandomSettings{
-		OrderStep:                 file.OrderStep,
-		MaxDifficultyOvershoot:    file.MaxDifficultyOvershoot,
-		SeriesFactionFallbackText: file.SeriesFactionFallbackText,
+		OrderStep:              file.OrderStep,
+		MaxDifficultyOvershoot: file.MaxDifficultyOvershoot,
+		MinSeriesSteps:         file.MinSeriesSteps,
+		MaxSeriesSteps:         file.MaxSeriesSteps,
 	}
 	// 清空旧字段，避免下发/写回时混入。
 	cfg.Punishments = nil
@@ -445,6 +404,30 @@ func ReadLegacyPunishmentPoolFromDisk() (tasks []types.PunishmentTaskConfig, ser
 		return nil, nil, fmt.Errorf("解析惩罚配置失败 %s: %w", path, err)
 	}
 	return file.Tasks, file.SeriesTasks, nil
+}
+
+func ReadGenderSeedsFromDisk() (factions []types.GenderFaction, genders []types.GenderOption, err error) {
+	if err := readOptionalJSON(configPath("gender-factions.json"), &factions); err != nil {
+		return nil, nil, err
+	}
+	if err := readOptionalJSON(configPath("genders.json"), &genders); err != nil {
+		return nil, nil, err
+	}
+	return factions, genders, nil
+}
+
+func readOptionalJSON(path string, dest any) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if err := json.Unmarshal(data, dest); err != nil {
+		return fmt.Errorf("解析 %s 失败: %w", path, err)
+	}
+	return nil
 }
 
 // dedupStrings 按出现顺序去重（用于任务的阵营标签多选，避免后台重复勾选被存两遍）。
@@ -572,6 +555,10 @@ func normalizeConfig(input types.AppConfig) types.AppConfig {
 	out.Site.Name = strings.TrimSpace(input.Site.Name)
 	out.Site.Description = strings.TrimSpace(input.Site.Description)
 	out.Site.AdminPassword = adminPass
+	out.Site.AnonymousContributorLabel = strings.TrimSpace(input.Site.AnonymousContributorLabel)
+	if out.Site.AnonymousContributorLabel == "" {
+		out.Site.AnonymousContributorLabel = types.DefaultAnonymousContributorLabel
+	}
 	out.AnnouncementBoard = ab
 	out.GenderFactions = genderFactions
 	out.Genders = genders
@@ -642,6 +629,62 @@ func assertHexColor(value, label string) error {
 	return nil
 }
 
+func ValidateGenders(input types.AppConfig) error {
+	if len(input.Genders) == 0 {
+		return fmt.Errorf("至少需要一个性别选项")
+	}
+	if len(input.GenderFactions) == 0 {
+		return fmt.Errorf("至少需要一个性别阵营")
+	}
+	factionIDs := make([]string, len(input.GenderFactions))
+	for i, f := range input.GenderFactions {
+		factionIDs[i] = f.ID
+	}
+	if err := assertUnique(factionIDs, "阵营 ID"); err != nil {
+		return err
+	}
+	genderIDs := make([]string, len(input.Genders))
+	for i, g := range input.Genders {
+		genderIDs[i] = g.ID
+	}
+	if err := assertUnique(genderIDs, "性别 ID"); err != nil {
+		return err
+	}
+	factionIDSet := make(map[string]struct{}, len(factionIDs))
+	for _, id := range factionIDs {
+		factionIDSet[id] = struct{}{}
+	}
+	for _, g := range input.Genders {
+		if g.Label == "" {
+			return fmt.Errorf("性别显示文字不能为空")
+		}
+		if g.FactionID == "" {
+			return fmt.Errorf("性别 %s 必须归属一个阵营", g.Label)
+		}
+		if _, ok := factionIDSet[g.FactionID]; !ok {
+			return fmt.Errorf("性别 %s 所属阵营 %s 不存在", g.Label, g.FactionID)
+		}
+	}
+	for _, faction := range input.GenderFactions {
+		if faction.Label == "" {
+			return fmt.Errorf("阵营名称不能为空")
+		}
+		if faction.TaskGroup != "male" && faction.TaskGroup != "female" && faction.TaskGroup != "default" {
+			return fmt.Errorf("%s 的任务分组必须是生理男/生理女/默认兜底之一", faction.Label)
+		}
+		if err := assertHexColor(faction.TextColor, faction.Label+" 文字颜色"); err != nil {
+			return err
+		}
+		if err := assertHexColor(faction.BackgroundColor, faction.Label+" 背景颜色"); err != nil {
+			return err
+		}
+		if err := assertHexColor(faction.BorderColor, faction.Label+" 边框颜色"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ValidateConfig 清洗并校验；不完整配置直接 error，不注入代码默认内容。
 func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 	input = normalizeConfig(input)
@@ -656,58 +699,8 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 			return input, fmt.Errorf("公告板内容不能为空")
 		}
 	}
-	if len(input.Genders) == 0 {
-		return input, fmt.Errorf("至少需要一个性别选项")
-	}
-	if len(input.GenderFactions) == 0 {
-		return input, fmt.Errorf("至少需要一个性别阵营")
-	}
-	factionIDs := make([]string, len(input.GenderFactions))
-	for i, f := range input.GenderFactions {
-		factionIDs[i] = f.ID
-	}
-	if err := assertUnique(factionIDs, "阵营 ID"); err != nil {
-		return input, err
-	}
-	genderIDs := make([]string, len(input.Genders))
-	for i, g := range input.Genders {
-		genderIDs[i] = g.ID
-	}
-	if err := assertUnique(genderIDs, "性别 ID"); err != nil {
-		return input, err
-	}
-	factionIDSet := make(map[string]struct{}, len(factionIDs))
-	for _, id := range factionIDs {
-		factionIDSet[id] = struct{}{}
-	}
-	for _, g := range input.Genders {
-		if g.Label == "" {
-			return input, fmt.Errorf("性别显示文字不能为空")
-		}
-		// 显示文字允许重复：同一文案（如 "SUB"）可以同时挂在多个阵营下，各自是独立的
-		// GenderOption（不同 ID + 不同 FactionID）。唯一性由上面的性别 ID 保证，
-		// 前端 gendersForFaction 按 factionId 过滤下拉池，同一阵营内不会出现重复文案的选项。
-		if g.FactionID == "" {
-			return input, fmt.Errorf("性别 %s 必须归属一个阵营", g.Label)
-		}
-		if _, ok := factionIDSet[g.FactionID]; !ok {
-			return input, fmt.Errorf("性别 %s 所属阵营 %s 不存在", g.Label, g.FactionID)
-		}
-	}
-	for _, faction := range input.GenderFactions {
-		if faction.Label == "" {
-			return input, fmt.Errorf("阵营名称不能为空")
-		}
-		if faction.TaskGroup != "male" && faction.TaskGroup != "female" && faction.TaskGroup != "default" {
-			return input, fmt.Errorf("%s 的任务分组必须是生理男/生理女/默认兜底之一", faction.Label)
-		}
-		if err := assertHexColor(faction.TextColor, faction.Label+" 文字颜色"); err != nil {
-			return input, err
-		}
-		if err := assertHexColor(faction.BackgroundColor, faction.Label+" 背景颜色"); err != nil {
-			return input, err
-		}
-		if err := assertHexColor(faction.BorderColor, faction.Label+" 边框颜色"); err != nil {
+	if len(input.Genders) > 0 || len(input.GenderFactions) > 0 {
+		if err := ValidateGenders(input); err != nil {
 			return input, err
 		}
 	}
@@ -752,8 +745,18 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 			return input, fmt.Errorf("%s 的随机房名至少需要名词/动词和房间词", tag.Name)
 		}
 	}
-	// 任务池 / 系列任务已迁到 SQLite，不再随 AppConfig 校验；见 server 的
-	// punishmentTasksSave / punishmentSeriesSave。
+	if input.PunishmentRandomSettings.MinSeriesSteps > contributionSeriesTechnicalMax {
+		return input, fmt.Errorf("系列任务最低步数不能超过 %d", contributionSeriesTechnicalMax)
+	}
+	if input.PunishmentRandomSettings.MaxSeriesSteps > contributionSeriesTechnicalMax {
+		return input, fmt.Errorf("系列任务最高步数不能超过 %d", contributionSeriesTechnicalMax)
+	}
+	if input.PunishmentRandomSettings.MaxSeriesSteps < input.PunishmentRandomSettings.MinSeriesSteps {
+		return input, fmt.Errorf("系列任务最高步数不能小于最低步数")
+	}
+	// 任务池 / 系列任务已迁到 SQLite，不再随 AppConfig 校验，也不再支持管理员后台直接
+	// 增删改——内容一律走玩家投稿 + 管理员审批（见 server 的 contribution_publish.go /
+	// contribution_crud.go 与 s.validatePunishmentTask）。
 	if input.PlayerPunishmentRoomNamePool == nil || len(input.PlayerPunishmentRoomNamePool.Subjects) == 0 || len(input.PlayerPunishmentRoomNamePool.RoomWords) == 0 {
 		return input, fmt.Errorf("玩家发布任务随机房名至少需要名词/动词和房间词")
 	}
@@ -992,6 +995,16 @@ func LoadConfig() (types.AppConfig, error) {
 	if err != nil {
 		return types.AppConfig{}, err
 	}
+	factions, genders, seedErr := ReadGenderSeedsFromDisk()
+	if seedErr != nil {
+		return types.AppConfig{}, seedErr
+	}
+	if len(cfg.GenderFactions) == 0 {
+		cfg.GenderFactions = factions
+	}
+	if len(cfg.Genders) == 0 {
+		cfg.Genders = genders
+	}
 	cfg = fixAnnouncementBoardEnabled(configPath("announcement-board.json"), cfg)
 	cfg = fixGiveawayVoteLimits(cfg)
 	valid, err := ValidateConfig(cfg)
@@ -1006,7 +1019,6 @@ func LoadConfig() (types.AppConfig, error) {
 // 原始 JSON 结构承接旧字段，避免先反序列化到新版类型后把旧文案静默丢掉。
 type punishmentTaskMigrationRecord struct {
 	ID                string            `json:"id"`
-	Name              string            `json:"name"`
 	Text              string            `json:"text"`
 	FactionIDs        []string          `json:"factionIds"`
 	Order             int               `json:"order"`
@@ -1065,7 +1077,6 @@ func convertPunishmentRecords(records []punishmentMigrationRecord, factionIDsByG
 			if len(task.Variants) == 0 && strings.TrimSpace(task.Text) != "" {
 				out.Tasks = append(out.Tasks, types.PunishmentTaskConfig{
 					ID:                strings.TrimSpace(task.ID),
-					Name:              strings.TrimSpace(task.Name),
 					Text:              strings.TrimSpace(task.Text),
 					FactionIDs:        cleanLines(task.FactionIDs),
 					Order:             order,
@@ -1078,10 +1089,6 @@ func convertPunishmentRecords(records []punishmentMigrationRecord, factionIDsByG
 			baseID := strings.TrimSpace(task.ID)
 			if baseID == "" {
 				baseID = fmt.Sprintf("task%d", taskIndex+1)
-			}
-			baseName := strings.TrimSpace(task.Name)
-			if baseName == "" {
-				baseName = fmt.Sprintf("任务 %d", taskIndex+1)
 			}
 			created := 0
 			for _, group := range []string{"default", "male", "female"} {
@@ -1106,7 +1113,6 @@ func convertPunishmentRecords(records []punishmentMigrationRecord, factionIDsByG
 				}
 				out.Tasks = append(out.Tasks, types.PunishmentTaskConfig{
 					ID:                id,
-					Name:              baseName,
 					Text:              text,
 					FactionIDs:        factionIDs,
 					Order:             order,
@@ -1117,14 +1123,14 @@ func convertPunishmentRecords(records []punishmentMigrationRecord, factionIDsByG
 			}
 			if created == 0 {
 				out.Tasks = append(out.Tasks, types.PunishmentTaskConfig{
-					ID: baseID, Name: baseName, Text: "请完成本局惩罚。", FactionIDs: []string{}, Order: order,
+					ID: baseID, Text: "请完成本局惩罚。", FactionIDs: []string{}, Order: order,
 					BackgroundImages: cleanLines(task.BackgroundImages), BackgroundOpacity: task.BackgroundOpacity,
 				})
 			}
 		}
 		if len(out.Tasks) == 0 {
 			out.Tasks = []types.PunishmentTaskConfig{{
-				ID: "task1", Name: "默认任务", Text: "请完成本局惩罚。", FactionIDs: []string{}, Order: 50,
+				ID: "task1", Text: "请完成本局惩罚。", FactionIDs: []string{}, Order: 50,
 				BackgroundImages: []string{}, BackgroundOpacity: 0.22,
 			}}
 		}
@@ -1186,6 +1192,7 @@ func upgradeLegacyPunishmentsForSave(input types.AppConfig) (types.AppConfig, er
 //  1. 若仍是顶层数组（旧任务类型容器），先展开 variants→factionIds，再拍平成 tags/tasks；
 //  2. 若已是对象但缺少 tags 字段，同样触发拍平；
 //  3. 已是新结构（顶层含 tags）则跳过。
+//
 // 迁移后写回磁盘；旧文件保留为 punishments.json.bak（若尚无备份）。
 func migratePunishmentsFile() error {
 	path := configPath("punishments.json")
@@ -1301,7 +1308,6 @@ func flattenPunishmentTypesToFile(records []punishmentMigrationRecord) punishmen
 			}
 			file.Tasks = append(file.Tasks, types.PunishmentTaskConfig{
 				ID:                id,
-				Name:              strings.TrimSpace(task.Name),
 				Text:              strings.TrimSpace(task.Text),
 				TagIDs:            []string{tagID},
 				FactionIDs:        cleanLines(task.FactionIDs),
@@ -1549,6 +1555,12 @@ func ensureSplitConfig() error {
 	if err := writeSplitConfig(cfg); err != nil {
 		return fmt.Errorf("迁移单体配置到拆分文件失败: %w", err)
 	}
+	if err := writeJSONFile(configPath("genders.json"), cfg.Genders); err != nil {
+		return fmt.Errorf("迁移性别种子失败: %w", err)
+	}
+	if err := writeJSONFile(configPath("gender-factions.json"), cfg.GenderFactions); err != nil {
+		return fmt.Errorf("迁移阵营种子失败: %w", err)
+	}
 	// 单体拍平产生的 tasks 写回 punishments.json（含 tasks 字段），供 SQLite 导入。
 	if monothlicPool != nil {
 		if err := writeJSONFile(configPath("punishments.json"), *monothlicPool); err != nil {
@@ -1576,8 +1588,6 @@ func readSplitConfig() (types.AppConfig, error) {
 		{"site.json", &cfg.Site},
 		{"announcement-board.json", &cfg.AnnouncementBoard},
 		{"security-disclaimer.json", &cfg.SecurityDisclaimer},
-		{"genders.json", &cfg.Genders},
-		{"gender-factions.json", &cfg.GenderFactions},
 		{"titles.json", &cfg.Titles},
 		{"punishments.json", &punishmentsFile},
 		{"player-punishment-room-name-pool.json", &cfg.PlayerPunishmentRoomNamePool},
@@ -1614,12 +1624,13 @@ func writeSplitConfig(cfg types.AppConfig) error {
 	}
 	legacyTasks, legacySeries := preserveLegacyPunishmentPoolJSON(configPath("punishments.json"))
 	punishmentsOut := punishmentsFileWriteData{
-		Tags:                      punishmentsFile.Tags,
-		OrderStep:                 punishmentsFile.OrderStep,
-		MaxDifficultyOvershoot:    punishmentsFile.MaxDifficultyOvershoot,
-		SeriesFactionFallbackText: punishmentsFile.SeriesFactionFallbackText,
-		Tasks:                     legacyTasks,
-		SeriesTasks:               legacySeries,
+		Tags:                   punishmentsFile.Tags,
+		OrderStep:              punishmentsFile.OrderStep,
+		MaxDifficultyOvershoot: punishmentsFile.MaxDifficultyOvershoot,
+		MinSeriesSteps:         punishmentsFile.MinSeriesSteps,
+		MaxSeriesSteps:         punishmentsFile.MaxSeriesSteps,
+		Tasks:                  legacyTasks,
+		SeriesTasks:            legacySeries,
 	}
 	parts := []struct {
 		file  string
@@ -1628,8 +1639,6 @@ func writeSplitConfig(cfg types.AppConfig) error {
 		{"site.json", cfg.Site},
 		{"announcement-board.json", cfg.AnnouncementBoard},
 		{"security-disclaimer.json", cfg.SecurityDisclaimer},
-		{"genders.json", cfg.Genders},
-		{"gender-factions.json", cfg.GenderFactions},
 		{"titles.json", cfg.Titles},
 		{"punishments.json", punishmentsOut},
 		{"player-punishment-room-name-pool.json", pool},
@@ -1740,19 +1749,6 @@ func SaveConfig(next types.AppConfig) (types.AppConfig, error) {
 // ResetConfig 从磁盘重新加载配置（已无 default/active 双轨；不覆盖用户文件）。
 func ResetConfig() (types.AppConfig, error) {
 	return LoadConfig()
-}
-
-// ExportConfigText 导出合并后的完整配置 JSON（便于备份/迁移）。
-func ExportConfigText() (string, error) {
-	cfg, err := LoadConfig()
-	if err != nil {
-		return "", fmt.Errorf("导出配置失败: %w", err)
-	}
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("导出配置失败: %w", err)
-	}
-	return string(data) + "\n", nil
 }
 
 // EnsureConfigPermissions 将 config/json/*.json 设为仅属主可读写（0600）、bin/server 设为可执行（部署后可选调用）。

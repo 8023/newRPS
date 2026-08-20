@@ -24,6 +24,7 @@ func newTestServer(t *testing.T) *Server {
 		rateBuckets:          map[string]*rateBucket{},
 		lobbyBroadcastDelay:  time.Hour,
 		roomBroadcastDelay:   time.Hour,
+		playerUpdateDelay:    time.Hour,
 	}
 }
 

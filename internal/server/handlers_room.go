@@ -193,7 +193,7 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		SeatStats:    map[types.SeatKey]types.SeatStats{types.SeatA: emptySeatStats(), types.SeatB: emptySeatStats()},
 		RoundHistory: []types.RoundHistoryItem{}, LockedSeatIDs: map[string]struct{}{},
 		DisconnectForfeits: map[string]DisconnectForfeit{}, CreatedAt: nowMs(),
-		// PunishmentTaskProgress 零值即为 0，随房间存活期累积，销毁即释放。
+		// PunishmentTaskProgress 零值即 nil map，按玩家 ID 懒初始化，随房间存活期累积，销毁即释放。
 	}
 	if isLiarsDice {
 		minP, maxP := liarsDiceRosterBounds(settings)
@@ -249,6 +249,15 @@ func (s *Server) onRoomJoin(client *Client, env wsEnvelope) {
 	room := s.rooms[p.RoomID]
 	if player == nil || room == nil {
 		client.reply(env.ID, nil, "房间不存在")
+		return
+	}
+	if player.RoomID == room.ID {
+		// 已经在这个房间里（典型场景：惩罚未完成时刷新页面，前端状态还没恢复完就又发了
+		// 一次 room:join）：不当成“换房”处理，跳过密码校验与 leaveRoom，避免被惩罚阶段
+		// 的禁止离开检查挡在门外，直接重新同步频道并回传当前房间快照即可。
+		s.clientLeaveRoom(client, lobbyChannel)
+		s.clientJoinRoom(client, room.ID)
+		client.reply(env.ID, map[string]any{"room": s.roomSnapshot(room, true, true)}, "")
 		return
 	}
 	if room.Settings.Password != "" {
@@ -1633,9 +1642,9 @@ func (s *Server) onPunishmentSubmit(client *Client, env wsEnvelope) {
 	// 先应答再广播，避免广播路径异常时客户端收不到 ack
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 	// 证明提交后立即推送（不走 debounce），胜方尽快看到图片/文字。
-	if s.punishmentComplete(room) {
-		s.resetForNextRound(room)
-	} else {
+	// 用 finishPunishmentIfComplete 而不是直接 resetForNextRound：棋类「每子惩罚」需要在惩罚完成后
+	// 恢复原对局（resumeAfterMidGamePunishment）而不是强行开新局。
+	if !s.finishPunishmentIfComplete(room) {
 		s.broadcastRoomImmediate(room.ID, false)
 	}
 	imageFile := ""
@@ -1711,7 +1720,7 @@ func (s *Server) onPunishmentAssignTask(client *Client, env wsEnvelope) {
 	if s.eventDB != nil {
 		if updated := latestPunishmentTask(room, p.PlayerID); updated != nil {
 			updated.EventID = randomID()
-			if err := s.eventDB.insertPunishmentTask(updated.EventID, nowMs(), "player", room.ID, player.ID, playerShortName(player), p.PlayerID, updated.PlayerName, cleanTask); err != nil {
+			if err := s.eventDB.insertPunishmentTask(updated.EventID, nowMs(), "player", room.ID, player.ID, playerShortName(player), p.PlayerID, updated.PlayerName, cleanTask, punishmentEventMeta{}); err != nil {
 				s.errorLog("punishment_event_insert_failed", err.Error())
 			}
 		}
@@ -1787,7 +1796,7 @@ func (s *Server) onPunishmentReview(client *Client, env wsEnvelope) {
 			if newTask != nil {
 				targetName = newTask.PlayerName
 			}
-			if err := s.eventDB.insertPunishmentTask(newID, reviewedAt, "player", room.ID, player.ID, playerShortName(player), p.PlayerID, targetName, cleanTask); err != nil {
+			if err := s.eventDB.insertPunishmentTask(newID, reviewedAt, "player", room.ID, player.ID, playerShortName(player), p.PlayerID, targetName, cleanTask, punishmentEventMeta{}); err != nil {
 				s.errorLog("punishment_event_insert_failed", err.Error())
 			}
 		}
@@ -1819,9 +1828,8 @@ func (s *Server) onPunishmentReview(client *Client, env wsEnvelope) {
 	s.updateProofInLatestHistory(room, p.PlayerID, types.HistoryProof{
 		Status: "approved", ReviewedBy: player.ID, ReviewedAt: &reviewedAt, RejectReason: reviewMessage,
 	})
-	if s.punishmentComplete(room) {
-		s.resetForNextRound(room)
-	} else {
+	// 用 finishPunishmentIfComplete 而不是直接 resetForNextRound：棋类「每子惩罚」需要恢复原对局而不是开新局。
+	if !s.finishPunishmentIfComplete(room) {
 		s.broadcastRoom(room.ID, false)
 	}
 	client.reply(env.ID, map[string]any{"ok": true}, "")
@@ -1874,9 +1882,8 @@ func (s *Server) onPunishmentConfirm(client *Client, env wsEnvelope) {
 	s.updateProofInLatestHistory(room, p.PlayerID, types.HistoryProof{
 		Status: "approved", ReviewedBy: player.ID, ReviewedAt: &reviewedAt,
 	})
-	if s.punishmentComplete(room) {
-		s.resetForNextRound(room)
-	} else {
+	// 用 finishPunishmentIfComplete 而不是直接 resetForNextRound：棋类「每子惩罚」需要恢复原对局而不是开新局。
+	if !s.finishPunishmentIfComplete(room) {
 		s.broadcastRoom(room.ID, false)
 	}
 	client.reply(env.ID, map[string]any{"ok": true}, "")
@@ -2071,8 +2078,6 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 		Message            string                             `json:"message"`
 		DurationSeconds    *float64                           `json:"durationSeconds"`
 		Result             types.RoundResult                  `json:"result"`
-		Tasks              []types.PunishmentTaskConfig       `json:"tasks"`
-		Series             []types.PunishmentSeriesTaskConfig `json:"series"`
 		Refs               []chatMessageRef                   `json:"refs"`
 	}
 	_ = decodeD(env, &p)
@@ -2083,33 +2088,27 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, "需要管理员权限")
 		return
 	}
-	if p.Action == "punishmentTasksGet" {
-		client.reply(env.ID, map[string]any{"tasks": sanitizePunishmentTasks(s.punishmentTasksCache)}, "")
-		return
-	}
-	if p.Action == "punishmentTasksSave" {
-		if err := s.savePunishmentTasks(p.Tasks); err != nil {
+	if strings.HasPrefix(p.Action, "contribution") || p.Action == "gendersGet" || p.Action == "gendersSave" {
+		raw := map[string]any{}
+		_ = decodeD(env, &raw)
+		raw["adminId"] = "admin"
+		if admin != nil {
+			raw["adminId"] = admin.ID
+		}
+		out, err := s.handleAdminContributionAction(p.Action, raw)
+		if err != nil {
 			client.reply(env.ID, nil, err.Error())
 			return
 		}
-		client.reply(env.ID, map[string]any{"tasks": sanitizePunishmentTasks(s.punishmentTasksCache)}, "")
-		// 任务增删或阵营调整会改变系列步骤的可用性；同步刷新建房面板的系列摘要。
-		s.emitConfigUpdate()
-		return
-	}
-	if p.Action == "punishmentSeriesGet" {
-		client.reply(env.ID, map[string]any{"series": sanitizePunishmentSeries(s.punishmentSeriesCache)}, "")
-		return
-	}
-	if p.Action == "punishmentSeriesSave" {
-		if err := s.savePunishmentSeries(p.Series); err != nil {
-			client.reply(env.ID, nil, err.Error())
-			return
+		if out != nil {
+			client.reply(env.ID, out, "")
+		} else {
+			client.reply(env.ID, map[string]any{"ok": true}, "")
 		}
-		client.reply(env.ID, map[string]any{"series": sanitizePunishmentSeries(s.punishmentSeriesCache)}, "")
-		s.emitConfigUpdate() // 摘要变化同步给建房面板
 		return
 	}
+	// 任务池/系列任务不再支持管理员在后台直接增删改：内容一律走玩家投稿 + 管理员审批
+	// （见 contribution* 系列 admin action），管理员只保留审批/批注/下架等审核类操作。
 	// 聊天管理走软删除，不再有"一键清空大厅/房间聊天"——只能针对检索出的具体消息
 	// （见 admin:chatSearch）单条/批量删除或恢复。删除即时持久化（面向普通玩家的
 	// recent/older 从此过滤掉这些行，新老访客都读不到）并推送 chat:deleted 通知在线
@@ -2189,6 +2188,7 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 			s.dropSyncChannel(channelRoom(p.RoomID))
 			delete(s.rooms, p.RoomID)
 			s.dropProofImageRoomEntries(p.RoomID)
+			s.recordSeriesRunProgressOnClose(room)
 			if s.eventDB != nil {
 				closerID, closerName := "", "管理员"
 				if admin != nil {

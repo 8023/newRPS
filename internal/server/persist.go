@@ -11,46 +11,58 @@ import (
 // persistedPlayer 是磁盘上的玩家档案形状（写路径：内存 → SQLite players + player_secrets；
 // 读路径：SQLite）。
 type persistedPlayer struct {
-	ID                           string            `json:"id"`
-	PlayerID                     string            `json:"playerId"`
-	PlayerSecrets                []string          `json:"playerSecrets,omitempty"`
-	ClaimKey                     string            `json:"claimKey,omitempty"`
-	Name                         string            `json:"name"`
-	GenderID                     string            `json:"genderId"`
-	FactionID                    string            `json:"factionId"`
-	AvatarURL                    string            `json:"avatarUrl,omitempty"`
-	NameWarEnabled               *bool             `json:"nameWarEnabled,omitempty"`
-	NameWarAllowRename           *bool             `json:"nameWarAllowRename,omitempty"`
-	NameWarToggledAt             *int64            `json:"nameWarToggledAt,omitempty"`
-	NameWarOriginalName          string            `json:"nameWarOriginalName,omitempty"`
-	NameWarPenaltyName           string            `json:"nameWarPenaltyName,omitempty"`
-	NameWarPunished              *bool             `json:"nameWarPunished,omitempty"`
-	NameWarRenameProtectedUntil  *int64            `json:"nameWarRenameProtectedUntil,omitempty"`
-	NameWarRenamedBy             string            `json:"nameWarRenamedBy,omitempty"`
-	NameWarRenamedByName         string            `json:"nameWarRenamedByName,omitempty"`
-	NameWarRenameWindowStartedAt *int64            `json:"nameWarRenameWindowStartedAt,omitempty"`
-	NameWarRenameCount           *int              `json:"nameWarRenameCount,omitempty"`
-	GiveawayEnabled              *bool             `json:"giveawayEnabled,omitempty"`
-	GiveawayValue                *float64          `json:"giveawayValue,omitempty"`
-	GiveawayClicks               *int              `json:"giveawayClicks,omitempty"`
-	RankMultiplierUnlocked       *bool             `json:"rankMultiplierUnlocked,omitempty"`
-	ExtremeModeEnabled           *bool             `json:"extremeModeEnabled,omitempty"`
-	ExtremeModeToggledAt         *int64            `json:"extremeModeToggledAt,omitempty"`
-	ExtremeModeCooldownUntil     *int64            `json:"extremeModeCooldownUntil,omitempty"`
-	ExtremeWinStreak             *int              `json:"extremeWinStreak,omitempty"`
-	ExtremeLastDecayHour         *int64            `json:"extremeLastDecayHour,omitempty"`
-	RankedLastDecayDay           *int64            `json:"rankedLastDecayDay,omitempty"`
-	PushMentionEnabled           *bool             `json:"pushMentionEnabled,omitempty"`
-	PushTurnEnabled              *bool             `json:"pushTurnEnabled,omitempty"`
-	PushSeatEnabled              *bool             `json:"pushSeatEnabled,omitempty"`
-	PushBondEnabled              *bool             `json:"pushBondEnabled,omitempty"`
-	BondMasterEnabled            *bool             `json:"bondMasterEnabled,omitempty"`
-	BondPetEnabled               *bool             `json:"bondPetEnabled,omitempty"`
-	BondPublicDisplay            *bool             `json:"bondPublicDisplay,omitempty"`
-	Stats                        types.PublicStats `json:"stats"`
-	GameStats                    types.GameStats   `json:"gameStats"`
-	CreatedAt                    int64             `json:"createdAt,omitempty"`
-	LastSeenAt                   int64             `json:"lastSeenAt,omitempty"`
+	ID                           string   `json:"id"`
+	PlayerID                     string   `json:"playerId"`
+	PlayerSecrets                []string `json:"playerSecrets,omitempty"`
+	ClaimKey                     string   `json:"claimKey,omitempty"`
+	Name                         string   `json:"name"`
+	GenderID                     string   `json:"genderId"`
+	FactionID                    string   `json:"factionId"`
+	AvatarURL                    string   `json:"avatarUrl,omitempty"`
+	NameWarEnabled               *bool    `json:"nameWarEnabled,omitempty"`
+	NameWarAllowRename           *bool    `json:"nameWarAllowRename,omitempty"`
+	NameWarToggledAt             *int64   `json:"nameWarToggledAt,omitempty"`
+	NameWarOriginalName          string   `json:"nameWarOriginalName,omitempty"`
+	NameWarPenaltyName           string   `json:"nameWarPenaltyName,omitempty"`
+	NameWarPunished              *bool    `json:"nameWarPunished,omitempty"`
+	NameWarRenameProtectedUntil  *int64   `json:"nameWarRenameProtectedUntil,omitempty"`
+	NameWarRenamedBy             string   `json:"nameWarRenamedBy,omitempty"`
+	NameWarRenamedByName         string   `json:"nameWarRenamedByName,omitempty"`
+	NameWarRenameWindowStartedAt *int64   `json:"nameWarRenameWindowStartedAt,omitempty"`
+	NameWarRenameCount           *int     `json:"nameWarRenameCount,omitempty"`
+	GiveawayEnabled              *bool    `json:"giveawayEnabled,omitempty"`
+	GiveawayValue                *float64 `json:"giveawayValue,omitempty"`
+	GiveawayClicks               *int     `json:"giveawayClicks,omitempty"`
+	RankMultiplierUnlocked       *bool    `json:"rankMultiplierUnlocked,omitempty"`
+	ExtremeModeEnabled           *bool    `json:"extremeModeEnabled,omitempty"`
+	ExtremeModeToggledAt         *int64   `json:"extremeModeToggledAt,omitempty"`
+	ExtremeModeCooldownUntil     *int64   `json:"extremeModeCooldownUntil,omitempty"`
+	ExtremeWinStreak             *int     `json:"extremeWinStreak,omitempty"`
+	ExtremeLastDecayHour         *int64   `json:"extremeLastDecayHour,omitempty"`
+	RankedLastDecayDay           *int64   `json:"rankedLastDecayDay,omitempty"`
+	ExtremeForceClosed           *bool    `json:"extremeForceClosed,omitempty"`
+	ExtremeForceClosedAt         *int64   `json:"extremeForceClosedAt,omitempty"`
+	ExtremeRenameProtectedUntil  *int64   `json:"extremeRenameProtectedUntil,omitempty"`
+	ExtremeRenamedBy             string   `json:"extremeRenamedBy,omitempty"`
+	ExtremeRenamedByName         string   `json:"extremeRenamedByName,omitempty"`
+	// GiveawayBoard*：白给自救板当前挂着的内容与投票计数（12 小时有效期，绝对时间戳跨重启
+	// 仍正确；过期后由 refreshGiveawayBoard 在下次访问时清空，加载时不需要特意判过期）。
+	GiveawayBoardText      string            `json:"giveawayBoardText,omitempty"`
+	GiveawayBoardSubmitted *int64            `json:"giveawayBoardSubmittedAt,omitempty"`
+	GiveawayBoardExpires   *int64            `json:"giveawayBoardExpiresAt,omitempty"`
+	GiveawayBoardLikes     *int              `json:"giveawayBoardLikes,omitempty"`
+	GiveawayBoardDislikes  *int              `json:"giveawayBoardDislikes,omitempty"`
+	PushMentionEnabled     *bool             `json:"pushMentionEnabled,omitempty"`
+	PushTurnEnabled        *bool             `json:"pushTurnEnabled,omitempty"`
+	PushSeatEnabled        *bool             `json:"pushSeatEnabled,omitempty"`
+	PushBondEnabled        *bool             `json:"pushBondEnabled,omitempty"`
+	BondMasterEnabled      *bool             `json:"bondMasterEnabled,omitempty"`
+	BondPetEnabled         *bool             `json:"bondPetEnabled,omitempty"`
+	BondPublicDisplay      *bool             `json:"bondPublicDisplay,omitempty"`
+	Stats                  types.PublicStats `json:"stats"`
+	GameStats              types.GameStats   `json:"gameStats"`
+	CreatedAt              int64             `json:"createdAt,omitempty"`
+	LastSeenAt             int64             `json:"lastSeenAt,omitempty"`
 }
 
 func (s *Server) serializePlayer(p *PlayerState) (persistedPlayer, bool) {
@@ -75,7 +87,13 @@ func (s *Server) serializePlayer(p *PlayerState) (persistedPlayer, bool) {
 		ExtremeModeCooldownUntil: p.ExtremeModeCooldownUntil, ExtremeWinStreak: p.ExtremeWinStreak,
 		ExtremeLastDecayHour: p.ExtremeLastDecayHour,
 		RankedLastDecayDay:   p.RankedLastDecayDay,
-		PushMentionEnabled:   p.PushMentionEnabled, PushTurnEnabled: p.PushTurnEnabled, PushSeatEnabled: p.PushSeatEnabled,
+		ExtremeForceClosed:   p.ExtremeForceClosed, ExtremeForceClosedAt: p.ExtremeForceClosedAt,
+		ExtremeRenameProtectedUntil: p.ExtremeRenameProtectedUntil,
+		ExtremeRenamedBy:            p.ExtremeRenamedBy, ExtremeRenamedByName: p.ExtremeRenamedByName,
+		GiveawayBoardText: p.GiveawayBoardText, GiveawayBoardSubmitted: p.GiveawayBoardSubmittedAt,
+		GiveawayBoardExpires: p.GiveawayBoardExpiresAt,
+		GiveawayBoardLikes:   p.GiveawayBoardLikes, GiveawayBoardDislikes: p.GiveawayBoardDislikes,
+		PushMentionEnabled: p.PushMentionEnabled, PushTurnEnabled: p.PushTurnEnabled, PushSeatEnabled: p.PushSeatEnabled,
 		PushBondEnabled:   p.PushBondEnabled,
 		BondMasterEnabled: p.BondMasterEnabled, BondPetEnabled: p.BondPetEnabled, BondPublicDisplay: p.BondPublicDisplay,
 		Stats: p.Stats, GameStats: p.GameStats,
@@ -192,8 +210,14 @@ func (s *Server) ingestPersistedPlayer(item persistedPlayer) bool {
 			GiveawayEnabled:              item.GiveawayEnabled,
 			GiveawayValue:                orFloat(item.GiveawayValue, 0),
 			GiveawayClicks:               orInt(item.GiveawayClicks, 0),
-			GiveawayBoardLikes:           intPtr(0),
-			GiveawayBoardDislikes:        intPtr(0),
+			// GiveawayBoard*：过期内容留给下次 refreshGiveawayBoard（lobbySnapshot 每次都会过一遍
+			// 全体玩家）在启动后自然清空，这里不必特意判过期——直接原样灌回，比在加载路径重复一遍
+			// 过期逻辑更不容易出现两处判断不一致。
+			GiveawayBoardText:            item.GiveawayBoardText,
+			GiveawayBoardSubmittedAt:     item.GiveawayBoardSubmitted,
+			GiveawayBoardExpiresAt:       item.GiveawayBoardExpires,
+			GiveawayBoardLikes:           orInt(item.GiveawayBoardLikes, 0),
+			GiveawayBoardDislikes:        orInt(item.GiveawayBoardDislikes, 0),
 			GiveawayVoteLikesThisHour:    intPtr(0),
 			GiveawayVoteDislikesThisHour: intPtr(0),
 			RankMultiplierUnlocked:       item.RankMultiplierUnlocked,
@@ -203,6 +227,11 @@ func (s *Server) ingestPersistedPlayer(item persistedPlayer) bool {
 			ExtremeWinStreak:             orInt(item.ExtremeWinStreak, 0),
 			ExtremeLastDecayHour:         orInt64(item.ExtremeLastDecayHour, currentExtremeDecayHour(now)),
 			RankedLastDecayDay:           orInt64(item.RankedLastDecayDay, currentRankedDecayDay(now)),
+			ExtremeForceClosed:           item.ExtremeForceClosed,
+			ExtremeForceClosedAt:         item.ExtremeForceClosedAt,
+			ExtremeRenameProtectedUntil:  item.ExtremeRenameProtectedUntil,
+			ExtremeRenamedBy:             item.ExtremeRenamedBy,
+			ExtremeRenamedByName:         item.ExtremeRenamedByName,
 			BondMasterEnabled:            item.BondMasterEnabled,
 			BondPetEnabled:               item.BondPetEnabled,
 			BondPublicDisplay:            item.BondPublicDisplay,

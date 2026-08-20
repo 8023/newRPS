@@ -10,7 +10,7 @@ import (
 // TestSchemaMigrationV25CreatesPunishmentTables 验证从 v24 升级到当前版本时：
 // player_punishment_tag_prefs 由 v25 建出、又被 v30 废弃（标签三态偏好改为纯浏览器本地
 // 存储）；player_punishment_series_progress 由 v25 建出、又被 v32 废弃（系列进度改为
-// 房间级共享内存字段，不再按玩家落盘）——两张废弃表升级后都不应残留。
+// 房间内内存态、按玩家独立计数，不再按玩家落盘）——两张废弃表升级后都不应残留。
 func TestSchemaMigrationV25CreatesPunishmentTables(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/database.db"

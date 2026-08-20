@@ -101,7 +101,7 @@ func cleanText(value string, max int) string {
 }
 
 // randomID 使用 RawURLEncoding，可能含 '_' 与 '-'
-var safeUploadRe = regexp.MustCompile(`(?i)^/uploads/(?:proofs|admin|avatars)/[0-9a-z._-]+\.(?:jpg|png|webp)$`)
+var safeUploadRe = regexp.MustCompile(`(?i)^/uploads/(?:proofs|admin|avatars|contributions)/[0-9a-z._-]+\.(?:jpg|png|webp)$`)
 
 func safeUploadURL(value string) string {
 	if safeUploadRe.MatchString(value) {

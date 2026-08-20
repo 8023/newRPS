@@ -460,6 +460,7 @@ message PunishmentTask {
   string assigned_by_name = 10;
   // type_name：该任务抽取自哪个任务类型（如"真心话"），玩家发布任务模式下为空。
   string type_name = 11;
+  string event_id = 12;
 }
 
 message HistoryProof {
@@ -864,8 +865,12 @@ message PunishmentRandomSettings {
   // 历史字段，倒伽马下不参与计算，保留以免旧配置/控件报错。
   double order_spread = 2;
   double max_difficulty_overshoot = 3;
-  // 系列任务某一步没有覆盖受罚者阵营时下发的兜底文案（空则用内置默认）。
-  string series_faction_fallback_text = 4;
+  reserved 4; // 原 series_faction_fallback_text，禁止复用
+  reserved "series_faction_fallback_text";
+  // 系列投稿最低步数；<=0 时前后端都按 10 兜底。
+  int32 min_series_steps = 5;
+  // 系列投稿最高步数；<=0 时前后端都按 20 兜底。
+  int32 max_series_steps = 6;
 }
 
 message PunishmentSubtaskVariant {
@@ -896,6 +901,9 @@ message PunishmentSeriesSummary {
   RoomNamePool room_name_pool = 3;
   repeated string room_background_images = 4;
   int32 step_count = 5;
+  int32 published_version = 6;
+  // 系列声明的目标阵营；供进战斗席本地校验，不在建房面板展示。
+  repeated string target_faction_ids = 10;
 }
 
 message GameConfig {
@@ -942,6 +950,7 @@ message SiteConfig {
   string description = 2;
   // admin password never sent to clients; keep empty on wire
   string admin_password = 3;
+  string anonymous_contributor_label = 4;
 }
 
 message AccessControlConfig {

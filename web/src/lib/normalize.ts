@@ -3,7 +3,7 @@
  * - 服务端 jsonsafe 已保证出站 slice/map 非 null。
  * - 此处负责：DELTA 合并后的薄兜底、lobby chat 本地保留、history 按 id 合并、配置缺字段补全。
  */
-import type { AppConfig, GameId, LobbySnapshot, PublicPlayer, PunishmentSeriesTaskConfig, PunishmentTaskConfig, RoomSnapshot, SeatKey } from "../shared/types";
+import type { AppConfig, GameId, LobbySnapshot, PublicPlayer, RoomSnapshot, SeatKey } from "../shared/types";
 
 /** 游戏缺省排位档位（与服务端 types.DefaultStakeTiers 镜像）：黑白棋按每子，其余整局。 */
 export function defaultStakeTiers(gameId: GameId): number[] {
@@ -678,12 +678,14 @@ export function normalizeConfig(config: AppConfig): AppConfig {
     punishmentSeriesSummaries: (config.punishmentSeriesSummaries || []).map((series) => ({
       ...series,
       roomBackgroundImages: series.roomBackgroundImages || [],
-      stepCount: series.stepCount ?? 0
+      stepCount: series.stepCount ?? 0,
+      targetFactionIds: series.targetFactionIds || []
     })),
     punishmentRandomSettings: {
       orderStep: config.punishmentRandomSettings?.orderStep ?? 2,
       maxDifficultyOvershoot: config.punishmentRandomSettings?.maxDifficultyOvershoot ?? 5,
-      seriesFactionFallbackText: config.punishmentRandomSettings?.seriesFactionFallbackText ?? ""
+      minSeriesSteps: (config.punishmentRandomSettings?.minSeriesSteps ?? 10) > 0 ? (config.punishmentRandomSettings?.minSeriesSteps ?? 10) : 10,
+      maxSeriesSteps: (config.punishmentRandomSettings?.maxSeriesSteps ?? 20) > 0 ? (config.punishmentRandomSettings?.maxSeriesSteps ?? 20) : 20
     },
     roomTags: config.roomTags || [],
     roomInfoTags: config.roomInfoTags || {},
@@ -707,32 +709,4 @@ export function normalizeConfig(config: AppConfig): AppConfig {
     },
     rankedScore: withRankedScoreDefaults(config.rankedScore)
   };
-}
-
-/** 任务池草稿规范化（admin 任务池 tab 本地 state）。 */
-export function normalizePunishmentTasks(tasks: PunishmentTaskConfig[] | undefined | null): PunishmentTaskConfig[] {
-  return (tasks || []).map((task) => ({
-    ...task,
-    id: task.id || "",
-    name: task.name || "",
-    text: task.text || "",
-    tagIds: task.tagIds || [],
-    factionIds: task.factionIds || [],
-    order: task.order ?? 50,
-    backgroundImages: task.backgroundImages || [],
-    backgroundOpacity: task.backgroundOpacity ?? 0.22
-  }));
-}
-
-/** 系列任务草稿规范化（admin 系列任务 tab 本地 state）。 */
-export function normalizePunishmentSeries(series: PunishmentSeriesTaskConfig[] | undefined | null): PunishmentSeriesTaskConfig[] {
-  return (series || []).map((s) => ({
-    ...s,
-    id: s.id || "",
-    name: s.name || "",
-    roomBackgroundImages: s.roomBackgroundImages || [],
-    steps: (s.steps || []).map((step) => ({
-      taskIds: step.taskIds || []
-    }))
-  }));
 }

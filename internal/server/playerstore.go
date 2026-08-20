@@ -45,6 +45,16 @@ CREATE TABLE IF NOT EXISTS players (
 	extreme_win_streak INTEGER,
 	extreme_last_decay_hour INTEGER,
 	ranked_last_decay_day INTEGER,
+	extreme_force_closed INTEGER,
+	extreme_force_closed_at INTEGER,
+	extreme_rename_protected_until INTEGER,
+	extreme_renamed_by TEXT NOT NULL DEFAULT '',
+	extreme_renamed_by_name TEXT NOT NULL DEFAULT '',
+	giveaway_board_text TEXT NOT NULL DEFAULT '',
+	giveaway_board_submitted_at INTEGER,
+	giveaway_board_expires_at INTEGER,
+	giveaway_board_likes INTEGER,
+	giveaway_board_dislikes INTEGER,
 	push_mention_enabled INTEGER,
 	push_turn_enabled INTEGER,
 	push_seat_enabled INTEGER,
@@ -133,6 +143,10 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 			rank_multiplier_unlocked,
 			extreme_mode_enabled, extreme_mode_toggled_at, extreme_mode_cooldown_until,
 			extreme_win_streak, extreme_last_decay_hour, ranked_last_decay_day,
+			extreme_force_closed, extreme_force_closed_at, extreme_rename_protected_until,
+			extreme_renamed_by, extreme_renamed_by_name,
+			giveaway_board_text, giveaway_board_submitted_at, giveaway_board_expires_at,
+			giveaway_board_likes, giveaway_board_dislikes,
 			push_mention_enabled, push_turn_enabled, push_seat_enabled, push_bond_enabled,
 			wins, losses, draws, punishments, ranked_points, highest_score, lowest_score, title, title_segment_id, title_custom, self_title,
 			rps_wins, rps_losses, rps_draws,
@@ -163,6 +177,10 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 			gaClicks                                sql.NullInt64
 			rankedDecay                             sql.NullInt64
 			bondMaster, bondPet, bondPublic         sql.NullInt64
+			exForceClosed                           sql.NullInt64
+			exForceClosedAt, exRenameProt           sql.NullInt64
+			gaBoardSubmitted, gaBoardExpires        sql.NullInt64
+			gaBoardLikes, gaBoardDislikes           sql.NullInt64
 		)
 		err := rows.Scan(
 			&item.ID, &item.PlayerID, &item.ClaimKey, &item.Name, &item.GenderID, &item.FactionID, &item.AvatarURL,
@@ -173,6 +191,10 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 			&rankUnlock,
 			&exEnabled, &exToggled, &exCool,
 			&exStreak, &exDecay, &rankedDecay,
+			&exForceClosed, &exForceClosedAt, &exRenameProt,
+			&item.ExtremeRenamedBy, &item.ExtremeRenamedByName,
+			&item.GiveawayBoardText, &gaBoardSubmitted, &gaBoardExpires,
+			&gaBoardLikes, &gaBoardDislikes,
 			&pushM, &pushT, &pushS, &pushB,
 			&item.Stats.Wins, &item.Stats.Losses, &item.Stats.Draws, &item.Stats.Punishments, &item.Stats.RankedPoints, &item.Stats.HighestScore, &item.Stats.LowestScore, &item.Stats.Title, &item.Stats.TitleSegmentID, &item.Stats.TitleCustom, &item.Stats.SelfTitle,
 			&item.GameStats.RPS.Wins, &item.GameStats.RPS.Losses, &item.GameStats.RPS.Draws,
@@ -210,6 +232,13 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 		item.ExtremeWinStreak = nullIntToIntPtr(exStreak)
 		item.ExtremeLastDecayHour = nullIntToInt64Ptr(exDecay)
 		item.RankedLastDecayDay = nullIntToInt64Ptr(rankedDecay)
+		item.ExtremeForceClosed = nullIntToBoolPtr(exForceClosed)
+		item.ExtremeForceClosedAt = nullIntToInt64Ptr(exForceClosedAt)
+		item.ExtremeRenameProtectedUntil = nullIntToInt64Ptr(exRenameProt)
+		item.GiveawayBoardSubmitted = nullIntToInt64Ptr(gaBoardSubmitted)
+		item.GiveawayBoardExpires = nullIntToInt64Ptr(gaBoardExpires)
+		item.GiveawayBoardLikes = nullIntToIntPtr(gaBoardLikes)
+		item.GiveawayBoardDislikes = nullIntToIntPtr(gaBoardDislikes)
 		item.PushMentionEnabled = nullIntToBoolPtr(pushM)
 		item.PushTurnEnabled = nullIntToBoolPtr(pushT)
 		item.PushSeatEnabled = nullIntToBoolPtr(pushS)
@@ -313,6 +342,10 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			rank_multiplier_unlocked,
 			extreme_mode_enabled, extreme_mode_toggled_at, extreme_mode_cooldown_until,
 			extreme_win_streak, extreme_last_decay_hour, ranked_last_decay_day,
+			extreme_force_closed, extreme_force_closed_at, extreme_rename_protected_until,
+			extreme_renamed_by, extreme_renamed_by_name,
+			giveaway_board_text, giveaway_board_submitted_at, giveaway_board_expires_at,
+			giveaway_board_likes, giveaway_board_dislikes,
 			push_mention_enabled, push_turn_enabled, push_seat_enabled, push_bond_enabled,
 			wins, losses, draws, punishments, ranked_points, highest_score, lowest_score, title, title_segment_id, title_custom, self_title,
 			rps_wins, rps_losses, rps_draws,
@@ -331,6 +364,8 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			?,?,?,
 			?,
 			?,?,?,?,?,?,
+			?,?,?,?,?,
+			?,?,?,?,?,
 			?,?,?,?,
 			?,?,?,?,?,?,?,?,?,?,?,
 			?,?,?,
@@ -372,6 +407,16 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			extreme_win_streak=excluded.extreme_win_streak,
 			extreme_last_decay_hour=excluded.extreme_last_decay_hour,
 			ranked_last_decay_day=excluded.ranked_last_decay_day,
+			extreme_force_closed=excluded.extreme_force_closed,
+			extreme_force_closed_at=excluded.extreme_force_closed_at,
+			extreme_rename_protected_until=excluded.extreme_rename_protected_until,
+			extreme_renamed_by=excluded.extreme_renamed_by,
+			extreme_renamed_by_name=excluded.extreme_renamed_by_name,
+			giveaway_board_text=excluded.giveaway_board_text,
+			giveaway_board_submitted_at=excluded.giveaway_board_submitted_at,
+			giveaway_board_expires_at=excluded.giveaway_board_expires_at,
+			giveaway_board_likes=excluded.giveaway_board_likes,
+			giveaway_board_dislikes=excluded.giveaway_board_dislikes,
 			push_mention_enabled=excluded.push_mention_enabled,
 			push_turn_enabled=excluded.push_turn_enabled,
 			push_seat_enabled=excluded.push_seat_enabled,
@@ -402,6 +447,10 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 		boolPtrToSQL(item.ExtremeModeEnabled), int64PtrToSQL(item.ExtremeModeToggledAt), int64PtrToSQL(item.ExtremeModeCooldownUntil),
 		intPtrToSQL(item.ExtremeWinStreak), int64PtrToSQL(item.ExtremeLastDecayHour),
 		int64PtrToSQL(item.RankedLastDecayDay),
+		boolPtrToSQL(item.ExtremeForceClosed), int64PtrToSQL(item.ExtremeForceClosedAt), int64PtrToSQL(item.ExtremeRenameProtectedUntil),
+		item.ExtremeRenamedBy, item.ExtremeRenamedByName,
+		item.GiveawayBoardText, int64PtrToSQL(item.GiveawayBoardSubmitted), int64PtrToSQL(item.GiveawayBoardExpires),
+		intPtrToSQL(item.GiveawayBoardLikes), intPtrToSQL(item.GiveawayBoardDislikes),
 		boolPtrToSQL(item.PushMentionEnabled), boolPtrToSQL(item.PushTurnEnabled), boolPtrToSQL(item.PushSeatEnabled), boolPtrToSQL(item.PushBondEnabled),
 		item.Stats.Wins, item.Stats.Losses, item.Stats.Draws, item.Stats.Punishments, item.Stats.RankedPoints, item.Stats.HighestScore, item.Stats.LowestScore, item.Stats.Title, item.Stats.TitleSegmentID, item.Stats.TitleCustom, item.Stats.SelfTitle,
 		gs.RPS.Wins, gs.RPS.Losses, gs.RPS.Draws,

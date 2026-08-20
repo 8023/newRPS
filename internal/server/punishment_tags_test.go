@@ -49,7 +49,7 @@ func TestCandidateTasksForTags(t *testing.T) {
 }
 
 // 对照 plan：难度为负数的任务应被随机候选池排除，正数/零不受影响
-// （零在保存前已被 config.NormalizePunishmentTasks 夹紧到 1，这里直接构造已落库的值验证过滤本身）。
+// （零在正常保存路径上会被 s.validatePunishmentTask 拒绝，这里直接构造已落库的值验证过滤本身）。
 func TestCandidateTasksForRandomDifficulty(t *testing.T) {
 	tasks := []types.PunishmentTaskConfig{
 		{ID: "positive", Order: 50},

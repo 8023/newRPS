@@ -50,6 +50,7 @@ func (s *Server) punishmentPlayersForResult(room *RoomState, result types.RoundR
 
 func (s *Server) addRoundHistory(room *RoomState, item types.RoundHistoryItem) {
 	item = sanitizeRoundHistoryItem(item)
+	s.bindPunishmentEventsToRound(room, item)
 	room.RoundHistory = append([]types.RoundHistoryItem{item}, room.RoundHistory...)
 	if len(room.RoundHistory) > roomHistoryMaxKeep {
 		room.RoundHistory = room.RoundHistory[:roomHistoryMaxKeep]
@@ -124,10 +125,6 @@ func (s *Server) buildPunishmentTasks(room *RoomState, punishedPlayers []*Player
 // 始终返回非 nil 切片，避免 history 里 punishmentTasks: null。
 func (s *Server) buildPunishmentTasksWithWinnerName(room *RoomState, punishedPlayers []*PlayerState, winnerName string) []types.PunishmentTask {
 	out := make([]types.PunishmentTask, 0, len(punishedPlayers))
-	// 房间级难度进度整局只 +1：平局双罚/双败一局会惩罚两名玩家，二者仍共用同一个目标难度基数，
-	// 且整局最多推进一次进度，而不是每个受罚玩家各推进一次。
-	baseCount := room.PunishmentTaskProgress
-	advancedRound := false
 	src := normalizePunishmentSource(room.Settings.PunishmentSource)
 	for _, player := range punishedPlayers {
 		var assigner *PlayerState
@@ -137,11 +134,7 @@ func (s *Server) buildPunishmentTasksWithWinnerName(room *RoomState, punishedPla
 		} else if src == "series" {
 			systemTask = s.pickSeriesTaskForPlayer(room, player, room.Settings.PunishmentSeriesID, winnerName)
 		} else {
-			var advanced bool
-			systemTask, advanced = s.pickSystemTaskForPlayer(room, player, winnerName, baseCount)
-			if advanced {
-				advancedRound = true
-			}
+			systemTask = s.pickSystemTaskForPlayerAdvancing(room, player, winnerName)
 		}
 		task := types.PunishmentTask{
 			PlayerID:     player.ID,
@@ -158,9 +151,11 @@ func (s *Server) buildPunishmentTasksWithWinnerName(room *RoomState, punishedPla
 				task.BackgroundOpacity = systemTask.BackgroundOpacity
 			}
 			if s.eventDB != nil {
-				task.EventID = randomID()
-				if err := s.eventDB.insertPunishmentTask(task.EventID, nowMs(), "system", room.ID, "", "", player.ID, task.PlayerName, task.TaskText); err != nil {
+				eventID := randomID()
+				if err := s.eventDB.insertPunishmentTask(eventID, nowMs(), "system", room.ID, "", "", player.ID, task.PlayerName, task.TaskText, systemTask.EventMeta); err != nil {
 					s.errorLog("punishment_event_insert_failed", err.Error())
+				} else {
+					task.EventID = eventID
 				}
 			}
 		}
@@ -169,9 +164,6 @@ func (s *Server) buildPunishmentTasksWithWinnerName(room *RoomState, punishedPla
 			task.AssignedByName = assigner.Name
 		}
 		out = append(out, task)
-	}
-	if advancedRound {
-		room.PunishmentTaskProgress = baseCount + 1
 	}
 	return out
 }
@@ -208,18 +200,19 @@ type punishmentTaskResult struct {
 	TypeName          string
 	BackgroundImage   string
 	BackgroundOpacity *float64
+	EventMeta         punishmentEventMeta
 }
 
-// pickSystemTaskForPlayer 按玩家阵营 + 房间标签筛选 + 房间级任务难度进度，抽取一条随机任务：
+// pickSystemTaskForPlayer 按玩家阵营 + 房间标签筛选 + 该玩家自己的任务难度进度，抽取一条随机任务：
 //  1. 阵营过滤（factionIds 为空或不含阵营的任务）；
 //  2. 标签过滤：任务标签与拒绝集合无交，且包含集合是任务标签的子集；
 //     包含集合为空时退化为只按拒绝集合排除；未勾选任何标签的任务无视筛选、永远入选；
 //  3. 难度过滤：难度为 -1 的任务排除出随机候选池（仅供系列任务按 ID 引用）；
 //  4. 候选整体丢进 weightedDifficultyPick（单阶段，全局难度参数）。
 //
-// count 是抽取时用的目标难度基数（通常即 room.PunishmentTaskProgress）。
-// 真正抽中难度题时 advanced=true，调用方据此决定房间级进度是否 +1。
-// 候选池为空时返回通用兜底话术，advanced=false。
+// count 是抽取时用的目标难度基数（通常即 room.PunishmentTaskProgress[player.ID]，房间内
+// 这名玩家自己的进度）。真正抽中难度题时 advanced=true，调用方据此决定该玩家自己的进度是否
+// +1（见 pickSystemTaskForPlayerAdvancing）。候选池为空时返回通用兜底话术，advanced=false。
 func (s *Server) pickSystemTaskForPlayer(room *RoomState, player *PlayerState, winnerName string, count int) (*punishmentTaskResult, bool) {
 	fallback := func() (*punishmentTaskResult, bool) {
 		op := 0.22
@@ -246,19 +239,33 @@ func (s *Server) pickSystemTaskForPlayer(room *RoomState, player *PlayerState, w
 		bg = task.BackgroundImages[randIntn(len(task.BackgroundImages))]
 	}
 	typeName := s.tagNamesForTask(task)
-	return &punishmentTaskResult{TaskText: taskText, TypeName: typeName, BackgroundImage: bg, BackgroundOpacity: &op}, true
+	return &punishmentTaskResult{
+		TaskText: taskText, TypeName: typeName, BackgroundImage: bg, BackgroundOpacity: &op,
+		EventMeta: s.metaForFormalTask(task, nil),
+	}, true
 }
 
-// defaultSeriesFactionFallbackText：管理员未配置兜底文案时，系列任务某一步
-// 没有覆盖受罚者阵营的下发的内置默认文案。
-const defaultSeriesFactionFallbackText = "该任务不适用于你所在的阵营"
+// pickSystemTaskForPlayerAdvancing 是 pickSystemTaskForPlayer 的落地入口：读取这名玩家在
+// 本房间内自己的难度进度（RoomState.PunishmentTaskProgress[player.ID]，与
+// PunishmentSeriesPlayerProgress 同构、按玩家 persistent ID 分槽），抽中难度题（非兜底）时
+// 把这名玩家自己的计数器 +1，房间里其他人抽多抽少都不受影响。
+func (s *Server) pickSystemTaskForPlayerAdvancing(room *RoomState, player *PlayerState, winnerName string) *punishmentTaskResult {
+	baseCount := room.PunishmentTaskProgress[player.ID]
+	task, advanced := s.pickSystemTaskForPlayer(room, player, winnerName, baseCount)
+	if advanced {
+		if room.PunishmentTaskProgress == nil {
+			room.PunishmentTaskProgress = map[string]int{}
+		}
+		room.PunishmentTaskProgress[player.ID] = baseCount + 1
+	}
+	return task
+}
 
-// pickSeriesTaskForPlayer 按房间共享的系列进度取下一步，再从该步 taskIds 按阵营挑任务；
-// 产出后推进房间计数器（+1）。进度是房间级的：全员共用，前一个玩家做完离开，后一个
-// 玩家从下一步继续；换房间（或房内换系列）从 0 重新计数，房间销毁即释放，不落盘。
+// pickSeriesTaskForPlayer 按该玩家在本房间内自己的系列进度取下一步，再从该步 taskIds 按
+// 阵营挑任务；产出后推进这名玩家自己的计数器（+1，见 RoomState.PunishmentSeriesPlayerProgress）。
 // 进度越界（系列步骤被改短等）clamp 到最后一条反复执行。某一步没有覆盖受罚者阵营时
-// 系列照常生效：下发管理员可配的兜底文案（见 defaultSeriesFactionFallbackText），
-// 进度同样推进。
+// 从随机任务池抽一条替补（见 pickSeriesReplacementTask），进度同样推进。「完成率」不在这里
+// 统计——那是房间销毁时才结算的快照，见 recordSeriesRunProgressOnClose。
 func (s *Server) pickSeriesTaskForPlayer(room *RoomState, player *PlayerState, seriesID, winnerName string) *punishmentTaskResult {
 	fallback := func() *punishmentTaskResult {
 		op := 0.22
@@ -270,8 +277,8 @@ func (s *Server) pickSeriesTaskForPlayer(room *RoomState, player *PlayerState, s
 		return fallback()
 	}
 	next := 0
-	if room.PunishmentSeriesProgressID == seriesID {
-		next = room.PunishmentSeriesProgress
+	if prog := room.PunishmentSeriesPlayerProgress[player.ID]; prog != nil && prog.SeriesID == seriesID {
+		next = prog.Step
 	}
 	if next < 0 {
 		next = 0
@@ -280,27 +287,16 @@ func (s *Server) pickSeriesTaskForPlayer(room *RoomState, player *PlayerState, s
 		next = len(series.Steps) - 1
 	}
 	advance := func() {
-		room.PunishmentSeriesProgressID = seriesID
-		room.PunishmentSeriesProgress = next + 1
+		if room.PunishmentSeriesPlayerProgress == nil {
+			room.PunishmentSeriesPlayerProgress = map[string]*seriesPlayerProgress{}
+		}
+		room.PunishmentSeriesPlayerProgress[player.ID] = &seriesPlayerProgress{SeriesID: seriesID, Step: next + 1}
 	}
-	taskByID := make(map[string]*types.PunishmentTaskConfig, len(s.punishmentTasksCache))
-	for i := range s.punishmentTasksCache {
-		t := &s.punishmentTasksCache[i]
-		taskByID[t.ID] = t
-	}
+	taskByID := s.taskIndexForRead()
 	task := pickSeriesStepTask(series.Steps[next].TaskIDs, player.FactionID, taskByID)
 	if task == nil {
-		text := strings.TrimSpace(s.cfg.PunishmentRandomSettings.SeriesFactionFallbackText)
-		if text == "" {
-			text = defaultSeriesFactionFallbackText
-		}
-		op := 0.22
 		advance()
-		return &punishmentTaskResult{
-			TaskText:          applyPunishmentPlaceholders(text, playerShortName(player), winnerName),
-			TypeName:          series.Name,
-			BackgroundOpacity: &op,
-		}
+		return s.pickSeriesReplacementTask(player, *series, next, winnerName)
 	}
 	if strings.TrimSpace(task.Text) == "" {
 		return fallback()
@@ -320,12 +316,126 @@ func (s *Server) pickSeriesTaskForPlayer(room *RoomState, player *PlayerState, s
 		TypeName:          series.Name,
 		BackgroundImage:   bg,
 		BackgroundOpacity: &op,
+		EventMeta:         s.metaForFormalTask(*task, series),
 	}
+}
+
+// recordSeriesRunProgressOnClose 在房间销毁时结算这个房间里每个玩家的系列完成度：只统计
+// 「至少走完 1 步」的玩家，样本值是「自己走完的步数 / 系列总步数」的百分比，落库后在
+// seriesRunStats 里取这些样本的算术平均——刻意不用"是否走到最后一步"的二元判定，
+// 否则一个 20 步的系列，大多数人走了 15 步就退出，完成率会被算得极低，看不出真实体验；
+// 按进度百分比取均值（上面例子约 75%）更贴近实际。调用方须持有 s.mu，在
+// delete(s.rooms, room.ID) 前后均可（房间对象本身，不依赖它还在不在 s.rooms 里）。三处
+// 房间销毁路径都要调：room.go 的 cleanupRoomIfEmpty（正常清空关房）、handlers_room.go 的
+// admin closeRoom（管理员强制关房）、server.go 优雅关停时的批量清空。
+func (s *Server) recordSeriesRunProgressOnClose(room *RoomState) {
+	if s.punishmentStore == nil || len(room.PunishmentSeriesPlayerProgress) == 0 {
+		return
+	}
+	for _, prog := range room.PunishmentSeriesPlayerProgress {
+		if prog == nil || prog.Step <= 0 {
+			continue
+		}
+		series := s.findSeriesByID(prog.SeriesID)
+		if series == nil || len(series.Steps) == 0 {
+			continue
+		}
+		steps := prog.Step
+		if steps > len(series.Steps) {
+			steps = len(series.Steps)
+		}
+		percent := int(float64(steps)/float64(len(series.Steps))*100 + 0.5)
+		if err := s.punishmentStore.recordSeriesRunProgress(series.ID, series.VoteVersion, percent); err != nil {
+			s.errorLog("series_run_progress_record_failed", err.Error())
+		}
+	}
+}
+
+// pickSeriesReplacementTask 在系列当前步没有变体命中受罚者阵营时，从随机任务池抽一条顶替。
+// 难度按「当前步序 / 总步数」定目标；标签三态由系列自身步骤的标签词频推导；票记到抽中的
+// 那条随机任务自己的贡献者，不记到系列头上。
+func (s *Server) pickSeriesReplacementTask(player *PlayerState, series types.PunishmentSeriesTaskConfig, stepIndex int, winnerName string) *punishmentTaskResult {
+	op := 0.22
+	fallback := &punishmentTaskResult{TaskText: "请完成本局惩罚。", BackgroundOpacity: &op, TypeName: series.Name}
+	if len(series.Steps) == 0 {
+		return fallback
+	}
+	ratio := float64(stepIndex+1) / float64(len(series.Steps))
+	incl, excl := s.seriesTagTriState(series)
+	pool := candidateTasksForFaction(s.punishmentTasksCache, player.FactionID)
+	pool = candidateTasksForRandomDifficulty(pool)
+	p1 := candidateTasksForTags(pool, incl, excl)
+	candidates := p1
+	if len(candidates) == 0 {
+		candidates = candidateTasksForTags(pool, nil, excl)
+	}
+	if len(candidates) == 0 {
+		candidates = pool
+	}
+	if len(candidates) == 0 {
+		return fallback
+	}
+	task := weightedDifficultyPickByRatio(candidates, ratio, s.cfg.PunishmentRandomSettings.MaxDifficultyOvershoot)
+	taskText := applyPunishmentPlaceholders(strings.TrimSpace(task.Text), playerShortName(player), winnerName)
+	if taskText == "" {
+		return fallback
+	}
+	bg := ""
+	if len(task.BackgroundImages) > 0 {
+		bg = task.BackgroundImages[randIntn(len(task.BackgroundImages))]
+	}
+	taskOp := task.BackgroundOpacity
+	return &punishmentTaskResult{
+		TaskText:          taskText,
+		TypeName:          series.Name,
+		BackgroundImage:   bg,
+		BackgroundOpacity: &taskOp,
+		EventMeta:         s.metaForFormalTask(task, nil),
+	}
+}
+
+// seriesTagTriState 按系列所有步骤引用的任务行统计标签词频：
+// included 只取词频最高的恰好一个（并列按标签 ID 字典序），excluded 为配置里一次都没出现的标签。
+func (s *Server) seriesTagTriState(series types.PunishmentSeriesTaskConfig) (included, excluded []string) {
+	byID := s.taskIndexForRead()
+	freq := map[string]int{}
+	for _, step := range series.Steps {
+		for _, id := range step.TaskIDs {
+			t := byID[id]
+			if t == nil {
+				continue
+			}
+			for _, tag := range t.TagIDs {
+				tag = strings.TrimSpace(tag)
+				if tag == "" {
+					continue
+				}
+				freq[tag]++
+			}
+		}
+	}
+	bestID := ""
+	bestN := 0
+	for id, n := range freq {
+		if n > bestN || (n == bestN && n > 0 && (bestID == "" || id < bestID)) {
+			bestID = id
+			bestN = n
+		}
+	}
+	if bestN > 0 {
+		included = []string{bestID}
+	}
+	for _, tag := range s.cfg.PunishmentTags {
+		if freq[tag.ID] == 0 {
+			excluded = append(excluded, tag.ID)
+		}
+	}
+	return included, excluded
 }
 
 // pickSeriesStepTask：收集 taskIds 中所有 FactionIDs 精确命中 factionID 的任务，随机挑一个；
 // 未勾选任何阵营的任务永远不参与匹配；指向不存在 ID 的直接跳过；全落空返回 nil——
-// 调用方（pickSeriesTaskForPlayer）此时下发阵营兜底文案，系列照常生效。
+// 调用方（pickSeriesTaskForPlayer）此时从随机池抽替补任务，系列照常生效。
 func pickSeriesStepTask(taskIDs []string, factionID string, taskByID map[string]*types.PunishmentTaskConfig) *types.PunishmentTaskConfig {
 	var matches []*types.PunishmentTaskConfig
 	for _, id := range taskIDs {
@@ -348,10 +458,110 @@ func pickSeriesStepTask(taskIDs []string, factionID string, taskByID map[string]
 }
 
 // seriesIsUsable 判断系列任务是否可用：至少要有一步。阵营覆盖不再影响可用性——
-// 某一步没覆盖到受罚者阵营时，运行时下发兜底文案（pickSeriesTaskForPlayer），
+// 某一步没覆盖到受罚者阵营时，运行时从随机池抽替补（pickSeriesReplacementTask），
 // 系列仍会出现在建房面板目录里。调用方须持有 s.mu。
 func (s *Server) seriesIsUsable(series types.PunishmentSeriesTaskConfig) bool {
 	return len(series.Steps) > 0
+}
+
+func (s *Server) metaForFormalTask(task types.PunishmentTaskConfig, series *types.PunishmentSeriesTaskConfig) punishmentEventMeta {
+	meta := punishmentEventMeta{}
+	src := task
+	// 投票目标恒定落在「这一条具体任务」上（TaskGroupID：同一次投稿/同一个系列步骤生成的
+	// 所有阵营变体共享同一个组，但系列的不同步骤各有各的组），不再按整个系列计票——
+	// 系列里每一步都要有自己独立的点赞点踩，见 tasksFromStepDraft。
+	// FormalSeriesID/FormalSeriesVersion 仍然记录（供事件溯源、系列完成率等统计用），
+	// 只是不再参与投票目标的解析（见 contribution_vote_rpc.go 的 formalTarget）。
+	if series != nil && series.ContributorPlayerID != "" {
+		meta.FormalSeriesID = series.ID
+		meta.FormalSeriesVersion = series.VoteVersion
+		src.ContributorPlayerID = series.ContributorPlayerID
+		src.ContributorAnonymous = series.ContributorAnonymous
+	}
+	if task.ContributorPlayerID != "" || src.ContributorPlayerID != "" {
+		meta.FormalTaskID = strings.TrimSpace(task.TaskGroupID)
+		if meta.FormalTaskID == "" {
+			meta.FormalTaskID = task.ID
+		}
+		meta.FormalTaskVersion = task.VoteVersion
+	}
+	if src.ContributorPlayerID == "" {
+		return meta
+	}
+	meta.ContributorPlayerID = src.ContributorPlayerID
+	meta.ContributorAnonymous = src.ContributorAnonymous
+	if p := s.players[src.ContributorPlayerID]; p != nil {
+		meta.ContributorNameSnap = playerShortName(p)
+	}
+	return meta
+}
+
+func (s *Server) bindPunishmentEventsToRound(room *RoomState, item types.RoundHistoryItem) {
+	// 本局完全没有惩罚任务时，不会有任何 punishment_events 行引用这个 roundID，
+	// 也就永远不会有内容可投票——记录参与者纯属浪费一次同步 SQLite 事务写入
+	// （addRoundHistory 是全平台调用最频繁的路径，很多房间根本没开惩罚）。
+	if s.eventDB == nil || len(item.PunishmentTasks) == 0 {
+		return
+	}
+	var losers []*PlayerState
+	loserIDs := map[string]struct{}{}
+	for _, t := range item.PunishmentTasks {
+		if t.EventID != "" {
+			if err := s.eventDB.bindEventRound(t.EventID, item.ID); err != nil {
+				s.errorLog("punishment_event_bind_round_failed", err.Error())
+			}
+		}
+		if p := s.players[t.PlayerID]; p != nil {
+			losers = append(losers, p)
+			loserIDs[p.ID] = struct{}{}
+		}
+	}
+	winners := []string{}
+	if room.Settings.GameID == types.GameLiarsDice && room.LiarsDice != nil {
+		winners = append(winners, room.LiarsDice.WinnerID)
+	} else {
+		// 谁是 winner 直接由「有没有被实际扣上惩罚任务」倒推，而不是重新按 item.Result 猜一遍：
+		// 平局开双罚、双输本就意味着两个座位都被记进了上面的 losers，此时不能再把他们也算进
+		// winners——不然 recordRoundVoteContext 的 seen 去重会让两人全部被误记为 Role=winner。
+		if a := room.Seats[types.SeatA]; a != nil {
+			if _, punished := loserIDs[a.GetID()]; !punished {
+				winners = append(winners, a.GetID())
+			}
+		}
+		if b := room.Seats[types.SeatB]; b != nil {
+			if _, punished := loserIDs[b.GetID()]; !punished {
+				winners = append(winners, b.GetID())
+			}
+		}
+	}
+	s.recordRoundVoteContext(room, item.ID, losers, winners)
+}
+
+func (s *Server) recordRoundVoteContext(room *RoomState, roundID string, losers []*PlayerState, winnerIDs []string) {
+	if s.contributionStore == nil || roundID == "" {
+		return
+	}
+	seen := map[string]struct{}{}
+	var parts []types.RoundParticipant
+	for _, id := range winnerIDs {
+		if id == "" {
+			continue
+		}
+		seen[id] = struct{}{}
+		parts = append(parts, types.RoundParticipant{RoundID: roundID, RoomID: room.ID, PlayerID: id, Role: types.RoundRoleWinner})
+	}
+	for _, p := range losers {
+		if p == nil {
+			continue
+		}
+		if _, ok := seen[p.ID]; ok {
+			continue
+		}
+		parts = append(parts, types.RoundParticipant{RoundID: roundID, RoomID: room.ID, PlayerID: p.ID, Role: types.RoundRoleLoser})
+	}
+	if err := s.contributionStore.insertRoundParticipants(roundID, room.ID, parts); err != nil {
+		s.errorLog("round_participants_insert_failed", err.Error())
+	}
 }
 
 // candidateTasksForFaction 筛出勾选了该阵营的任务；未勾选任何阵营的任务永远不参与匹配。
@@ -417,7 +627,7 @@ func candidateTasksForTags(tasks []types.PunishmentTaskConfig, included, exclude
 // candidateTasksForRandomDifficulty 过滤掉难度为 -1 的任务：-1 是"仅供系列任务按 ID
 // 引用、不参与随机抽取"的唯一合法负数标记（现在也是把任务挡在随机池外的唯一手段，
 // 标签留空已不再排除随机候选），不参与 weightedDifficultyPick 的难度加权计算。判断用 < 0（而非 == -1）是防御性写法——
-// 保存路径（config.NormalizePunishmentTasks）保证落库值只会是 -1 或 1-99，此处多一层兜底。
+// 保存路径（s.validatePunishmentTask，投稿发布/管理员审批时校验）拒绝落库值不是 -1 或 1-99 的任务，此处多一层兜底。
 func candidateTasksForRandomDifficulty(tasks []types.PunishmentTaskConfig) []types.PunishmentTaskConfig {
 	out := make([]types.PunishmentTaskConfig, 0, len(tasks))
 	for _, t := range tasks {
@@ -454,20 +664,45 @@ func (s *Server) tagNamesForTask(task types.PunishmentTaskConfig) string {
 	return strings.Join(names, "、")
 }
 
-// weightedDifficultyPick 按房间目标难度，用倒伽马（反射 Gamma）加权随机挑一个候选任务：
-//
-//	目标难度 target = clamp((count+1)*step, 候选最小难度, 候选最大难度)
-//	硬顶 hardCap = target + overshoot（不含该难度：难度 >= hardCap 权重为 0）
-//	变换 X = hardCap - 难度；X ~ Gamma(α=4, θ=overshoot/3)，众数在 X=overshoot ⇒ 峰值在 target
-//	向简单侧（X 增大）拖尾；更难侧在 hardCap 处截断为 0。
-//
-// count 是本房间内系统任务已被抽取的总次数（与玩家、与任务类型无关）。
-// 若候选全被硬顶滤掉，则退化为只在最简单那一档里抽。
-// step/overshoot <=0 时用代码内默认值兜底。传入的 candidates 不能为空。
+// weightedDifficultyPick 按房间目标难度，用倒伽马（反射 Gamma）加权随机挑一个候选任务。
+// count 是本房间内系统任务已被抽取的总次数。传入的 candidates 不能为空。
 func weightedDifficultyPick(candidates []types.PunishmentTaskConfig, count int, step, overshoot float64) types.PunishmentTaskConfig {
 	if step <= 0 {
 		step = defaultPunishmentOrderStep
 	}
+	return pickByDifficultyTarget(candidates, float64(count+1)*step, overshoot)
+}
+
+// weightedDifficultyPickByRatio 按系列步序比例定目标难度：target = min + ratio*(max-min)。
+func weightedDifficultyPickByRatio(candidates []types.PunishmentTaskConfig, ratio, overshoot float64) types.PunishmentTaskConfig {
+	minDiff, maxDiff := candidates[0].Order, candidates[0].Order
+	for _, c := range candidates[1:] {
+		if c.Order < minDiff {
+			minDiff = c.Order
+		}
+		if c.Order > maxDiff {
+			maxDiff = c.Order
+		}
+	}
+	if ratio < 0 {
+		ratio = 0
+	}
+	if ratio > 1 {
+		ratio = 1
+	}
+	target := float64(minDiff) + ratio*float64(maxDiff-minDiff)
+	return pickByDifficultyTarget(candidates, target, overshoot)
+}
+
+// pickByDifficultyTarget 用倒伽马加权随机挑一个候选：
+//
+//	目标难度 target = clamp(target, 候选最小难度, 候选最大难度)
+//	硬顶 hardCap = target + overshoot（不含该难度：难度 >= hardCap 权重为 0）
+//	变换 X = hardCap - 难度；X ~ Gamma(α=4, θ=overshoot/3)，众数在 X=overshoot ⇒ 峰值在 target
+//	向简单侧（X 增大）拖尾；更难侧在 hardCap 处截断为 0。
+//
+// 若候选全被硬顶滤掉，则退化为只在最简单那一档里抽。overshoot <=0 时用代码内默认值兜底。
+func pickByDifficultyTarget(candidates []types.PunishmentTaskConfig, target, overshoot float64) types.PunishmentTaskConfig {
 	if overshoot <= 0 {
 		overshoot = defaultPunishmentDifficultyOvershoot
 	}
@@ -480,7 +715,6 @@ func weightedDifficultyPick(candidates []types.PunishmentTaskConfig, count int, 
 			maxDiff = c.Order
 		}
 	}
-	target := float64(count+1) * step
 	if target < float64(minDiff) {
 		target = float64(minDiff)
 	}
@@ -825,6 +1059,7 @@ func (s *Server) approveProofBySystem(room *RoomState, playerID, message string)
 	s.updateProofInLatestHistory(room, playerID, types.HistoryProof{
 		Status: "approved", ReviewedBy: "system-auto-forgive", ReviewedAt: &reviewedAt, RejectReason: message,
 	})
+	s.markPunishmentEventApproved(room, playerID)
 	return true
 }
 
@@ -860,6 +1095,20 @@ func (s *Server) submitSystemPunishmentProof(room *RoomState, player *PlayerStat
 		Status: "approved", ReviewedBy: "system-timeout", ReviewedAt: &submittedAt,
 		RejectReason: message, SubmittedAt: submittedAt,
 	})
+	s.markPunishmentEventApproved(room, player.ID)
+}
+
+func (s *Server) markPunishmentEventApproved(room *RoomState, playerID string) {
+	if s.eventDB == nil {
+		return
+	}
+	task := latestPunishmentTask(room, playerID)
+	if task == nil || task.EventID == "" {
+		return
+	}
+	if err := s.eventDB.updatePunishmentStatus(task.EventID, "approved"); err != nil {
+		s.errorLog("punishment_event_update_failed", err.Error())
+	}
 }
 
 func (s *Server) finishPunishmentIfComplete(room *RoomState) bool {

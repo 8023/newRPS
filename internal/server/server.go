@@ -69,10 +69,12 @@ func New() (*Server, error) {
 	proofDir := filepath.Join(uploadsDir, "proofs")
 	adminDir := filepath.Join(uploadsDir, "admin")
 	avatarDir := filepath.Join(uploadsDir, "avatars")
+	contribDir := filepath.Join(uploadsDir, "contributions")
 	dataDir := filepath.Join(root, "work", "db")
 	_ = os.MkdirAll(proofDir, 0o755)
 	_ = os.MkdirAll(adminDir, 0o755)
 	_ = os.MkdirAll(avatarDir, 0o755)
+	_ = os.MkdirAll(contribDir, 0o755)
 	_ = os.MkdirAll(dataDir, 0o755)
 
 	// 会话密钥：优先环境变量；否则落盘 work/session.secret，避免每次重启使浏览器 token 全部失效。
@@ -184,6 +186,7 @@ func New() (*Server, error) {
 		proofUploadsDir:           proofDir,
 		adminUploadsDir:           adminDir,
 		avatarUploadsDir:          avatarDir,
+		contribUploadsDir:         contribDir,
 		proofImageRooms:           map[string]string{},
 		dataDir:                   dataDir,
 		playersFile:               filepath.Join(dataDir, "players.json"),
@@ -241,6 +244,8 @@ func New() (*Server, error) {
 		s.pushDB = newPushStore(db)
 		s.playerDB = newPlayerStore(db)
 		s.punishmentStore = newPunishmentStore(db)
+		s.genderStore = newGenderStore(db)
+		s.contributionStore = newContributionStore(db)
 		s.activityDB = newActivityStore(db)
 		s.petBondDB = newPetBondStore(db)
 		s.analyticsDB = newAnalyticsStore(db)
@@ -268,6 +273,18 @@ func New() (*Server, error) {
 	// 任务池/系列：一次性从 punishments.json 导入（表空时），再加载到内存缓存。
 	s.migratePunishmentPoolFromJSONIfNeeded()
 	s.reloadPunishmentCaches()
+	if err := s.importGendersFromJSONIfNeeded(); err != nil {
+		// 这里不能只 errorLog 后静默继续：s.logCh 的消费者协程要到 Run() 才会启动，
+		// New() 阶段任何写入 logCh 的错误详情在进程退出前根本不会落盘/可见。种子导入
+		// 失败会导致 gender_options 表继续为空，紧接着的 ValidateGenders 必然报出一句
+		// 和真实原因无关的"至少需要一个性别选项"，排查时无从下手——直接 fail fast 并
+		// 把底层错误带出来。
+		return nil, fmt.Errorf("性别与阵营种子导入失败: %w", err)
+	}
+	s.reloadGenderCaches()
+	if err := config.ValidateGenders(s.cfg); err != nil {
+		return nil, fmt.Errorf("性别与阵营校验失败: %w", err)
+	}
 	// VAPID 密钥：失败不阻断游戏服务，但会记错误日志；公钥接口返回 503，
 	// 设置页会明确显示订阅失败，sendPush 也会因公钥为空跳过。
 	if keys, err := loadOrGenerateVAPIDKeys(root); err != nil {
@@ -275,7 +292,6 @@ func New() (*Server, error) {
 	} else {
 		s.vapid = keys
 	}
-	exportConfigText = config.ExportConfigText
 	return s, nil
 }
 
@@ -310,7 +326,6 @@ func (s *Server) Run() error {
 			s.mu.Unlock()
 		}
 	}()
-
 	addr := fmt.Sprintf("%s:%d", s.host, s.port)
 	httpServer := &http.Server{
 		Addr:              addr,
@@ -441,6 +456,7 @@ func (s *Server) closeLiveStateOnShutdown() {
 			id: id, name: r.Settings.Name, gameID: string(r.Settings.GameID),
 			ownerID: r.OwnerID, creatorName: r.CreatorName, createdAt: r.CreatedAt,
 		})
+		s.recordSeriesRunProgressOnClose(r)
 		delete(s.rooms, id)
 	}
 	// 优雅关停等价于清空所有房间：进程一退出 s.rooms 本就不落盘，proofImageRooms 里

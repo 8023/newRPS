@@ -17544,6 +17544,7 @@ export const game = $root.game = (() => {
          * @property {string|null} [assignedBy] PunishmentTask assignedBy
          * @property {string|null} [assignedByName] PunishmentTask assignedByName
          * @property {string|null} [typeName] PunishmentTask typeName
+         * @property {string|null} [eventId] PunishmentTask eventId
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -17656,6 +17657,14 @@ export const game = $root.game = (() => {
         PunishmentTask.prototype.typeName = "";
 
         /**
+         * PunishmentTask eventId.
+         * @member {string} eventId
+         * @memberof game.PunishmentTask
+         * @instance
+         */
+        PunishmentTask.prototype.eventId = "";
+
+        /**
          * Creates a new PunishmentTask instance using the specified properties.
          * @function create
          * @memberof game.PunishmentTask
@@ -17707,6 +17716,8 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 10, wireType 2 =*/82).string(message.assignedByName);
             if (message.typeName != null && $Object.hasOwnProperty.call(message, "typeName") && message.typeName !== "")
                 writer.uint32(/* id 11, wireType 2 =*/90).string(message.typeName);
+            if (message.eventId != null && $Object.hasOwnProperty.call(message, "eventId") && message.eventId !== "")
+                writer.uint32(/* id 12, wireType 2 =*/98).string(message.eventId);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -17844,6 +17855,15 @@ export const game = $root.game = (() => {
                             delete message.typeName;
                         continue;
                     }
+                case 12: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.eventId = value;
+                        else
+                            delete message.eventId;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -17917,6 +17937,9 @@ export const game = $root.game = (() => {
             if (message.typeName != null && $Object.hasOwnProperty.call(message, "typeName"))
                 if (!$util.isString(message.typeName))
                     return "typeName: string expected";
+            if (message.eventId != null && $Object.hasOwnProperty.call(message, "eventId"))
+                if (!$util.isString(message.eventId))
+                    return "eventId: string expected";
             return null;
         };
 
@@ -17968,6 +17991,9 @@ export const game = $root.game = (() => {
             if (object.typeName != null)
                 if (typeof object.typeName !== "string" || object.typeName.length)
                     message.typeName = $String(object.typeName);
+            if (object.eventId != null)
+                if (typeof object.eventId !== "string" || object.eventId.length)
+                    message.eventId = $String(object.eventId);
             return message;
         };
 
@@ -17999,6 +18025,7 @@ export const game = $root.game = (() => {
                 object.assignedBy = "";
                 object.assignedByName = "";
                 object.typeName = "";
+                object.eventId = "";
             }
             if (message.playerId != null && $Object.hasOwnProperty.call(message, "playerId"))
                 object.playerId = message.playerId;
@@ -18020,6 +18047,8 @@ export const game = $root.game = (() => {
                 object.assignedByName = message.assignedByName;
             if (message.typeName != null && $Object.hasOwnProperty.call(message, "typeName"))
                 object.typeName = message.typeName;
+            if (message.eventId != null && $Object.hasOwnProperty.call(message, "eventId"))
+                object.eventId = message.eventId;
             return object;
         };
 
@@ -35404,7 +35433,8 @@ export const game = $root.game = (() => {
          * @property {number|null} [orderStep] PunishmentRandomSettings orderStep
          * @property {number|null} [orderSpread] PunishmentRandomSettings orderSpread
          * @property {number|null} [maxDifficultyOvershoot] PunishmentRandomSettings maxDifficultyOvershoot
-         * @property {string|null} [seriesFactionFallbackText] PunishmentRandomSettings seriesFactionFallbackText
+         * @property {number|null} [minSeriesSteps] PunishmentRandomSettings minSeriesSteps
+         * @property {number|null} [maxSeriesSteps] PunishmentRandomSettings maxSeriesSteps
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -35461,12 +35491,20 @@ export const game = $root.game = (() => {
         PunishmentRandomSettings.prototype.maxDifficultyOvershoot = 0;
 
         /**
-         * PunishmentRandomSettings seriesFactionFallbackText.
-         * @member {string} seriesFactionFallbackText
+         * PunishmentRandomSettings minSeriesSteps.
+         * @member {number} minSeriesSteps
          * @memberof game.PunishmentRandomSettings
          * @instance
          */
-        PunishmentRandomSettings.prototype.seriesFactionFallbackText = "";
+        PunishmentRandomSettings.prototype.minSeriesSteps = 0;
+
+        /**
+         * PunishmentRandomSettings maxSeriesSteps.
+         * @member {number} maxSeriesSteps
+         * @memberof game.PunishmentRandomSettings
+         * @instance
+         */
+        PunishmentRandomSettings.prototype.maxSeriesSteps = 0;
 
         /**
          * Creates a new PunishmentRandomSettings instance using the specified properties.
@@ -35506,8 +35544,10 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 2, wireType 1 =*/17).double(message.orderSpread);
             if (message.maxDifficultyOvershoot != null && $Object.hasOwnProperty.call(message, "maxDifficultyOvershoot") && !$Object.is(message.maxDifficultyOvershoot, 0))
                 writer.uint32(/* id 3, wireType 1 =*/25).double(message.maxDifficultyOvershoot);
-            if (message.seriesFactionFallbackText != null && $Object.hasOwnProperty.call(message, "seriesFactionFallbackText") && message.seriesFactionFallbackText !== "")
-                writer.uint32(/* id 4, wireType 2 =*/34).string(message.seriesFactionFallbackText);
+            if (message.minSeriesSteps != null && $Object.hasOwnProperty.call(message, "minSeriesSteps") && message.minSeriesSteps !== 0)
+                writer.uint32(/* id 5, wireType 0 =*/40).int32(message.minSeriesSteps);
+            if (message.maxSeriesSteps != null && $Object.hasOwnProperty.call(message, "maxSeriesSteps") && message.maxSeriesSteps !== 0)
+                writer.uint32(/* id 6, wireType 0 =*/48).int32(message.maxSeriesSteps);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -35582,13 +35622,22 @@ export const game = $root.game = (() => {
                             delete message.maxDifficultyOvershoot;
                         continue;
                     }
-                case 4: {
-                        if (wireType !== 2)
+                case 5: {
+                        if (wireType !== 0)
                             break;
-                        if ((value = reader.stringVerify()).length)
-                            message.seriesFactionFallbackText = value;
+                        if (value = reader.int32())
+                            message.minSeriesSteps = value;
                         else
-                            delete message.seriesFactionFallbackText;
+                            delete message.minSeriesSteps;
+                        continue;
+                    }
+                case 6: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.maxSeriesSteps = value;
+                        else
+                            delete message.maxSeriesSteps;
                         continue;
                     }
                 }
@@ -35643,9 +35692,12 @@ export const game = $root.game = (() => {
             if (message.maxDifficultyOvershoot != null && $Object.hasOwnProperty.call(message, "maxDifficultyOvershoot"))
                 if (typeof message.maxDifficultyOvershoot !== "number")
                     return "maxDifficultyOvershoot: number expected";
-            if (message.seriesFactionFallbackText != null && $Object.hasOwnProperty.call(message, "seriesFactionFallbackText"))
-                if (!$util.isString(message.seriesFactionFallbackText))
-                    return "seriesFactionFallbackText: string expected";
+            if (message.minSeriesSteps != null && $Object.hasOwnProperty.call(message, "minSeriesSteps"))
+                if (!$util.isInteger(message.minSeriesSteps))
+                    return "minSeriesSteps: integer expected";
+            if (message.maxSeriesSteps != null && $Object.hasOwnProperty.call(message, "maxSeriesSteps"))
+                if (!$util.isInteger(message.maxSeriesSteps))
+                    return "maxSeriesSteps: integer expected";
             return null;
         };
 
@@ -35676,9 +35728,12 @@ export const game = $root.game = (() => {
             if (object.maxDifficultyOvershoot != null)
                 if (!$Object.is($Number(object.maxDifficultyOvershoot), 0))
                     message.maxDifficultyOvershoot = $Number(object.maxDifficultyOvershoot);
-            if (object.seriesFactionFallbackText != null)
-                if (typeof object.seriesFactionFallbackText !== "string" || object.seriesFactionFallbackText.length)
-                    message.seriesFactionFallbackText = $String(object.seriesFactionFallbackText);
+            if (object.minSeriesSteps != null)
+                if ($Number(object.minSeriesSteps) !== 0)
+                    message.minSeriesSteps = object.minSeriesSteps | 0;
+            if (object.maxSeriesSteps != null)
+                if ($Number(object.maxSeriesSteps) !== 0)
+                    message.maxSeriesSteps = object.maxSeriesSteps | 0;
             return message;
         };
 
@@ -35703,7 +35758,8 @@ export const game = $root.game = (() => {
                 object.orderStep = 0;
                 object.orderSpread = 0;
                 object.maxDifficultyOvershoot = 0;
-                object.seriesFactionFallbackText = "";
+                object.minSeriesSteps = 0;
+                object.maxSeriesSteps = 0;
             }
             if (message.orderStep != null && $Object.hasOwnProperty.call(message, "orderStep"))
                 object.orderStep = options.json && !$isFinite(message.orderStep) ? $String(message.orderStep) : message.orderStep;
@@ -35711,8 +35767,10 @@ export const game = $root.game = (() => {
                 object.orderSpread = options.json && !$isFinite(message.orderSpread) ? $String(message.orderSpread) : message.orderSpread;
             if (message.maxDifficultyOvershoot != null && $Object.hasOwnProperty.call(message, "maxDifficultyOvershoot"))
                 object.maxDifficultyOvershoot = options.json && !$isFinite(message.maxDifficultyOvershoot) ? $String(message.maxDifficultyOvershoot) : message.maxDifficultyOvershoot;
-            if (message.seriesFactionFallbackText != null && $Object.hasOwnProperty.call(message, "seriesFactionFallbackText"))
-                object.seriesFactionFallbackText = message.seriesFactionFallbackText;
+            if (message.minSeriesSteps != null && $Object.hasOwnProperty.call(message, "minSeriesSteps"))
+                object.minSeriesSteps = message.minSeriesSteps;
+            if (message.maxSeriesSteps != null && $Object.hasOwnProperty.call(message, "maxSeriesSteps"))
+                object.maxSeriesSteps = message.maxSeriesSteps;
             return object;
         };
 
@@ -36814,6 +36872,8 @@ export const game = $root.game = (() => {
          * @property {game.RoomNamePool.$Properties|null} [roomNamePool] PunishmentSeriesSummary roomNamePool
          * @property {Array.<string>|null} [roomBackgroundImages] PunishmentSeriesSummary roomBackgroundImages
          * @property {number|null} [stepCount] PunishmentSeriesSummary stepCount
+         * @property {number|null} [publishedVersion] PunishmentSeriesSummary publishedVersion
+         * @property {Array.<string>|null} [targetFactionIds] PunishmentSeriesSummary targetFactionIds
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -36840,6 +36900,7 @@ export const game = $root.game = (() => {
          */
         const PunishmentSeriesSummary = function (properties) {
             this.roomBackgroundImages = [];
+            this.targetFactionIds = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -36887,6 +36948,22 @@ export const game = $root.game = (() => {
         PunishmentSeriesSummary.prototype.stepCount = 0;
 
         /**
+         * PunishmentSeriesSummary publishedVersion.
+         * @member {number} publishedVersion
+         * @memberof game.PunishmentSeriesSummary
+         * @instance
+         */
+        PunishmentSeriesSummary.prototype.publishedVersion = 0;
+
+        /**
+         * PunishmentSeriesSummary targetFactionIds.
+         * @member {Array.<string>} targetFactionIds
+         * @memberof game.PunishmentSeriesSummary
+         * @instance
+         */
+        PunishmentSeriesSummary.prototype.targetFactionIds = $util.emptyArray;
+
+        /**
          * Creates a new PunishmentSeriesSummary instance using the specified properties.
          * @function create
          * @memberof game.PunishmentSeriesSummary
@@ -36929,6 +37006,11 @@ export const game = $root.game = (() => {
                     writer.uint32(/* id 4, wireType 2 =*/34).string(message.roomBackgroundImages[i]);
             if (message.stepCount != null && $Object.hasOwnProperty.call(message, "stepCount") && message.stepCount !== 0)
                 writer.uint32(/* id 5, wireType 0 =*/40).int32(message.stepCount);
+            if (message.publishedVersion != null && $Object.hasOwnProperty.call(message, "publishedVersion") && message.publishedVersion !== 0)
+                writer.uint32(/* id 6, wireType 0 =*/48).int32(message.publishedVersion);
+            if (message.targetFactionIds != null && message.targetFactionIds.length)
+                for (let i = 0; i < message.targetFactionIds.length; ++i)
+                    writer.uint32(/* id 10, wireType 2 =*/82).string(message.targetFactionIds[i]);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -37017,6 +37099,23 @@ export const game = $root.game = (() => {
                             delete message.stepCount;
                         continue;
                     }
+                case 6: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.publishedVersion = value;
+                        else
+                            delete message.publishedVersion;
+                        continue;
+                    }
+                case 10: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.targetFactionIds && message.targetFactionIds.length))
+                            message.targetFactionIds = [];
+                        message.targetFactionIds.push(reader.stringVerify());
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -37081,6 +37180,16 @@ export const game = $root.game = (() => {
             if (message.stepCount != null && $Object.hasOwnProperty.call(message, "stepCount"))
                 if (!$util.isInteger(message.stepCount))
                     return "stepCount: integer expected";
+            if (message.publishedVersion != null && $Object.hasOwnProperty.call(message, "publishedVersion"))
+                if (!$util.isInteger(message.publishedVersion))
+                    return "publishedVersion: integer expected";
+            if (message.targetFactionIds != null && $Object.hasOwnProperty.call(message, "targetFactionIds")) {
+                if (!$Array.isArray(message.targetFactionIds))
+                    return "targetFactionIds: array expected";
+                for (let i = 0; i < message.targetFactionIds.length; ++i)
+                    if (!$util.isString(message.targetFactionIds[i]))
+                        return "targetFactionIds: string[] expected";
+            }
             return null;
         };
 
@@ -37123,6 +37232,16 @@ export const game = $root.game = (() => {
             if (object.stepCount != null)
                 if ($Number(object.stepCount) !== 0)
                     message.stepCount = object.stepCount | 0;
+            if (object.publishedVersion != null)
+                if ($Number(object.publishedVersion) !== 0)
+                    message.publishedVersion = object.publishedVersion | 0;
+            if (object.targetFactionIds) {
+                if (!$Array.isArray(object.targetFactionIds))
+                    throw $TypeError(".game.PunishmentSeriesSummary.targetFactionIds: array expected");
+                message.targetFactionIds = $Array(object.targetFactionIds.length);
+                for (let i = 0; i < object.targetFactionIds.length; ++i)
+                    message.targetFactionIds[i] = $String(object.targetFactionIds[i]);
+            }
             return message;
         };
 
@@ -37143,13 +37262,16 @@ export const game = $root.game = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let object = {};
-            if (options.arrays || options.defaults)
+            if (options.arrays || options.defaults) {
                 object.roomBackgroundImages = [];
+                object.targetFactionIds = [];
+            }
             if (options.defaults) {
                 object.id = "";
                 object.name = "";
                 object.roomNamePool = null;
                 object.stepCount = 0;
+                object.publishedVersion = 0;
             }
             if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
                 object.id = message.id;
@@ -37164,6 +37286,13 @@ export const game = $root.game = (() => {
             }
             if (message.stepCount != null && $Object.hasOwnProperty.call(message, "stepCount"))
                 object.stepCount = message.stepCount;
+            if (message.publishedVersion != null && $Object.hasOwnProperty.call(message, "publishedVersion"))
+                object.publishedVersion = message.publishedVersion;
+            if (message.targetFactionIds && message.targetFactionIds.length) {
+                object.targetFactionIds = $Array(message.targetFactionIds.length);
+                for (let j = 0; j < message.targetFactionIds.length; ++j)
+                    object.targetFactionIds[j] = message.targetFactionIds[j];
+            }
             return object;
         };
 
@@ -39071,6 +39200,7 @@ export const game = $root.game = (() => {
          * @property {string|null} [name] SiteConfig name
          * @property {string|null} [description] SiteConfig description
          * @property {string|null} [adminPassword] SiteConfig adminPassword
+         * @property {string|null} [anonymousContributorLabel] SiteConfig anonymousContributorLabel
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -39127,6 +39257,14 @@ export const game = $root.game = (() => {
         SiteConfig.prototype.adminPassword = "";
 
         /**
+         * SiteConfig anonymousContributorLabel.
+         * @member {string} anonymousContributorLabel
+         * @memberof game.SiteConfig
+         * @instance
+         */
+        SiteConfig.prototype.anonymousContributorLabel = "";
+
+        /**
          * Creates a new SiteConfig instance using the specified properties.
          * @function create
          * @memberof game.SiteConfig
@@ -39164,6 +39302,8 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.description);
             if (message.adminPassword != null && $Object.hasOwnProperty.call(message, "adminPassword") && message.adminPassword !== "")
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.adminPassword);
+            if (message.anonymousContributorLabel != null && $Object.hasOwnProperty.call(message, "anonymousContributorLabel") && message.anonymousContributorLabel !== "")
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.anonymousContributorLabel);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -39238,6 +39378,15 @@ export const game = $root.game = (() => {
                             delete message.adminPassword;
                         continue;
                     }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.anonymousContributorLabel = value;
+                        else
+                            delete message.anonymousContributorLabel;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -39290,6 +39439,9 @@ export const game = $root.game = (() => {
             if (message.adminPassword != null && $Object.hasOwnProperty.call(message, "adminPassword"))
                 if (!$util.isString(message.adminPassword))
                     return "adminPassword: string expected";
+            if (message.anonymousContributorLabel != null && $Object.hasOwnProperty.call(message, "anonymousContributorLabel"))
+                if (!$util.isString(message.anonymousContributorLabel))
+                    return "anonymousContributorLabel: string expected";
             return null;
         };
 
@@ -39320,6 +39472,9 @@ export const game = $root.game = (() => {
             if (object.adminPassword != null)
                 if (typeof object.adminPassword !== "string" || object.adminPassword.length)
                     message.adminPassword = $String(object.adminPassword);
+            if (object.anonymousContributorLabel != null)
+                if (typeof object.anonymousContributorLabel !== "string" || object.anonymousContributorLabel.length)
+                    message.anonymousContributorLabel = $String(object.anonymousContributorLabel);
             return message;
         };
 
@@ -39344,6 +39499,7 @@ export const game = $root.game = (() => {
                 object.name = "";
                 object.description = "";
                 object.adminPassword = "";
+                object.anonymousContributorLabel = "";
             }
             if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
                 object.name = message.name;
@@ -39351,6 +39507,8 @@ export const game = $root.game = (() => {
                 object.description = message.description;
             if (message.adminPassword != null && $Object.hasOwnProperty.call(message, "adminPassword"))
                 object.adminPassword = message.adminPassword;
+            if (message.anonymousContributorLabel != null && $Object.hasOwnProperty.call(message, "anonymousContributorLabel"))
+                object.anonymousContributorLabel = message.anonymousContributorLabel;
             return object;
         };
 

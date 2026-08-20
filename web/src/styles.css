@@ -5214,6 +5214,18 @@ main {
   gap: 10px;
 }
 
+/* h2 默认自带浏览器 UA 外边距（约 0.83em 上下），在这一行网格里比无外边距的
+   input/button 兄弟项“重”，align-items:center 会把它的文字挤得偏下——清零外边距、
+   改成行内 flex 让图标与文字自身也居中对齐，与右侧密码框/按钮同一条水平线。 */
+.admin-login-card h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--page-text);
+  line-height: 1.25;
+}
+
 .admin-tool-shell {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
@@ -6512,7 +6524,7 @@ main {
   width: 12em;
 }
 
-.faction-gender-row > input.faction-gender-label-input {
+.faction-gender-row>input.faction-gender-label-input {
   width: 12em;
 }
 
@@ -6806,7 +6818,7 @@ main {
 }
 
 .designed-task-card {
-  min-height: 118px;
+  min-height: 80px;
   align-content: center;
   padding: 14px;
 }
@@ -6839,6 +6851,31 @@ main {
 .task-card.danger {
   border-color: var(--pink-border);
   background: color-mix(in srgb, var(--pink) 42%, var(--panel-soft));
+}
+
+/* 任务卡片第三行：点赞/点踩评价，独立成行且右对齐，与前两行（标题/任务文案，左对齐）区分开。
+   借用共建评价组件（.contribution-vote），但去掉它在共建列表里的独立卡片外观（边框/底色/内
+   边距），让它看起来只是任务卡片内的一行，而不是卡片里又嵌了一张卡片。 */
+.task-card-vote-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.task-card-vote-row .contribution-vote {
+  border: none;
+  padding: 0;
+  background: transparent;
+  text-align: right;
+}
+
+.task-card-vote-row .vote-actions {
+  justify-content: flex-end;
+}
+
+.contribution-vote-result {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 @media (max-width: 920px) {
@@ -6919,8 +6956,28 @@ main {
     grid-template-columns: 1fr;
   }
 
+  /* 标题、口令输入框各自占一整行；「进入管理」「返回」两个按钮换到 2 列网格，
+     自动落进标题/输入框之后的下一行，左右对半分——而不是各自单独占一整行。 */
   .admin-login-card {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-login-card h2,
+  .admin-login-card input {
+    grid-column: 1 / -1;
+  }
+
+  /* 编辑面板标题行（图标+标题+说明 与「有未保存修改」状态）默认不换行，而后者还带
+     max-width:320px——窄屏下会把标题挤成竖排。允许换行，未保存状态独占下一行并改回
+     左对齐（右对齐在整行宽度下没有意义，只会把文字甩到屏幕最右侧）。 */
+  .admin-editor-head {
+    flex-wrap: wrap;
+  }
+
+  .admin-edit-status {
+    max-width: none;
+    justify-items: start;
+    text-align: left;
   }
 
   .game-choice-grid {
@@ -7162,6 +7219,38 @@ main {
     justify-content: space-between;
     margin-bottom: 6px;
     gap: 8px;
+  }
+
+  .contribute-page .panel-title.lobby-title {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .contribute-page .lobby-title-actions {
+    width: 100%;
+  }
+
+  .contribute-page .lobby-title-actions button {
+    flex: 1;
+  }
+
+  .lobby-main .lobby-title-actions {
+    width: auto;
+    flex: none;
+    margin-left: auto;
+    flex-wrap: nowrap;
+  }
+
+  .lobby-main .lobby-title-actions button {
+    flex: none;
+    width: auto;
+    flex-shrink: 0;
+  }
+
+  .lobby-main .lobby-title-actions .soft-button {
+    min-height: 34px;
+    padding: 7px 10px;
   }
 
   .panel-title.lobby-title h2 {
@@ -7422,7 +7511,6 @@ main {
   }
 
   .designed-task-card {
-    min-height: 150px;
     align-content: end;
     padding: 16px;
   }
@@ -8072,4 +8160,677 @@ main {
 .petbond-graph-edge-label:hover rect {
   fill: color-mix(in srgb, var(--chart-5) 35%, var(--panel-solid));
   stroke: var(--chart-5);
+}
+
+.lobby-title-actions,
+.contribute-tabs,
+.vote-actions,
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* 通用垂直堆叠工具类：给一组没有专门布局类的兄弟表单控件（label/fieldset/button/p）
+   补上统一的行间距。共建模块大量套了这个类名却一直没定义，控件全部零间距贴在一起，
+   见 DESIGN.md 第 8 节。 */
+.stack {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  /* grid 子项默认 min-width:auto，遇到不换行的图片/长内容会撑破容器宽度而不是收缩
+     （grid 版“内容溢出”）；这里强制允许收缩，配合子元素自身的 max-width 生效。 */
+  min-width: 0;
+}
+
+.contribute-tabs button.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* 后台「共建审核」的待处理/随机任务/系列任务三个选项卡：原先是玩家端共用的实心药丸样式，
+   放在后台里偏单薄；这里改用「用户与房间」管理分类导航（.admin-management-nav）同一套
+   卡片语言——留白边框 + 选中态左侧色条，与后台其它分类导航视觉统一。 */
+.admin-contribution .contribute-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* 按钮内部改成「标题 + 摘要药丸」左右两列，与 .admin-management-nav 同一套
+   span/em 结构（见下方两条），摘要显示条数（待处理多少条、随机任务/系列任务
+   各自正在使用多少条），不再是纯文字的空药丸按钮。 */
+.admin-contribution .contribute-tabs button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--panel-solid) 82%, transparent);
+  color: var(--page-text);
+  font-weight: 700;
+  text-align: left;
+}
+
+.admin-contribution .contribute-tabs button>span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-contribution .contribute-tabs em {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  padding: 5px 7px;
+  white-space: nowrap;
+}
+
+.admin-contribution .contribute-tabs button.active {
+  background: color-mix(in srgb, var(--primary) 14%, var(--panel-solid));
+  border-color: var(--primary);
+  color: var(--page-text);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.admin-contribution .contribute-tabs button.active em {
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--border));
+  background: color-mix(in srgb, var(--primary) 16%, var(--panel-solid));
+  color: var(--page-text);
+}
+
+/* 超过约 13 条自动出现滚动条，不再把整页无限撑高（后台共建审核列表历史条目可能很长）；
+   玩家端「参与共建」自己的列表同样复用这个类，条数一般不多，但撑高的问题同理，一起收敛。 */
+/* padding-top 给悬停上浮（transform: translateY(-1px)，见全局 button:hover）留出余量，
+   否则列表第一项紧贴容器顶部，上浮时它自己的上边框会被 overflow-y:auto 的裁剪边界挡住。 */
+.contribute-list {
+  display: grid;
+  gap: 8px;
+  max-height: 640px;
+  overflow-y: auto;
+  padding-top: 2px;
+  padding-right: 2px;
+}
+
+.contribute-item,
+.contribution-vote,
+.status-chip {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--panel-soft);
+}
+
+/* 投稿列表行：卡片内「类型 / 状态徽标 / 批注 / 时间 / 操作按钮」纵向排布，各自补间距；
+   行本身是 <button> 时，全局 button 默认 inline-flex + 居中会把内容挤成一行居中，
+   要额外改左对齐、撑满宽度。 */
+.contribute-item {
+  display: grid;
+  gap: 6px;
+}
+
+/* justify-content 沿用全局 button 的 center：display:grid 后单一隐式列不再撑满容器宽度
+   （按内容自身宽度定轨、整组轨道再居中），文字虽然 text-align:left 但左右仍会各留一截
+   空白、显得不紧凑。改成 stretch 让轨道撑满整行，参照 .punishment-index-list button
+   同款写法（后台「称号池」左栏索引）。 */
+button.contribute-item {
+  text-align: left;
+  align-items: start;
+  justify-content: stretch;
+  width: 100%;
+}
+
+/* 列表第一行标题：单行显示，超出卡片宽度截断成省略号，不换行顶高整张卡片（长标题/
+   长文案投稿混进列表时常见）。grid 子项默认不会收缩到比自身内容更窄，min-width:0
+   是让 overflow/ellipsis 生效的前提。 */
+.contribute-item strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-chip {
+  display: inline-flex;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--page-text);
+  border: 1px solid var(--border);
+}
+
+/* 状态色复用站内已有的约定色（成功绿 #5fbf8f、金色 #f2b84b、既有的 --reject 危险色），
+   走 color-mix 与 --panel-solid 混合，深色模式自动跟着变深；不再写死一个和主题不搭、
+   深色模式下也不会变化的浅色 hex（见 DESIGN.md 第 2/8 节）。 */
+.status-pending,
+.status-revision_draft,
+.status-revision_pending,
+.status-unpublish_pending {
+  background: color-mix(in srgb, #f2b84b 30%, var(--panel-solid));
+  border-color: color-mix(in srgb, #f2b84b 55%, var(--border));
+}
+
+.status-approved {
+  background: color-mix(in srgb, #5fbf8f 26%, var(--panel-solid));
+  border-color: color-mix(in srgb, #5fbf8f 55%, var(--border));
+}
+
+.status-rejected,
+.status-revision_rejected {
+  background: color-mix(in srgb, var(--reject) 70%, var(--panel-solid));
+  border-color: var(--reject-border);
+}
+
+.status-draft,
+.status-withdrawn {
+  color: var(--muted);
+}
+
+/* width+max-width 双保险：外层容器窄于 220px（如手机上的详情栏）时按 max-width:100%
+   收缩，而不是撑破 .contribute-panel（此前只写 max-width:220px，配合祖先 grid 缺
+   min-width:0 会在窄屏上把整段控件一起顶出面板，见 DESIGN.md 第 8 节相关记录）。 */
+.contribute-preview {
+  width: 220px;
+  max-width: 100%;
+  border-radius: 8px;
+  display: block;
+}
+
+.contribute-step {
+  display: grid;
+  gap: 10px;
+  border: 1px dashed var(--primary);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--panel-soft);
+}
+
+/* 相邻两步之间再补一截空白，与 .stack 本身的 10px 间距叠加，让步骤边界更容易看出来
+   （原来只靠 .stack 的 gap，步骤之间和步骤内部控件的间距视觉上分不清）。 */
+.contribute-step+.contribute-step {
+  margin-top: 10px;
+}
+
+.contribute-step.step-gap {
+  border-color: var(--reject-border);
+  background: color-mix(in srgb, var(--reject) 18%, var(--panel-soft));
+}
+
+.step-variant {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--panel-solid);
+}
+
+/* 文案预览用的 <p>：默认浏览器 UA 样式上下各留 1em，在紧凑的卡片里显得很空，
+   收窄成上 0.2em、下 0（不需要下边距，容器自身的 gap 已经隔开了下一个元素）。 */
+.step-variant p {
+  margin: 0.2em 0 0;
+}
+
+.step-editor {
+  gap: 12px;
+}
+
+/* 后台共建审核现在直接复用玩家端「参与共建」同一套骨架（.contribute-layout 等，
+   见下方定义），保持两边视觉是同一套语言，不再单独起一份更窄的两栏网格。 */
+.admin-contribution {
+  display: grid;
+  gap: 14px;
+}
+
+/* 「待处理」板块：性别审批队列 + 总览统计，纵向堆叠，标题走 .compact-title 同一套字号。 */
+.admin-review-section {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-review-section h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--page-text);
+}
+
+/* 总览统计：随机任务/系列任务各一行，5 种状态各一张可点击卡片，直接跳到对应板块并
+   定位到匹配的第一条投稿。外观复用 .contribute-item 卡片语言，不再另起一套按钮样式。 */
+.admin-overview-kind {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-overview-kind>strong {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.admin-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.admin-overview-stat {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  text-align: center;
+  padding: 10px 8px;
+}
+
+.admin-overview-stat strong {
+  font-size: 20px;
+}
+
+.admin-overview-stat small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-overview-stat:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+/* ── 共建页表单细节：fieldset/legend/复选框复位 ──────────────────
+   浏览器默认 fieldset 是灰色浮雕边框、legend 内嵌凸起，和站内卡片语言完全不搭；
+   默认复选框也和 .admin-chat-manager 已经在用的「18px + 主题色」风格不一致。
+   统一按 DESIGN.md 第 5 节的规则复位。 */
+.contribute-page fieldset,
+.admin-contribution fieldset {
+  margin: 0;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--panel-solid);
+  display: grid;
+  gap: 8px;
+}
+
+/* 嵌套在另一层 fieldset/卡片里的下一层，底色降一档做出层级区分 */
+.contribute-page fieldset fieldset,
+.admin-contribution fieldset fieldset {
+  background: var(--panel-soft);
+}
+
+/* .step-variant / .contribute-step 早先就有自己固定的外观（实色文案卡 / 虚线步骤框），
+   这里用更高优先级的选择器重申一遍，避免被上面两条通用 fieldset 复位规则盖掉
+   （系列表单里「步骤 fieldset > 文案卡 fieldset」正好两层嵌套，会被降档规则误伤）。 */
+.contribute-page fieldset.step-variant,
+.admin-contribution fieldset.step-variant {
+  background: var(--panel-solid);
+  border-color: var(--border);
+}
+
+.contribute-page fieldset.contribute-step,
+.admin-contribution fieldset.contribute-step {
+  background: var(--panel-soft);
+  border: 2px dashed var(--border-strong);
+}
+
+.contribute-page fieldset.contribute-step.step-gap,
+.admin-contribution fieldset.contribute-step.step-gap {
+  border-color: var(--reject-border);
+  background: color-mix(in srgb, var(--reject) 18%, var(--panel-soft));
+}
+
+.contribute-page legend,
+.admin-contribution legend {
+  padding: 0 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* 「第 N 步」是整个步骤卡片的标题，字号要比卡片内部「适用阵营」「惩罚标签」这类
+   小标题更突出，用更高优先级的选择器（fieldset.contribute-step 的直接子 legend）单独重申。 */
+.contribute-page fieldset.contribute-step>legend,
+.admin-contribution fieldset.contribute-step>legend {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--page-text);
+}
+
+/* 标题在上、控件在下的单字段：直接复用后台已有的 .field-label / .field-label span
+   （定义见本文件 config-row 附近），不在这里另起一套。 */
+
+/* 单个独立复选框（如"匿名贡献"）：18px + 主题色，不做药丸化处理 */
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--page-text);
+  cursor: pointer;
+}
+
+.checkbox-inline input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+/* 一组多选复选框（适用阵营/惩罚标签/面向阵营）：渲染成可点击药丸，复用
+   .room-tag-picker button.active 的选中态语言，而不是一排孤零零的方框+文字 */
+.contribute-page fieldset.checkbox-fieldset,
+.admin-contribution fieldset.checkbox-fieldset {
+  background: var(--panel-soft);
+}
+
+.checkbox-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.checkbox-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  background: var(--panel-solid);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--page-text);
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+/* 药丸本身就是 <button>（不再内嵌 <input type=checkbox>），选中态纯靠底色表达 */
+.checkbox-pill.active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 24%, var(--panel-solid));
+}
+
+/* 页面骨架：与 .topbar/.dashboard 同一条 max-width 基准线对齐同宽，不再单独开一个更窄的
+   880/1180px——之前各写各的，共建页两侧比顶栏窄一截，视觉上不同宽。 */
+.contribute-page {
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+}
+
+.contribute-panel {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+/* 左：我的投稿列表（按当前板块过滤，含末尾"提交新 xxx"入口）；右：选中投稿的详情/编辑器，
+   或未选中时对应板块的新建编辑器。性别/随机任务/系列任务的板块切换挪到了标题行，与
+   「返回大厅」同排；历史投稿不再单拎一个 tab 页，而是按板块常驻在左栏，点开即在右栏
+   查看或修改，见需求记录。 */
+.contribute-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.contribute-sidebar {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-width: 0;
+}
+
+/* 后台共建审核左栏顶部的搜索框：外观直接吃全局 input 样式，这里只收紧一下高度，
+   和下面紧凑的列表行比例更协调，不需要另起一套输入框皮肤。 */
+.contribute-list-search {
+  padding: 8px 12px;
+}
+
+.contribute-main {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--panel-soft);
+}
+
+/* 投稿列表里当前选中的一条，用底色区分（与药丸/tab 选中态同一套语言） */
+.contribute-item.active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 18%, var(--panel-soft));
+}
+
+/* 投稿者昵称悬停/聚焦浮窗：药丸形卡片装 PlayerAvatar+PlayerBadge，与主宠关系力导向图
+   悬停节点弹出的 .petbond-graph-popover 同一套视觉语言（见 PetBondGraphPanel.tsx）。 */
+.contribute-submitter {
+  position: relative;
+  cursor: default;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.contribute-submitter-popover {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: 300px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--panel-solid);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 10px 28px var(--shadow);
+}
+
+/* 列表末尾的"提交新 xxx"入口：虚线边框 + 主题色文字，与真实投稿卡片区分开。
+   选择器要压过 button.contribute-item 的 text-align:left/align-items:start
+   （二者都是"元素+1 个类"的特化程度，这里再叠一个类把优先级压过去）。 */
+button.contribute-item.contribute-item-new {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  color: var(--primary);
+  font-weight: 700;
+  text-align: center;
+  align-items: center;
+  justify-items: center;
+}
+
+/* 「难度 + 封面图选择」「匿名贡献 + 封面图预览」这类左右两列均分的行；
+   两侧子项都要 min-width:0，否则内部图片/输入框不换行时会把列撑宽顶出面板。 */
+.contribute-split-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: end;
+  min-width: 0;
+}
+
+.contribute-split-row>* {
+  min-width: 0;
+}
+
+.contribute-preview-row-side {
+  min-width: 0;
+}
+
+/* 保存草稿 / 提交审批固定在表单右下角，不再撑满一整行 */
+.contribute-submit-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 共建页标题行四个按钮（三板块 + 返回大厅）与大厅「返回/创建」同一套 .small 尺寸；
+   display:contents 让 tablist 不额外占一层 flex，四个按钮在同一行里等高对齐。 */
+.contribute-page .lobby-title-actions .contribute-tabs {
+  display: contents;
+}
+
+/* 系列每一步：提示语/难度+封面图（合并一行，.contribute-split-row 均分）/上移下移删除
+   添加四个按钮全在左栏；惩罚标签单独占右栏，刻意不逐行对齐——每栏各自纵向堆叠自己的
+   内容，用默认的 align-items:stretch 让两栏撑到同一总高度，内容更短的一栏下方自然留空，
+   而不是被拉伸变形或跟另一栏的控件强行对平。未勾选「同时发布到随机任务」时左栏的提示语/
+   难度一并隐藏、右栏的标签也隐藏，四个按钮仍紧跟在封面图选择器后面，同一套布局继续生效。 */
+.step-columns {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.step-columns>.step-column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.series-step-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: stretch;
+}
+
+.series-step-actions button {
+  flex: 1;
+}
+
+/* 上移/下移/添加沿用全局 button:hover 的浅蓝色即可；只有「删除」是破坏性操作，
+   悬停单独换成浅红色，与其它三个按钮区分开。 */
+.series-step-actions button.step-delete-button:hover {
+  background: color-mix(in srgb, var(--reject) 55%, var(--panel-solid));
+  border-color: var(--reject-border);
+}
+
+/* .notice 本来是页级通知条（自带最大宽+居中+14px 独立底边距），嵌在共建卡片/表单
+   内部当局部提示用时要把这些页级布局属性归零，否则在窄卡片里会显得突兀。 */
+.contribute-page .notice,
+.admin-contribution .notice {
+  max-width: none;
+  margin: 0;
+}
+
+.contribute-detail-head {
+  display: grid;
+  gap: 4px;
+}
+
+.contribute-detail-head strong {
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.checkbox-pill.conflict,
+.checkbox-pill.conflict.active {
+  border-color: var(--reject-border);
+  background: color-mix(in srgb, var(--reject) 55%, var(--panel-solid));
+  color: var(--page-text);
+}
+
+/* 点击「提交审批」后，没填好的输入框/文本域标红，与上面阵营选重复的 .conflict 是
+   同一套视觉语言。fieldset（如「本系列面向哪些阵营」）边框已经带 class+element 选择器，
+   要单独再写一条更高优先级的规则才压得过，不能指望 .field-invalid 单类选择器生效。 */
+.field-invalid {
+  border-color: var(--reject-border);
+  background: color-mix(in srgb, var(--reject) 16%, var(--panel-solid));
+}
+
+.contribute-page fieldset.field-invalid,
+.admin-contribution fieldset.field-invalid {
+  border-color: var(--reject-border);
+  background: color-mix(in srgb, var(--reject) 16%, var(--panel-soft));
+}
+
+/* min-height:38px 对齐同一行「难度」输入框的高度；「选取文件」「移除封面」两个按钮特意不用
+   .small（34px 会比输入框矮一截），用默认按钮高度（38px）撑满这一行。 */
+.cover-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  min-width: 0;
+}
+
+.cover-picker input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* 与「选取文件/移除封面」按钮及旁边的「难度」输入框同高（见 .cover-picker 的 min-height），
+   而不是任意选一个更小的缩略图尺寸。 */
+.cover-thumb {
+  width: 38px;
+  height: 38px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  flex: none;
+}
+
+.contribute-unsaved-card {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+
+.contribute-unsaved-card h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.contribute-unsaved-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 768px) {
+  .contribute-page .lobby-title-actions {
+    width: 100%;
+  }
+
+  .contribute-page .lobby-title-actions button {
+    flex: 1;
+  }
+
+  .admin-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .contribute-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .contribute-split-row {
+    grid-template-columns: 1fr;
+  }
+
+  .step-columns {
+    flex-direction: column;
+  }
 }

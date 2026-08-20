@@ -20,12 +20,14 @@ import {
   AboutPanel, GlobalLeaderboardPanel, Lobby, Login, PlayerBadge, ProfilePanel, Room, SecurityDisclaimer,
   connectionStateText, phaseText
 } from "./ui/AppViews";
+import { ContributeView } from "./ui/ContributeView";
 import { HelpPanel } from "./ui/HelpPanel";
 import { startAnalytics, trackLoginSuccess, trackPageview, trackThemeToggle } from "./lib/analytics";
 
 // 后台管理面板（含可能新增的图表等重型组件）单独打包，普通玩家不会触发这次 import。
 const AdminPanel = lazy(() => import("./ui/AdminViews").then((module) => ({ default: module.AdminPanel })));
 
+type AppView = "login" | "lobby" | "room" | "admin" | "contribute";
 
 export function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -35,7 +37,11 @@ export function App() {
   // 随机任务开房标签偏好：纯本地浏览器存储，不再随 player:join 从服务端下发。
   const [punishmentTagPrefs, setPunishmentTagPrefs] = useState<Record<string, string>>(() => readPunishmentTagPrefs());
   const [leaderboardPlayersSnapshot, setLeaderboardPlayersSnapshot] = useState<PublicPlayer[]>([]);
-  const [view, setView] = useState<"login" | "lobby" | "room" | "admin">(() => isAdminRoute() ? "admin" : "login");
+  const [view, setView] = useState<AppView>(() => isAdminRoute() ? "admin" : "login");
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const viewBeforeAdminRef = useRef<AppView>(isAdminRoute() ? "login" : "lobby");
+  const [keepContribute, setKeepContribute] = useState(false);
   // 有本地登录缓存时先进入恢复态，避免刷新时先闪一下登录页再进大厅。
   const [restoringSession, setRestoringSession] = useState(() => !isAdminRoute() && hasCachedLogin());
   const [profileOpen, setProfileOpen] = useState(false);
@@ -61,6 +67,7 @@ export function App() {
   const [restoreKickBusy, setRestoreKickBusy] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(() => (localStorage.getItem("rps-online-theme") === "dark" ? "dark" : "light"));
   const restoreInFlightRef = useRef(false);
+  const restoreWaitersRef = useRef<Array<(ok: boolean) => void>>([]);
   const hadConnectedRef = useRef(socket.connected);
   const latestLobbyPlayersRef = useRef<PublicPlayer[]>([]);
   const leaderboardSnapshotAtRef = useRef(0);
@@ -93,26 +100,31 @@ export function App() {
     if (helpOpen) trackPageview("help");
   }, [helpOpen]);
 
-  async function restoreSession(options: { showRecoveredNotice?: boolean } = {}) {
-    if (restoreInFlightRef.current) return;
+  async function restoreSession(options: { showRecoveredNotice?: boolean } = {}): Promise<boolean> {
+    if (restoreInFlightRef.current) {
+      return await new Promise<boolean>((resolve) => {
+        restoreWaitersRef.current.push(resolve);
+      });
+    }
     const token = localStorage.getItem(tokenKey);
     const cachedName = localStorage.getItem("rps-online-name") || "";
     const { genderId: cachedGender } = readCachedJoinGender();
     if (!cachedName || !sessionTokenLooksValid(token)) {
       setRestoringSession(false);
-      return;
+      return false;
     }
     // 未连上时绝不尝试 join，更不能因此清 token（旧逻辑会把”未连接”误判成坏 token）。
-    if (!socket.connected) return;
+    if (!socket.connected) return false;
 
     restoreInFlightRef.current = true;
+    let ok = false;
     const payload = { name: cachedName, genderId: cachedGender, token, ...(await joinIdentityPayload()) };
     try {
       const next = await ask<MeState & { alreadyOnline?: true }>("player:join", payload);
       if (next.alreadyOnline) {
         setRestoreKickPending(payload);
         setRestoringSession(false);
-        return;
+        return false;
       }
       if (next.token) localStorage.setItem(tokenKey, next.token);
       if (next.reissuedSecret) localStorage.setItem(playerSecretKey, next.reissuedSecret);
@@ -124,10 +136,17 @@ export function App() {
       if (next.room) setRoom(normalizeRoomSnapshot(next.room));
       else setRoom(null);
       if (!isAdminRoute()) {
-        setView(next.room ? "room" : "lobby");
-        if (next.room?.phase === "punishment") setNotice("已恢复到未完成的惩罚房间。");
-        else if (options.showRecoveredNotice) setNotice("连接已恢复，玩家状态已同步。");
+        if (next.room) {
+          setView("room");
+          if (next.room.phase === "punishment") setNotice("已恢复到未完成的惩罚房间。");
+        } else if (viewRef.current !== "contribute") {
+          setView("lobby");
+          if (options.showRecoveredNotice) setNotice("连接已恢复，玩家状态已同步。");
+        } else if (options.showRecoveredNotice) {
+          setNotice("连接已恢复，玩家状态已同步。");
+        }
       }
+      ok = true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       // 仅身份/会话类错误放弃自动登录；瞬时断线等保持缓存，下次 connect 再试。
@@ -147,7 +166,10 @@ export function App() {
     } finally {
       restoreInFlightRef.current = false;
       setRestoringSession(false);
+      const waiters = restoreWaitersRef.current.splice(0);
+      for (const wait of waiters) wait(ok);
     }
+    return ok;
   }
 
   async function confirmRestoreKick() {
@@ -418,18 +440,42 @@ export function App() {
     setDisclaimerConfirmed(true);
   }
 
+  function openAdmin() {
+    const current = viewRef.current;
+    if (current !== "admin") {
+      viewBeforeAdminRef.current = current;
+      if (current === "contribute") setKeepContribute(true);
+    }
+    if (!isAdminRoute()) window.location.hash = "admin";
+    setView("admin");
+  }
+
+  function leaveAdmin() {
+    if (window.location.hash === "#admin") window.location.hash = "";
+    const prev = viewBeforeAdminRef.current;
+    if (prev === "contribute" && me) {
+      setView("contribute");
+      return;
+    }
+    if (prev === "room" && me && room) {
+      setView("room");
+      return;
+    }
+    setKeepContribute(false);
+    setView(me ? "lobby" : "login");
+  }
+
   useEffect(() => {
     // 管理入口故意不放在普通页面按钮里：地址加 #admin，或按 Ctrl/Command + Shift + A。
     function openHiddenAdmin(event: KeyboardEvent) {
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "a") {
-        window.location.hash = "admin";
-        setView("admin");
+        openAdmin();
       }
     }
     function openFromHash() {
-      if (isAdminRoute()) setView("admin");
+      if (isAdminRoute()) openAdmin();
     }
-    if (isAdminRoute()) setView("admin");
+    if (isAdminRoute()) openAdmin();
     window.addEventListener("keydown", openHiddenAdmin);
     window.addEventListener("hashchange", openFromHash);
     return () => {
@@ -558,11 +604,16 @@ export function App() {
         setView(isAdminRoute() ? "admin" : next.room ? "room" : "lobby");
         if (next.room?.phase === "punishment") setNotice("已恢复到未完成的惩罚房间。");
       }} onError={setNotice} />}
-      {view === "lobby" && me && lobby && <Lobby config={config} lobby={lobby} me={me.player} punishmentTagPrefs={punishmentTagPrefs} onError={setNotice} onGoRoom={(nextRoom) => { if (nextRoom) setRoom(nextRoom); setView("room"); }} onPunishmentTagPrefsChange={(prefs) => { setPunishmentTagPrefs(prefs); writePunishmentTagPrefs(prefs); }} />}
+      {view === "lobby" && me && lobby && <Lobby config={config} lobby={lobby} me={me.player} punishmentTagPrefs={punishmentTagPrefs} onError={setNotice} onGoRoom={(nextRoom) => { if (nextRoom) setRoom(nextRoom); setView("room"); }} onContribute={() => setView("contribute")} onPunishmentTagPrefsChange={(prefs) => { setPunishmentTagPrefs(prefs); writePunishmentTagPrefs(prefs); }} />}
+      {(view === "contribute" || (view === "admin" && keepContribute)) && me && config ? (
+        <div hidden={view !== "contribute"}>
+          <ContributeView config={config} me={me.player} onBack={() => { setKeepContribute(false); setView("lobby"); }} onError={setNotice} ensureSession={() => restoreSession()} />
+        </div>
+      ) : null}
       {view === "room" && me && room && <Room config={config} room={room} me={me.player} lobby={lobby} onBack={() => setView("lobby")} onError={setNotice} />}
       {view === "admin" && lobby && (
         <Suspense fallback={<div className="loading">正在加载后台管理…</div>}>
-          <AdminPanel config={config} lobby={lobby} onBack={() => { if (window.location.hash === "#admin") window.location.hash = ""; setView(me ? "lobby" : "login"); }} onError={setNotice} />
+          <AdminPanel config={config} lobby={lobby} onBack={leaveAdmin} onError={setNotice} />
         </Suspense>
       )}
       {view === "room" && !room && <section className="panel">你暂时不在房间里。</section>}

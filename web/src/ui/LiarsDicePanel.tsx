@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Dices } from "lucide-react";
-import type { PublicPlayer, RoomSnapshot } from "../shared/types";
+import type { AppConfig, PublicPlayer, RoomSnapshot } from "../shared/types";
+import { seriesFactionWarning } from "./seriesFaction";
 import { ask } from "../lib/rpc";
 import { socket } from "../ws";
 import { displayPlayerName, PlayerAvatar, PlayerBadge, roomPlayerById } from "./AppViews";
@@ -17,7 +18,7 @@ function playerName(room: RoomSnapshot, id: string, fallbackNames?: Record<strin
   return fallbackNames?.[id] || id;
 }
 
-export function LiarsDicePanel({ room, me, onError }: { room: RoomSnapshot; me: PublicPlayer; onError: (message: string) => void }) {
+export function LiarsDicePanel({ room, me, config, onError }: { room: RoomSnapshot; me: PublicPlayer; config: AppConfig; onError: (message: string) => void }) {
   const ld = room.liarsDice;
   const [myDice, setMyDice] = useState<number[]>([]);
   const [bidCount, setBidCount] = useState(1);
@@ -128,7 +129,11 @@ export function LiarsDicePanel({ room, me, onError }: { room: RoomSnapshot; me: 
         {(room.phase === "ready" || room.phase === "waiting") && (
           <div className="liarsdice-roster-actions">
             {!isParticipant && (
-              <button className="primary" disabled={busy || ld.participantIds.length >= (room.settings.liarsDiceMaxPlayers || 8)} onClick={() => act("liarsdice:joinRoster")}>
+              <button className="primary" disabled={busy || ld.participantIds.length >= (room.settings.liarsDiceMaxPlayers || 8)} onClick={() => {
+                const warn = seriesFactionWarning(room, config, me);
+                if (warn && !window.confirm(warn)) return;
+                act("liarsdice:joinRoster");
+              }}>
                 加入参战席
               </button>
             )}

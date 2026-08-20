@@ -79,6 +79,22 @@ func TestDomainWireFieldParity(t *testing.T) {
 			msg:    &wire.NameWarConfig{},
 		},
 		{
+			name:   "PunishmentTask",
+			domain: types.PunishmentTask{},
+			msg:    &wire.PunishmentTask{},
+			skip:   map[string]bool{"rejectCount": true},
+		},
+		{
+			name:   "PunishmentSeriesSummary",
+			domain: types.PunishmentSeriesSummary{},
+			msg:    &wire.PunishmentSeriesSummary{},
+		},
+		{
+			name:   "PunishmentRandomSettings",
+			domain: types.PunishmentRandomSettings{},
+			msg:    &wire.PunishmentRandomSettings{},
+		},
+		{
 			name:   "OthelloState",
 			domain: types.OthelloState{},
 			msg:    &wire.OthelloState{},

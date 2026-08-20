@@ -1,7 +1,7 @@
 import { type CSSProperties, Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Download, RefreshCcw, Save, Settings, Shield, Upload } from "lucide-react";
-import type { AppConfig, GenderFaction, LobbySnapshot, PublicPlayer, PunishmentSeriesTaskConfig, PunishmentTaskConfig, RoomInfoTagStyle, RoomNamePool } from "../shared/types";
-import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, DEFAULT_NAME_WAR_RENAME_MIN_POINTS, normalizePunishmentSeries, normalizePunishmentTasks, withAccessControlDefaults, withRankedScoreDefaults } from "../lib/normalize";
+import type { AppConfig, GenderFaction, LobbySnapshot, PublicPlayer, RoomInfoTagStyle, RoomNamePool } from "../shared/types";
+import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, DEFAULT_NAME_WAR_RENAME_MIN_POINTS, withAccessControlDefaults, withRankedScoreDefaults } from "../lib/normalize";
 import { ask } from "../lib/rpc";
 import { prepareProofImageForUpload } from "../lib/proofImage";
 import { formatBytes, formatDuration } from "../lib/format";
@@ -16,10 +16,12 @@ import {
 // recharts 只在管理员点开「数据分析」时才下载：AdminPanel 本身已是 lazy chunk，
 // 这里再嵌一层让图表库单独成块，连管理员改配置时都不会加载。
 const AnalyticsPanel = lazy(() => import("./AnalyticsPanel").then((m) => ({ default: m.AnalyticsPanel })));
+import { AdminContributionReview, type ContributionReviewCounts } from "./AdminContributionReview";
+import { formatContributionReviewSubtitle, MAX_SERIES_STEPS } from "./contributeSeries";
 
-export type AdminSection = "site" | "analytics" | "factions" | "titles" | "punishments" | "roomTags" | "nameWar" | "giveaway" | "petBond" | "rooms";
+export type AdminSection = "site" | "analytics" | "factions" | "titles" | "punishments" | "contributions" | "roomTags" | "nameWar" | "giveaway" | "petBond" | "rooms";
 
-const SECTIONS_WITHOUT_SAVE = new Set<AdminSection>(["rooms", "analytics"]);
+const SECTIONS_WITHOUT_SAVE = new Set<AdminSection>(["rooms", "analytics", "contributions", "factions"]);
 export type AdminRoomTab = "rooms" | "announcement" | "users";
 
 /** 用户管理的筛选/排序开关（与后端 admin:listPlayers 字段对应）。 */
@@ -100,20 +102,8 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
   const [factionSearch, setFactionSearch] = useState("");
   const [activeTitleId, setActiveTitleId] = useState(config.titles[0]?.id || "");
   const [titleSearch, setTitleSearch] = useState("");
-  const [punishmentTab, setPunishmentTab] = useState<"config" | "series" | "pool">("config");
   const [activeTagId, setActiveTagId] = useState(config.punishmentTags?.[0]?.id || "");
   const [punishmentSearch, setPunishmentSearch] = useState("");
-  // 任务池 / 系列任务：独立草稿，与 config:save 无关
-  const [taskPoolDraft, setTaskPoolDraft] = useState<PunishmentTaskConfig[]>([]);
-  const [taskPoolLoaded, setTaskPoolLoaded] = useState(false);
-  const [taskPoolDirty, setTaskPoolDirty] = useState(false);
-  const [activeTaskId, setActiveTaskId] = useState("");
-  const [seriesDraft, setSeriesDraft] = useState<PunishmentSeriesTaskConfig[]>([]);
-  const [seriesLoaded, setSeriesLoaded] = useState(false);
-  const [seriesDirty, setSeriesDirty] = useState(false);
-  const [activeSeriesId, setActiveSeriesId] = useState("");
-  const [taskPickerStep, setTaskPickerStep] = useState<{ seriesId: string; stepIndex: number } | null>(null);
-  const [taskPickerQuery, setTaskPickerQuery] = useState("");
   const [announcementMessage, setAnnouncementMessage] = useState("");
   const [announcementSeconds, setAnnouncementSeconds] = useState("8");
   const [activeRoomTab, setActiveRoomTab] = useState<AdminRoomTab>("rooms");
@@ -128,6 +118,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
   const [adminFilterOfflineCount, setAdminFilterOfflineCount] = useState(0);
   const [adminPlayersLoading, setAdminPlayersLoading] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [contributionCounts, setContributionCounts] = useState<ContributionReviewCounts>({ pending: 0, revisionPending: 0, unpublishPending: 0 });
   const [serverConfigChanged, setServerConfigChanged] = useState(false);
   const lastServerConfigText = useRef(JSON.stringify(config));
   const adminPlayersRequestGen = useRef(0);
@@ -153,82 +144,6 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
     setServerConfigChanged(false);
   }
 
-  async function ensureTaskPoolLoaded() {
-    if (taskPoolLoaded) return taskPoolDraft;
-    try {
-      const res = await ask<{ tasks: PunishmentTaskConfig[] }>("admin:action", { action: "punishmentTasksGet" });
-      const tasks = normalizePunishmentTasks(res.tasks);
-      setTaskPoolDraft(tasks);
-      setTaskPoolLoaded(true);
-      setTaskPoolDirty(false);
-      setActiveTaskId((old) => tasks.some((t) => t.id === old) ? old : tasks[0]?.id || "");
-      return tasks;
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "加载任务池失败");
-      return taskPoolDraft;
-    }
-  }
-
-  async function ensureSeriesLoaded() {
-    if (seriesLoaded) return seriesDraft;
-    // 系列编辑需要任务池做选择器
-    await ensureTaskPoolLoaded();
-    try {
-      const res = await ask<{ series: PunishmentSeriesTaskConfig[] }>("admin:action", { action: "punishmentSeriesGet" });
-      const series = normalizePunishmentSeries(res.series);
-      setSeriesDraft(series);
-      setSeriesLoaded(true);
-      setSeriesDirty(false);
-      setActiveSeriesId((old) => series.some((s) => s.id === old) ? old : series[0]?.id || "");
-      return series;
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "加载系列任务失败");
-      return seriesDraft;
-    }
-  }
-
-  async function saveTaskPool() {
-    try {
-      const res = await ask<{ tasks: PunishmentTaskConfig[] }>("admin:action", {
-        action: "punishmentTasksSave",
-        tasks: taskPoolDraft
-      });
-      const tasks = normalizePunishmentTasks(res.tasks);
-      setTaskPoolDraft(tasks);
-      setTaskPoolDirty(false);
-      setActiveTaskId((old) => tasks.some((t) => t.id === old) ? old : tasks[0]?.id || "");
-      onError("任务池已保存");
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "保存任务池失败");
-    }
-  }
-
-  async function saveSeriesPool() {
-    try {
-      const res = await ask<{ series: PunishmentSeriesTaskConfig[] }>("admin:action", {
-        action: "punishmentSeriesSave",
-        series: seriesDraft
-      });
-      const series = normalizePunishmentSeries(res.series);
-      setSeriesDraft(series);
-      setSeriesDirty(false);
-      setActiveSeriesId((old) => series.some((s) => s.id === old) ? old : series[0]?.id || "");
-      onError("系列任务已保存");
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "保存系列任务失败");
-    }
-  }
-
-  function patchTaskPool(next: PunishmentTaskConfig[]) {
-    setTaskPoolDraft(next);
-    setTaskPoolDirty(true);
-  }
-
-  function patchSeriesDraft(next: PunishmentSeriesTaskConfig[]) {
-    setSeriesDraft(next);
-    setSeriesDirty(true);
-  }
-
   async function login() {
     try {
       await ask("admin:login", { password });
@@ -237,6 +152,17 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
       onError(error instanceof Error ? error.message : "登录失败");
     }
   }
+
+  useEffect(() => {
+    if (!logged) return;
+    ask<ContributionReviewCounts>("admin:action", { action: "contributionCounts", password })
+      .then((c) => setContributionCounts({
+        pending: Number(c.pending) || 0,
+        revisionPending: Number(c.revisionPending) || 0,
+        unpublishPending: Number(c.unpublishPending) || 0,
+      }))
+      .catch(() => undefined);
+  }, [logged, password]);
 
   async function save() {
     try {
@@ -388,7 +314,8 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
     { id: "analytics", label: "数据分析", detail: "访问 · 游戏 · 渠道" },
     { id: "factions", label: "性别与阵营", detail: `${draft.genders.length} 个性别 · ${draft.genderFactions.length} 个阵营` },
     { id: "titles", label: "排位与称号", detail: `${draft.titles.length} 个段位 · 积分展示上下限` },
-    { id: "punishments", label: "惩罚任务", detail: `${(draft.punishmentTags || []).length} 标签 · 任务池/系列独立保存` },
+    { id: "punishments", label: "惩罚任务", detail: `${(draft.punishmentTags || []).length} 个惩罚标签` },
+    { id: "contributions", label: "共建审核", detail: formatContributionReviewSubtitle(contributionCounts) },
     { id: "roomTags", label: "房间标签", detail: `${draft.roomTags.length} 个标签 · 房间头部彩色标签` },
     { id: "nameWar", label: "名争 / 极限", detail: `${draft.nameWar.penaltyPrefix} · ${draft.extremeMode.emoji} ${draft.extremeMode.label}` },
     { id: "giveaway", label: "白给模式", detail: draft.giveaway.panelTitle },
@@ -500,6 +427,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
             <label className="field-label"><span>网站名称</span><input value={draft.site.name} onChange={(event) => patch({ site: { ...draft.site, name: event.target.value } })} placeholder="网站名称" /></label>
             <label className="field-label"><span>网站说明</span><textarea value={draft.site.description} onChange={(event) => patch({ site: { ...draft.site, description: event.target.value } })} placeholder="网站说明" /></label>
             <label className="field-label"><span>管理员口令</span><input type="password" value={draft.site.adminPassword} onChange={(event) => patch({ site: { ...draft.site, adminPassword: event.target.value } })} placeholder="管理员口令" /></label>
+            <label className="field-label"><span>匿名贡献者展示名</span><input value={draft.site.anonymousContributorLabel || "匿名贡献者"} onChange={(event) => patch({ site: { ...draft.site, anonymousContributorLabel: event.target.value } })} placeholder="匿名贡献者" /></label>
           </div>
           <div className="config-section admin-section-card">
             <AdminSectionHeader title="限流策略" subtitle="按设备、IP 与资源占用范围集中管理访问限制。" />
@@ -648,6 +576,10 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
       );
     }
 
+    if (activeSection === "contributions") {
+      return <AdminContributionReview config={config} password={password} onError={onError} onCounts={setContributionCounts} />;
+    }
+
     if (activeSection === "factions") {
       const filteredFactions = draft.genderFactions.filter((faction) => {
         const keyword = factionSearch.trim().toLowerCase();
@@ -789,6 +721,11 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                 </div>
               )}
             </div>
+            <button className="primary" type="button" onClick={() => {
+              void ask("admin:action", { action: "gendersSave", password, genders: draft.genders, factions: draft.genderFactions })
+                .then(() => onError(""))
+                .catch((e: unknown) => onError(e instanceof Error ? e.message : "保存失败"));
+            }}>保存性别与阵营</button>
           </div>
         </>
       );
@@ -819,11 +756,11 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
             </div>
           </div>
           <div className="config-section admin-section-card">
-            <AdminSectionHeader title="游戏排位分值" subtitle="不同游戏创建房间时可选的积分档位（逗号分隔，最多 4 个，升序，第一个为默认档）。黑白棋按每子结算、其余按整局结算。" />
+            <AdminSectionHeader title="游戏排位分值" subtitle="各游戏可选的积分档位。第 1 个为默认，最多 4 个，逗号分隔。" />
             <div className="config-row">
               {(draft.games || []).map((game, index) => (
                 <label className="field-label" key={game.id}>
-                  <span>{game.name}</span>
+                  <span>{game.id === "liarsdice" ? `${game.name}（每子）` : `${game.name}（每局）`}</span>
                   <input
                     value={(game.stakes ?? []).join(",")}
                     placeholder="如 5,10,20"
@@ -933,384 +870,89 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
       const rs = draft.punishmentRandomSettings || { orderStep: 2, maxDifficultyOvershoot: 5 };
       const keyword = punishmentSearch.trim().toLowerCase();
       const filteredTags = tags.filter((t) => !keyword || `${t.id} ${t.name}`.toLowerCase().includes(keyword));
-      const filteredTasks = taskPoolDraft.filter((t) => !keyword || `${t.id} ${t.name} ${t.text}`.toLowerCase().includes(keyword));
-      const filteredSeries = seriesDraft.filter((s) => !keyword || `${s.id} ${s.name}`.toLowerCase().includes(keyword));
       const tagIndex = Math.max(0, tags.findIndex((t) => t.id === activeTagId));
-      const taskIndex = Math.max(0, taskPoolDraft.findIndex((t) => t.id === activeTaskId));
-      const seriesIndex = Math.max(0, seriesDraft.findIndex((s) => s.id === activeSeriesId));
       const activeTag = tags[tagIndex];
-      const activeTask = taskPoolDraft[taskIndex];
-      const activeSeries = seriesDraft[seriesIndex];
-      const tagName = (id: string) => {
-        if (id.startsWith("series:")) return id;
-        return tags.find((t) => t.id === id)?.name || id;
-      };
-      const taskLabel = (id: string) => {
-        const t = taskPoolDraft.find((x) => x.id === id);
-        if (!t) return `${id}（已删除）`;
-        return t.name || t.id;
-      };
       return (
         <div className="config-section admin-section-card">
-          <AdminSectionHeader title="惩罚任务" subtitle="系列任务和任务池需独立保存，任务文案可用 {loser}/{winner} 替代败者与胜者昵称。" />
-          <div className="admin-subtab-row">
-            <button type="button" className={punishmentTab === "config" ? "active" : ""} onClick={() => setPunishmentTab("config")}>惩罚配置</button>
-            <button type="button" className={punishmentTab === "series" ? "active" : ""} onClick={() => { setPunishmentTab("series"); void ensureSeriesLoaded(); }}>系列任务</button>
-            <button type="button" className={punishmentTab === "pool" ? "active" : ""} onClick={() => { setPunishmentTab("pool"); void ensureTaskPoolLoaded(); }}>任务池</button>
-            {punishmentTab === "series" && (
-              <button type="button" className="primary subtab-save" disabled={!seriesLoaded || !seriesDirty} onClick={() => void saveSeriesPool()}>
-                <Save size={16} /> 保存系列任务{seriesDirty ? " *" : ""}
-              </button>
-            )}
-            {punishmentTab === "pool" && (
-              <button type="button" className="primary subtab-save" disabled={!taskPoolLoaded || !taskPoolDirty} onClick={() => void saveTaskPool()}>
-                <Save size={16} /> 保存任务池{taskPoolDirty ? " *" : ""}
-              </button>
+          <AdminSectionHeader title="惩罚任务" subtitle="配置标签库、随机抽取参数和玩家发布任务的房名词库。" />
+          <input value={punishmentSearch} onChange={(event) => setPunishmentSearch(event.target.value)} placeholder="搜索标签名称 / ID" style={{ marginBottom: 12 }} />
+          <div className="punishment-manager">
+            <aside className="punishment-index-panel">
+              <div className="punishment-index-list">
+                {filteredTags.map((item) => (
+                  <button className={item.id === activeTag?.id ? "active" : ""} key={item.id} onClick={() => setActiveTagId(item.id)}>
+                    <span>{item.name}</span>
+                  </button>
+                ))}
+                {filteredTags.length === 0 && <p className="empty">没有匹配的标签</p>}
+              </div>
+              <button onClick={() => {
+                const nextId = nextAdminId("tag", tags.map((t) => t.id));
+                setActiveTagId(nextId);
+                patch({ punishmentTags: [...tags, { id: nextId, name: "新标签", roomBackgroundImages: [], roomNamePool: defaultAdminRoomNamePool() }] });
+              }}>添加标签</button>
+            </aside>
+            {activeTag && (
+              <div className="mini-card punishment-detail-panel">
+                <div className="admin-card-title">
+                  <strong>{activeTag.name}</strong>
+                  <small>{tagIndex + 1} / {tags.length} · 示例：{sampleRoomName(activeTag.roomNamePool)}</small>
+                </div>
+                <div className="config-row">
+                  <label className="field-label"><span>任务标签</span><input value={activeTag.name} onChange={(event) => patch({ punishmentTags: tags.map((t, i) => i === tagIndex ? { ...t, name: event.target.value } : t) })} /></label>
+                  <div className="field-label field-label-action">
+                    <span>&nbsp;</span>
+                    <button type="button" className="danger-button" onClick={() => {
+                      if (tags.length <= 1) { onError("至少需要保留 1 个标签"); return; }
+                      if (!window.confirm(`确定删除标签「${activeTag.name}」吗？保存配置后，任务池里带该标签的任务会自动摘除该标签。`)) return;
+                      const nextTags = tags.filter((_, i) => i !== tagIndex);
+                      setActiveTagId(nextTags[Math.max(0, tagIndex - 1)]?.id || nextTags[0]?.id || "");
+                      patch({ punishmentTags: nextTags });
+                    }}>删除这个标签</button>
+                  </div>
+                </div>
+                <AdminBackgroundImageField label="房间信息卡图库" values={activeTag.roomBackgroundImages || []} upload={uploadAdminImage} onError={onError} onChange={(roomBackgroundImages) => patch({ punishmentTags: tags.map((t, i) => i === tagIndex ? { ...t, roomBackgroundImages } : t) })} />
+                <RoomNamePoolEditor title="随机房名词库" pool={activeTag.roomNamePool || emptyRoomNamePool()} onChange={(roomNamePool) => patch({ punishmentTags: tags.map((t, i) => i === tagIndex ? { ...t, roomNamePool } : t) })} />
+              </div>
             )}
           </div>
-          <input value={punishmentSearch} onChange={(event) => setPunishmentSearch(event.target.value)} placeholder="搜索名称 / ID / 文案" style={{ marginBottom: 12 }} />
-
-          {punishmentTab === "config" && (
-            <>
-              <div className="punishment-manager">
-                <aside className="punishment-index-panel">
-                  <div className="punishment-index-list">
-                    {filteredTags.map((item) => (
-                      <button className={item.id === activeTag?.id ? "active" : ""} key={item.id} onClick={() => setActiveTagId(item.id)}>
-                        <span>{item.name}</span>
-                      </button>
-                    ))}
-                    {filteredTags.length === 0 && <p className="empty">没有匹配的标签</p>}
-                  </div>
-                  <button onClick={() => {
-                    const nextId = nextAdminId("tag", tags.map((t) => t.id));
-                    setActiveTagId(nextId);
-                    patch({ punishmentTags: [...tags, { id: nextId, name: "新标签", roomBackgroundImages: [], roomNamePool: defaultAdminRoomNamePool() }] });
-                  }}>添加标签</button>
-                </aside>
-                {activeTag && (
-                  <div className="mini-card punishment-detail-panel">
-                    <div className="admin-card-title">
-                      <strong>{activeTag.name}</strong>
-                      <small>{tagIndex + 1} / {tags.length} · 示例：{sampleRoomName(activeTag.roomNamePool)}</small>
-                    </div>
-                    <div className="config-row">
-                      <label className="field-label"><span>任务标签</span><input value={activeTag.name} onChange={(event) => patch({ punishmentTags: tags.map((t, i) => i === tagIndex ? { ...t, name: event.target.value } : t) })} /></label>
-                      <div className="field-label field-label-action">
-                        <span>&nbsp;</span>
-                        <button type="button" className="danger-button" onClick={() => {
-                          if (tags.length <= 1) { onError("至少需要保留 1 个标签"); return; }
-                          if (!window.confirm(`确定删除标签「${activeTag.name}」吗？保存配置后，任务池里带该标签的任务会自动摘除该标签。`)) return;
-                          const nextTags = tags.filter((_, i) => i !== tagIndex);
-                          setActiveTagId(nextTags[Math.max(0, tagIndex - 1)]?.id || nextTags[0]?.id || "");
-                          patch({ punishmentTags: nextTags });
-                        }}>删除这个标签</button>
-                      </div>
-                    </div>
-                    <AdminBackgroundImageField label="房间信息卡图库" values={activeTag.roomBackgroundImages || []} upload={uploadAdminImage} onError={onError} onChange={(roomBackgroundImages) => patch({ punishmentTags: tags.map((t, i) => i === tagIndex ? { ...t, roomBackgroundImages } : t) })} />
-                    <RoomNamePoolEditor title="随机房名词库" pool={activeTag.roomNamePool || emptyRoomNamePool()} onChange={(roomNamePool) => patch({ punishmentTags: tags.map((t, i) => i === tagIndex ? { ...t, roomNamePool } : t) })} />
-                  </div>
-                )}
-              </div>
-              <div className="mini-card player-punishment-room-name-card">
-                <div className="admin-card-title">
-                  <strong>玩家发布任务随机房名词库</strong>
-                  <small>示例：{sampleRoomName(draft.playerPunishmentRoomNamePool)}</small>
-                </div>
-                <RoomNamePoolEditor title="使用玩家自定义任务时所生成的房间名" pool={draft.playerPunishmentRoomNamePool || defaultAdminRoomNamePool()} onChange={(playerPunishmentRoomNamePool) => patch({ playerPunishmentRoomNamePool })} />
-              </div>
-              <div className="mini-card">
-                <div className="admin-card-title"><strong>随机任务全局难度</strong></div>
-                <div className="config-row">
-                  <label className="field-label">
-                    <span>难度推进步长（默认 2）</span>
-                    <input type="number" min={0} step={1} value={rs.orderStep ?? 2} onChange={(event) => patch({ punishmentRandomSettings: { ...rs, orderStep: Number(event.target.value) } })} />
-                  </label>
-                  <label className="field-label">
-                    <span>难度上浮硬顶（默认 5）</span>
-                    <input type="number" min={0} step={1} value={rs.maxDifficultyOvershoot ?? 5} onChange={(event) => patch({ punishmentRandomSettings: { ...rs, maxDifficultyOvershoot: Number(event.target.value) } })} />
-                  </label>
-                </div>
-              </div>
-              <div className="mini-card">
-                <div className="admin-card-title"><strong>系列任务兜底文案</strong><small>某一步的候选任务没覆盖到的阵营会收到这段文案</small></div>
-                <label className="field-label">
-                  <span>兜底文案（可用 {"{loser}"}/{"{winner}"}，留空用默认「该任务不适用于你所在的阵营」）</span>
-                  <input value={rs.seriesFactionFallbackText ?? ""} onChange={(event) => patch({ punishmentRandomSettings: { ...rs, seriesFactionFallbackText: event.target.value } })} />
-                </label>
-              </div>
-            </>
-          )}
-
-          {punishmentTab === "pool" && (
-            <>
-              {!taskPoolLoaded && <p className="hint">正在加载任务池…</p>}
-              {taskPoolLoaded && (
-                <>
-                  <div className="punishment-manager">
-                    <aside className="punishment-index-panel">
-                      <div className="punishment-index-list">
-                        {filteredTasks.map((item) => {
-                          const noTags = !(item.tagIds || []).length;
-                          const excludedByOrder = item.order === -1;
-                          return (
-                            <button className={item.id === activeTask?.id ? "active" : ""} key={item.id} onClick={() => setActiveTaskId(item.id)}>
-                              <span>{item.name || item.id}</span>
-                              <small>
-                                难度 {item.order}{excludedByOrder ? "（不参与随机）" : ""} · {(item.tagIds || []).map(tagName).join("、") || (noTags ? "无标签，不受筛选" : "")}
-                              </small>
-                            </button>
-                          );
-                        })}
-                        {filteredTasks.length === 0 && <p className="empty">没有匹配的任务</p>}
-                      </div>
-                      <button onClick={() => {
-                        const nextId = nextAdminId("task", taskPoolDraft.map((t) => t.id));
-                        setActiveTaskId(nextId);
-                        patchTaskPool([...taskPoolDraft, newFlatPunishmentTask(nextId, tags[0]?.id)]);
-                      }}>添加任务</button>
-                    </aside>
-                    {activeTask && (
-                      <div className="mini-card punishment-detail-panel">
-                        <div className="admin-card-title">
-                          <strong>{activeTask.name || activeTask.id}</strong>
-                          <small>{taskIndex + 1} / {taskPoolDraft.length} · {factionSummaryLabel(activeTask.factionIds || [], draft.genderFactions)}</small>
-                        </div>
-                        {!(activeTask.tagIds || []).length && <p className="hint">ℹ 这条任务未勾选标签：不受建房标签筛选影响，任何随机房间都可能抽到它。</p>}
-                        {activeTask.order === -1 && <p className="hint">ℹ 这条任务难度为 -1，随机模式下不会被抽到（仍可被系列任务按 ID 引用）。</p>}
-                        <div className="config-row">
-                          <label className="field-label"><span>任务名称</span><input value={activeTask.name} onChange={(event) => patchTaskPool(taskPoolDraft.map((t, i) => i === taskIndex ? { ...activeTask, name: event.target.value } : t))} /></label>
-                          <div className="field-label field-label-action">
-                            <span>&nbsp;</span>
-                            <button type="button" className="danger-button" onClick={() => {
-                              if (taskPoolDraft.length <= 1) { onError("至少需要保留 1 条任务"); return; }
-                              if (!window.confirm(`确定删除任务「${activeTask.name || activeTask.id}」吗？已被系列引用的步骤运行时会跳过。`)) return;
-                              const nextTasks = taskPoolDraft.filter((_, i) => i !== taskIndex);
-                              setActiveTaskId(nextTasks[Math.max(0, taskIndex - 1)]?.id || nextTasks[0]?.id || "");
-                              patchTaskPool(nextTasks);
-                            }}>删除这条任务</button>
-                          </div>
-                        </div>
-                        <label className="field-label">
-                          <span>任务文案（可用 {"{loser}"}/{"{winner}"}）</span>
-                          <textarea value={activeTask.text} onChange={(event) => patchTaskPool(taskPoolDraft.map((t, i) => i === taskIndex ? { ...activeTask, text: event.target.value } : t))} />
-                        </label>
-                        <div className="config-row">
-                          <label className="field-label"><span>任务难度（-1~99）</span><input type="number" min={-1} max={99} value={activeTask.order} onChange={(event) => patchTaskPool(taskPoolDraft.map((t, i) => i === taskIndex ? { ...activeTask, order: Number(event.target.value) } : t))} /></label>
-                          <label className="field-label"><span>背景透明率</span><input type="number" min={0} max={1} step={0.01} value={activeTask.backgroundOpacity ?? 0.22} onChange={(event) => patchTaskPool(taskPoolDraft.map((t, i) => i === taskIndex ? { ...activeTask, backgroundOpacity: Number(event.target.value) } : t))} /></label>
-                        </div>
-                        <div className="field-label">
-                          <span>所属标签</span>
-                          <div className="faction-checkbox-grid">
-                            {tags.map((tag) => {
-                              const checked = (activeTask.tagIds || []).includes(tag.id);
-                              return (
-                                <label key={tag.id} className="faction-checkbox">
-                                  <input type="checkbox" checked={checked} onChange={(event) => {
-                                    const next = event.target.checked
-                                      ? [...(activeTask.tagIds || []), tag.id]
-                                      : (activeTask.tagIds || []).filter((id) => id !== tag.id);
-                                    patchTaskPool(taskPoolDraft.map((t, i) => i === taskIndex ? { ...activeTask, tagIds: next } : t));
-                                  }} />
-                                  {tag.name}
-                                </label>
-                              );
-                            })}
-                          </div>
-                          {(activeTask.tagIds || []).some((id) => id.startsWith("series:")) && (
-                            <p className="hint">含内部标签 {(activeTask.tagIds || []).filter((id) => id.startsWith("series:")).join("、")}（系列迁移产生，可保留或改勾真实标签）。</p>
-                          )}
-                        </div>
-                        <div className="field-label">
-                          <span>适用阵营</span>
-                          <div className="faction-checkbox-grid">
-                            {draft.genderFactions.map((faction) => {
-                              const checked = (activeTask.factionIds || []).includes(faction.id);
-                              return (
-                                <label key={faction.id} className="faction-checkbox">
-                                  <input type="checkbox" checked={checked} onChange={(event) => {
-                                    const next = event.target.checked
-                                      ? [...(activeTask.factionIds || []), faction.id]
-                                      : (activeTask.factionIds || []).filter((id) => id !== faction.id);
-                                    patchTaskPool(taskPoolDraft.map((t, i) => i === taskIndex ? { ...activeTask, factionIds: next } : t));
-                                  }} />
-                                  {faction.label}
-                                </label>
-                              );
-                            })}
-                          </div>
-                          {!(activeTask.factionIds || []).length && <p className="hint">ℹ 这条任务未勾选阵营，不会被抽到（随机模式候选池和系列任务候选都不会用到它）。</p>}
-                        </div>
-                        <AdminBackgroundImageField label="任务背景图库" values={activeTask.backgroundImages || []} upload={uploadAdminImage} onError={onError} onChange={(backgroundImages) => patchTaskPool(taskPoolDraft.map((t, i) => i === taskIndex ? { ...activeTask, backgroundImages } : t))} />
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </>
-          )}
-
-          {punishmentTab === "series" && (
-            <>
-              {!seriesLoaded && <p className="hint">正在加载系列任务…</p>}
-              {seriesLoaded && (
-                <>
-                  {taskPoolDraft.length === 0 && <p className="hint" style={{ color: "var(--reject, #c45)" }}>请先在任务池里创建任务，再编排系列步骤。</p>}
-                  <div className="punishment-manager">
-                    <aside className="punishment-index-panel">
-                      <div className="punishment-index-list">
-                        {filteredSeries.map((item) => {
-                          const hasSteps = (item.steps || []).length > 0;
-                          const uncovered = (item.steps || []).some((step) => seriesStepMissingFactionLabels(step.taskIds || [], taskPoolDraft, draft.genderFactions).length > 0);
-                          return (
-                            <button className={item.id === activeSeries?.id ? "active" : ""} key={item.id} onClick={() => setActiveSeriesId(item.id)}>
-                              <span className={hasSteps ? undefined : "danger-hint"}>{item.name}{!hasSteps || uncovered ? " ⚠" : ""}</span>
-                              <small>{(item.steps || []).length} 步{!hasSteps ? " · 没有步骤，不会生效" : uncovered ? " · 有未覆盖阵营，走兜底文案" : ""}</small>
-                            </button>
-                          );
-                        })}
-                        {filteredSeries.length === 0 && <p className="empty">没有系列任务（可为空）</p>}
-                      </div>
-                      <button onClick={() => {
-                        const nextId = nextAdminId("series", seriesDraft.map((s) => s.id));
-                        setActiveSeriesId(nextId);
-                        patchSeriesDraft([...seriesDraft, newSeriesTask(nextId)]);
-                      }}>添加系列任务</button>
-                    </aside>
-                    {activeSeries && (
-                      <div className="mini-card punishment-detail-panel">
-                        <div className="admin-card-title">
-                          <strong>{activeSeries.name}</strong>
-                          <small>{seriesIndex + 1} / {seriesDraft.length} · {(activeSeries.steps || []).length} 步 · 示例：{sampleRoomName(activeSeries.roomNamePool)}</small>
-                        </div>
-                        <div className="admin-danger-row">
-                          <button type="button" className="danger-button" onClick={() => {
-                            if (!window.confirm(`确定删除系列「${activeSeries.name}」吗？`)) return;
-                            const next = seriesDraft.filter((_, i) => i !== seriesIndex);
-                            setActiveSeriesId(next[Math.max(0, seriesIndex - 1)]?.id || next[0]?.id || "");
-                            patchSeriesDraft(next);
-                          }}>删除这个系列</button>
-                        </div>
-                        <label className="field-label"><span>玩家可见名称</span><input value={activeSeries.name} onChange={(event) => patchSeriesDraft(seriesDraft.map((s, i) => i === seriesIndex ? { ...activeSeries, name: event.target.value } : s))} /></label>
-                        <AdminBackgroundImageField label="房间信息卡图库" values={activeSeries.roomBackgroundImages || []} upload={uploadAdminImage} onError={onError} onChange={(roomBackgroundImages) => patchSeriesDraft(seriesDraft.map((s, i) => i === seriesIndex ? { ...activeSeries, roomBackgroundImages } : s))} />
-                        <RoomNamePoolEditor title="随机房名词库" pool={activeSeries.roomNamePool || emptyRoomNamePool()} onChange={(roomNamePool) => patchSeriesDraft(seriesDraft.map((s, i) => i === seriesIndex ? { ...activeSeries, roomNamePool } : s))} />
-                        <div className="punishment-task-list">
-                          {(activeSeries.steps || []).map((step, subIndex) => {
-                            const pickerOpen = taskPickerStep?.seriesId === activeSeries.id && taskPickerStep.stepIndex === subIndex;
-                            const missing = seriesStepMissingFactionLabels(step.taskIds || [], taskPoolDraft, draft.genderFactions);
-                            return (
-                              <details className="mini-card punishment-task-editor" key={subIndex} open={subIndex === 0 || pickerOpen}>
-                                <summary>
-                                  <span className="punishment-step-summary-title">
-                                    <strong>第 {subIndex + 1} 步</strong>
-                                    <small className={missing.length > 0 ? "danger-hint" : ""} title={missing.length > 0 ? `没有覆盖到：${missing.join("、")}——这些阵营的玩家跑到这一步会收到兜底文案。` : undefined}>
-                                      {(step.taskIds || []).length} 个候选{missing.length > 0 ? " ⚠" : ""}
-                                    </small>
-                                  </span>
-                                  <span className="punishment-step-summary-actions">
-                                    <button type="button" className="tiny-danger-button" disabled={subIndex === 0} onClick={(e) => {
-                                      e.preventDefault(); e.stopPropagation();
-                                      const steps = [...(activeSeries.steps || [])];
-                                      const tmp = steps[subIndex]; steps[subIndex] = steps[subIndex - 1]; steps[subIndex - 1] = tmp;
-                                      patchSeriesDraft(seriesDraft.map((s, i) => i === seriesIndex ? { ...activeSeries, steps } : s));
-                                    }}>上移</button>
-                                    <button type="button" className="tiny-danger-button" disabled={subIndex >= (activeSeries.steps || []).length - 1} onClick={(e) => {
-                                      e.preventDefault(); e.stopPropagation();
-                                      const steps = [...(activeSeries.steps || [])];
-                                      const tmp = steps[subIndex]; steps[subIndex] = steps[subIndex + 1]; steps[subIndex + 1] = tmp;
-                                      patchSeriesDraft(seriesDraft.map((s, i) => i === seriesIndex ? { ...activeSeries, steps } : s));
-                                    }}>下移</button>
-                                    <button type="button" className="tiny-danger-button" onClick={(e) => {
-                                      e.preventDefault(); e.stopPropagation();
-                                      if (pickerOpen) {
-                                        setTaskPickerStep(null);
-                                      } else {
-                                        setTaskPickerStep({ seriesId: activeSeries.id, stepIndex: subIndex });
-                                        setTaskPickerQuery("");
-                                      }
-                                    }}>{pickerOpen ? "收起" : "添加"}</button>
-                                    <button type="button" className="danger-button tiny-danger-button" onClick={(e) => {
-                                      e.preventDefault(); e.stopPropagation();
-                                      if ((activeSeries.steps || []).length <= 1) { onError("至少保留一步"); return; }
-                                      const steps = (activeSeries.steps || []).filter((_, i) => i !== subIndex);
-                                      patchSeriesDraft(seriesDraft.map((s, i) => i === seriesIndex ? { ...activeSeries, steps } : s));
-                                    }}>删除</button>
-                                  </span>
-                                </summary>
-                                <div className="task-picker-selected">
-                                  {(step.taskIds || []).map((tid, ti) => (
-                                    <span className="task-picker-chip" key={`${tid}-${ti}`}>
-                                      <span>{taskLabel(tid)}</span>
-                                      <span className="task-picker-chip-actions">
-                                        <button type="button" className="tiny-danger-button" disabled={ti === 0} onClick={() => {
-                                          const ids = [...(step.taskIds || [])];
-                                          const tmp = ids[ti]; ids[ti] = ids[ti - 1]; ids[ti - 1] = tmp;
-                                          const steps = (activeSeries.steps || []).map((st, i) => i === subIndex ? { taskIds: ids } : st);
-                                          patchSeriesDraft(seriesDraft.map((s, i) => i === seriesIndex ? { ...activeSeries, steps } : s));
-                                        }}>上移</button>
-                                        <button type="button" className="tiny-danger-button" disabled={ti >= (step.taskIds || []).length - 1} onClick={() => {
-                                          const ids = [...(step.taskIds || [])];
-                                          const tmp = ids[ti]; ids[ti] = ids[ti + 1]; ids[ti + 1] = tmp;
-                                          const steps = (activeSeries.steps || []).map((st, i) => i === subIndex ? { taskIds: ids } : st);
-                                          patchSeriesDraft(seriesDraft.map((s, i) => i === seriesIndex ? { ...activeSeries, steps } : s));
-                                        }}>下移</button>
-                                        <button type="button" className="danger-button tiny-danger-button" onClick={() => {
-                                          if ((step.taskIds || []).length <= 1) { onError("每步至少 1 个任务"); return; }
-                                          const ids = (step.taskIds || []).filter((_, i) => i !== ti);
-                                          const steps = (activeSeries.steps || []).map((st, i) => i === subIndex ? { taskIds: ids } : st);
-                                          patchSeriesDraft(seriesDraft.map((s, i) => i === seriesIndex ? { ...activeSeries, steps } : s));
-                                        }}>删除</button>
-                                      </span>
-                                    </span>
-                                  ))}
-                                  {(step.taskIds || []).length === 0 && <p className="hint">还没选任务</p>}
-                                </div>
-                                {pickerOpen && (
-                                  <div className="task-picker-panel">
-                                    <input value={taskPickerQuery} onChange={(e) => setTaskPickerQuery(e.target.value)} placeholder="按标签 / 阵营 / 文案搜索" />
-                                    <div className="task-picker-list">
-                                      {taskPoolDraft
-                                        .filter((t) => {
-                                          const q = taskPickerQuery.trim().toLowerCase();
-                                          if (!q) return true;
-                                          const tagStr = (t.tagIds || []).map(tagName).join(" ");
-                                          const facStr = (t.factionIds || []).map((id) => draft.genderFactions.find((f) => f.id === id)?.label || id).join(" ");
-                                          return `${t.id} ${t.name} ${t.text} ${tagStr} ${facStr}`.toLowerCase().includes(q);
-                                        })
-                                        .map((t) => (
-                                          <button type="button" key={t.id} className="task-picker-item" onClick={() => {
-                                            const ids = [...(step.taskIds || []), t.id];
-                                            const steps = (activeSeries.steps || []).map((st, i) => i === subIndex ? { taskIds: ids } : st);
-                                            patchSeriesDraft(seriesDraft.map((s, i) => i === seriesIndex ? { ...activeSeries, steps } : s));
-                                          }}>
-                                            <strong>{t.name || t.id}</strong>
-                                            <small>{(t.tagIds || []).map(tagName).join("、") || "无标签"} · {factionSummaryLabel(t.factionIds || [], draft.genderFactions)}</small>
-                                            <span className="hint">{t.text}</span>
-                                          </button>
-                                        ))}
-                                      {taskPoolDraft.length === 0 && <p className="empty">请先在任务池里创建任务</p>}
-                                    </div>
-                                  </div>
-                                )}
-                              </details>
-                            );
-                          })}
-                        </div>
-                        <button type="button" onClick={() => {
-                          const firstTask = taskPoolDraft[0]?.id;
-                          const steps = [...(activeSeries.steps || []), { taskIds: firstTask ? [firstTask] : [] }];
-                          patchSeriesDraft(seriesDraft.map((s, i) => i === seriesIndex ? { ...activeSeries, steps } : s));
-                        }}>添加子任务步骤</button>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </>
-          )}
+          <div className="mini-card player-punishment-room-name-card">
+            <div className="admin-card-title">
+              <strong>玩家发布任务随机房名词库</strong>
+              <small>示例：{sampleRoomName(draft.playerPunishmentRoomNamePool)}</small>
+            </div>
+            <RoomNamePoolEditor title="使用玩家自定义任务时所生成的房间名" pool={draft.playerPunishmentRoomNamePool || defaultAdminRoomNamePool()} onChange={(playerPunishmentRoomNamePool) => patch({ playerPunishmentRoomNamePool })} />
+          </div>
+          <div className="mini-card">
+            <div className="admin-card-title"><strong>随机任务全局难度</strong></div>
+            <div className="config-row">
+              <label className="field-label">
+                <span>难度推进步长（默认 2）</span>
+                <input type="number" min={0} step={1} value={rs.orderStep ?? 2} onChange={(event) => patch({ punishmentRandomSettings: { ...rs, orderStep: Number(event.target.value) } })} />
+              </label>
+              <label className="field-label">
+                <span>难度上浮硬顶（默认 5）</span>
+                <input type="number" min={0} step={1} value={rs.maxDifficultyOvershoot ?? 5} onChange={(event) => patch({ punishmentRandomSettings: { ...rs, maxDifficultyOvershoot: Number(event.target.value) } })} />
+              </label>
+            </div>
+          </div>
+          <div className="mini-card">
+            <div className="admin-card-title"><strong>系列任务步数</strong></div>
+            <div className="config-row">
+              <label className="field-label">
+                <span>最低步数（默认 10）</span>
+                <input type="number" min={1} max={MAX_SERIES_STEPS} value={rs.minSeriesSteps ?? 10} onChange={(event) => patch({ punishmentRandomSettings: { ...rs, minSeriesSteps: Number(event.target.value) } })} />
+              </label>
+              <label className="field-label">
+                <span>最高步数（默认 20）</span>
+                <input type="number" min={1} max={MAX_SERIES_STEPS} value={rs.maxSeriesSteps ?? 20} onChange={(event) => patch({ punishmentRandomSettings: { ...rs, maxSeriesSteps: Number(event.target.value) } })} />
+              </label>
+            </div>
+          </div>
         </div>
       );
     }
+
 
     if (activeSection === "nameWar") {
       const preview = `${draft.nameWar.penaltyPrefix || "失名者"}-A7K2`;
@@ -1831,52 +1473,6 @@ export function nextAdminId(prefix: string, existingIds: string[]) {
   let index = 1;
   while (used.has(`${safePrefix}${index}`)) index += 1;
   return `${safePrefix}${index}`;
-}
-
-// factionSummaryLabel：任务编辑器里展示"这条任务给哪些阵营"的一句话摘要。
-// 未勾选任何阵营的任务永远不会被抽到（既不进入随机模式候选池，也不能作为系列任务的候选）。
-export function factionSummaryLabel(factionIds: string[], genderFactions: GenderFaction[]) {
-  if (!factionIds.length) return "不会被抽到";
-  const labels = factionIds.map((id) => genderFactions.find((faction) => faction.id === id)?.label || id);
-  return labels.join("、");
-}
-
-// seriesStepMissingFactionLabels：某一步的候选任务合起来未覆盖到的阵营展示名列表
-// （未勾选阵营的任务不计入覆盖）。未覆盖不再导致系列失效——这些阵营的玩家
-// 跑到该步会收到管理员可配的兜底文案，这里只用于编辑器里的提示。
-export function seriesStepMissingFactionLabels(taskIds: string[], taskPool: PunishmentTaskConfig[], genderFactions: GenderFaction[]) {
-  if (!genderFactions.length) return [];
-  const taskById = new Map(taskPool.map((t) => [t.id, t]));
-  const covered = new Set<string>();
-  for (const id of taskIds) {
-    const t = taskById.get(id);
-    if (!t) continue;
-    for (const fid of t.factionIds || []) covered.add(fid);
-  }
-  return genderFactions.filter((f) => !covered.has(f.id)).map((f) => f.label);
-}
-
-export function newFlatPunishmentTask(id: string, defaultTagId?: string): PunishmentTaskConfig {
-  return {
-    id,
-    name: "新任务",
-    text: "写下这条任务的文案，可用 {loser}/{winner}",
-    tagIds: defaultTagId ? [defaultTagId] : [],
-    factionIds: [],
-    order: 50,
-    backgroundImages: [],
-    backgroundOpacity: 0.22
-  };
-}
-
-export function newSeriesTask(id: string): PunishmentSeriesTaskConfig {
-  return {
-    id,
-    name: "新系列",
-    roomBackgroundImages: [],
-    roomNamePool: defaultAdminRoomNamePool(),
-    steps: [{ taskIds: [] }]
-  };
 }
 
 /** 后台聊天检索结果的一行；在玩家可见的聊天字段之上叠加房间名快照与软删除状态。 */

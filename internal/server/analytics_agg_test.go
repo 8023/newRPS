@@ -309,13 +309,13 @@ func TestRebuildDayPunishmentDoneUsesApproved(t *testing.T) {
 	taskAt := day*86_400_000 - offsetMs + 12*3_600_000
 
 	// 发布 4 条：1 approved + 1 rejected + 1 pending + 1 assigned
-	if err := events.insertPunishmentTask("t-approved", taskAt, "system", "r1", "", "", "p1", "甲", "任务A"); err != nil {
+	if err := events.insertPunishmentTask("t-approved", taskAt, "system", "r1", "", "", "p1", "甲", "任务A", punishmentEventMeta{}); err != nil {
 		t.Fatalf("insert approved task: %v", err)
 	}
 	if err := events.updatePunishmentProof("t-approved", taskAt+1000, "证明", "", "approved"); err != nil {
 		t.Fatalf("proof approved: %v", err)
 	}
-	if err := events.insertPunishmentTask("t-rejected", taskAt+1, "player", "r1", "w", "胜", "p2", "乙", "任务B"); err != nil {
+	if err := events.insertPunishmentTask("t-rejected", taskAt+1, "player", "r1", "w", "胜", "p2", "乙", "任务B", punishmentEventMeta{}); err != nil {
 		t.Fatalf("insert rejected task: %v", err)
 	}
 	if err := events.updatePunishmentProof("t-rejected", taskAt+2000, "证明", "", "pending"); err != nil {
@@ -324,13 +324,13 @@ func TestRebuildDayPunishmentDoneUsesApproved(t *testing.T) {
 	if err := events.markPunishmentRedo("t-rejected", "t-redo"); err != nil {
 		t.Fatalf("mark redo: %v", err)
 	}
-	if err := events.insertPunishmentTask("t-pending", taskAt+2, "system", "r1", "", "", "p3", "丙", "任务C"); err != nil {
+	if err := events.insertPunishmentTask("t-pending", taskAt+2, "system", "r1", "", "", "p3", "丙", "任务C", punishmentEventMeta{}); err != nil {
 		t.Fatalf("insert pending task: %v", err)
 	}
 	if err := events.updatePunishmentProof("t-pending", taskAt+3000, "证明", "", "pending"); err != nil {
 		t.Fatalf("proof pending: %v", err)
 	}
-	if err := events.insertPunishmentTask("t-assigned", taskAt+3, "system", "r1", "", "", "p4", "丁", "任务D"); err != nil {
+	if err := events.insertPunishmentTask("t-assigned", taskAt+3, "system", "r1", "", "", "p4", "丁", "任务D", punishmentEventMeta{}); err != nil {
 		t.Fatalf("insert assigned task: %v", err)
 	}
 
