@@ -6,8 +6,6 @@
 export type VariantPreview = { text?: string; factionIds?: string[] };
 export type StepPreview = {
   variants?: VariantPreview[];
-  text?: string;
-  factionIds?: string[];
   inRandomPool?: boolean;
   order?: number;
   tagIds?: string[];
@@ -16,12 +14,8 @@ export type StepPreview = {
 };
 export type DraftPreview = {
   name?: string;
-  label?: string;
-  factionId?: string;
-  factionIds?: string[];
   targetFactionIds?: string[];
   variants?: VariantPreview[];
-  text?: string;
   steps?: StepPreview[];
   tagIds?: string[];
   order?: number;
@@ -29,17 +23,10 @@ export type DraftPreview = {
   backgroundImage?: string;
 };
 
-export function effectiveContributionContent(version: { content?: string; reviewedContent?: string } | null | undefined): string {
-  return version?.reviewedContent?.trim() ? version.reviewedContent : (version?.content || "");
-}
-
-export function parseContributionDraft(raw: string): DraftPreview | null {
-  try {
-    const parsed = JSON.parse(raw) as DraftPreview;
-    return parsed && typeof parsed === "object" ? parsed : null;
-  } catch {
-    return null;
-  }
+/** ContributionItem.content 经 RPC 回来时已经是解析好的对象（StepDraft 或 SeriesDraft
+    形状），不再是需要 JSON.parse 的字符串——这里只做一层防御性的形状校验。 */
+export function asContributionDraft(content: unknown): DraftPreview | null {
+  return content && typeof content === "object" ? (content as DraftPreview) : null;
 }
 
 export function ContributionPreview({ draft, kind, factionLabel, tagLabel }: {
@@ -48,14 +35,6 @@ export function ContributionPreview({ draft, kind, factionLabel, tagLabel }: {
   factionLabel: (id: string) => string;
   tagLabel: (id: string) => string;
 }) {
-  if (kind === "gender" || draft.label) {
-    return (
-      <article className="step-variant">
-        <p>性别名称：{draft.label || "（空）"}</p>
-        <small className="hint">归属阵营：{factionLabel(draft.factionId || "")}</small>
-      </article>
-    );
-  }
   if (kind === "series" || draft.steps) {
     return (
       <div className="stack">
@@ -65,7 +44,7 @@ export function ContributionPreview({ draft, kind, factionLabel, tagLabel }: {
         {(draft.steps || []).map((step, i) => (
           <fieldset key={i} className="contribute-step">
             <legend>第 {i + 1} 步</legend>
-            <VariantCards variants={step.variants} fallbackText={step.text} fallbackFactions={step.factionIds} factionLabel={factionLabel} />
+            <VariantCards variants={step.variants} factionLabel={factionLabel} />
             <StepMeta step={step} tagLabel={tagLabel} />
           </fieldset>
         ))}
@@ -74,23 +53,17 @@ export function ContributionPreview({ draft, kind, factionLabel, tagLabel }: {
   }
   return (
     <div className="stack">
-      <VariantCards variants={draft.variants} fallbackText={draft.text} fallbackFactions={draft.factionIds} factionLabel={factionLabel} />
+      <VariantCards variants={draft.variants} factionLabel={factionLabel} />
       <StepMeta step={draft} tagLabel={tagLabel} />
     </div>
   );
 }
 
-function VariantCards({ variants, fallbackText, fallbackFactions, factionLabel }: {
+function VariantCards({ variants, factionLabel }: {
   variants?: VariantPreview[];
-  fallbackText?: string;
-  fallbackFactions?: string[];
   factionLabel: (id: string) => string;
 }) {
-  const items = variants && variants.length > 0
-    ? variants
-    : fallbackText
-      ? [{ text: fallbackText, factionIds: fallbackFactions || [] }]
-      : [];
+  const items = variants || [];
   if (items.length === 0) return <p className="hint">没有文案。</p>;
   return (
     <div className="stack">

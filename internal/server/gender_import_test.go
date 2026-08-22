@@ -6,8 +6,8 @@ import (
 	"github.com/doumiao/newRPS/internal/types"
 )
 
-// TestDedupGenderSeeds 覆盖生产环境实际出现过的场景：旧版 genders.json 在引入
-// (faction_id, normalized_label) 唯一约束之前，允许同一阵营内出现多条重名性别选项。
+// TestDedupGenderSeeds 覆盖防御性场景：种子 JSON 里出现同阵营重名性别选项时，
+// dedupGenderSeeds 应该去重而不是让导入撞 (faction_id, label) 唯一约束回滚。
 func TestDedupGenderSeeds(t *testing.T) {
 	in := []types.GenderOption{
 		{ID: "gender2", Label: "母狗", FactionID: "female_faction"},

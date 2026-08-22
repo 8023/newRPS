@@ -91,17 +91,23 @@ func TestSchemaMigrationV10V11FromV9(t *testing.T) {
 		t.Fatalf("schema_version = %d, want %d", v, currentSchemaVersion)
 	}
 
-	// 新列存在且旧行可读（NULL 偏好 / 0 战绩）
+	// 新列存在且旧行可读（NULL 偏好 / 0 战绩）。斗兽棋战绩自 v47 起已从 players 平铺列
+	// 拆到 player_game_stats 子表（一行一游戏），这里改为查子表；bond_* 三列不属于
+	// v47 拆分范围，仍是 players 上的普通列。
 	var jW, jL, jD int
 	var bondM, bondP, bondPub sql.NullInt64
 	if err := db.QueryRow(`
-		SELECT jungle_wins, jungle_losses, jungle_draws,
-		       bond_master_enabled, bond_pet_enabled, bond_public_display
-		FROM players WHERE id='p1'`).Scan(&jW, &jL, &jD, &bondM, &bondP, &bondPub); err != nil {
-		t.Fatalf("query migrated player columns: %v", err)
+		SELECT wins, losses, draws FROM player_game_stats WHERE player_id='p1' AND game_id='jungle'`).
+		Scan(&jW, &jL, &jD); err != nil {
+		t.Fatalf("query migrated jungle game stats: %v", err)
 	}
 	if jW != 0 || jL != 0 || jD != 0 {
 		t.Fatalf("jungle WLD should default 0, got %d/%d/%d", jW, jL, jD)
+	}
+	if err := db.QueryRow(`
+		SELECT bond_master_enabled, bond_pet_enabled, bond_public_display
+		FROM players WHERE id='p1'`).Scan(&bondM, &bondP, &bondPub); err != nil {
+		t.Fatalf("query migrated bond columns: %v", err)
 	}
 	if bondM.Valid || bondP.Valid || bondPub.Valid {
 		t.Fatalf("bond flags should be NULL for old rows, got valid=%v/%v/%v", bondM.Valid, bondP.Valid, bondPub.Valid)

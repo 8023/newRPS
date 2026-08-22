@@ -1,85 +1,118 @@
 package server
 
 import (
+	"os"
 	"testing"
 
+	"github.com/doumiao/newRPS/internal/config"
 	"github.com/doumiao/newRPS/internal/types"
 )
 
-// TestMigrateSeriesVariantsToTasks 验证系列变体打散后的任务池 + steps.taskIds
-// 引用能被 pickSeriesTaskForPlayer 按阵营正确选取；表非空时 migrate 幂等。
-func TestMigrateSeriesVariantsToTasks(t *testing.T) {
+// TestMigratePunishmentPoolFromJSON_seedsTasksAndSeries 覆盖磁盘遗留 punishments.json
+// tasks/seriesTasks 一次性导入 sub_tasks/series：独立任务各自成一行单变体，系列每个 subtask
+// 成一步（多份 variants 直接落进该步的 Variants），全部标记 approved、贡献者归
+// legacyPunishmentContributorID；表非空时 migrate 幂等（不重复导入）。
+func TestMigratePunishmentPoolFromJSON_seedsTasksAndSeries(t *testing.T) {
+	dir := t.TempDir()
+	origRoot := config.GetRootDir()
+	config.SetRootDirForTest(dir)
+	t.Cleanup(func() { config.SetRootDirForTest(origRoot) })
+	writeLegacyPunishmentsJSON(t, dir, `{
+		"tags": [],
+		"tasks": [
+			{"id": "t1", "text": "原任务", "tagIds": ["truth"], "order": 50}
+		],
+		"seriesTasks": [
+			{
+				"id": "s1", "name": "试炼",
+				"targetFactionIds": ["female_faction"],
+				"roomNamePool": {"subjects": ["b"], "roomWords": ["c"]},
+				"roomBackgroundImages": ["/uploads/admin/series.webp"],
+				"subtasks": [
+					{"variants": [
+						{"text": "女变体", "factionIds": ["female_faction"]},
+						{"text": "通用变体", "factionIds": []}
+					]}
+				]
+			}
+		]
+	}`)
+
 	db, err := openDatabase(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	ps := newPunishmentStore(db)
-
-	// 模拟 migrate 写入结果：原 tasks + 系列变体打散任务 + steps 引用
-	tasks := []types.PunishmentTaskConfig{
-		{ID: "t1", Text: "原任务", TagIDs: []string{"truth"}, Order: 50, BackgroundImages: []string{}, BackgroundOpacity: 0.22},
-		{ID: "s1_s0_v0", Text: "女变体", TagIDs: []string{"series:s1"}, FactionIDs: []string{"female_faction"}, Order: 50, BackgroundImages: []string{}, BackgroundOpacity: 0.3},
-		{ID: "s1_s0_v1", Text: "通用变体", TagIDs: []string{"series:s1"}, FactionIDs: []string{}, Order: 50, BackgroundImages: []string{}, BackgroundOpacity: 0.22},
-	}
-	series := []types.PunishmentSeriesTaskConfig{{
-		ID: "s1", Name: "试炼",
-		RoomNamePool: &types.RoomNamePool{Subjects: []string{"b"}, RoomWords: []string{"c"}},
-		Steps:        []types.PunishmentSeriesStep{{TaskIDs: []string{"s1_s0_v0", "s1_s0_v1"}}},
-	}}
-	if err := ps.replaceTasks(tasks); err != nil {
-		t.Fatal(err)
-	}
-	if err := ps.replaceSeries(series); err != nil {
-		t.Fatal(err)
-	}
-
-	s := &Server{punishmentStore: ps}
+	s := &Server{db: db, contributionStore: newContributionStore(db)}
+	s.migratePunishmentPoolFromJSONIfNeeded()
 	s.reloadPunishmentCaches()
 
-	// 迁移产物保留 series:<id> 内部标签和普通难度 50；只要阵营精确命中，
-	// 它也应进入普通随机池，而不是被隐式当成系列专用任务。
-	randomPool := candidateTasksForFaction(s.punishmentTasksCache, "female_faction")
-	randomPool = candidateTasksForTags(randomPool, nil, nil)
-	randomPool = candidateTasksForRandomDifficulty(randomPool)
-	foundMigratedVariant := false
-	for _, task := range randomPool {
-		if task.ID == "s1_s0_v0" {
-			foundMigratedVariant = true
-			break
+	foundStandalone := false
+	foundVariant := false
+	for _, task := range s.punishmentTasksCache {
+		if task.Text == "原任务" {
+			foundStandalone = true
+		}
+		if task.Text == "女变体" && task.SeriesID != "" {
+			foundVariant = true
 		}
 	}
-	if !foundMigratedVariant {
-		t.Fatalf("migrated series variant should remain eligible for random mode: %#v", randomPool)
+	if !foundStandalone {
+		t.Fatalf("standalone legacy task missing: %#v", s.punishmentTasksCache)
+	}
+	standaloneID := ""
+	for _, task := range s.punishmentTasksCache {
+		if task.Text == "原任务" {
+			standaloneID = task.ID
+		}
+	}
+	if standaloneID != "t1" {
+		t.Fatalf("standalone legacy ID=%q, want t1", standaloneID)
+	}
+	if !foundVariant {
+		t.Fatalf("series step variant missing: %#v", s.punishmentTasksCache)
+	}
+	if len(s.punishmentSeriesCache) != 1 || s.punishmentSeriesCache[0].Name != "试炼" {
+		t.Fatalf("series cache=%#v", s.punishmentSeriesCache)
+	}
+	if s.punishmentSeriesCache[0].ID != "s1" || len(s.punishmentSeriesCache[0].TargetFactionIDs) != 1 || s.punishmentSeriesCache[0].TargetFactionIDs[0] != "female_faction" {
+		t.Fatalf("series identity/targets were not preserved: %#v", s.punishmentSeriesCache[0])
+	}
+	if s.punishmentSeriesCache[0].RoomNamePool == nil || len(s.punishmentSeriesCache[0].RoomNamePool.Subjects) != 1 || s.punishmentSeriesCache[0].RoomNamePool.Subjects[0] != "b" || len(s.punishmentSeriesCache[0].RoomBackgroundImages) != 1 {
+		t.Fatalf("series presentation was not preserved: %#v", s.punishmentSeriesCache[0])
 	}
 
 	player := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "p1", Name: "小败", FactionID: "female_faction"}, PlayerID: "pid1", Persistent: true}
 	s.players = map[string]*PlayerState{player.ID: player}
-	room := &RoomState{Settings: types.RoomSettings{PunishmentSource: "series", PunishmentSeriesID: "s1"}}
-	r := s.pickSeriesTaskForPlayer(room, player, "s1", "胜")
+	seriesID := s.punishmentSeriesCache[0].ID
+	room := &RoomState{Settings: types.RoomSettings{PunishmentSource: "series", PunishmentSeriesID: seriesID}}
+	r := s.pickSeriesTaskForPlayer(room, player, seriesID, "胜")
 	if r == nil || r.TaskText != "女变体" {
 		t.Fatalf("pick after migrate: %#v", r)
 	}
 
-	// 表非空 → migrate 幂等（不覆盖）
-	s.migratePunishmentPoolFromJSONIfNeeded()
-	got, err := ps.listTasks()
+	// 表非空 → migrate 幂等（不重复导入）。
+	n, err := s.contributionStore.tasks.countAll()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 3 {
-		t.Fatalf("idempotent count=%d want 3", len(got))
+	s.migratePunishmentPoolFromJSONIfNeeded()
+	n2, err := s.contributionStore.tasks.countAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n2 != n {
+		t.Fatalf("idempotent count changed %d -> %d", n, n2)
 	}
 }
 
-func TestStampLegacyPunishmentAttribution_when_importRunsAfterSchemaMigrations_then_fillsMetadata(t *testing.T) {
-	tasks := []types.PunishmentTaskConfig{{ID: "legacy_task"}}
-	series := []types.PunishmentSeriesTaskConfig{{ID: "legacy_series"}}
-	stampLegacyPunishmentAttribution(tasks, series)
-	if tasks[0].ContributorPlayerID != legacyPunishmentContributorID || tasks[0].VoteVersion != 1 || tasks[0].ContentVersion != 1 || tasks[0].TaskGroupID != tasks[0].ID {
-		t.Fatalf("legacy task metadata incomplete: %+v", tasks[0])
+func writeLegacyPunishmentsJSON(t *testing.T, rootDir, body string) {
+	t.Helper()
+	dir := rootDir + "/config/json"
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
 	}
-	if series[0].ContributorPlayerID != legacyPunishmentContributorID || series[0].VoteVersion != 1 || series[0].ContentVersion != 1 {
-		t.Fatalf("legacy series metadata incomplete: %+v", series[0])
+	if err := os.WriteFile(dir+"/punishments.json", []byte(body), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

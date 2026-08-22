@@ -123,7 +123,7 @@ func TestOpenDatabaseMigratedPunishmentEventsAcceptsInserts(t *testing.T) {
 	defer db.Close()
 
 	store := newEventStore(db)
-	if err := store.insertPunishmentTask("id1", 100, "src", "r1", "pub", "发布者", "t1", "目标", "任务文本", punishmentEventMeta{}); err != nil {
+	if err := store.insertPunishmentTask("id1", 100, "r1", "pub", "发布者", "t1", "目标", "任务文本", punishmentEventMeta{}); err != nil {
 		t.Fatalf("insert into migrated punishment_events: %v", err)
 	}
 }
@@ -197,12 +197,12 @@ func TestOpenDatabaseConvertsLegacyPunishmentEvents(t *testing.T) {
 	}
 
 	var publisherID, targetName, status, proofText string
-	if err := db.QueryRow(`SELECT publisher_id, target_name, status, proof_text FROM punishment_events WHERE task_text = '讲个笑话'`).
+	if err := db.QueryRow(`SELECT approver_id, performer_name, status, proof_text FROM punishment_events WHERE task_text = '讲个笑话'`).
 		Scan(&publisherID, &targetName, &status, &proofText); err != nil {
 		t.Fatalf("query matched row: %v", err)
 	}
 	if publisherID != "pub1" || targetName != "目标" || status != "approved" || proofText != "哈哈哈" {
-		t.Fatalf("matched task+proof row not merged correctly: publisher_id=%q target_name=%q status=%q proof_text=%q",
+		t.Fatalf("matched task+proof row not merged correctly: approver_id=%q performer_name=%q status=%q proof_text=%q",
 			publisherID, targetName, status, proofText)
 	}
 
@@ -217,12 +217,12 @@ func TestOpenDatabaseConvertsLegacyPunishmentEvents(t *testing.T) {
 	}
 
 	var orphanTargetID, orphanPublisherID string
-	if err := db.QueryRow(`SELECT target_id, publisher_id FROM punishment_events WHERE task_text = '对方已离开'`).
+	if err := db.QueryRow(`SELECT performer_id, approver_id FROM punishment_events WHERE task_text = '对方已离开'`).
 		Scan(&orphanTargetID, &orphanPublisherID); err != nil {
 		t.Fatalf("query orphan proof row: %v", err)
 	}
 	if orphanTargetID != "tgt3" || orphanPublisherID != "" {
-		t.Fatalf("orphan proof row should synthesize target from submitter with empty publisher, got target_id=%q publisher_id=%q", orphanTargetID, orphanPublisherID)
+		t.Fatalf("orphan proof row should synthesize performer from submitter with empty approver, got performer_id=%q approver_id=%q", orphanTargetID, orphanPublisherID)
 	}
 }
 

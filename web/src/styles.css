@@ -1130,12 +1130,26 @@ main {
 
 .create-box {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* 默认 stretch 会把矮的那一列强行拉到跟高的那一列一样高——.create-column 内部又是
+     align-content:start，拉伸出来的高度就变成列底部一段看得见的空白。左右两列（基础+
+     玩法 / 惩罚）该各自多高就多高，不互相影响。 */
+  align-items: start;
 }
 
 .create-scroll-area {
   min-height: 0;
   overflow: auto;
   padding-right: 2px;
+}
+
+/* 基础＋玩法一列，惩罚单独一列：同一个 .create-box 网格行里两侧内容多少不一定相等
+   （尤其惩罚展开系列/标签选择后会明显变高），靠这层包装 + 上面 .create-box 的
+   align-items:start 让两列各自撑到自己内容的高度，互不拉伸、互不留白。 */
+.create-column {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
 }
 
 .create-section {
@@ -1441,14 +1455,18 @@ main {
   min-height: 34px;
 }
 
+/* 房间卡片右边框要和下方「通用改名处」面板的右边框对齐：
+   - 显式声明单列 minmax(0, 1fr)，否则隐式列按内容宽度定轨，卡片撑不满容器；
+   - 不留 padding-right / scrollbar-gutter。这两项原本是给滚动条预留位置的，但会
+     恒定吃掉约 20px，房间少到不出现滚动条时右侧就白白空出一截。滚动条现在直接
+     压在容器右边缘，出现时卡片自然缩进，不出现时严格对齐。 */
 .room-list {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   max-height: min(68dvh, 760px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-right: 4px;
-  scrollbar-gutter: stable;
 }
 
 .lobby-lower-grid {
@@ -2206,13 +2224,19 @@ main {
   width: fit-content;
 }
 
+/* 第三行是个空的弹性行，专门用来吸收左列（actions）比右列两块面板加起来还高时多出来的
+   高度——惩罚任务面板展开、尤其是上传证明图之后左列会明显变高。没有这一行的话，actions
+   跨越的两行会按内容分摊这段多余高度，房间聊天与对局记录之间就会被撑出一大段空白；
+   放到最后一行之后，两块面板始终紧挨着，空白落在对局记录下方。 */
 .room-content-grid {
   order: 3;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(var(--page-side-min), var(--page-side-width));
   grid-template-areas:
     "actions side"
-    "actions history";
+    "actions history"
+    "actions .";
+  grid-template-rows: auto auto 1fr;
   gap: 14px;
   align-items: start;
 }
@@ -4292,19 +4316,30 @@ main {
   font-size: 13px;
 }
 
-.history-punishment-summary {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
+/* 对局记录里任务+证明包在同一个 .history-task-group 圆角矩形里，底色统一为白色
+   （见下方 .history-task-group 规则），中间靠这条虚线上边框分隔，不再各自独立
+   成两个圆角矩形。只在 loose（对局记录里没有对应任务的证明）之外的那份 .inline
+   变体上生效。 */
+.history-task-group {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-solid);
 }
 
-.history-punishment-summary small {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--panel-soft);
-  padding: 2px 8px;
-  font-size: 12px;
+.history-task-group .history-task {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.history-task-group .history-proof.inline {
+  border: 0;
+  border-top: 1px dashed var(--border);
+  border-radius: 0;
+  background: transparent;
+  padding: 8px 10px 10px;
 }
 
 .history-proof {
@@ -4331,7 +4366,7 @@ main {
 }
 
 .history-proof-image-button {
-  width: min(260px, 100%);
+  width: 100%;
   padding: 0;
   min-height: auto;
   border: 0;
@@ -4344,31 +4379,43 @@ main {
   transform: scale(1.02);
 }
 
+/* 证明图一律按容器宽度等比缩放：不再钉死 260px（右侧会空一截），也不再给 <img> 自己
+   配 min-height + 底色——图片比这个最小高度矮时，多出来的底色会在图片上下各露出一条
+   多余的线。占位高度/底色统一交给 .proof-image-wrap 且只在加载期间生效。 */
 .history-proof img,
 .history-proof-image-button img {
-  width: min(260px, 100%);
-  min-height: 120px;
+  width: 100%;
   object-fit: contain;
-  background: color-mix(in srgb, var(--primary) 8%, var(--panel-soft));
   border-radius: 8px;
-  border: 1px solid var(--border);
   display: block;
   cursor: zoom-in;
 }
 
+/* .proof-image-wrap 是个 <span>，里面的 <img> 是 block —— 不显式声明 display:block 的话，
+   块级子元素会把这个行内盒拆成前后两个空的行内片段，每个片段各自画出自己的左右边框，
+   看上去就是图片上方、下方各多一道短竖线（用户看到的两道浅蓝线段就是它）。 */
 .proof-image-wrap {
   position: relative;
-  width: min(320px, 100%);
-  min-height: 140px;
+  display: block;
+  width: 100%;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--primary) 10%, var(--panel-soft));
   overflow: hidden;
+}
+
+/* 撑出「图片加载中…」占位所需的高度与底色，加载完成后立刻撤掉，
+   免得矮图片的上下露出底色。 */
+.proof-image-wrap:not(.is-ready) {
+  min-height: 140px;
+  background: color-mix(in srgb, var(--primary) 10%, var(--panel-soft));
 }
 
 .proof-image-wrap img {
   width: 100%;
-  min-height: 140px;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   object-fit: contain;
   display: block;
   cursor: zoom-in;
@@ -4428,10 +4475,12 @@ main {
   margin-top: 8px;
 }
 
-.punishment-task-image-button img,
-.proof .history-proof-image-button img,
-.proof-submit-card .history-proof-image-button img {
+/* 任务配图保留边框与固定上限宽度；证明图（.proof / .proof-submit-card 里的那两处）
+   已改成随容器铺满，不再在这里被钉回 320px。 */
+.punishment-task-image-button img {
   width: min(320px, 100%);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--primary) 8%, var(--panel-soft));
   cursor: zoom-in;
 }
 
@@ -4725,11 +4774,6 @@ main {
   display: none;
 }
 
-.proof,
-.proof-preview {
-  max-width: 320px;
-}
-
 .proof {
   display: grid;
   gap: 8px;
@@ -4748,7 +4792,11 @@ main {
   line-height: 1.45;
 }
 
-.proof img,
+/* 粉色描边只加在最外那一层上：远端图是 ProofImage 的 .proof-image-wrap，本地 blob 预览
+   则是直接挂在按钮下的 <img>（用 > 精确区分，避免连 wrap 里面的 <img> 一起选中而叠出
+   双层边框）。 */
+.proof .proof-image-wrap,
+.proof .history-proof-image-button>img,
 .proof-preview {
   width: 100%;
   border-radius: 8px;
@@ -6853,29 +6901,57 @@ main {
   background: color-mix(in srgb, var(--pink) 42%, var(--panel-soft));
 }
 
-/* 任务卡片第三行：点赞/点踩评价，独立成行且右对齐，与前两行（标题/任务文案，左对齐）区分开。
+/* 任务卡片第三行：点赞/点踩评价，独立成行且左对齐，与前两行（标题/任务文案）保持同一起始线。
    借用共建评价组件（.contribution-vote），但去掉它在共建列表里的独立卡片外观（边框/底色/内
-   边距），让它看起来只是任务卡片内的一行，而不是卡片里又嵌了一张卡片。 */
+   边距），让它看起来只是任务卡片内的一行，而不是卡片里又嵌了一张卡片。与上方任务文案之间用
+   虚线分隔并留出一点顶部间距（沿用 .history-section 同款分隔线写法），避免评价行紧贴任务
+   正文糊在一起。 */
 .task-card-vote-row {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  margin-top: 4px;
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
 }
 
 .task-card-vote-row .contribution-vote {
   border: none;
   padding: 0;
   background: transparent;
-  text-align: right;
+  text-align: left;
 }
 
 .task-card-vote-row .vote-actions {
-  justify-content: flex-end;
+  justify-content: flex-start;
+}
+
+/* "评价任务："提示语与结果行统一走 --muted 弱化配色，避免比任务正文（.designed-task-card p，
+   16px/900 加粗）还醒目；赞/踩按钮沿用站内 .icon-button 同款 34px 紧凑尺寸，而不是全局默认
+   38px 按钮，让这一行看起来是卡片内的次要操作，不是独立的强调按钮。 */
+.task-card-vote-row .vote-actions span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.task-card-vote-row .vote-actions button {
+  padding: 0 10px;
+  height: 34px;
+  min-height: 34px;
+  font-size: 13px;
 }
 
 .contribution-vote-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
   margin: 0;
   color: var(--muted);
   font-size: 12px;
+}
+
+.contribution-vote-result .vote-result-stats::before {
+  content: "· ";
 }
 
 @media (max-width: 920px) {
@@ -7221,18 +7297,25 @@ main {
     gap: 8px;
   }
 
+  /* 「参与共建」标题行的三个按钮（随机任务/系列任务/返回大厅）优先与标题同一行、贴右对齐；
+     只有这一行真放不下标题+三个按钮时才整体换到标题下方——不强制固定摊开成两行/网格，
+     也不逐个拉伸等分宽度（那样会显得按钮忽宽忽窄，不像"固定宽度"）。 */
   .contribute-page .panel-title.lobby-title {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 14px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 8px;
   }
 
   .contribute-page .lobby-title-actions {
-    width: 100%;
+    flex: none;
+    flex-wrap: nowrap;
+    margin-left: auto;
   }
 
   .contribute-page .lobby-title-actions button {
-    flex: 1;
+    flex: none;
+    width: auto;
   }
 
   .lobby-main .lobby-title-actions {
@@ -7408,6 +7491,8 @@ main {
       "actions"
       "side"
       "history";
+    /* 单列堆叠时不需要桌面端那个吸收多余高度的空行 */
+    grid-template-rows: none;
   }
 
   .actions-panel {
@@ -7513,6 +7598,17 @@ main {
   .designed-task-card {
     align-content: end;
     padding: 16px;
+  }
+
+  /* 手机端窄屏放不下"由 xx 贡献 · N 人评价 · 点赞 xx%"一整行，拆成两行：贡献者一行，
+     人数+点赞率一行，去掉桌面端用来分隔两段的居中圆点。 */
+  .contribution-vote-result {
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .contribution-vote-result .vote-result-stats::before {
+    content: "";
   }
 
   .history-task {
@@ -8251,14 +8347,27 @@ main {
 /* 超过约 13 条自动出现滚动条，不再把整页无限撑高（后台共建审核列表历史条目可能很长）；
    玩家端「参与共建」自己的列表同样复用这个类，条数一般不多，但撑高的问题同理，一起收敛。 */
 /* padding-top 给悬停上浮（transform: translateY(-1px)，见全局 button:hover）留出余量，
-   否则列表第一项紧贴容器顶部，上浮时它自己的上边框会被 overflow-y:auto 的裁剪边界挡住。 */
+   否则列表第一项紧贴容器顶部，上浮时它自己的上边框会被 overflow-y:auto 的裁剪边界挡住。
+   scrollbar-gutter: stable 让滚动条固定预留一条轨道空间（不支持的浏览器忽略这条声明，
+   退化回原来的行为）；padding-right 从 2px 提到 10px，避免非 overlay 滚动条（如 Windows
+   经典滚动条约 15-17px 宽）没地方放，只能挤进卡片右侧内容区，把卡片标题/徽标行的可用
+   宽度顶得只剩几像素、贴着卡片边框甚至被滚动条盖住——随机任务池条目一多触发滚动条
+   就会这样，系列任务条目少通常不触发滚动条所以看不出来。 */
 .contribute-list {
   display: grid;
+  /* 和 .contribute-item 同一个坑（见那条规则上方的注释）：这里的隐式行装的是
+     .contribute-item 这个嵌套网格容器，它自己内部又因为标题 <strong> 的
+     overflow:hidden 触发"自动最小尺寸清零"，导致这层向上汇报的最小内容高度也被算成
+     接近 0——本层 auto 轨道跟着塌缩，卡片的外层边框盒因此比实际内容矮一截，
+     徽标/日期那一行会越出卡片下边框、糊到下一张卡片头上。同样换成 min-content 让
+     每一行按实际内容高度撑开。 */
+  grid-auto-rows: min-content;
   gap: 8px;
   max-height: 640px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding-top: 2px;
-  padding-right: 2px;
+  padding-right: 10px;
 }
 
 .contribute-item,
@@ -8272,9 +8381,19 @@ main {
 
 /* 投稿列表行：卡片内「类型 / 状态徽标 / 批注 / 时间 / 操作按钮」纵向排布，各自补间距；
    行本身是 <button> 时，全局 button 默认 inline-flex + 居中会把内容挤成一行居中，
-   要额外改左对齐、撑满宽度。 */
+   要额外改左对齐、撑满宽度。
+   grid-auto-rows 必须显式设成 min-content，不能吃默认的 auto：本卡片第一行标题
+   （.contribute-item strong）为了单行省略号要设 overflow:hidden，而 CSS Grid 规定
+   —— 网格项在某轴向 overflow 不是 visible 时，该轴向的"自动最小尺寸"按 0 计算而不是按
+   内容高度算。auto 轨道正是用这个"自动最小尺寸"参与测算，结果这一行的隐式轨道会塌缩成
+   0 高度，标题文字的渲染框仍按内容实际高度撑开、但已经不占位，于是整段视觉上盖到下面
+   徽标/日期那一行上（看起来像标题和徽标"糊在一起"）。min-content 轨道用的是另一套测算
+   （按内容的最小内容尺寸算），不吃那条"overflow 非 visible 则自动最小尺寸清零"的规则，
+   两行就能各自撑开、不再重叠——实测对照过，即便去掉这行也不会影响省略号本身的截断效果，
+   两者互不冲突。 */
 .contribute-item {
   display: grid;
+  grid-auto-rows: min-content;
   gap: 6px;
 }
 
@@ -8313,10 +8432,7 @@ button.contribute-item {
 /* 状态色复用站内已有的约定色（成功绿 #5fbf8f、金色 #f2b84b、既有的 --reject 危险色），
    走 color-mix 与 --panel-solid 混合，深色模式自动跟着变深；不再写死一个和主题不搭、
    深色模式下也不会变化的浅色 hex（见 DESIGN.md 第 2/8 节）。 */
-.status-pending,
-.status-revision_draft,
-.status-revision_pending,
-.status-unpublish_pending {
+.status-pending {
   background: color-mix(in srgb, #f2b84b 30%, var(--panel-solid));
   border-color: color-mix(in srgb, #f2b84b 55%, var(--border));
 }
@@ -8326,8 +8442,7 @@ button.contribute-item {
   border-color: color-mix(in srgb, #5fbf8f 55%, var(--border));
 }
 
-.status-rejected,
-.status-revision_rejected {
+.status-rejected {
   background: color-mix(in srgb, var(--reject) 70%, var(--panel-solid));
   border-color: var(--reject-border);
 }
@@ -8677,17 +8792,18 @@ button.contribute-item.contribute-item-new {
   gap: 8px;
 }
 
-/* 共建页标题行四个按钮（三板块 + 返回大厅）与大厅「返回/创建」同一套 .small 尺寸；
-   display:contents 让 tablist 不额外占一层 flex，四个按钮在同一行里等高对齐。 */
+/* 共建页标题行三个按钮（随机任务、系列任务 + 返回大厅）与大厅「返回/创建」同一套 .small 尺寸；
+   display:contents 让 tablist 不额外占一层 flex，三个按钮在同一行里等高对齐。 */
 .contribute-page .lobby-title-actions .contribute-tabs {
   display: contents;
 }
 
-/* 系列每一步：提示语/难度+封面图（合并一行，.contribute-split-row 均分）/上移下移删除
-   添加四个按钮全在左栏；惩罚标签单独占右栏，刻意不逐行对齐——每栏各自纵向堆叠自己的
-   内容，用默认的 align-items:stretch 让两栏撑到同一总高度，内容更短的一栏下方自然留空，
-   而不是被拉伸变形或跟另一栏的控件强行对平。未勾选「同时发布到随机任务」时左栏的提示语/
-   难度一并隐藏、右栏的标签也隐藏，四个按钮仍紧跟在封面图选择器后面，同一套布局继续生效。 */
+/* 系列每一步、且这一步要进随机池时的两栏布局：左栏惩罚标签；右栏是提示语/难度+封面图
+   （合并一行，.contribute-split-row 均分）/上移下移删除添加四个按钮。两栏刻意不逐行
+   对齐——各自纵向堆叠自己的内容，用默认的 align-items:stretch 让两栏撑到同一总高度，
+   内容更短的一栏下方自然留空，而不是被拉伸变形或跟另一栏的控件强行对平。未勾选「同时
+   发布到随机任务」时不再用这套两栏布局，退化成单栏（封面图+四个按钮合并一行，
+   见 StepEditor.tsx 里 showPoolFields 为假的分支，复用 .contribute-split-row）。 */
 .step-columns {
   display: flex;
   gap: 12px;
@@ -8810,13 +8926,9 @@ button.contribute-item.contribute-item-new {
 }
 
 @media (max-width: 768px) {
-  .contribute-page .lobby-title-actions {
-    width: 100%;
-  }
-
-  .contribute-page .lobby-title-actions button {
-    flex: 1;
-  }
+  /* 手机端「参与共建」顶部三个按钮（随机任务/系列任务/返回大厅）的一行/换行/固定宽度/
+     右对齐规则统一在上面 920px 断点里定义即可覆盖到这个更窄的断点，这里不再重复/冲突
+     设置成两列网格。 */
 
   .admin-overview-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

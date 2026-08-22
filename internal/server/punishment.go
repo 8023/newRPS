@@ -116,24 +116,29 @@ func (s *Server) punishmentRoundLabel(room *RoomState, tasks []types.PunishmentT
 	return strings.Join(names, "、")
 }
 
-func (s *Server) buildPunishmentTasks(room *RoomState, punishedPlayers []*PlayerState, result types.RoundResult) []types.PunishmentTask {
-	return s.buildPunishmentTasksWithWinnerName(room, punishedPlayers, s.winnerNameForResult(room, result))
+func (s *Server) buildPunishmentTasks(room *RoomState, punishedPlayers []*PlayerState, result types.RoundResult, trigger string) []types.PunishmentTask {
+	return s.buildPunishmentTasksWithWinnerName(room, punishedPlayers, s.winnerNameForResult(room, result), trigger)
 }
 
 // buildPunishmentTasksWithWinnerName：与 buildPunishmentTasks 同构，但胜者展示名由调用方直接给出
 // （大话骰的赢家不是 Seat 反查得到的，见 buildLiarsDicePunishmentTasks）。
 // 始终返回非 nil 切片，避免 history 里 punishmentTasks: null。
-func (s *Server) buildPunishmentTasksWithWinnerName(room *RoomState, punishedPlayers []*PlayerState, winnerName string) []types.PunishmentTask {
+//
+// approver（原"publisher"）恒定是 punishmentReviewer(room, 受罚者)——不管任务来源是随机/
+// 系列/玩家发布，都是"这局里另一个座位上的人"（大话骰是本局赢家）；玩家发布任务场景下
+// "谁发布的"和"谁审批的"天然是同一个人，taskAssigner 本就是 punishmentReviewer 的别名。
+// tie_double_punish：一次结算同时惩罚 >1 人时，这几个人之间没有真正的赢家、只是互相审批
+// （平局双罚/双输判负都属于这种情况），供审计参考，不参与任何业务判断。
+func (s *Server) buildPunishmentTasksWithWinnerName(room *RoomState, punishedPlayers []*PlayerState, winnerName, trigger string) []types.PunishmentTask {
 	out := make([]types.PunishmentTask, 0, len(punishedPlayers))
 	src := normalizePunishmentSource(room.Settings.PunishmentSource)
+	tieDoublePunish := len(punishedPlayers) > 1
 	for _, player := range punishedPlayers {
-		var assigner *PlayerState
+		reviewer := s.punishmentReviewer(room, player.ID)
 		var systemTask *punishmentTaskResult
-		if src == "player" {
-			assigner = s.taskAssigner(room, player.ID)
-		} else if src == "series" {
+		if src == "series" {
 			systemTask = s.pickSeriesTaskForPlayer(room, player, room.Settings.PunishmentSeriesID, winnerName)
-		} else {
+		} else if src != "player" {
 			systemTask = s.pickSystemTaskForPlayerAdvancing(room, player, winnerName)
 		}
 		task := types.PunishmentTask{
@@ -150,18 +155,28 @@ func (s *Server) buildPunishmentTasksWithWinnerName(room *RoomState, punishedPla
 			if systemTask.BackgroundOpacity != nil {
 				task.BackgroundOpacity = systemTask.BackgroundOpacity
 			}
-			if s.eventDB != nil {
-				eventID := randomID()
-				if err := s.eventDB.insertPunishmentTask(eventID, nowMs(), "system", room.ID, "", "", player.ID, task.PlayerName, task.TaskText, systemTask.EventMeta); err != nil {
-					s.errorLog("punishment_event_insert_failed", err.Error())
-				} else {
-					task.EventID = eventID
-				}
-			}
 		}
-		if assigner != nil {
-			task.AssignedBy = assigner.ID
-			task.AssignedByName = assigner.Name
+		if reviewer != nil {
+			task.AssignedBy = reviewer.ID
+			task.AssignedByName = reviewer.Name
+		}
+		// player 来源不在这里建事件行：此时玩家还没输入任务文案，事件要等
+		// handlers_room.go 里对方真正提交自定义任务文案时才创建（approver/performer 的
+		// 位置参数跟这里改名前完全一致，那两处调用不用跟着改）。
+		if s.eventDB != nil && systemTask != nil {
+			eventID := randomID()
+			approverID, approverName := "", ""
+			if reviewer != nil {
+				approverID, approverName = reviewer.ID, playerShortName(reviewer)
+			}
+			meta := systemTask.EventMeta
+			meta.Trigger = trigger
+			meta.TieDoublePunish = tieDoublePunish
+			if err := s.eventDB.insertPunishmentTask(eventID, nowMs(), room.ID, approverID, approverName, player.ID, task.PlayerName, task.TaskText, meta); err != nil {
+				s.errorLog("punishment_event_insert_failed", err.Error())
+			} else {
+				task.EventID = eventID
+			}
 		}
 		out = append(out, task)
 	}
@@ -234,14 +249,11 @@ func (s *Server) pickSystemTaskForPlayer(room *RoomState, player *PlayerState, w
 		return fallback()
 	}
 	op := task.BackgroundOpacity
-	bg := ""
-	if len(task.BackgroundImages) > 0 {
-		bg = task.BackgroundImages[randIntn(len(task.BackgroundImages))]
-	}
+	bg := task.BackgroundImage
 	typeName := s.tagNamesForTask(task)
 	return &punishmentTaskResult{
 		TaskText: taskText, TypeName: typeName, BackgroundImage: bg, BackgroundOpacity: &op,
-		EventMeta: s.metaForFormalTask(task, nil),
+		EventMeta: s.metaForFormalTask(task),
 	}, true
 }
 
@@ -273,7 +285,7 @@ func (s *Server) pickSeriesTaskForPlayer(room *RoomState, player *PlayerState, s
 	}
 	seriesID = strings.TrimSpace(seriesID)
 	series := s.findSeriesByID(seriesID)
-	if series == nil || len(series.Steps) == 0 {
+	if series == nil || series.StepCount == 0 {
 		return fallback()
 	}
 	next := 0
@@ -283,8 +295,8 @@ func (s *Server) pickSeriesTaskForPlayer(room *RoomState, player *PlayerState, s
 	if next < 0 {
 		next = 0
 	}
-	if next >= len(series.Steps) {
-		next = len(series.Steps) - 1
+	if next >= series.StepCount {
+		next = series.StepCount - 1
 	}
 	advance := func() {
 		if room.PunishmentSeriesPlayerProgress == nil {
@@ -292,8 +304,7 @@ func (s *Server) pickSeriesTaskForPlayer(room *RoomState, player *PlayerState, s
 		}
 		room.PunishmentSeriesPlayerProgress[player.ID] = &seriesPlayerProgress{SeriesID: seriesID, Step: next + 1}
 	}
-	taskByID := s.taskIndexForRead()
-	task := pickSeriesStepTask(series.Steps[next].TaskIDs, player.FactionID, taskByID)
+	task := pickSeriesStepTask(s.punishmentSeriesSteps[seriesID], next, player.FactionID)
 	if task == nil {
 		advance()
 		return s.pickSeriesReplacementTask(player, *series, next, winnerName)
@@ -306,17 +317,14 @@ func (s *Server) pickSeriesTaskForPlayer(room *RoomState, player *PlayerState, s
 		return fallback()
 	}
 	op := task.BackgroundOpacity
-	bg := ""
-	if len(task.BackgroundImages) > 0 {
-		bg = task.BackgroundImages[randIntn(len(task.BackgroundImages))]
-	}
+	bg := task.BackgroundImage
 	advance()
 	return &punishmentTaskResult{
 		TaskText:          taskText,
 		TypeName:          series.Name,
 		BackgroundImage:   bg,
 		BackgroundOpacity: &op,
-		EventMeta:         s.metaForFormalTask(*task, series),
+		EventMeta:         s.metaForFormalTask(*task),
 	}
 }
 
@@ -337,15 +345,15 @@ func (s *Server) recordSeriesRunProgressOnClose(room *RoomState) {
 			continue
 		}
 		series := s.findSeriesByID(prog.SeriesID)
-		if series == nil || len(series.Steps) == 0 {
+		if series == nil || series.StepCount == 0 {
 			continue
 		}
 		steps := prog.Step
-		if steps > len(series.Steps) {
-			steps = len(series.Steps)
+		if steps > series.StepCount {
+			steps = series.StepCount
 		}
-		percent := int(float64(steps)/float64(len(series.Steps))*100 + 0.5)
-		if err := s.punishmentStore.recordSeriesRunProgress(series.ID, series.VoteVersion, percent); err != nil {
+		percent := int(float64(steps)/float64(series.StepCount)*100 + 0.5)
+		if err := s.punishmentStore.recordSeriesRunProgress(series.ID, series.Version, percent); err != nil {
 			s.errorLog("series_run_progress_record_failed", err.Error())
 		}
 	}
@@ -357,10 +365,10 @@ func (s *Server) recordSeriesRunProgressOnClose(room *RoomState) {
 func (s *Server) pickSeriesReplacementTask(player *PlayerState, series types.PunishmentSeriesTaskConfig, stepIndex int, winnerName string) *punishmentTaskResult {
 	op := 0.22
 	fallback := &punishmentTaskResult{TaskText: "请完成本局惩罚。", BackgroundOpacity: &op, TypeName: series.Name}
-	if len(series.Steps) == 0 {
+	if series.StepCount == 0 {
 		return fallback
 	}
-	ratio := float64(stepIndex+1) / float64(len(series.Steps))
+	ratio := float64(stepIndex+1) / float64(series.StepCount)
 	incl, excl := s.seriesTagTriState(series)
 	pool := candidateTasksForFaction(s.punishmentTasksCache, player.FactionID)
 	pool = candidateTasksForRandomDifficulty(pool)
@@ -380,38 +388,34 @@ func (s *Server) pickSeriesReplacementTask(player *PlayerState, series types.Pun
 	if taskText == "" {
 		return fallback
 	}
-	bg := ""
-	if len(task.BackgroundImages) > 0 {
-		bg = task.BackgroundImages[randIntn(len(task.BackgroundImages))]
-	}
+	bg := task.BackgroundImage
 	taskOp := task.BackgroundOpacity
 	return &punishmentTaskResult{
 		TaskText:          taskText,
 		TypeName:          series.Name,
 		BackgroundImage:   bg,
 		BackgroundOpacity: &taskOp,
-		EventMeta:         s.metaForFormalTask(task, nil),
+		EventMeta:         s.metaForFormalTask(task),
 	}
 }
 
 // seriesTagTriState 按系列所有步骤引用的任务行统计标签词频：
 // included 只取词频最高的恰好一个（并列按标签 ID 字典序），excluded 为配置里一次都没出现的标签。
 func (s *Server) seriesTagTriState(series types.PunishmentSeriesTaskConfig) (included, excluded []string) {
-	byID := s.taskIndexForRead()
 	freq := map[string]int{}
-	for _, step := range series.Steps {
-		for _, id := range step.TaskIDs {
-			t := byID[id]
-			if t == nil {
+	seenStep := map[string]struct{}{}
+	for _, variant := range s.punishmentSeriesSteps[series.ID] {
+		// 同一步的多份变体共享同一个 ID/TagIDs，只按步骤计一次，不按变体重复计数。
+		if _, ok := seenStep[variant.ID]; ok {
+			continue
+		}
+		seenStep[variant.ID] = struct{}{}
+		for _, tag := range variant.TagIDs {
+			tag = strings.TrimSpace(tag)
+			if tag == "" {
 				continue
 			}
-			for _, tag := range t.TagIDs {
-				tag = strings.TrimSpace(tag)
-				if tag == "" {
-					continue
-				}
-				freq[tag]++
-			}
+			freq[tag]++
 		}
 	}
 	bestID := ""
@@ -433,18 +437,14 @@ func (s *Server) seriesTagTriState(series types.PunishmentSeriesTaskConfig) (inc
 	return included, excluded
 }
 
-// pickSeriesStepTask：收集 taskIds 中所有 FactionIDs 精确命中 factionID 的任务，随机挑一个；
-// 未勾选任何阵营的任务永远不参与匹配；指向不存在 ID 的直接跳过；全落空返回 nil——
-// 调用方（pickSeriesTaskForPlayer）此时从随机池抽替补任务，系列照常生效。
-func pickSeriesStepTask(taskIDs []string, factionID string, taskByID map[string]*types.PunishmentTaskConfig) *types.PunishmentTaskConfig {
+// pickSeriesStepTask：从某系列指定步骤（已展开的变体列表里筛出 StepIndex==stepIndex 的
+// 那些）中收集所有 FactionIDs 精确命中 factionID 的变体，随机挑一个；未勾选任何阵营的
+// 变体永远不参与匹配；全落空返回 nil——调用方（pickSeriesTaskForPlayer）此时从随机池抽
+// 替补任务，系列照常生效。
+func pickSeriesStepTask(stepVariants []*types.PunishmentTaskConfig, stepIndex int, factionID string) *types.PunishmentTaskConfig {
 	var matches []*types.PunishmentTaskConfig
-	for _, id := range taskIDs {
-		id = strings.TrimSpace(id)
-		if id == "" {
-			continue
-		}
-		t := taskByID[id]
-		if t == nil {
+	for _, t := range stepVariants {
+		if t.StepIndex != stepIndex {
 			continue
 		}
 		if containsString(t.FactionIDs, factionID) {
@@ -457,110 +457,38 @@ func pickSeriesStepTask(taskIDs []string, factionID string, taskByID map[string]
 	return matches[randIntn(len(matches))]
 }
 
-// seriesIsUsable 判断系列任务是否可用：至少要有一步。阵营覆盖不再影响可用性——
-// 某一步没覆盖到受罚者阵营时，运行时从随机池抽替补（pickSeriesReplacementTask），
-// 系列仍会出现在建房面板目录里。调用方须持有 s.mu。
+// seriesIsUsable 判断系列任务的运行时结构是否至少有一步。新系列在提交和审批时已保证
+// 每一步覆盖其声明的目标阵营；目标阵营外玩家强行进入房间，或遇到历史异常数据时，
+// pickSeriesReplacementTask 仍会从玩家对应阵营的随机池抽取替补。调用方须持有 s.mu。
 func (s *Server) seriesIsUsable(series types.PunishmentSeriesTaskConfig) bool {
-	return len(series.Steps) > 0
+	return series.StepCount > 0
 }
 
-func (s *Server) metaForFormalTask(task types.PunishmentTaskConfig, series *types.PunishmentSeriesTaskConfig) punishmentEventMeta {
-	meta := punishmentEventMeta{}
-	src := task
-	// 投票目标恒定落在「这一条具体任务」上（TaskGroupID：同一次投稿/同一个系列步骤生成的
-	// 所有阵营变体共享同一个组，但系列的不同步骤各有各的组），不再按整个系列计票——
-	// 系列里每一步都要有自己独立的点赞点踩，见 tasksFromStepDraft。
-	// FormalSeriesID/FormalSeriesVersion 仍然记录（供事件溯源、系列完成率等统计用），
-	// 只是不再参与投票目标的解析（见 contribution_vote_rpc.go 的 formalTarget）。
-	if series != nil && series.ContributorPlayerID != "" {
-		meta.FormalSeriesID = series.ID
-		meta.FormalSeriesVersion = series.VoteVersion
-		src.ContributorPlayerID = series.ContributorPlayerID
-		src.ContributorAnonymous = series.ContributorAnonymous
-	}
-	if task.ContributorPlayerID != "" || src.ContributorPlayerID != "" {
-		meta.FormalTaskID = strings.TrimSpace(task.TaskGroupID)
-		if meta.FormalTaskID == "" {
-			meta.FormalTaskID = task.ID
-		}
-		meta.FormalTaskVersion = task.VoteVersion
-	}
-	if src.ContributorPlayerID == "" {
-		return meta
-	}
-	meta.ContributorPlayerID = src.ContributorPlayerID
-	meta.ContributorAnonymous = src.ContributorAnonymous
-	if p := s.players[src.ContributorPlayerID]; p != nil {
-		meta.ContributorNameSnap = playerShortName(p)
-	}
-	return meta
+// metaForFormalTask 组装惩罚事件的正式任务溯源信息。投票目标恒定落在「这一条具体任务」
+// 的 ID 上（独立随机任务/系列的每一步各自的 ID，都是 sub_tasks 的行 ID），系列的不同步骤
+// 天然各有各的 ID，不再按整个系列合并计票——见 eventStore.castPunishmentEventVoteAndAggregate/
+// subTaskStore.voteAggregate。贡献者是谁、系列归属、要不要匿名都不再存进这份 meta——
+// 需要时由 contribution_vote_rpc.go 按 FormalTaskID/FormalTaskVersion 现查 sub_tasks
+// （atVersion），昵称统一现查 s.players，不做快照。
+func (s *Server) metaForFormalTask(task types.PunishmentTaskConfig) punishmentEventMeta {
+	return punishmentEventMeta{FormalTaskID: task.ID, FormalTaskVersion: task.Version}
 }
 
+// bindPunishmentEventsToRound 把本局产生的惩罚事件行都打上 round_id（纯审计用途）。
+// 投票资格不再靠"这局的参与者名单"这张单独的表判断——approver_id/performer_id 已经在
+// insertPunishmentTask 那一刻直接写死在事件行自己身上（见 buildPunishmentTasksWithWinnerName
+// 的注释），这里不需要再额外记录一遍。
 func (s *Server) bindPunishmentEventsToRound(room *RoomState, item types.RoundHistoryItem) {
-	// 本局完全没有惩罚任务时，不会有任何 punishment_events 行引用这个 roundID，
-	// 也就永远不会有内容可投票——记录参与者纯属浪费一次同步 SQLite 事务写入
-	// （addRoundHistory 是全平台调用最频繁的路径，很多房间根本没开惩罚）。
 	if s.eventDB == nil || len(item.PunishmentTasks) == 0 {
 		return
 	}
-	var losers []*PlayerState
-	loserIDs := map[string]struct{}{}
 	for _, t := range item.PunishmentTasks {
-		if t.EventID != "" {
-			if err := s.eventDB.bindEventRound(t.EventID, item.ID); err != nil {
-				s.errorLog("punishment_event_bind_round_failed", err.Error())
-			}
-		}
-		if p := s.players[t.PlayerID]; p != nil {
-			losers = append(losers, p)
-			loserIDs[p.ID] = struct{}{}
-		}
-	}
-	winners := []string{}
-	if room.Settings.GameID == types.GameLiarsDice && room.LiarsDice != nil {
-		winners = append(winners, room.LiarsDice.WinnerID)
-	} else {
-		// 谁是 winner 直接由「有没有被实际扣上惩罚任务」倒推，而不是重新按 item.Result 猜一遍：
-		// 平局开双罚、双输本就意味着两个座位都被记进了上面的 losers，此时不能再把他们也算进
-		// winners——不然 recordRoundVoteContext 的 seen 去重会让两人全部被误记为 Role=winner。
-		if a := room.Seats[types.SeatA]; a != nil {
-			if _, punished := loserIDs[a.GetID()]; !punished {
-				winners = append(winners, a.GetID())
-			}
-		}
-		if b := room.Seats[types.SeatB]; b != nil {
-			if _, punished := loserIDs[b.GetID()]; !punished {
-				winners = append(winners, b.GetID())
-			}
-		}
-	}
-	s.recordRoundVoteContext(room, item.ID, losers, winners)
-}
-
-func (s *Server) recordRoundVoteContext(room *RoomState, roundID string, losers []*PlayerState, winnerIDs []string) {
-	if s.contributionStore == nil || roundID == "" {
-		return
-	}
-	seen := map[string]struct{}{}
-	var parts []types.RoundParticipant
-	for _, id := range winnerIDs {
-		if id == "" {
+		if t.EventID == "" {
 			continue
 		}
-		seen[id] = struct{}{}
-		parts = append(parts, types.RoundParticipant{RoundID: roundID, RoomID: room.ID, PlayerID: id, Role: types.RoundRoleWinner})
-	}
-	for _, p := range losers {
-		if p == nil {
-			continue
+		if err := s.eventDB.bindEventRound(t.EventID, item.ID); err != nil {
+			s.errorLog("punishment_event_bind_round_failed", err.Error())
 		}
-		if _, ok := seen[p.ID]; ok {
-			continue
-		}
-		parts = append(parts, types.RoundParticipant{RoundID: roundID, RoomID: room.ID, PlayerID: p.ID, Role: types.RoundRoleLoser})
-	}
-	if err := s.contributionStore.insertRoundParticipants(roundID, room.ID, parts); err != nil {
-		s.errorLog("round_participants_insert_failed", err.Error())
 	}
 }
 
@@ -627,7 +555,7 @@ func candidateTasksForTags(tasks []types.PunishmentTaskConfig, included, exclude
 // candidateTasksForRandomDifficulty 过滤掉难度为 -1 的任务：-1 是"仅供系列任务按 ID
 // 引用、不参与随机抽取"的唯一合法负数标记（现在也是把任务挡在随机池外的唯一手段，
 // 标签留空已不再排除随机候选），不参与 weightedDifficultyPick 的难度加权计算。判断用 < 0（而非 == -1）是防御性写法——
-// 保存路径（s.validatePunishmentTask，投稿发布/管理员审批时校验）拒绝落库值不是 -1 或 1-99 的任务，此处多一层兜底。
+// 保存路径（decodeStepDraft，投稿提交/审批时经 contributionStore.validateOwnedDraft 校验）拒绝落库值不是 -1 或 1-99 的任务，此处多一层兜底。
 func candidateTasksForRandomDifficulty(tasks []types.PunishmentTaskConfig) []types.PunishmentTaskConfig {
 	out := make([]types.PunishmentTaskConfig, 0, len(tasks))
 	for _, t := range tasks {

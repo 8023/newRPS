@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { AppConfig } from "../shared/types";
 import { StepEditor } from "./StepEditor";
 import {
@@ -32,7 +32,9 @@ export function ContributeSeriesForm({
   onError,
   showAnonymous = true,
   showSaveDraft = true,
+  saveDraftLabel = "保存草稿",
   submitLabel = "提交审批",
+  extraSubmitActions,
 }: {
   config: AppConfig;
   name: string;
@@ -50,7 +52,10 @@ export function ContributeSeriesForm({
   onError: (message: string) => void;
   showAnonymous?: boolean;
   showSaveDraft?: boolean;
+  saveDraftLabel?: string;
   submitLabel?: string;
+  /** 渲染在提交行最左侧（保存/提交按钮之前），供调用方插入"撤回"这类附加操作。 */
+  extraSubmitActions?: ReactNode;
 }) {
   const [attempted, setAttempted] = useState(false);
   const minSteps = effectiveMinSeriesSteps(config.punishmentRandomSettings?.minSeriesSteps);
@@ -129,7 +134,8 @@ export function ContributeSeriesForm({
       {steps.length < minSteps ? <p className="notice">系列任务至少需要 {minSteps} 步，还差 {minSteps - steps.length} 步。</p> : null}
       {steps.length > maxSteps ? <p className="notice">系列任务最多 {maxSteps} 步，超出 {steps.length - maxSteps} 步。</p> : null}
       <div className="contribute-submit-row">
-        {showSaveDraft ? <button type="button" disabled={busy || !canSaveDraft} onClick={onSaveDraft}>保存草稿</button> : null}
+        {extraSubmitActions}
+        {showSaveDraft ? <button type="button" disabled={busy || !canSaveDraft} onClick={onSaveDraft}>{saveDraftLabel}</button> : null}
         <button className="primary" disabled={busy} type="submit">{submitLabel}</button>
       </div>
     </form>

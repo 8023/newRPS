@@ -15,6 +15,17 @@ type playerStore struct {
 	mu sync.Mutex
 }
 
+// playerSchema：players 主表只保留身份字段、聚合战绩缓存（wins/losses/draws 等，由
+// SyncTotalsFromGameStats 从下面的 player_game_stats 同步而来的"总榜"展示值）与推送/认主
+// 开关这类始终只有几列、不会持续增长的字段。四组"功能域状态"——名争、白给、极限模式、
+// 分游戏胜负平——各自拆到独立子表（v47 迁移，见 player_migrate_v47.go），原因：
+//  1. 这四组在 SQL 层从未被按列过滤/排序过，只在启动时整表读进内存、写回时整行覆盖，
+//     拆分不损失任何查询能力；
+//  2. game_stats 这组会随新游戏上线持续增长（jungle_wins/chess_wins 都是后补的 ALTER
+//     TABLE），拆成"一行一游戏"之后新游戏只是多插入几行数据，表结构不用再变；
+//  3. players 表原本 78 个位置参数的单条 INSERT，字段顺序错位的隐患随字段数下降而下降。
+// persistedPlayer（persist.go）与 PlayerState 内存形状不变，拆分只发生在这个文件的
+// SQL 读写层——业务代码不需要感知这四张子表的存在。
 const playerSchema = `
 CREATE TABLE IF NOT EXISTS players (
 	id TEXT PRIMARY KEY,
@@ -24,37 +35,8 @@ CREATE TABLE IF NOT EXISTS players (
 	gender_id TEXT NOT NULL DEFAULT '',
 	faction_id TEXT NOT NULL DEFAULT '',
 	avatar_url TEXT NOT NULL DEFAULT '',
-	name_war_enabled INTEGER,
-	name_war_allow_rename INTEGER,
-	name_war_toggled_at INTEGER,
-	name_war_original_name TEXT NOT NULL DEFAULT '',
-	name_war_penalty_name TEXT NOT NULL DEFAULT '',
-	name_war_punished INTEGER,
-	name_war_rename_protected_until INTEGER,
-	name_war_renamed_by TEXT NOT NULL DEFAULT '',
-	name_war_renamed_by_name TEXT NOT NULL DEFAULT '',
-	name_war_rename_window_started_at INTEGER,
-	name_war_rename_count INTEGER,
-	giveaway_enabled INTEGER,
-	giveaway_value REAL,
-	giveaway_clicks INTEGER,
 	rank_multiplier_unlocked INTEGER,
-	extreme_mode_enabled INTEGER,
-	extreme_mode_toggled_at INTEGER,
-	extreme_mode_cooldown_until INTEGER,
-	extreme_win_streak INTEGER,
-	extreme_last_decay_hour INTEGER,
 	ranked_last_decay_day INTEGER,
-	extreme_force_closed INTEGER,
-	extreme_force_closed_at INTEGER,
-	extreme_rename_protected_until INTEGER,
-	extreme_renamed_by TEXT NOT NULL DEFAULT '',
-	extreme_renamed_by_name TEXT NOT NULL DEFAULT '',
-	giveaway_board_text TEXT NOT NULL DEFAULT '',
-	giveaway_board_submitted_at INTEGER,
-	giveaway_board_expires_at INTEGER,
-	giveaway_board_likes INTEGER,
-	giveaway_board_dislikes INTEGER,
 	push_mention_enabled INTEGER,
 	push_turn_enabled INTEGER,
 	push_seat_enabled INTEGER,
@@ -70,27 +52,6 @@ CREATE TABLE IF NOT EXISTS players (
 	self_title TEXT NOT NULL DEFAULT '',
 	highest_score INTEGER NOT NULL DEFAULT 0,
 	lowest_score INTEGER NOT NULL DEFAULT 0,
-	rps_wins INTEGER NOT NULL DEFAULT 0,
-	rps_losses INTEGER NOT NULL DEFAULT 0,
-	rps_draws INTEGER NOT NULL DEFAULT 0,
-	othello_wins INTEGER NOT NULL DEFAULT 0,
-	othello_losses INTEGER NOT NULL DEFAULT 0,
-	othello_draws INTEGER NOT NULL DEFAULT 0,
-	tictactoe_wins INTEGER NOT NULL DEFAULT 0,
-	tictactoe_losses INTEGER NOT NULL DEFAULT 0,
-	tictactoe_draws INTEGER NOT NULL DEFAULT 0,
-	gomoku_wins INTEGER NOT NULL DEFAULT 0,
-	gomoku_losses INTEGER NOT NULL DEFAULT 0,
-	gomoku_draws INTEGER NOT NULL DEFAULT 0,
-	liarsdice_wins INTEGER NOT NULL DEFAULT 0,
-	liarsdice_losses INTEGER NOT NULL DEFAULT 0,
-	liarsdice_draws INTEGER NOT NULL DEFAULT 0,
-	jungle_wins INTEGER NOT NULL DEFAULT 0,
-	jungle_losses INTEGER NOT NULL DEFAULT 0,
-	jungle_draws INTEGER NOT NULL DEFAULT 0,
-	chess_wins INTEGER NOT NULL DEFAULT 0,
-	chess_losses INTEGER NOT NULL DEFAULT 0,
-	chess_draws INTEGER NOT NULL DEFAULT 0,
 	total_online_ms INTEGER NOT NULL DEFAULT 0,
 	bond_master_enabled INTEGER,
 	bond_pet_enabled INTEGER,
@@ -108,6 +69,65 @@ CREATE TABLE IF NOT EXISTS player_secrets (
 	FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_player_secrets_player ON player_secrets(player_id);
+-- player_name_war/player_giveaway/player_extreme_mode：与 players 一对一，每个持久化
+-- 玩家固定有且只有一行（loadAll/upsertInTx 无条件维护，不做"行缺失=从未使用过"的稀疏
+-- 判断），列语义与 v46 之前同名的 players 列完全一致，NULL 仍表示"从未设置过"。
+CREATE TABLE IF NOT EXISTS player_name_war (
+	player_id TEXT PRIMARY KEY,
+	enabled INTEGER,
+	allow_rename INTEGER,
+	toggled_at INTEGER,
+	original_name TEXT NOT NULL DEFAULT '',
+	penalty_name TEXT NOT NULL DEFAULT '',
+	punished INTEGER,
+	rename_protected_until INTEGER,
+	renamed_by TEXT NOT NULL DEFAULT '',
+	renamed_by_name TEXT NOT NULL DEFAULT '',
+	rename_window_started_at INTEGER,
+	rename_count INTEGER,
+	FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS player_giveaway (
+	player_id TEXT PRIMARY KEY,
+	enabled INTEGER,
+	value REAL,
+	clicks INTEGER,
+	board_text TEXT NOT NULL DEFAULT '',
+	board_submitted_at INTEGER,
+	board_expires_at INTEGER,
+	board_likes INTEGER,
+	board_dislikes INTEGER,
+	FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS player_extreme_mode (
+	player_id TEXT PRIMARY KEY,
+	enabled INTEGER,
+	toggled_at INTEGER,
+	cooldown_until INTEGER,
+	win_streak INTEGER,
+	last_decay_hour INTEGER,
+	force_closed INTEGER,
+	force_closed_at INTEGER,
+	rename_protected_until INTEGER,
+	renamed_by TEXT NOT NULL DEFAULT '',
+	renamed_by_name TEXT NOT NULL DEFAULT '',
+	FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+);
+-- player_game_stats：一行一款游戏的胜负平，取代原先 7 款游戏各 3 列、共 21 列的平铺
+-- 结构。新游戏上线只需多 INSERT 几行，不用再 ALTER TABLE。每个持久化玩家固定有 7 行
+-- （每款游戏各一行，哪怕从没打过也是 0/0/0），与 player_name_war 等表同样的"稠密"
+-- 设计：换来的是行数=玩家数×游戏数这个不变量，既让迁移正确性可以直接用行数核对，也让
+-- loadAll/upsertInTx 不需要"这一行存在与否"的分支逻辑。
+CREATE TABLE IF NOT EXISTS player_game_stats (
+	player_id TEXT NOT NULL,
+	game_id   TEXT NOT NULL,
+	wins      INTEGER NOT NULL DEFAULT 0,
+	losses    INTEGER NOT NULL DEFAULT 0,
+	draws     INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (player_id, game_id),
+	FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_player_game_stats_player ON player_game_stats(player_id);
 `
 
 func newPlayerStore(db *sql.DB) *playerStore {
@@ -118,6 +138,13 @@ func newPlayerStore(db *sql.DB) *playerStore {
 type playerRow struct {
 	item    persistedPlayer
 	secrets []string
+}
+
+// gameIDsForStats：player_game_stats 覆盖的全部游戏，loadAll/upsertInTx 都按这个顺序
+// 遍历。新游戏上线只需要在这里加一项，不需要 ALTER TABLE。
+var gameIDsForStats = []types.GameID{
+	types.GameRPS, types.GameOthello, types.GameTicTacToe, types.GameGomoku,
+	types.GameLiarsDice, types.GameJungle, types.GameChess,
 }
 
 func (ps *playerStore) count() (int, error) {
@@ -132,30 +159,14 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
-	// 注意：db.SetMaxOpenConns(1)，不能在 rows 未 Close 时再 Query（会死锁）。
-	// 先扫完 players，再一次性加载全部 secrets。
+	// 注意：db.SetMaxOpenConns(1)，同一时刻只能有一组 rows 未 Close，不能嵌套 Query（会
+	// 死锁）。所以这里和 secrets 一样：players 主表先整个扫完 Close，再依次扫完四张子表
+	// 各自 Close，最后在内存里按 player_id 合并——都是独立的只读全表扫描，互不依赖。
 	rows, err := ps.db.Query(`
 		SELECT id, player_id, claim_key, name, gender_id, faction_id, avatar_url,
-			name_war_enabled, name_war_allow_rename, name_war_toggled_at, name_war_original_name,
-			name_war_penalty_name, name_war_punished, name_war_rename_protected_until,
-			name_war_renamed_by, name_war_renamed_by_name, name_war_rename_window_started_at, name_war_rename_count,
-			giveaway_enabled, giveaway_value, giveaway_clicks,
-			rank_multiplier_unlocked,
-			extreme_mode_enabled, extreme_mode_toggled_at, extreme_mode_cooldown_until,
-			extreme_win_streak, extreme_last_decay_hour, ranked_last_decay_day,
-			extreme_force_closed, extreme_force_closed_at, extreme_rename_protected_until,
-			extreme_renamed_by, extreme_renamed_by_name,
-			giveaway_board_text, giveaway_board_submitted_at, giveaway_board_expires_at,
-			giveaway_board_likes, giveaway_board_dislikes,
+			rank_multiplier_unlocked, ranked_last_decay_day,
 			push_mention_enabled, push_turn_enabled, push_seat_enabled, push_bond_enabled,
 			wins, losses, draws, punishments, ranked_points, highest_score, lowest_score, title, title_segment_id, title_custom, self_title,
-			rps_wins, rps_losses, rps_draws,
-			othello_wins, othello_losses, othello_draws,
-			tictactoe_wins, tictactoe_losses, tictactoe_draws,
-			gomoku_wins, gomoku_losses, gomoku_draws,
-			liarsdice_wins, liarsdice_losses, liarsdice_draws,
-			jungle_wins, jungle_losses, jungle_draws,
-			chess_wins, chess_losses, chess_draws,
 			total_online_ms,
 			bond_master_enabled, bond_pet_enabled, bond_public_display,
 			created_at, last_seen_at
@@ -168,42 +179,15 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 	for rows.Next() {
 		var item persistedPlayer
 		var (
-			nwEnabled, nwAllow, nwPunished          sql.NullInt64
-			nwToggled, nwProt, nwWinStart, nwRename sql.NullInt64
-			gaEnabled, rankUnlock, exEnabled        sql.NullInt64
-			exToggled, exCool, exStreak, exDecay    sql.NullInt64
-			pushM, pushT, pushS, pushB              sql.NullInt64
-			gaValue                                 sql.NullFloat64
-			gaClicks                                sql.NullInt64
-			rankedDecay                             sql.NullInt64
-			bondMaster, bondPet, bondPublic         sql.NullInt64
-			exForceClosed                           sql.NullInt64
-			exForceClosedAt, exRenameProt           sql.NullInt64
-			gaBoardSubmitted, gaBoardExpires        sql.NullInt64
-			gaBoardLikes, gaBoardDislikes           sql.NullInt64
+			rankUnlock, rankedDecay         sql.NullInt64
+			pushM, pushT, pushS, pushB      sql.NullInt64
+			bondMaster, bondPet, bondPublic sql.NullInt64
 		)
 		err := rows.Scan(
 			&item.ID, &item.PlayerID, &item.ClaimKey, &item.Name, &item.GenderID, &item.FactionID, &item.AvatarURL,
-			&nwEnabled, &nwAllow, &nwToggled, &item.NameWarOriginalName,
-			&item.NameWarPenaltyName, &nwPunished, &nwProt,
-			&item.NameWarRenamedBy, &item.NameWarRenamedByName, &nwWinStart, &nwRename,
-			&gaEnabled, &gaValue, &gaClicks,
-			&rankUnlock,
-			&exEnabled, &exToggled, &exCool,
-			&exStreak, &exDecay, &rankedDecay,
-			&exForceClosed, &exForceClosedAt, &exRenameProt,
-			&item.ExtremeRenamedBy, &item.ExtremeRenamedByName,
-			&item.GiveawayBoardText, &gaBoardSubmitted, &gaBoardExpires,
-			&gaBoardLikes, &gaBoardDislikes,
+			&rankUnlock, &rankedDecay,
 			&pushM, &pushT, &pushS, &pushB,
 			&item.Stats.Wins, &item.Stats.Losses, &item.Stats.Draws, &item.Stats.Punishments, &item.Stats.RankedPoints, &item.Stats.HighestScore, &item.Stats.LowestScore, &item.Stats.Title, &item.Stats.TitleSegmentID, &item.Stats.TitleCustom, &item.Stats.SelfTitle,
-			&item.GameStats.RPS.Wins, &item.GameStats.RPS.Losses, &item.GameStats.RPS.Draws,
-			&item.GameStats.Othello.Wins, &item.GameStats.Othello.Losses, &item.GameStats.Othello.Draws,
-			&item.GameStats.TicTacToe.Wins, &item.GameStats.TicTacToe.Losses, &item.GameStats.TicTacToe.Draws,
-			&item.GameStats.Gomoku.Wins, &item.GameStats.Gomoku.Losses, &item.GameStats.Gomoku.Draws,
-			&item.GameStats.LiarsDice.Wins, &item.GameStats.LiarsDice.Losses, &item.GameStats.LiarsDice.Draws,
-			&item.GameStats.Jungle.Wins, &item.GameStats.Jungle.Losses, &item.GameStats.Jungle.Draws,
-			&item.GameStats.Chess.Wins, &item.GameStats.Chess.Losses, &item.GameStats.Chess.Draws,
 			&item.Stats.TotalOnlineMs,
 			&bondMaster, &bondPet, &bondPublic,
 			&item.CreatedAt, &item.LastSeenAt,
@@ -212,33 +196,8 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 			_ = rows.Close()
 			return nil, err
 		}
-		item.NameWarEnabled = nullIntToBoolPtr(nwEnabled)
-		item.NameWarAllowRename = nullIntToBoolPtr(nwAllow)
-		item.NameWarPunished = nullIntToBoolPtr(nwPunished)
-		item.NameWarToggledAt = nullIntToInt64Ptr(nwToggled)
-		item.NameWarRenameProtectedUntil = nullIntToInt64Ptr(nwProt)
-		item.NameWarRenameWindowStartedAt = nullIntToInt64Ptr(nwWinStart)
-		item.NameWarRenameCount = nullIntToIntPtr(nwRename)
-		item.GiveawayEnabled = nullIntToBoolPtr(gaEnabled)
-		if gaValue.Valid {
-			v := gaValue.Float64
-			item.GiveawayValue = &v
-		}
-		item.GiveawayClicks = nullIntToIntPtr(gaClicks)
 		item.RankMultiplierUnlocked = nullIntToBoolPtr(rankUnlock)
-		item.ExtremeModeEnabled = nullIntToBoolPtr(exEnabled)
-		item.ExtremeModeToggledAt = nullIntToInt64Ptr(exToggled)
-		item.ExtremeModeCooldownUntil = nullIntToInt64Ptr(exCool)
-		item.ExtremeWinStreak = nullIntToIntPtr(exStreak)
-		item.ExtremeLastDecayHour = nullIntToInt64Ptr(exDecay)
 		item.RankedLastDecayDay = nullIntToInt64Ptr(rankedDecay)
-		item.ExtremeForceClosed = nullIntToBoolPtr(exForceClosed)
-		item.ExtremeForceClosedAt = nullIntToInt64Ptr(exForceClosedAt)
-		item.ExtremeRenameProtectedUntil = nullIntToInt64Ptr(exRenameProt)
-		item.GiveawayBoardSubmitted = nullIntToInt64Ptr(gaBoardSubmitted)
-		item.GiveawayBoardExpires = nullIntToInt64Ptr(gaBoardExpires)
-		item.GiveawayBoardLikes = nullIntToIntPtr(gaBoardLikes)
-		item.GiveawayBoardDislikes = nullIntToIntPtr(gaBoardDislikes)
 		item.PushMentionEnabled = nullIntToBoolPtr(pushM)
 		item.PushTurnEnabled = nullIntToBoolPtr(pushT)
 		item.PushSeatEnabled = nullIntToBoolPtr(pushS)
@@ -256,17 +215,208 @@ func (ps *playerStore) loadAll() ([]playerRow, error) {
 		return nil, err
 	}
 
+	nameWarByPlayer, err := ps.loadAllNameWarLocked()
+	if err != nil {
+		return nil, err
+	}
+	giveawayByPlayer, err := ps.loadAllGiveawayLocked()
+	if err != nil {
+		return nil, err
+	}
+	extremeByPlayer, err := ps.loadAllExtremeModeLocked()
+	if err != nil {
+		return nil, err
+	}
+	gameStatsByPlayer, err := ps.loadAllGameStatsLocked()
+	if err != nil {
+		return nil, err
+	}
 	secretsByPlayer, err := ps.loadAllSecretsLocked()
 	if err != nil {
 		return nil, err
 	}
+
 	out := make([]playerRow, 0, len(items))
 	for _, item := range items {
+		// 四张子表都是"稠密"设计（每个持久化玩家固定一行/一组），正常情况下 ok 恒为
+		// true；缺行只会发生在库被手工改过之类的异常场景，此时保留 item 里的零值
+		// （nil 指针/空字符串），效果等同于旧版 NULL 列"从未设置过"。
+		if nw, ok := nameWarByPlayer[item.ID]; ok {
+			applyNameWarRow(&item, nw)
+		}
+		if ga, ok := giveawayByPlayer[item.ID]; ok {
+			applyGiveawayRow(&item, ga)
+		}
+		if ex, ok := extremeByPlayer[item.ID]; ok {
+			applyExtremeModeRow(&item, ex)
+		}
+		if gs, ok := gameStatsByPlayer[item.ID]; ok {
+			item.GameStats = gs
+		}
 		secrets := secretsByPlayer[item.ID]
 		item.PlayerSecrets = secrets
 		out = append(out, playerRow{item: item, secrets: secrets})
 	}
 	return out, nil
+}
+
+// nameWarRow/giveawayRow/extremeModeRow：player_name_war/player_giveaway/
+// player_extreme_mode 三张子表各自的扫描形状，字段与列一一对应。
+type nameWarRow struct {
+	Enabled, AllowRename, Punished     sql.NullInt64
+	ToggledAt, RenameProtectedUntil    sql.NullInt64
+	RenameWindowStartedAt, RenameCount sql.NullInt64
+	OriginalName, PenaltyName          string
+	RenamedBy, RenamedByName           string
+}
+
+func (ps *playerStore) loadAllNameWarLocked() (map[string]nameWarRow, error) {
+	rows, err := ps.db.Query(`
+		SELECT player_id, enabled, allow_rename, toggled_at, original_name, penalty_name,
+			punished, rename_protected_until, renamed_by, renamed_by_name,
+			rename_window_started_at, rename_count
+		FROM player_name_war`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]nameWarRow{}
+	for rows.Next() {
+		var pid string
+		var r nameWarRow
+		if err := rows.Scan(&pid, &r.Enabled, &r.AllowRename, &r.ToggledAt, &r.OriginalName, &r.PenaltyName,
+			&r.Punished, &r.RenameProtectedUntil, &r.RenamedBy, &r.RenamedByName,
+			&r.RenameWindowStartedAt, &r.RenameCount); err != nil {
+			return nil, err
+		}
+		out[pid] = r
+	}
+	return out, rows.Err()
+}
+
+func applyNameWarRow(item *persistedPlayer, r nameWarRow) {
+	item.NameWarEnabled = nullIntToBoolPtr(r.Enabled)
+	item.NameWarAllowRename = nullIntToBoolPtr(r.AllowRename)
+	item.NameWarToggledAt = nullIntToInt64Ptr(r.ToggledAt)
+	item.NameWarOriginalName = r.OriginalName
+	item.NameWarPenaltyName = r.PenaltyName
+	item.NameWarPunished = nullIntToBoolPtr(r.Punished)
+	item.NameWarRenameProtectedUntil = nullIntToInt64Ptr(r.RenameProtectedUntil)
+	item.NameWarRenamedBy = r.RenamedBy
+	item.NameWarRenamedByName = r.RenamedByName
+	item.NameWarRenameWindowStartedAt = nullIntToInt64Ptr(r.RenameWindowStartedAt)
+	item.NameWarRenameCount = nullIntToIntPtr(r.RenameCount)
+}
+
+type giveawayRow struct {
+	Enabled                          sql.NullInt64
+	Value                            sql.NullFloat64
+	Clicks                           sql.NullInt64
+	BoardText                        string
+	BoardSubmittedAt, BoardExpiresAt sql.NullInt64
+	BoardLikes, BoardDislikes        sql.NullInt64
+}
+
+func (ps *playerStore) loadAllGiveawayLocked() (map[string]giveawayRow, error) {
+	rows, err := ps.db.Query(`
+		SELECT player_id, enabled, value, clicks, board_text, board_submitted_at, board_expires_at,
+			board_likes, board_dislikes
+		FROM player_giveaway`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]giveawayRow{}
+	for rows.Next() {
+		var pid string
+		var r giveawayRow
+		if err := rows.Scan(&pid, &r.Enabled, &r.Value, &r.Clicks, &r.BoardText, &r.BoardSubmittedAt, &r.BoardExpiresAt,
+			&r.BoardLikes, &r.BoardDislikes); err != nil {
+			return nil, err
+		}
+		out[pid] = r
+	}
+	return out, rows.Err()
+}
+
+func applyGiveawayRow(item *persistedPlayer, r giveawayRow) {
+	item.GiveawayEnabled = nullIntToBoolPtr(r.Enabled)
+	if r.Value.Valid {
+		v := r.Value.Float64
+		item.GiveawayValue = &v
+	}
+	item.GiveawayClicks = nullIntToIntPtr(r.Clicks)
+	item.GiveawayBoardText = r.BoardText
+	item.GiveawayBoardSubmitted = nullIntToInt64Ptr(r.BoardSubmittedAt)
+	item.GiveawayBoardExpires = nullIntToInt64Ptr(r.BoardExpiresAt)
+	item.GiveawayBoardLikes = nullIntToIntPtr(r.BoardLikes)
+	item.GiveawayBoardDislikes = nullIntToIntPtr(r.BoardDislikes)
+}
+
+type extremeModeRow struct {
+	Enabled                    sql.NullInt64
+	ToggledAt, CooldownUntil   sql.NullInt64
+	WinStreak, LastDecayHour   sql.NullInt64
+	ForceClosed, ForceClosedAt sql.NullInt64
+	RenameProtectedUntil       sql.NullInt64
+	RenamedBy, RenamedByName   string
+}
+
+func (ps *playerStore) loadAllExtremeModeLocked() (map[string]extremeModeRow, error) {
+	rows, err := ps.db.Query(`
+		SELECT player_id, enabled, toggled_at, cooldown_until, win_streak, last_decay_hour,
+			force_closed, force_closed_at, rename_protected_until, renamed_by, renamed_by_name
+		FROM player_extreme_mode`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]extremeModeRow{}
+	for rows.Next() {
+		var pid string
+		var r extremeModeRow
+		if err := rows.Scan(&pid, &r.Enabled, &r.ToggledAt, &r.CooldownUntil, &r.WinStreak, &r.LastDecayHour,
+			&r.ForceClosed, &r.ForceClosedAt, &r.RenameProtectedUntil, &r.RenamedBy, &r.RenamedByName); err != nil {
+			return nil, err
+		}
+		out[pid] = r
+	}
+	return out, rows.Err()
+}
+
+func applyExtremeModeRow(item *persistedPlayer, r extremeModeRow) {
+	item.ExtremeModeEnabled = nullIntToBoolPtr(r.Enabled)
+	item.ExtremeModeToggledAt = nullIntToInt64Ptr(r.ToggledAt)
+	item.ExtremeModeCooldownUntil = nullIntToInt64Ptr(r.CooldownUntil)
+	item.ExtremeWinStreak = nullIntToIntPtr(r.WinStreak)
+	item.ExtremeLastDecayHour = nullIntToInt64Ptr(r.LastDecayHour)
+	item.ExtremeForceClosed = nullIntToBoolPtr(r.ForceClosed)
+	item.ExtremeForceClosedAt = nullIntToInt64Ptr(r.ForceClosedAt)
+	item.ExtremeRenameProtectedUntil = nullIntToInt64Ptr(r.RenameProtectedUntil)
+	item.ExtremeRenamedBy = r.RenamedBy
+	item.ExtremeRenamedByName = r.RenamedByName
+}
+
+// loadAllGameStatsLocked 把 player_game_stats 的全部行按 player_id 合并回
+// types.GameStats（WLDFor 与 upsertInTx 写入时用的是同一张 game_id 映射表）。
+func (ps *playerStore) loadAllGameStatsLocked() (map[string]types.GameStats, error) {
+	rows, err := ps.db.Query(`SELECT player_id, game_id, wins, losses, draws FROM player_game_stats`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]types.GameStats{}
+	for rows.Next() {
+		var pid, gameID string
+		var w, l, d int
+		if err := rows.Scan(&pid, &gameID, &w, &l, &d); err != nil {
+			return nil, err
+		}
+		gs := out[pid]
+		*gs.WLDFor(types.GameID(gameID)) = types.GameWLD{Wins: w, Losses: l, Draws: d}
+		out[pid] = gs
+	}
+	return out, rows.Err()
 }
 
 func (ps *playerStore) loadAllSecretsLocked() (map[string][]string, error) {
@@ -331,50 +481,20 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 	if item.ID == "" || item.PlayerID == "" {
 		return fmt.Errorf("playerstore: missing id/playerId")
 	}
-	gs := item.GameStats
 	_, err := tx.Exec(`
 		INSERT INTO players (
 			id, player_id, claim_key, name, gender_id, faction_id, avatar_url,
-			name_war_enabled, name_war_allow_rename, name_war_toggled_at, name_war_original_name,
-			name_war_penalty_name, name_war_punished, name_war_rename_protected_until,
-			name_war_renamed_by, name_war_renamed_by_name, name_war_rename_window_started_at, name_war_rename_count,
-			giveaway_enabled, giveaway_value, giveaway_clicks,
-			rank_multiplier_unlocked,
-			extreme_mode_enabled, extreme_mode_toggled_at, extreme_mode_cooldown_until,
-			extreme_win_streak, extreme_last_decay_hour, ranked_last_decay_day,
-			extreme_force_closed, extreme_force_closed_at, extreme_rename_protected_until,
-			extreme_renamed_by, extreme_renamed_by_name,
-			giveaway_board_text, giveaway_board_submitted_at, giveaway_board_expires_at,
-			giveaway_board_likes, giveaway_board_dislikes,
+			rank_multiplier_unlocked, ranked_last_decay_day,
 			push_mention_enabled, push_turn_enabled, push_seat_enabled, push_bond_enabled,
 			wins, losses, draws, punishments, ranked_points, highest_score, lowest_score, title, title_segment_id, title_custom, self_title,
-			rps_wins, rps_losses, rps_draws,
-			othello_wins, othello_losses, othello_draws,
-			tictactoe_wins, tictactoe_losses, tictactoe_draws,
-			gomoku_wins, gomoku_losses, gomoku_draws,
-			liarsdice_wins, liarsdice_losses, liarsdice_draws,
-			jungle_wins, jungle_losses, jungle_draws,
-			chess_wins, chess_losses, chess_draws,
 			total_online_ms,
 			bond_master_enabled, bond_pet_enabled, bond_public_display,
 			created_at, last_seen_at
 		) VALUES (
 			?,?,?,?,?,?,?,
-			?,?,?,?,?,?,?,?,?,?,?,
-			?,?,?,
-			?,
-			?,?,?,?,?,?,
-			?,?,?,?,?,
-			?,?,?,?,?,
+			?,?,
 			?,?,?,?,
 			?,?,?,?,?,?,?,?,?,?,?,
-			?,?,?,
-			?,?,?,
-			?,?,?,
-			?,?,?,
-			?,?,?,
-			?,?,?,
-			?,?,?,
 			?,
 			?,?,?,
 			?,?
@@ -386,37 +506,8 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			gender_id=excluded.gender_id,
 			faction_id=excluded.faction_id,
 			avatar_url=excluded.avatar_url,
-			name_war_enabled=excluded.name_war_enabled,
-			name_war_allow_rename=excluded.name_war_allow_rename,
-			name_war_toggled_at=excluded.name_war_toggled_at,
-			name_war_original_name=excluded.name_war_original_name,
-			name_war_penalty_name=excluded.name_war_penalty_name,
-			name_war_punished=excluded.name_war_punished,
-			name_war_rename_protected_until=excluded.name_war_rename_protected_until,
-			name_war_renamed_by=excluded.name_war_renamed_by,
-			name_war_renamed_by_name=excluded.name_war_renamed_by_name,
-			name_war_rename_window_started_at=excluded.name_war_rename_window_started_at,
-			name_war_rename_count=excluded.name_war_rename_count,
-			giveaway_enabled=excluded.giveaway_enabled,
-			giveaway_value=excluded.giveaway_value,
-			giveaway_clicks=excluded.giveaway_clicks,
 			rank_multiplier_unlocked=excluded.rank_multiplier_unlocked,
-			extreme_mode_enabled=excluded.extreme_mode_enabled,
-			extreme_mode_toggled_at=excluded.extreme_mode_toggled_at,
-			extreme_mode_cooldown_until=excluded.extreme_mode_cooldown_until,
-			extreme_win_streak=excluded.extreme_win_streak,
-			extreme_last_decay_hour=excluded.extreme_last_decay_hour,
 			ranked_last_decay_day=excluded.ranked_last_decay_day,
-			extreme_force_closed=excluded.extreme_force_closed,
-			extreme_force_closed_at=excluded.extreme_force_closed_at,
-			extreme_rename_protected_until=excluded.extreme_rename_protected_until,
-			extreme_renamed_by=excluded.extreme_renamed_by,
-			extreme_renamed_by_name=excluded.extreme_renamed_by_name,
-			giveaway_board_text=excluded.giveaway_board_text,
-			giveaway_board_submitted_at=excluded.giveaway_board_submitted_at,
-			giveaway_board_expires_at=excluded.giveaway_board_expires_at,
-			giveaway_board_likes=excluded.giveaway_board_likes,
-			giveaway_board_dislikes=excluded.giveaway_board_dislikes,
 			push_mention_enabled=excluded.push_mention_enabled,
 			push_turn_enabled=excluded.push_turn_enabled,
 			push_seat_enabled=excluded.push_seat_enabled,
@@ -425,13 +516,6 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			punishments=excluded.punishments, ranked_points=excluded.ranked_points,
 			highest_score=excluded.highest_score, lowest_score=excluded.lowest_score,
 			title=excluded.title, title_segment_id=excluded.title_segment_id, title_custom=excluded.title_custom, self_title=excluded.self_title,
-			rps_wins=excluded.rps_wins, rps_losses=excluded.rps_losses, rps_draws=excluded.rps_draws,
-			othello_wins=excluded.othello_wins, othello_losses=excluded.othello_losses, othello_draws=excluded.othello_draws,
-			tictactoe_wins=excluded.tictactoe_wins, tictactoe_losses=excluded.tictactoe_losses, tictactoe_draws=excluded.tictactoe_draws,
-			gomoku_wins=excluded.gomoku_wins, gomoku_losses=excluded.gomoku_losses, gomoku_draws=excluded.gomoku_draws,
-			liarsdice_wins=excluded.liarsdice_wins, liarsdice_losses=excluded.liarsdice_losses, liarsdice_draws=excluded.liarsdice_draws,
-			jungle_wins=excluded.jungle_wins, jungle_losses=excluded.jungle_losses, jungle_draws=excluded.jungle_draws,
-			chess_wins=excluded.chess_wins, chess_losses=excluded.chess_losses, chess_draws=excluded.chess_draws,
 			total_online_ms=excluded.total_online_ms,
 			bond_master_enabled=excluded.bond_master_enabled,
 			bond_pet_enabled=excluded.bond_pet_enabled,
@@ -439,32 +523,26 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			created_at=excluded.created_at, last_seen_at=excluded.last_seen_at
 	`,
 		item.ID, item.PlayerID, item.ClaimKey, item.Name, item.GenderID, item.FactionID, item.AvatarURL,
-		boolPtrToSQL(item.NameWarEnabled), boolPtrToSQL(item.NameWarAllowRename), int64PtrToSQL(item.NameWarToggledAt), item.NameWarOriginalName,
-		item.NameWarPenaltyName, boolPtrToSQL(item.NameWarPunished), int64PtrToSQL(item.NameWarRenameProtectedUntil),
-		item.NameWarRenamedBy, item.NameWarRenamedByName, int64PtrToSQL(item.NameWarRenameWindowStartedAt), intPtrToSQL(item.NameWarRenameCount),
-		boolPtrToSQL(item.GiveawayEnabled), floatPtrToSQL(item.GiveawayValue), intPtrToSQL(item.GiveawayClicks),
-		boolPtrToSQL(item.RankMultiplierUnlocked),
-		boolPtrToSQL(item.ExtremeModeEnabled), int64PtrToSQL(item.ExtremeModeToggledAt), int64PtrToSQL(item.ExtremeModeCooldownUntil),
-		intPtrToSQL(item.ExtremeWinStreak), int64PtrToSQL(item.ExtremeLastDecayHour),
-		int64PtrToSQL(item.RankedLastDecayDay),
-		boolPtrToSQL(item.ExtremeForceClosed), int64PtrToSQL(item.ExtremeForceClosedAt), int64PtrToSQL(item.ExtremeRenameProtectedUntil),
-		item.ExtremeRenamedBy, item.ExtremeRenamedByName,
-		item.GiveawayBoardText, int64PtrToSQL(item.GiveawayBoardSubmitted), int64PtrToSQL(item.GiveawayBoardExpires),
-		intPtrToSQL(item.GiveawayBoardLikes), intPtrToSQL(item.GiveawayBoardDislikes),
+		boolPtrToSQL(item.RankMultiplierUnlocked), int64PtrToSQL(item.RankedLastDecayDay),
 		boolPtrToSQL(item.PushMentionEnabled), boolPtrToSQL(item.PushTurnEnabled), boolPtrToSQL(item.PushSeatEnabled), boolPtrToSQL(item.PushBondEnabled),
 		item.Stats.Wins, item.Stats.Losses, item.Stats.Draws, item.Stats.Punishments, item.Stats.RankedPoints, item.Stats.HighestScore, item.Stats.LowestScore, item.Stats.Title, item.Stats.TitleSegmentID, item.Stats.TitleCustom, item.Stats.SelfTitle,
-		gs.RPS.Wins, gs.RPS.Losses, gs.RPS.Draws,
-		gs.Othello.Wins, gs.Othello.Losses, gs.Othello.Draws,
-		gs.TicTacToe.Wins, gs.TicTacToe.Losses, gs.TicTacToe.Draws,
-		gs.Gomoku.Wins, gs.Gomoku.Losses, gs.Gomoku.Draws,
-		gs.LiarsDice.Wins, gs.LiarsDice.Losses, gs.LiarsDice.Draws,
-		gs.Jungle.Wins, gs.Jungle.Losses, gs.Jungle.Draws,
-		gs.Chess.Wins, gs.Chess.Losses, gs.Chess.Draws,
 		item.Stats.TotalOnlineMs,
 		boolPtrToSQL(item.BondMasterEnabled), boolPtrToSQL(item.BondPetEnabled), boolPtrToSQL(item.BondPublicDisplay),
 		item.CreatedAt, item.LastSeenAt,
 	)
 	if err != nil {
+		return err
+	}
+	if err := ps.upsertNameWarInTx(tx, item); err != nil {
+		return err
+	}
+	if err := ps.upsertGiveawayInTx(tx, item); err != nil {
+		return err
+	}
+	if err := ps.upsertExtremeModeInTx(tx, item); err != nil {
+		return err
+	}
+	if err := ps.upsertGameStatsInTx(tx, item); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(`DELETE FROM player_secrets WHERE player_id = ?`, item.ID); err != nil {
@@ -475,6 +553,88 @@ func (ps *playerStore) upsertInTx(tx *sql.Tx, item persistedPlayer) error {
 			continue
 		}
 		if _, err := tx.Exec(`INSERT OR IGNORE INTO player_secrets (player_id, secret) VALUES (?, ?)`, item.ID, secret); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (ps *playerStore) upsertNameWarInTx(tx *sql.Tx, item persistedPlayer) error {
+	_, err := tx.Exec(`
+		INSERT INTO player_name_war (
+			player_id, enabled, allow_rename, toggled_at, original_name, penalty_name,
+			punished, rename_protected_until, renamed_by, renamed_by_name,
+			rename_window_started_at, rename_count
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+		ON CONFLICT(player_id) DO UPDATE SET
+			enabled=excluded.enabled, allow_rename=excluded.allow_rename, toggled_at=excluded.toggled_at,
+			original_name=excluded.original_name, penalty_name=excluded.penalty_name, punished=excluded.punished,
+			rename_protected_until=excluded.rename_protected_until, renamed_by=excluded.renamed_by,
+			renamed_by_name=excluded.renamed_by_name, rename_window_started_at=excluded.rename_window_started_at,
+			rename_count=excluded.rename_count
+	`,
+		item.ID, boolPtrToSQL(item.NameWarEnabled), boolPtrToSQL(item.NameWarAllowRename), int64PtrToSQL(item.NameWarToggledAt),
+		item.NameWarOriginalName, item.NameWarPenaltyName, boolPtrToSQL(item.NameWarPunished),
+		int64PtrToSQL(item.NameWarRenameProtectedUntil), item.NameWarRenamedBy, item.NameWarRenamedByName,
+		int64PtrToSQL(item.NameWarRenameWindowStartedAt), intPtrToSQL(item.NameWarRenameCount),
+	)
+	return err
+}
+
+func (ps *playerStore) upsertGiveawayInTx(tx *sql.Tx, item persistedPlayer) error {
+	_, err := tx.Exec(`
+		INSERT INTO player_giveaway (
+			player_id, enabled, value, clicks, board_text, board_submitted_at, board_expires_at,
+			board_likes, board_dislikes
+		) VALUES (?,?,?,?,?,?,?,?,?)
+		ON CONFLICT(player_id) DO UPDATE SET
+			enabled=excluded.enabled, value=excluded.value, clicks=excluded.clicks,
+			board_text=excluded.board_text, board_submitted_at=excluded.board_submitted_at,
+			board_expires_at=excluded.board_expires_at, board_likes=excluded.board_likes,
+			board_dislikes=excluded.board_dislikes
+	`,
+		item.ID, boolPtrToSQL(item.GiveawayEnabled), floatPtrToSQL(item.GiveawayValue), intPtrToSQL(item.GiveawayClicks),
+		item.GiveawayBoardText, int64PtrToSQL(item.GiveawayBoardSubmitted), int64PtrToSQL(item.GiveawayBoardExpires),
+		intPtrToSQL(item.GiveawayBoardLikes), intPtrToSQL(item.GiveawayBoardDislikes),
+	)
+	return err
+}
+
+func (ps *playerStore) upsertExtremeModeInTx(tx *sql.Tx, item persistedPlayer) error {
+	_, err := tx.Exec(`
+		INSERT INTO player_extreme_mode (
+			player_id, enabled, toggled_at, cooldown_until, win_streak, last_decay_hour,
+			force_closed, force_closed_at, rename_protected_until, renamed_by, renamed_by_name
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+		ON CONFLICT(player_id) DO UPDATE SET
+			enabled=excluded.enabled, toggled_at=excluded.toggled_at, cooldown_until=excluded.cooldown_until,
+			win_streak=excluded.win_streak, last_decay_hour=excluded.last_decay_hour,
+			force_closed=excluded.force_closed, force_closed_at=excluded.force_closed_at,
+			rename_protected_until=excluded.rename_protected_until, renamed_by=excluded.renamed_by,
+			renamed_by_name=excluded.renamed_by_name
+	`,
+		item.ID, boolPtrToSQL(item.ExtremeModeEnabled), int64PtrToSQL(item.ExtremeModeToggledAt), int64PtrToSQL(item.ExtremeModeCooldownUntil),
+		intPtrToSQL(item.ExtremeWinStreak), int64PtrToSQL(item.ExtremeLastDecayHour),
+		boolPtrToSQL(item.ExtremeForceClosed), int64PtrToSQL(item.ExtremeForceClosedAt), int64PtrToSQL(item.ExtremeRenameProtectedUntil),
+		item.ExtremeRenamedBy, item.ExtremeRenamedByName,
+	)
+	return err
+}
+
+// upsertGameStatsInTx 无条件写全 gameIDsForStats 里的每一款游戏（哪怕这局没有任何变化的
+// 游戏也重新写一遍 0/0/0），不做"只有变化的游戏才写"的判断——每个玩家固定 7 行，换来的
+// 是 loadAll 侧不需要处理"这一行存在与否"的分支，多出的写入量在每分钟一次的落盘节奏下
+// 可以忽略。
+func (ps *playerStore) upsertGameStatsInTx(tx *sql.Tx, item persistedPlayer) error {
+	gs := item.GameStats
+	for _, gameID := range gameIDsForStats {
+		wld := gs.WLDFor(gameID)
+		if _, err := tx.Exec(`
+			INSERT INTO player_game_stats (player_id, game_id, wins, losses, draws)
+			VALUES (?,?,?,?,?)
+			ON CONFLICT(player_id, game_id) DO UPDATE SET
+				wins=excluded.wins, losses=excluded.losses, draws=excluded.draws
+		`, item.ID, string(gameID), wld.Wins, wld.Losses, wld.Draws); err != nil {
 			return err
 		}
 	}
@@ -535,6 +695,3 @@ func nullIntToInt64Ptr(n sql.NullInt64) *int64 {
 	v := n.Int64
 	return &v
 }
-
-// 编译期用到 types 的占位，避免仅 schema 文件时误删 import。
-var _ = types.GameStats{}

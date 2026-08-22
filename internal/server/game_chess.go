@@ -520,7 +520,7 @@ func (s *Server) applyChessDisconnectForfeit(room *RoomState, forfeit Disconnect
 	for i, p := range punishedPlayers {
 		punishedNames[i] = playerShortName(p)
 	}
-	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, types.RoundResult(forfeit.WinnerSeat))
+	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, types.RoundResult(forfeit.WinnerSeat), "round_end")
 	if winner != nil {
 		s.refreshPlayerSnapshots(winner)
 	}

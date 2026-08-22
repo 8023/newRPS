@@ -132,3 +132,16 @@ func TestOnPunishmentReviewApproveRejectsReplayOnAlreadyApprovedProof(t *testing
 		t.Fatalf("重放通过请求应被拒绝，got err=%q", errMsg)
 	}
 }
+
+func TestOnPunishmentReviewRejectsUnknownAction(t *testing.T) {
+	s, client := setupPunishmentReviewRoom(t)
+	s.onPunishmentReview(client, wsEnvelope{E: "punishment:review", ID: 1, D: map[string]any{
+		"playerId": "l", "action": "crafted-approve",
+	}})
+	if got := lastReplyError(t, client); got != "审核动作无效" {
+		t.Fatalf("unknown action error=%q", got)
+	}
+	if got := s.rooms["room1"].Proofs[0].Status; got != "pending" {
+		t.Fatalf("unknown action changed proof status to %q", got)
+	}
+}

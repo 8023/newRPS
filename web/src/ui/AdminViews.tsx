@@ -1,5 +1,5 @@
 import { type CSSProperties, Suspense, lazy, useEffect, useRef, useState } from "react";
-import { Download, RefreshCcw, Save, Settings, Shield, Upload } from "lucide-react";
+import { RefreshCcw, Save, Settings, Shield, Upload } from "lucide-react";
 import type { AppConfig, GenderFaction, LobbySnapshot, PublicPlayer, RoomInfoTagStyle, RoomNamePool } from "../shared/types";
 import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, DEFAULT_NAME_WAR_RENAME_MIN_POINTS, withAccessControlDefaults, withRankedScoreDefaults } from "../lib/normalize";
 import { ask } from "../lib/rpc";
@@ -118,7 +118,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
   const [adminFilterOfflineCount, setAdminFilterOfflineCount] = useState(0);
   const [adminPlayersLoading, setAdminPlayersLoading] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [contributionCounts, setContributionCounts] = useState<ContributionReviewCounts>({ pending: 0, revisionPending: 0, unpublishPending: 0 });
+  const [contributionCounts, setContributionCounts] = useState<ContributionReviewCounts>({ pending: 0 });
   const [serverConfigChanged, setServerConfigChanged] = useState(false);
   const lastServerConfigText = useRef(JSON.stringify(config));
   const adminPlayersRequestGen = useRef(0);
@@ -155,12 +155,14 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
 
   useEffect(() => {
     if (!logged) return;
-    ask<ContributionReviewCounts>("admin:action", { action: "contributionCounts", password })
-      .then((c) => setContributionCounts({
-        pending: Number(c.pending) || 0,
-        revisionPending: Number(c.revisionPending) || 0,
-        unpublishPending: Number(c.unpublishPending) || 0,
-      }))
+    // 侧边栏徽标只需要一个总数，不用打开整个共建审核面板，复用同一个总览接口
+    // （AdminContributionReview.tsx 展开后台数据时也走它）。
+    ask<{ counts?: { task?: Record<string, number>; series?: Record<string, number> } }>("admin:action", { action: "contributionPendingOverview", password })
+      .then((res) => {
+        const t = res.counts?.task || {};
+        const s = res.counts?.series || {};
+        setContributionCounts({ pending: (Number(t.pending) || 0) + (Number(s.pending) || 0) });
+      })
       .catch(() => undefined);
   }, [logged, password]);
 
@@ -182,31 +184,6 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
       onError("已从磁盘重新加载配置");
     } catch (error) {
       onError(error instanceof Error ? error.message : "重新加载配置失败");
-    }
-  }
-
-  async function exportConfig() {
-    try {
-      const response = await fetch("/api/config/export", {
-        method: "GET",
-        headers: { "Accept": "application/json", "X-Admin-Password": password }
-      });
-      if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        throw new Error(data?.message || "配置导出失败");
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "rps-config.json";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      onError("配置已导出");
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "配置导出失败");
     }
   }
 
@@ -1457,7 +1434,6 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
               <div className="admin-sticky-actions">
                 <button className="primary" onClick={save}><Save size={16} /> 保存配置</button>
                 <button onClick={resetDefault} title="从磁盘重新读取 config/*.json"><RefreshCcw size={16} /> 重新加载</button>
-                <button onClick={exportConfig}><Download size={16} /> 导出配置</button>
               </div>
             )}
           </div>

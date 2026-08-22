@@ -20,6 +20,7 @@ import {
   seriesCoverageGaps,
   seriesDraftHasContent,
   stepHasContent,
+  voteRatio,
 } from "./contributeSeries";
 
 describe("buildSeriesContent", () => {
@@ -111,13 +112,15 @@ describe("draft content detection", () => {
 });
 
 describe("contribution list meta", () => {
-  it("distinguishes live-content revision states without treating the old version as offline", () => {
-    expect(contributionStatusLabel.revision_draft).toBe("修订草稿");
-    expect(contributionStatusLabel.revision_pending).toBe("修订审核中");
-    expect(contributionStatusLabel.revision_rejected).toBe("修订被驳回");
-    expect(contributionHasPublishedVersion("revision_draft")).toBe(true);
-    expect(contributionHasPublishedVersion("revision_pending")).toBe(true);
-    expect(contributionHasPublishedVersion("revision_rejected")).toBe(true);
+  it("labels the five live statuses (no more separate revision states)", () => {
+    expect(contributionStatusLabel.draft).toBe("草稿");
+    expect(contributionStatusLabel.pending).toBe("待审批");
+    expect(contributionStatusLabel.approved).toBe("已通过");
+    expect(contributionStatusLabel.rejected).toBe("已驳回");
+    expect(contributionStatusLabel.withdrawn).toBe("已撤回");
+    expect(contributionHasPublishedVersion("approved")).toBe(true);
+    expect(contributionHasPublishedVersion("pending")).toBe(false);
+    expect(contributionHasPublishedVersion("draft")).toBe(false);
   });
 
   it("returns the bare day for unapproved items (status now lives in the chip)", () => {
@@ -147,20 +150,26 @@ describe("contribution list meta", () => {
     })).toBe("26/08/20 · 点赞 86% · 完成 100%");
   });
 
-  it("shows the old live version metrics during revision states", () => {
+  it("only shows vote/completion metrics for approved items", () => {
     expect(contributionVoteTail({ kind: "task", status: "pending" })).toBe("");
-    expect(contributionVoteTail({ kind: "gender", status: "approved" })).toBe("");
+    expect(contributionVoteTail({ kind: "task", status: "withdrawn", likeRatio: 80 })).toBe("");
     expect(contributionVoteTail({ kind: "task", status: "approved", likeRatio: 86 })).toBe("点赞 86%");
-    expect(contributionVoteTail({ kind: "task", status: "revision_pending", likeRatio: 80 })).toBe("点赞 80%");
     expect(contributionVoteTail({ kind: "series", status: "approved", likeRatio: 86, completionRate: 100 })).toBe("点赞 86% · 完成 100%");
   });
 
-  it("uses name as the contribution title", () => {
+  it("uses name as the contribution title, falling back to the first variant's text", () => {
     expect(contributionDraftTitle({ name: "投稿任务", variants: [{ text: "正文" }] })).toBe("投稿任务");
-    expect(contributionDraftTitle({ label: "狐狸" })).toBe("狐狸");
+    expect(contributionDraftTitle({ variants: [{ text: "只有一份文案" }] })).toBe("只有一份文案");
   });
 
   it("formats the admin review subtitle with queue counts", () => {
-    expect(formatContributionReviewSubtitle({ pending: 9, revisionPending: 4, unpublishPending: 1 })).toBe("待审 9 · 复审 4 · 下架 1");
+    expect(formatContributionReviewSubtitle({ pending: 9 })).toBe("待审 9 条");
+  });
+
+  it("computes the like ratio from raw counts, 0 with no votes", () => {
+    expect(voteRatio(0, 0)).toBe(0);
+    expect(voteRatio(undefined, undefined)).toBe(0);
+    expect(voteRatio(3, 1)).toBe(75);
+    expect(voteRatio(1, 3)).toBe(25);
   });
 });

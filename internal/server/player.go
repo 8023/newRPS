@@ -2,6 +2,7 @@ package server
 
 import (
 	"crypto/subtle"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
@@ -29,7 +30,8 @@ func (s *Server) publicConfig() types.AppConfig {
 }
 
 // buildPunishmentSeriesSummaries 从系列缓存生成建房用公开目录（无任务文案/taskIds）。
-// 只要有步骤就入选；阵营覆盖不全不再拦截（运行时未覆盖阵营会从随机池抽替补）。
+// 已通过审核的新系列保证每一步覆盖其声明的目标阵营；这里只检查运行时结构至少有一步。
+// 对目标阵营之外的玩家及历史异常数据，仍由运行时从其阵营随机池抽替补。
 func (s *Server) buildPunishmentSeriesSummaries() []types.PunishmentSeriesSummary {
 	out := make([]types.PunishmentSeriesSummary, 0, len(s.punishmentSeriesCache))
 	for _, series := range s.punishmentSeriesCache {
@@ -41,8 +43,8 @@ func (s *Server) buildPunishmentSeriesSummaries() []types.PunishmentSeriesSummar
 			Name:                 series.Name,
 			RoomNamePool:         series.RoomNamePool,
 			RoomBackgroundImages: series.RoomBackgroundImages,
-			StepCount:            len(series.Steps),
-			PublishedVersion:     series.ContentVersion,
+			StepCount:            series.StepCount,
+			Version:              series.Version,
 			TargetFactionIDs:     append([]string(nil), series.TargetFactionIDs...),
 		}
 		out = append(out, sum)
@@ -50,99 +52,90 @@ func (s *Server) buildPunishmentSeriesSummaries() []types.PunishmentSeriesSummar
 	return out
 }
 
-// reloadPunishmentCaches 从 SQLite 刷新内存缓存（启动 / admin save 后调用）。
-// 调用方须持有 s.mu，或在尚无并发访问的启动路径调用。
+// reloadPunishmentCaches 从 SQLite 刷新内存缓存（启动 / 共建投稿状态变化后调用）。
+// 调用方须持有 s.mu，或在尚无并发访问的启动路径调用。子任务表一行可能带多份文案变体
+// （见 sub_tasks.variants），这里按变体展开成扁平的 []types.PunishmentTaskConfig——
+// 与旧版"一行一变体"物理存储时期完全同构，punishment.go 的候选筛选/难度加权算法不用改。
 func (s *Server) reloadPunishmentCaches() {
-	if s.punishmentStore == nil {
+	if s.contributionStore == nil {
 		s.punishmentTasksCache = []types.PunishmentTaskConfig{}
 		s.punishmentSeriesCache = []types.PunishmentSeriesTaskConfig{}
 		s.rebuildPunishmentCacheIndexes()
 		return
 	}
-	if tasks, err := s.punishmentStore.listTasks(); err != nil {
+	if rows, err := s.contributionStore.tasks.listApprovedForCache(); err != nil {
 		s.errorLog("punishment_tasks_load_failed", err.Error())
 		s.punishmentTasksCache = []types.PunishmentTaskConfig{}
 	} else {
-		s.punishmentTasksCache = tasks
+		out := make([]types.PunishmentTaskConfig, 0, len(rows))
+		for _, r := range rows {
+			for _, v := range r.Draft.Variants {
+				out = append(out, types.PunishmentTaskConfig{
+					ID: r.ID, Version: r.Version, SeriesID: r.SeriesID, StepIndex: r.StepIndex,
+					Text: v.Text, FactionIDs: v.FactionIDs, TagIDs: r.Draft.TagIDs, Order: r.Draft.Order,
+					BackgroundImage: r.Draft.BackgroundImage, BackgroundOpacity: r.Draft.BackgroundOpacity,
+					ContributorPlayerID: r.ContributorPlayerID, ContributorName: s.playerName(r.ContributorPlayerID),
+					ContributorAnonymous: r.ContributorAnonymous, LikeCount: r.LikeCount, DownCount: r.DownCount,
+					CreatedAt: r.CreatedAt,
+				})
+			}
+		}
+		s.punishmentTasksCache = out
 	}
-	if series, err := s.punishmentStore.listSeries(); err != nil {
+	if rows, err := s.contributionStore.series.listApprovedForCache(); err != nil {
 		s.errorLog("punishment_series_load_failed", err.Error())
 		s.punishmentSeriesCache = []types.PunishmentSeriesTaskConfig{}
 	} else {
-		s.punishmentSeriesCache = series
+		out := make([]types.PunishmentSeriesTaskConfig, 0, len(rows))
+		for _, r := range rows {
+			pool := &types.RoomNamePool{}
+			if r.RoomNamePool != nil {
+				pool = &types.RoomNamePool{Subjects: r.RoomNamePool.Subjects, RoomWords: r.RoomNamePool.RoomWords, Adjectives: r.RoomNamePool.Adjectives}
+			}
+			out = append(out, types.PunishmentSeriesTaskConfig{
+				ID: r.ID, Version: r.Version, Name: r.Name, RoomNamePool: pool, RoomBackgroundImages: r.RoomBackgroundImages,
+				TargetFactionIDs: r.TargetFactionIDs, ContributorPlayerID: r.ContributorPlayerID,
+				ContributorName: s.playerName(r.ContributorPlayerID), ContributorAnonymous: r.ContributorAnonymous, CreatedAt: r.CreatedAt,
+			})
+		}
+		s.punishmentSeriesCache = out
 	}
 	s.rebuildPunishmentCacheIndexes()
 }
 
+// rebuildPunishmentCacheIndexes 从两份缓存切片重建按 ID 查找用的索引：
+// punishmentSeriesByID（系列元信息）、punishmentSeriesSteps（某系列当前所有步骤展开出的
+// 变体列表，按 StepIndex 过滤即为某一步）、每个系列的 StepCount（DISTINCT StepIndex 数）。
 func (s *Server) rebuildPunishmentCacheIndexes() {
-	s.punishmentTaskByID = make(map[string]*types.PunishmentTaskConfig, len(s.punishmentTasksCache))
-	for i := range s.punishmentTasksCache {
-		task := &s.punishmentTasksCache[i]
-		s.punishmentTaskByID[task.ID] = task
-	}
 	s.punishmentSeriesByID = make(map[string]*types.PunishmentSeriesTaskConfig, len(s.punishmentSeriesCache))
 	for i := range s.punishmentSeriesCache {
 		series := &s.punishmentSeriesCache[i]
 		s.punishmentSeriesByID[series.ID] = series
 	}
-}
-
-func (s *Server) taskIndexForRead() map[string]*types.PunishmentTaskConfig {
-	if s.punishmentTaskByID != nil {
-		return s.punishmentTaskByID
-	}
-	// 单元测试和少量构造型调用会只注入切片而不走 reload；返回临时索引且不缓存，避免测试
-	// 随后 append/替换切片时留下悬空指针。生产路径始终使用上面的持久索引。
-	out := make(map[string]*types.PunishmentTaskConfig, len(s.punishmentTasksCache))
+	s.punishmentSeriesSteps = make(map[string][]*types.PunishmentTaskConfig, len(s.punishmentSeriesCache))
+	stepSets := make(map[string]map[int]struct{}, len(s.punishmentSeriesCache))
 	for i := range s.punishmentTasksCache {
-		out[s.punishmentTasksCache[i].ID] = &s.punishmentTasksCache[i]
-	}
-	return out
-}
-
-func (s *Server) validatePunishmentTask(t types.PunishmentTaskConfig) error {
-	tagSet := map[string]struct{}{}
-	for _, tag := range s.cfg.PunishmentTags {
-		tagSet[tag.ID] = struct{}{}
-	}
-	factionSet := map[string]struct{}{}
-	for _, f := range s.cfg.GenderFactions {
-		factionSet[f.ID] = struct{}{}
-	}
-	label := t.ID
-	if strings.TrimSpace(t.Text) == "" {
-		return fmt.Errorf("随机任务 %s 的文案不能为空", label)
-	}
-	for _, tid := range t.TagIDs {
-		if strings.HasPrefix(tid, "series:") {
+		task := &s.punishmentTasksCache[i]
+		if task.SeriesID == "" {
 			continue
 		}
-		if _, ok := tagSet[tid]; !ok {
-			return fmt.Errorf("随机任务 %s 引用了不存在的标签 %s", label, tid)
+		s.punishmentSeriesSteps[task.SeriesID] = append(s.punishmentSeriesSteps[task.SeriesID], task)
+		if stepSets[task.SeriesID] == nil {
+			stepSets[task.SeriesID] = map[int]struct{}{}
 		}
+		stepSets[task.SeriesID][task.StepIndex] = struct{}{}
 	}
-	if t.Order != -1 && (t.Order < 1 || t.Order > 99) {
-		return fmt.Errorf("随机任务 %s 的任务难度必须是 -1（不参与随机抽取）或在 1 到 99 之间", label)
+	for id, series := range s.punishmentSeriesByID {
+		series.StepCount = len(stepSets[id])
 	}
-	for _, fid := range t.FactionIDs {
-		if _, ok := factionSet[fid]; !ok {
-			return fmt.Errorf("随机任务 %s 勾选了不存在的阵营 %s", label, fid)
-		}
-	}
-	if t.BackgroundImages == nil {
-		return fmt.Errorf("随机任务 %s 的背景图库格式不正确", label)
-	}
-	if t.BackgroundOpacity < 0 || t.BackgroundOpacity > 1 {
-		return fmt.Errorf("随机任务 %s 的背景透明率必须在 0 到 1 之间", label)
-	}
-	return nil
 }
 
 // cascadeRemovedTagsFromTasks 在惩罚配置保存后：从任务池 tagIds 里摘除已删除的标签 ID。
 // 不阻断保存；空标签任务合法保留，可继续供系列按 ID 引用，也仍会进入随机候选池
-// （未勾选标签的任务无视标签筛选，见 candidateTasksForTags）。
+// （未勾选标签的任务无视标签筛选，见 candidateTasksForTags）。这是系统自动维护，不是
+// 投稿人编辑内容，直接原地改当前生效行的 tag_ids 列，不产生新版本。
 func (s *Server) cascadeRemovedTagsFromTasks(oldTags, newTags []types.PunishmentTagConfig) {
-	if s.punishmentStore == nil || len(s.punishmentTasksCache) == 0 {
+	if s.contributionStore == nil || len(s.punishmentTasksCache) == 0 {
 		return
 	}
 	newSet := map[string]struct{}{}
@@ -158,31 +151,39 @@ func (s *Server) cascadeRemovedTagsFromTasks(oldTags, newTags []types.Punishment
 	if len(removed) == 0 {
 		return
 	}
+	seen := map[string]struct{}{}
 	changed := false
-	next := make([]types.PunishmentTaskConfig, len(s.punishmentTasksCache))
-	copy(next, s.punishmentTasksCache)
-	for i := range next {
-		// 重新切片避免共享底层数组副作用
-		orig := append([]string(nil), next[i].TagIDs...)
-		filtered := orig[:0]
-		for _, id := range orig {
+	for _, task := range s.punishmentTasksCache {
+		if _, ok := seen[task.ID]; ok {
+			continue
+		}
+		seen[task.ID] = struct{}{}
+		filtered := make([]string, 0, len(task.TagIDs))
+		rowChanged := false
+		for _, id := range task.TagIDs {
 			if _, gone := removed[id]; gone {
-				changed = true
+				rowChanged = true
 				continue
 			}
 			filtered = append(filtered, id)
 		}
-		next[i].TagIDs = filtered
+		if !rowChanged {
+			continue
+		}
+		changed = true
+		tagJSON, err := json.Marshal(filtered)
+		if err != nil {
+			continue
+		}
+		if _, err := s.db.Exec(`UPDATE sub_tasks SET tag_ids = ? WHERE id = ? AND version = (SELECT MAX(version) FROM sub_tasks WHERE id = ?)`,
+			string(tagJSON), task.ID, task.ID); err != nil {
+			s.errorLog("punishment_task_tag_cascade_failed", err.Error())
+		}
 	}
 	if !changed {
 		return
 	}
-	if err := s.punishmentStore.replaceTasks(next); err != nil {
-		s.errorLog("punishment_tag_cascade_failed", err.Error())
-		return
-	}
-	s.punishmentTasksCache = next
-	s.rebuildPunishmentCacheIndexes()
+	s.reloadPunishmentCaches()
 }
 
 // adminLoginFailure* 常量：管理员口令校验失败的锁定阈值。只统计失败次数（正确口令的

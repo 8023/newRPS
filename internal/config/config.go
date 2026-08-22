@@ -156,6 +156,14 @@ func cleanLines(values []string) []string {
 	return items
 }
 
+// firstOf 取字符串切片的第一个元素；旧版"背景图数组"迁移为单值字段时使用。
+func firstOf(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
+}
+
 func clampNumber(value float64, min, max float64) int {
 	if math.IsNaN(value) || math.IsInf(value, 0) {
 		return int(min)
@@ -342,7 +350,7 @@ func punishmentsFileFromConfig(cfg types.AppConfig) punishmentsFileData {
 // punishmentsFileWriteData 是实际写盘用的形态：在 punishmentsFileData 之外，原样带上
 // 磁盘上尚未被一次性迁移消费掉的旧 tasks/seriesTasks 字段（若有），避免任何一次
 // config:save/config:reset（包括与惩罚任务毫无关系的字段改动）把这两个字段连带整份
-// 文件一起冲掉——迁移是否已跑完全看 SQLite 里 punishment_tasks 表是否有行，不看
+// 文件一起冲掉——迁移是否已跑完全看 SQLite 里 sub_tasks 表是否有行，不看
 // 磁盘文件；写盘时无条件保留能读到的旧字段，多写不多余（迁移完成后就是纯死数据，
 // 但比"抢在迁移之前被写没"安全）。
 type punishmentsFileWriteData struct {
@@ -754,9 +762,9 @@ func ValidateConfig(input types.AppConfig) (types.AppConfig, error) {
 	if input.PunishmentRandomSettings.MaxSeriesSteps < input.PunishmentRandomSettings.MinSeriesSteps {
 		return input, fmt.Errorf("系列任务最高步数不能小于最低步数")
 	}
-	// 任务池 / 系列任务已迁到 SQLite，不再随 AppConfig 校验，也不再支持管理员后台直接
-	// 增删改——内容一律走玩家投稿 + 管理员审批（见 server 的 contribution_publish.go /
-	// contribution_crud.go 与 s.validatePunishmentTask）。
+	// 任务池 / 系列任务已迁到 SQLite（sub_tasks / series，全量版本化），不再随 AppConfig
+	// 校验，也不再支持管理员后台直接增删改——内容一律走玩家投稿 + 管理员审批（见 server 的
+	// contribution_service.go / contribution_admin.go 与 decodeStepDraft/decodeSeriesDraft）。
 	if input.PlayerPunishmentRoomNamePool == nil || len(input.PlayerPunishmentRoomNamePool.Subjects) == 0 || len(input.PlayerPunishmentRoomNamePool.RoomWords) == 0 {
 		return input, fmt.Errorf("玩家发布任务随机房名至少需要名词/动词和房间词")
 	}
@@ -1080,7 +1088,7 @@ func convertPunishmentRecords(records []punishmentMigrationRecord, factionIDsByG
 					Text:              strings.TrimSpace(task.Text),
 					FactionIDs:        cleanLines(task.FactionIDs),
 					Order:             order,
-					BackgroundImages:  cleanLines(task.BackgroundImages),
+					BackgroundImage:   firstOf(cleanLines(task.BackgroundImages)),
 					BackgroundOpacity: task.BackgroundOpacity,
 				})
 				continue
@@ -1116,7 +1124,7 @@ func convertPunishmentRecords(records []punishmentMigrationRecord, factionIDsByG
 					Text:              text,
 					FactionIDs:        factionIDs,
 					Order:             order,
-					BackgroundImages:  cleanLines(task.BackgroundImages),
+					BackgroundImage:   firstOf(cleanLines(task.BackgroundImages)),
 					BackgroundOpacity: task.BackgroundOpacity,
 				})
 				created++
@@ -1124,14 +1132,14 @@ func convertPunishmentRecords(records []punishmentMigrationRecord, factionIDsByG
 			if created == 0 {
 				out.Tasks = append(out.Tasks, types.PunishmentTaskConfig{
 					ID: baseID, Text: "请完成本局惩罚。", FactionIDs: []string{}, Order: order,
-					BackgroundImages: cleanLines(task.BackgroundImages), BackgroundOpacity: task.BackgroundOpacity,
+					BackgroundImage: firstOf(cleanLines(task.BackgroundImages)), BackgroundOpacity: task.BackgroundOpacity,
 				})
 			}
 		}
 		if len(out.Tasks) == 0 {
 			out.Tasks = []types.PunishmentTaskConfig{{
 				ID: "task1", Text: "请完成本局惩罚。", FactionIDs: []string{}, Order: 50,
-				BackgroundImages: []string{}, BackgroundOpacity: 0.22,
+				BackgroundImage: "", BackgroundOpacity: 0.22,
 			}}
 		}
 		converted = append(converted, out)
@@ -1312,7 +1320,7 @@ func flattenPunishmentTypesToFile(records []punishmentMigrationRecord) punishmen
 				TagIDs:            []string{tagID},
 				FactionIDs:        cleanLines(task.FactionIDs),
 				Order:             order,
-				BackgroundImages:  cleanLines(task.BackgroundImages),
+				BackgroundImage:   firstOf(cleanLines(task.BackgroundImages)),
 				BackgroundOpacity: task.BackgroundOpacity,
 			})
 		}

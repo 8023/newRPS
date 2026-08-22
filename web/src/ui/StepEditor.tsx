@@ -29,8 +29,9 @@ export function StepEditor({
   /** 与「封面图预览」同一行、分布在左侧的附加控件（如「匿名贡献」）；仅单份编辑场景
       （随机任务）传入，系列每一步各自没有独立的匿名开关，不传。 */
   rightOfPreview?: ReactNode;
-  /** 系列每一步的上移/下移/删除/添加；随机任务不传。传入时启用两栏布局：左侧提示语/
-      难度/封面图，右侧惩罚标签 + 这四个按钮（见 stepActions 传入分支）。 */
+  /** 系列每一步的上移/下移/删除/添加；随机任务不传。传入且这一步要进随机池时启用两栏
+      布局：左栏惩罚标签，右栏提示语/难度/封面图 + 这四个按钮；未勾选「同时发布到随机
+      任务」时退化为单栏，封面图与这四个按钮合并一行（见 stepActions 传入分支）。 */
   stepActions?: ReactNode;
   /** 点击过一次「提交审批」但校验没通过：把还没填好的文案输入框标红，
       与阵营选重复时的 .conflict 标红是同一套视觉语言。不传时按 false 处理。 */
@@ -171,24 +172,32 @@ export function StepEditor({
         </label>
       ) : null}
       {stepActions ? (
-        // 系列每一步：两栏布局——左栏是提示语 + 难度/封面图（合并一行、各占左栏一半宽度，
-        // 结合两栏布局即整行的四分之一）+ 紧跟在下面的上移/下移/删除/添加；右栏只放惩罚
-        // 标签。按钮和封面图选择器同处左栏、按普通文档流排在其后，不管难度字段是否因未勾
-        // 选「同时发布到随机任务」而隐藏，都稳稳落在「选取文件」按钮下方，不会因为两栏各
-        // 自独立起高而错位对到「封面图」文字那一行（见 styles.css .step-columns 的说明）。
-        <div className="step-columns">
-          <div className="step-column">
-            {showPoolFields ? <p className="hint">{DIFFICULTY_GUIDE}</p> : null}
-            <div className="contribute-split-row">
-              {showPoolFields ? difficultyField : null}
-              {coverPicker}
+        showPoolFields ? (
+          // 系列每一步、且这一步要进随机池：两栏布局——左栏惩罚标签，右栏是提示语 +
+          // 难度/封面图（合并一行，各占右栏一半宽度）+ 紧跟在下面的上移/下移/删除/添加。
+          <div className="step-columns">
+            <div className="step-column">
+              {tagsFieldset}
             </div>
+            <div className="step-column">
+              <p className="hint">{DIFFICULTY_GUIDE}</p>
+              <div className="contribute-split-row">
+                {difficultyField}
+                {coverPicker}
+              </div>
+              <div className="series-step-actions">{stepActions}</div>
+            </div>
+          </div>
+        ) : (
+          // 未勾选「同时发布到随机任务」：没有标签/难度可放，退化成单栏——封面图选择器占
+          // 左半，上移/下移/删除/添加四个按钮占右半（各占整行八分之一），且都对齐到「选取
+          // 文件」按钮所在的那一行，而不是上面「封面图」三个字那一行（.contribute-split-row
+          // 的 align-items:end 保证这一点，与「难度/封面图」合并一行是同一套写法）。
+          <div className="contribute-split-row">
+            {coverPicker}
             <div className="series-step-actions">{stepActions}</div>
           </div>
-          <div className="step-column">
-            {showPoolFields ? tagsFieldset : null}
-          </div>
-        </div>
+        )
       ) : (
         <>
           {showPoolFields ? tagsFieldset : null}

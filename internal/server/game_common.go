@@ -280,7 +280,11 @@ func (s *Server) buildMatchHistoryShell(room *RoomState, result types.RoundResul
 	for i, p := range punishedPlayers {
 		punishedNames[i] = playerShortName(p)
 	}
-	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, result)
+	trigger := "round_end"
+	if resultLabel == "吃子惩罚" {
+		trigger = "piece_capture"
+	}
+	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, result, trigger)
 	item := types.RoundHistoryItem{
 		ID:              randomID(),
 		Round:           len(room.RoundHistory) + 1,

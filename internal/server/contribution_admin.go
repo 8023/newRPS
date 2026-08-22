@@ -3,13 +3,20 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/doumiao/newRPS/internal/config"
 	"github.com/doumiao/newRPS/internal/types"
 )
 
+// maxGenderLabelRunes：性别/阵营 ID、名称的字符数上限（adminSaveGenders 用）。
+const maxGenderLabelRunes = 40
+
+// handleAdminContributionAction 是后台"共建审核"（action 前缀 "contribution"）+「性别与
+// 阵营」批量管理（action 为 "gendersGet"/"gendersSave"，与共建投稿系统无关，见
+// genderstore.go 顶部注释）共用的管理员操作入口。共建审核只保留批准/驳回/下架/取消撤回/
+// 批注这些审核类操作，内容本身（新增/修改文案）一律走"玩家投稿"，没有绕过投稿记录直接
+// 增删改任务池/系列表的入口。
 func (s *Server) handleAdminContributionAction(action string, raw map[string]any) (any, error) {
 	if action == "gendersGet" || action == "gendersSave" {
 		if s.genderStore == nil {
@@ -17,6 +24,12 @@ func (s *Server) handleAdminContributionAction(action string, raw map[string]any
 		}
 	} else if s.contributionStore == nil {
 		return nil, fmt.Errorf("共建存储不可用")
+	}
+	if action == "gendersGet" {
+		return map[string]any{"genders": s.cfg.Genders, "factions": s.cfg.GenderFactions}, nil
+	}
+	if action == "gendersSave" {
+		return s.adminSaveGenders(raw)
 	}
 	id, err := optionalStringField(raw, "id")
 	if err != nil {
@@ -27,223 +40,443 @@ func (s *Server) handleAdminContributionAction(action string, raw map[string]any
 	if err != nil {
 		return nil, err
 	}
+	if err := validateReviewComment(comment); err != nil {
+		return nil, err
+	}
+	kind, err := optionalStringField(raw, "kind")
+	if err != nil {
+		return nil, err
+	}
+	kind = strings.TrimSpace(kind)
 	adminID, _ := raw["adminId"].(string)
+	if strings.HasPrefix(action, "contribution") && action != "contributionList" && action != "contributionPendingOverview" {
+		// kind 为空继续按历史接口解释为 task；显式传入未知值必须拒绝，不能落入 task 分支。
+		if kind == "" {
+			kind = types.ContributionKindTask
+		} else if !validContributionKind(kind) {
+			return nil, fmt.Errorf("投稿类型无效")
+		}
+	}
 	switch action {
 	case "contributionList":
 		status, err := optionalStringField(raw, "status")
 		if err != nil {
 			return nil, err
 		}
-		kind, err := optionalStringField(raw, "kind")
-		if err != nil {
-			return nil, err
-		}
 		status = strings.TrimSpace(status)
-		kind = strings.TrimSpace(kind)
 		if status != "" && !validContributionStatus(status) {
 			return nil, fmt.Errorf("投稿状态无效")
 		}
 		if kind != "" && !validContributionKind(kind) {
 			return nil, fmt.Errorf("投稿类型无效")
 		}
-		list, err := s.contributionStore.listByStatus(status, kind)
+		items, err := s.adminListContributions(kind, status)
 		if err != nil {
 			return nil, err
 		}
-		counts, err := contributionReviewCountsMap(s.contributionStore)
-		if err != nil {
-			return nil, err
-		}
-		// 必须包成 object：protobuf Struct 不能以顶层数组作为 RPC 载荷，
-		// 直接返回 []Submission 会被编成 {"_": [...]}，前端 Array.isArray 为假，列表永远是空的。
-		return map[string]any{"items": list, "counts": counts}, nil
-	case "contributionCounts":
-		return contributionReviewCountsMap(s.contributionStore)
+		// 已通过投稿的点赞率/系列完成率一次性算好随列表下发，前端不必再对每条已通过
+		// 投稿单独发一次 contributionGet——审核队列条数一多，逐条请求很容易在几秒内
+		// 撞上 admin:action 的速率限制（见 AdminContributionReview.tsx 的 useEffect 注释）。
+		s.fillContributionListMeta(items)
+		// 必须包成 object：protobuf Struct 不能以顶层数组作为 RPC 载荷。
+		return map[string]any{"items": items}, nil
 	case "contributionPendingOverview":
-		genders, err := s.contributionStore.listStatusIn(types.ContributionKindGender, []string{
-			types.ContributionPending, types.ContributionRevisionPending,
-			types.ContributionUnpublishPending, types.ContributionRejected,
-			types.ContributionRevisionDraft, types.ContributionRevisionRejected,
-		})
+		matrix, poolStats, err := s.contributionPendingOverview()
 		if err != nil {
 			return nil, err
 		}
-		matrix, err := s.contributionStore.reviewCountsMatrix([]string{types.ContributionKindTask, types.ContributionKindSeries})
-		if err != nil {
-			return nil, err
-		}
-		// poolStats：当前已审批通过、实际躺在池子里的条数/组数（与「总览」里按投稿状态数的
-		// 计数是两回事——那边数的是投稿流水，这里数的是任务池/系列表本身的行数），供管理员
-		// 一眼看出内容库规模。口径与数据分析「随机任务」「系列任务」增长图一致，见
-		// punishmentStore.randomTaskGroupCount / seriesGroupCount。
-		poolStats := map[string]int{}
-		if s.punishmentStore != nil {
-			if n, err := s.punishmentStore.randomTaskGroupCount(); err == nil {
-				poolStats["randomTasks"] = n
-			}
-			if n, err := s.punishmentStore.seriesGroupCount(); err == nil {
-				poolStats["series"] = n
-			}
-		}
-		return map[string]any{"genders": genders, "counts": matrix, "poolStats": poolStats}, nil
-	case "contributionUpdateComment":
-		if err := validateAdminContributionID(id); err != nil {
-			return nil, err
-		}
-		if err := validateReviewComment(comment); err != nil {
-			return nil, err
-		}
-		return nil, s.contributionStore.updateReviewComment(id, comment)
-	case "contributionRevertReject":
-		if err := validateAdminContributionID(id); err != nil {
-			return nil, err
-		}
-		return nil, s.contributionStore.revertRejection(id)
+		return map[string]any{"counts": matrix, "poolStats": poolStats}, nil
 	case "contributionGet":
 		if err := validateAdminContributionID(id); err != nil {
 			return nil, err
 		}
-		sub, err := s.contributionStore.get(id)
+		if kind == "" {
+			kind = types.ContributionKindTask
+		}
+		item, err := s.contributionStore.get(kind, id)
 		if err != nil {
 			return nil, err
 		}
-		ver, err := s.contributionStore.getVersion(id, sub.ActiveVersion)
-		if err != nil {
+		if kind == types.ContributionKindSeries {
+			item.Completion = s.seriesCompletionStats(id)
+		}
+		item.SubmitterName = s.playerName(item.SubmitterID)
+		return item, nil
+	case "contributionUpdateComment":
+		if err := validateAdminContributionID(id); err != nil {
 			return nil, err
 		}
-		st, _ := s.contributionStore.submissionVoteAggregate(sub.ID, sub.PublishedVersion)
-		var completion *types.SeriesCompletionStats
-		if sub.Kind == types.ContributionKindSeries {
-			completion = s.seriesCompletionStats(sub.PublishedTargetID, sub.PublishedVersion)
+		if err := s.adminUpdateComment(kind, id, comment); err != nil {
+			return nil, err
 		}
-		return map[string]any{"submission": sub, "version": ver, "votes": st, "completion": completion}, nil
+		return map[string]any{"ok": true}, nil
 	case "contributionReject":
 		if err := validateAdminContributionID(id); err != nil {
 			return nil, err
 		}
-		if err := validateReviewComment(comment); err != nil {
+		if err := s.adminReject(kind, id, adminID, comment); err != nil {
 			return nil, err
 		}
-		return nil, s.contributionStore.reject(id, adminID, comment)
+		s.afterContributionChange()
+		return map[string]any{"ok": true}, nil
+	case "contributionRevertReject":
+		if err := validateAdminContributionID(id); err != nil {
+			return nil, err
+		}
+		if err := s.adminSetStatus(kind, id, types.ContributionPending, adminID, comment); err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true}, nil
 	case "contributionPublish", "contributionReview":
 		if err := validateAdminContributionID(id); err != nil {
 			return nil, err
 		}
-		if err := validateReviewComment(comment); err != nil {
-			return nil, err
-		}
-		reviewed, err := optionalStringField(raw, "reviewedContent")
+		reviewedContent, err := optionalStringField(raw, "reviewedContent")
 		if err != nil {
 			return nil, fmt.Errorf("审核内容格式错误")
 		}
-		if reviewed == "" {
-			if obj, ok := raw["reviewed"].(map[string]any); ok {
-				b, err := json.Marshal(obj)
-				if err != nil {
-					return nil, fmt.Errorf("审核内容格式错误")
-				}
-				reviewed = string(b)
-			} else if _, exists := raw["reviewed"]; exists {
-				return nil, fmt.Errorf("审核内容格式错误")
-			}
-		}
-		// 只有性别发布会改变玩家档案解析结果。任务/系列审批是低频管理操作，但不该因此
-		// 在全局游戏锁内遍历“全部玩家 × 全部房间”刷新座位快照。
-		sub, err := s.contributionStore.get(id)
-		if err != nil {
+		if err := s.adminApprove(kind, id, adminID, comment, reviewedContent); err != nil {
 			return nil, err
 		}
-		if err := s.publishContribution(id, adminID, reviewed, comment); err != nil {
-			return nil, err
-		}
-		if sub.Kind == types.ContributionKindGender {
-			s.refreshAllPlayersForConfig()
-		}
-		s.emitConfigUpdate()
-		s.broadcastLobby()
+		s.afterContributionChange()
 		return map[string]any{"ok": true}, nil
 	case "contributionUnpublish":
 		if err := validateAdminContributionID(id); err != nil {
 			return nil, err
 		}
-		if err := validateReviewComment(comment); err != nil {
+		if err := s.adminSetStatus(kind, id, types.ContributionWithdrawn, adminID, comment); err != nil {
 			return nil, err
 		}
-		sub, err := s.contributionStore.get(id)
-		if err != nil {
-			return nil, err
-		}
-		if err := s.unpublishContribution(id, adminID, comment); err != nil {
-			return nil, err
-		}
-		if sub.Kind == types.ContributionKindGender {
-			s.refreshAllPlayersForConfig()
-		}
-		s.emitConfigUpdate()
-		s.broadcastLobby()
+		s.afterContributionChange()
 		return map[string]any{"ok": true}, nil
-	case "contributionSetVoteOverride":
-		kind, _ := raw["targetKind"].(string)
-		tid, _ := raw["targetId"].(string)
-		kind, tid = strings.TrimSpace(kind), strings.TrimSpace(tid)
-		ver, err := intFromAny(raw["targetVersion"])
-		if err != nil || ver < 1 {
-			return nil, fmt.Errorf("评价版本无效")
-		}
-		ratio, err := intFromAny(raw["displayRatio"])
-		if err != nil {
-			return nil, fmt.Errorf("覆盖点赞率格式无效")
-		}
-		note, err := optionalStringField(raw, "note")
-		if err != nil {
+	case "contributionRevertWithdraw":
+		if err := validateAdminContributionID(id); err != nil {
 			return nil, err
 		}
-		if err := validateVoteTarget(kind, tid); err != nil {
+		if err := s.validateContributionForApproval(kind, id, ""); err != nil {
 			return nil, err
 		}
-		if err := validateReviewComment(note); err != nil {
+		if err := s.adminSetStatus(kind, id, types.ContributionApproved, adminID, comment); err != nil {
 			return nil, err
 		}
-		exists, err := s.contributionStore.voteTargetExists(kind, tid, ver)
-		if err != nil {
-			return nil, err
-		}
-		if !exists {
-			return nil, errVoteInvalidTarget
-		}
-		return nil, s.contributionStore.setVoteOverride(kind, tid, ver, ratio, adminID, note)
-	case "contributionClearVoteOverride":
-		kind, _ := raw["targetKind"].(string)
-		tid, _ := raw["targetId"].(string)
-		kind, tid = strings.TrimSpace(kind), strings.TrimSpace(tid)
-		ver, err := intFromAny(raw["targetVersion"])
-		if err != nil || ver < 1 {
-			return nil, fmt.Errorf("评价版本无效")
-		}
-		if err := validateVoteTarget(kind, tid); err != nil {
-			return nil, err
-		}
-		return nil, s.contributionStore.clearVoteOverride(kind, tid, ver)
-	case "gendersGet":
-		return map[string]any{"genders": s.cfg.Genders, "factions": s.cfg.GenderFactions}, nil
-	case "gendersSave":
-		return s.adminSaveGenders(raw)
+		s.afterContributionChange()
+		return map[string]any{"ok": true}, nil
 	default:
-		// 路由到这里的都是前缀匹配 "contribution*" 或 genders* 的动作；真正未识别的动作
-		// 报错而不是悄悄返回成功，避免未来同前缀但语义无关的新动作被这里吞掉。
 		return nil, fmt.Errorf("未知的后台动作：%s", action)
 	}
 }
 
-// seriesCompletionStats 读一个系列版本的完成率统计——各玩家"已走步数/总步数"百分比样本的
-// 算术平均（见 punishmentstore.go 的 punishment_series_run_stats）。store 不可用、seriesID
-// 为空（该投稿还没真正发布过）、或查询出错都返回 nil，调用方按"没有完成率数据"处理，
-// 不当错误传播。
-func (s *Server) seriesCompletionStats(seriesID string, version int) *types.SeriesCompletionStats {
+func (s *Server) afterContributionChange() {
+	s.reloadPunishmentCaches()
+	s.emitConfigUpdate()
+	s.broadcastLobby()
+}
+
+// adminListContributions 返回后台审核列表：kind 为空时任务+系列都列出。
+func (s *Server) adminListContributions(kind, status string) ([]types.ContributionItem, error) {
+	var out []types.ContributionItem
+	if kind == "" || kind == types.ContributionKindTask {
+		rows, err := s.contributionStore.tasks.listAdmin(status)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rows {
+			if r.SeriesID != "" {
+				continue // 系列步骤不在这个列表单独出现，跟着系列一起编辑/展示
+			}
+			out = append(out, subTaskToItem(r, false))
+		}
+	}
+	if kind == "" || kind == types.ContributionKindSeries {
+		rows, err := s.contributionStore.series.listAdmin(status)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rows {
+			out = append(out, seriesToItem(r, nil, false))
+		}
+	}
+	// 昵称不做快照，统一按 SubmitterID 现查当前显示名（与聊天板块的既有约定一致，
+	// 见 subTaskToItem/seriesToItem 顶部注释）。
+	for i := range out {
+		out[i].SubmitterName = s.playerName(out[i].SubmitterID)
+	}
+	return out, nil
+}
+
+// fillContributionListMeta 就地补全列表里"已通过"投稿的点赞率原料（LikeCount/DownCount）与
+// 系列完成率（Completion）——这两项只有已通过的版本才会展示（见 contributeSeries.ts 的
+// contributionHasPublishedVersion），其余状态不查，省几次数据库往返。任务的赞踩沿用
+// contributionStore.get 同一份 voteAggregate（汇总该 id 名下所有历史版本），系列则沿用
+// seriesToItem(withContent=true) 那份"汇总当前各步骤"的口径——都是复用既有单条查询逻辑，
+// 只是在一次 RPC 里对列表批量跑一遍，换来的是前端不用再为每条已通过投稿单开一次
+// admin:action 请求（那样做很容易在打开一个条目略多的板块时就把速率限制打满）。
+func (s *Server) fillContributionListMeta(items []types.ContributionItem) {
+	for i := range items {
+		it := &items[i]
+		if it.Status != types.ContributionApproved {
+			continue
+		}
+		switch it.Kind {
+		case types.ContributionKindTask:
+			likes, downs, err := s.contributionStore.tasks.voteAggregate(it.ID)
+			if err != nil {
+				continue
+			}
+			it.LikeCount, it.DownCount = likes, downs
+		case types.ContributionKindSeries:
+			steps, err := s.contributionStore.tasks.stepsForSeries(it.ID)
+			if err == nil {
+				for _, st := range steps {
+					it.LikeCount += st.LikeCount
+					it.DownCount += st.DownCount
+				}
+			}
+			it.Completion = s.seriesCompletionStats(it.ID)
+		}
+	}
+}
+
+// contributionPendingOverview 统计任务/系列两种类型各状态的投稿条数（后台"待处理"总览用），
+// 以及当前已发布的池子规模。
+func (s *Server) contributionPendingOverview() (map[string]any, map[string]int, error) {
+	statuses := []string{types.ContributionPending, types.ContributionApproved, types.ContributionRejected, types.ContributionWithdrawn}
+	matrix := map[string]any{}
+	for _, kind := range []string{types.ContributionKindTask, types.ContributionKindSeries} {
+		row := map[string]int{}
+		for _, st := range statuses {
+			row[st] = 0
+		}
+		items, err := s.adminListContributions(kind, "")
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, it := range items {
+			if _, ok := row[it.Status]; ok {
+				row[it.Status]++
+			}
+		}
+		matrix[kind] = row
+	}
+	poolStats := map[string]int{}
+	if n, err := s.contributionStore.tasks.approvedRandomPoolCount(); err == nil {
+		poolStats["randomTasks"] = n
+	}
+	if n, err := s.contributionStore.series.approvedSeriesCount(); err == nil {
+		poolStats["series"] = n
+	}
+	return matrix, poolStats, nil
+}
+
+func (s *Server) adminUpdateComment(kind, id, comment string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	now := nowMs()
+	var res interface{ RowsAffected() (int64, error) }
+	switch kind {
+	case types.ContributionKindSeries:
+		r, err := tx.Exec(`UPDATE series SET review_comment=?, updated_at=? WHERE id=? AND version=(SELECT MAX(version) FROM series WHERE id=?)`, comment, now, id, id)
+		if err != nil {
+			return err
+		}
+		res = r
+	case types.ContributionKindTask:
+		r, err := tx.Exec(`UPDATE sub_tasks SET review_comment=?, updated_at=?
+			WHERE id=? AND series_id='' AND active=1 AND version=(SELECT MAX(version) FROM sub_tasks WHERE id=?)`, comment, now, id, id)
+		if err != nil {
+			return err
+		}
+		res = r
+	default:
+		return fmt.Errorf("投稿类型无效")
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return errContributionNotFound
+	}
+	return tx.Commit()
+}
+
+func (s *Server) adminReject(kind, id, adminID, comment string) error {
+	return s.adminSetStatus(kind, id, types.ContributionRejected, adminID, comment)
+}
+
+// adminSetStatus 是所有"纯状态流转"型管理员操作的共用实现：驳回/撤销驳回/下架/取消撤回
+// 本质都只是把某个 id 最新那一行的 status 改掉，系列还要连带它当前的步骤一起改。
+func (s *Server) adminSetStatus(kind, id, status, adminID, comment string) error {
+	expected := map[string]string{
+		types.ContributionRejected:  types.ContributionPending,
+		types.ContributionPending:   types.ContributionRejected,
+		types.ContributionWithdrawn: types.ContributionApproved,
+		types.ContributionApproved:  types.ContributionWithdrawn,
+	}[status]
+	if expected == "" {
+		return errContributionBadStatus
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	switch kind {
+	case types.ContributionKindSeries:
+		row, err := s.contributionStore.series.latestTx(tx, id)
+		if err != nil {
+			return err
+		}
+		if row.Status != expected {
+			return errContributionBadStatus
+		}
+		if err := s.contributionStore.series.setStatus(tx, id, status, adminID, comment); err != nil {
+			return err
+		}
+		stepIDs, err := seriesStepIDsTx(tx, id)
+		if err != nil {
+			return err
+		}
+		for _, sid := range stepIDs {
+			if err := s.contributionStore.tasks.setStatus(tx, sid, status, adminID, comment); err != nil {
+				return err
+			}
+		}
+	case types.ContributionKindTask:
+		row, err := s.contributionStore.tasks.latestTx(tx, id)
+		if err != nil {
+			return err
+		}
+		if row.SeriesID != "" || !row.Active {
+			return errContributionNotFound
+		}
+		if row.Status != expected {
+			return errContributionBadStatus
+		}
+		if err := s.contributionStore.tasks.setStatus(tx, id, status, adminID, comment); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("投稿类型无效")
+	}
+	return tx.Commit()
+}
+
+// adminApprove 批准一份投稿：reviewedContent 非空时视为管理员就地改稿后批准
+// （插入一个新版本、内容用改后的，直接以 approved 状态生效）；为空则原样批准当前最新版本
+// （纯状态流转，不产生新版本）。
+func (s *Server) validateContributionForApproval(kind, id, reviewedContent string) error {
+	raw := strings.TrimSpace(reviewedContent)
+	if raw == "" {
+		item, err := s.contributionStore.get(kind, id)
+		if err != nil {
+			return err
+		}
+		raw, err = marshalDraft(item.Content)
+		if err != nil {
+			return err
+		}
+	}
+	if err := s.contributionStore.validateOwnedDraft(kind, raw); err != nil {
+		return err
+	}
+	if err := s.validateContributionRefs(kind, raw); err != nil {
+		return err
+	}
+	if kind == types.ContributionKindSeries {
+		if err := s.validateSeriesMinSteps(raw); err != nil {
+			return err
+		}
+		if err := s.validateSeriesMaxSteps(raw); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Server) adminApprove(kind, id, adminID, comment, reviewedContent string) error {
+	if err := s.validateContributionForApproval(kind, id, reviewedContent); err != nil {
+		return err
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	switch kind {
+	case types.ContributionKindSeries:
+		prev, err := s.contributionStore.series.latestTx(tx, id)
+		if err != nil {
+			return err
+		}
+		if prev.Status != types.ContributionPending {
+			return errContributionBadStatus
+		}
+		if strings.TrimSpace(reviewedContent) != "" {
+			draft, err := decodeSeriesDraft(reviewedContent)
+			if err != nil {
+				return err
+			}
+			seriesRow, err := s.contributionStore.series.insertVersion(tx, id, draft.Name, draft.TargetFactionIDs,
+				types.ContributionApproved, prev.ContributorPlayerID, prev.ContributorAnonymous, adminID, comment)
+			if err != nil {
+				return err
+			}
+			if _, err := s.contributionStore.saveSeriesSteps(tx, seriesRow.ID, prev.ContributorPlayerID, prev.ContributorAnonymous, draft.Steps); err != nil {
+				return err
+			}
+		} else if err := s.contributionStore.series.setStatus(tx, id, types.ContributionApproved, adminID, comment); err != nil {
+			return err
+		}
+		stepIDs, err := seriesStepIDsTx(tx, id)
+		if err != nil {
+			return err
+		}
+		for _, sid := range stepIDs {
+			if err := s.contributionStore.tasks.setStatus(tx, sid, types.ContributionApproved, adminID, comment); err != nil {
+				return err
+			}
+		}
+	case types.ContributionKindTask:
+		prev, err := s.contributionStore.tasks.latestTx(tx, id)
+		if err != nil {
+			return err
+		}
+		if prev.SeriesID != "" || !prev.Active {
+			return errContributionNotFound
+		}
+		if prev.Status != types.ContributionPending {
+			return errContributionBadStatus
+		}
+		if strings.TrimSpace(reviewedContent) != "" {
+			draft, err := decodeStepDraft(reviewedContent)
+			if err != nil {
+				return err
+			}
+			if _, err := s.contributionStore.tasks.insertVersion(tx, id, "", 0, draft,
+				types.ContributionApproved, prev.ContributorPlayerID, prev.ContributorAnonymous, adminID, comment); err != nil {
+				return err
+			}
+		} else if err := s.contributionStore.tasks.setStatus(tx, id, types.ContributionApproved, adminID, comment); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("投稿类型无效")
+	}
+	return tx.Commit()
+}
+
+// seriesCompletionStats 读一个系列的完成率统计——各玩家"已走步数/总步数"百分比样本的
+// 算术平均（见 punishmentstore.go 的 punishment_series_run_stats）。store 不可用或查询出错
+// 都返回 nil，调用方按"没有完成率数据"处理，不当错误传播。
+func (s *Server) seriesCompletionStats(seriesID string) *types.SeriesCompletionStats {
 	if s.punishmentStore == nil || seriesID == "" {
 		return nil
 	}
-	participants, percentSum, err := s.punishmentStore.seriesRunStats(seriesID, version)
+	row, err := s.contributionStore.series.latest(seriesID)
+	if err != nil {
+		return nil
+	}
+	participants, percentSum, err := s.punishmentStore.seriesRunStats(seriesID, row.Version)
 	if err != nil {
 		return nil
 	}
@@ -255,49 +488,10 @@ func (s *Server) seriesCompletionStats(seriesID string, version int) *types.Seri
 	return stats
 }
 
-func contributionReviewCountsMap(cs *contributionStore) (map[string]any, error) {
-	pending, revision, unpublish, err := cs.reviewQueueCounts()
-	if err != nil {
-		return nil, err
-	}
-	return map[string]any{
-		"pending":          pending,
-		"revisionPending":  revision,
-		"unpublishPending": unpublish,
-	}, nil
-}
-
-func intFromAny(v any) (int, error) {
-	switch n := v.(type) {
-	case float64:
-		if math.IsNaN(n) || math.IsInf(n, 0) || math.Trunc(n) != n || n > float64(math.MaxInt) || n < float64(math.MinInt) {
-			return 0, fmt.Errorf("整数格式无效")
-		}
-		return int(n), nil
-	case int:
-		return n, nil
-	default:
-		return 0, fmt.Errorf("整数格式无效")
-	}
-}
-
-func optionalStringField(raw map[string]any, key string) (string, error) {
-	v, exists := raw[key]
-	if !exists || v == nil {
-		return "", nil
-	}
-	s, ok := v.(string)
-	if !ok {
-		return "", fmt.Errorf("%s 格式无效", key)
-	}
-	return s, nil
-}
-
 func validContributionStatus(status string) bool {
 	switch status {
 	case types.ContributionDraft, types.ContributionPending, types.ContributionApproved,
-		types.ContributionRejected, types.ContributionWithdrawn, types.ContributionRevisionPending,
-		types.ContributionRevisionDraft, types.ContributionRevisionRejected, types.ContributionUnpublishPending:
+		types.ContributionRejected, types.ContributionWithdrawn:
 		return true
 	default:
 		return false
@@ -318,13 +512,20 @@ func validateReviewComment(comment string) error {
 	return nil
 }
 
-func validateVoteTarget(kind, id string) error {
-	if kind != types.ContributionKindTask || id == "" || len([]rune(id)) > maxContributionIDRunes {
-		return errVoteInvalidTarget
+func optionalStringField(raw map[string]any, key string) (string, error) {
+	v, exists := raw[key]
+	if !exists || v == nil {
+		return "", nil
 	}
-	return nil
+	s, ok := v.(string)
+	if !ok {
+		return "", fmt.Errorf("%s 格式无效", key)
+	}
+	return s, nil
 }
 
+// adminSaveGenders 是后台「性别与阵营」板块的直接批量增删改（与共建投稿系统无关，见
+// genderstore.go 顶部注释）：整份覆盖 gender_factions/gender_options 两张表。
 func (s *Server) adminSaveGenders(raw map[string]any) (any, error) {
 	b, err := json.Marshal(raw)
 	if err != nil {

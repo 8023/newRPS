@@ -228,7 +228,7 @@ func TestPunishmentTaskProgressIsPerPlayer(t *testing.T) {
 		t.Fatalf("new room progress should be empty, got %#v", room.PunishmentTaskProgress)
 	}
 	// p1 单人受罚的一局：只推进 p1 自己的计数，p2 不受影响。
-	if tasks := s.buildPunishmentTasksWithWinnerName(room, []*PlayerState{p1}, "胜"); len(tasks) != 1 || tasks[0].TaskText == "" {
+	if tasks := s.buildPunishmentTasksWithWinnerName(room, []*PlayerState{p1}, "胜", "round_end"); len(tasks) != 1 || tasks[0].TaskText == "" {
 		t.Fatalf("first round tasks=%#v", tasks)
 	}
 	if got := room.PunishmentTaskProgress["p1"]; got != 1 {
@@ -238,7 +238,7 @@ func TestPunishmentTaskProgressIsPerPlayer(t *testing.T) {
 		t.Fatalf("p2 progress should stay 0 while only p1 is punished, got %d", got)
 	}
 	// 换 p2 受罚的一局：p2 从自己的 0 起算 +1，p1 的进度不受影响。
-	if tasks := s.buildPunishmentTasksWithWinnerName(room, []*PlayerState{p2}, "胜"); len(tasks) != 1 || tasks[0].TaskText == "" {
+	if tasks := s.buildPunishmentTasksWithWinnerName(room, []*PlayerState{p2}, "胜", "round_end"); len(tasks) != 1 || tasks[0].TaskText == "" {
 		t.Fatalf("second round tasks=%#v", tasks)
 	}
 	if got := room.PunishmentTaskProgress["p2"]; got != 1 {
@@ -248,7 +248,7 @@ func TestPunishmentTaskProgressIsPerPlayer(t *testing.T) {
 		t.Fatalf("p1 progress should stay at 1 while p2 is punished, got %d", got)
 	}
 	// 平局双罚/双败：一局内同时惩罚两名玩家，二人各自的计数都 +1。
-	if tasks := s.buildPunishmentTasksWithWinnerName(room, []*PlayerState{p1, p2}, ""); len(tasks) != 2 || tasks[0].TaskText == "" || tasks[1].TaskText == "" {
+	if tasks := s.buildPunishmentTasksWithWinnerName(room, []*PlayerState{p1, p2}, "", "round_end"); len(tasks) != 2 || tasks[0].TaskText == "" || tasks[1].TaskText == "" {
 		t.Fatalf("double-punish round tasks=%#v", tasks)
 	}
 	if got := room.PunishmentTaskProgress["p1"]; got != 2 {
@@ -259,7 +259,7 @@ func TestPunishmentTaskProgressIsPerPlayer(t *testing.T) {
 	}
 	// 再抽几局只罚 p1，确认 p2 的进度维持不变（各自独立，不共用房间级计数）。
 	for i := 0; i < 3; i++ {
-		if tasks := s.buildPunishmentTasksWithWinnerName(room, []*PlayerState{p1}, "胜"); len(tasks) != 1 {
+		if tasks := s.buildPunishmentTasksWithWinnerName(room, []*PlayerState{p1}, "胜", "round_end"); len(tasks) != 1 {
 			t.Fatalf("round %d failed", i+4)
 		}
 	}

@@ -259,13 +259,6 @@ func TestSaveConfigMigratesLegacyPunishments(t *testing.T) {
 			"male":    "回答一个勇气问题。",
 			"female":  "回答一个心情问题。",
 		},
-		Tasks: []types.PunishmentTaskConfig{{
-			ID: "legacy-task", Variants: map[string]string{
-				"default": "回答一个默认问题。",
-				"male":    "回答一个勇气问题。",
-				"female":  "回答一个心情问题。",
-			},
-		}},
 		RoomNamePool: &types.RoomNamePool{
 			Adjectives: []string{"坦白"}, Subjects: []string{"真心话"}, RoomWords: []string{"小屋"},
 		},

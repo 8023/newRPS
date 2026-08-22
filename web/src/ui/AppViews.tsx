@@ -27,7 +27,7 @@ import { ContributionVote } from "./ContributionVote";
 import { contributionStatusLabel } from "./contributeSeries";
 import type { VoteCard } from "../shared/types";
 import { LiarsDicePanel } from "./LiarsDicePanel";
-import { seriesFactionWarning } from "./seriesFaction";
+import { seriesFactionWarning, seriesFactionWarningFor } from "./seriesFaction";
 import { GomokuPanel, GomokuScore } from "./GomokuPanel";
 import { JunglePanel, JungleScore, jungleSideLabel } from "./JunglePanel";
 import { ChessPanel, ChessScore, chessSideLabel } from "./ChessPanel";
@@ -512,6 +512,10 @@ export function Lobby({ config, lobby, me, punishmentTagPrefs, onError, onGoRoom
   async function joinRoom(roomId: string) {
     try {
       const targetRoom = lobby.rooms.find((room) => room.id === roomId);
+      if (targetRoom) {
+        const warn = seriesFactionWarningFor(targetRoom.punishmentSource, targetRoom.punishmentSeriesId, config, me);
+        if (warn && !window.confirm(warn)) return;
+      }
       if (targetRoom?.enableRanked && Boolean(targetRoom.enableExtremeRanked) !== Boolean(me.extremeModeEnabled)) {
         const ok = window.confirm(me.extremeModeEnabled
           ? "你是极限模式玩家，进入普通排位房后只能在观战席，不能上桌。确认进入？"
@@ -1138,6 +1142,9 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
                 </div>
               )}
             </div>
+            {/* 基础＋玩法放同一独立列，惩罚单独一列：两列各自按自身内容撑高，互不拉伸对方
+                （CSS Grid 同行拉伸会让矮的一侧内部被空白填满，见 .create-columns 的注释）。 */}
+            <div className="create-column">
             <div className="create-section">
               <h3>基础</h3>
               <input value={settings.name} onKeyDown={preventEnterSubmit} onChange={(event) => { setCustomRoomName(true); patch({ name: event.target.value }); }} placeholder="房间名" />
@@ -1223,6 +1230,8 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
                 </div>
               )}
             </div>
+            </div>
+            <div className="create-column">
             <div className="create-section">
               <h3>惩罚</h3>
               <Select
@@ -1309,6 +1318,7 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
                   )}
                 </>
               )}
+            </div>
             </div>
           </div>
         </div>
@@ -1935,14 +1945,16 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
                         <h4>{punishedPlayer ? <PlayerBadge player={punishedPlayer} compact /> : punishedPlayerName(room, playerId)} {isMine ? "（你）" : ""}</h4>
                         <em>{proof?.status === "approved" ? "已完成" : proof?.status === "pending" ? "待审核" : proof?.status === "rejected" ? "重做中" : taskAssigned ? "待提交" : "等任务"}</em>
                       </div>
-                      {taskAssigned && task && (
-                        <div className={`task-card designed-task-card ${task.backgroundImage ? "has-task-background" : ""}`} style={taskCardStyle}>
-                          <b>{isMine ? "你的任务" : "对方任务"}</b>
-                          <p>{taskTextOnly(taskText, task.factionLabel)}</p>
-                          {(taskAssignerPlayer || task.assignedByName) && <small>发布者：{taskAssignerPlayer ? displayPlayerName(taskAssignerPlayer) : task.assignedByName}</small>}
-                          {task.eventId && <div className="task-card-vote-row"><ContributionVoteLazy eventId={task.eventId} onError={onError} /></div>}
-                        </div>
-                      )}
+                      {taskAssigned && task && (() => {
+                        const assignerName = taskAssignerPlayer ? displayPlayerName(taskAssignerPlayer) : task.assignedByName;
+                        return (
+                          <div className={`task-card designed-task-card ${task.backgroundImage ? "has-task-background" : ""}`} style={taskCardStyle}>
+                            <b>{assignerName ? `由 ${assignerName} 发布给${isMine ? "你" : "对方"}的任务` : (isMine ? "你的任务" : "对方任务")}</b>
+                            <p>{taskTextOnly(taskText, task.factionLabel)}</p>
+                            {task.eventId && <div className="task-card-vote-row"><ContributionVoteLazy eventId={task.eventId} proofStatus={proof?.status} onError={onError} /></div>}
+                          </div>
+                        );
+                      })()}
                       {!taskAssigned && room.settings.punishmentSource === "player" && (
                         <div className="assign-task-box">
                           {isMine && <p className="hint">等待对方发布任务，发布后你就可以提交证明。</p>}
@@ -2092,7 +2104,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
             <div className="chat-scroll-shell">
               <div className="round-history-list" ref={historyListRef} onScroll={handleHistoryScroll}>
                 {hasMoreHistory && <div className="chat-more-hint">{historyLoading ? "加载中…" : "↑ 上滑加载更早记录"}</div>}
-                {orderedRoundHistory.map((item) => <RoundHistoryCard key={item.id} item={item} onOpenImage={setPreviewImage} onError={onError} />)}
+                {orderedRoundHistory.map((item) => <RoundHistoryCard key={item.id} item={item} onOpenImage={setPreviewImage} />)}
                 {visibleRoundHistory.length === 0 && <p className="empty">还没有对局记录</p>}
               </div>
               {!historyStick && visibleRoundHistory.length > 0 && (
@@ -2545,7 +2557,7 @@ export function occupantDisplay(occupant: SeatOccupant) {
   return displayPlayerName(occupant);
 }
 
-export function RoundHistoryCard({ item, onOpenImage, onError }: { item: RoomSnapshot["roundHistory"][number]; onOpenImage: (imageUrl: string) => void; onError?: (message: string) => void }) {
+export function RoundHistoryCard({ item, onOpenImage }: { item: RoomSnapshot["roundHistory"][number]; onOpenImage: (imageUrl: string) => void }) {
   const safe = normalizeRoundHistoryItem(item);
   const proofByPlayer = new Map(safe.proofs.map((proof) => [proof.playerId, proof]));
   const taskPlayerIds = new Set(safe.punishmentTasks.map((task) => task.playerId));
@@ -2585,21 +2597,24 @@ export function RoundHistoryCard({ item, onOpenImage, onError }: { item: RoomSna
       </div>
       {safe.punishedNames.length > 0 && (
         <section className="history-section">
-          <div className="history-punishment-summary">
-            <b>{safe.punishmentName || "惩罚"}</b>
-            <small>{safe.punishedNames.join("、")}</small>
-          </div>
+          {/* 发布任务 + 完成证明包在同一个 .history-task-group 圆角矩形里，底色统一为白色，
+              中间靠 .history-proof.inline 顶部的虚线分隔（见 styles.css），不再是各自独立
+              的两个圆角矩形。 */}
           {safe.punishmentTasks.map((task) => {
             const proof = proofByPlayer.get(task.playerId);
+            const taskStyle = task.backgroundImage
+              ? { "--task-bg": `url(${task.backgroundImage})`, "--task-bg-opacity": String(task.backgroundOpacity ?? 0.22) } as CSSProperties
+              : undefined;
             return (
-              <div
-                className={`history-task ${task.backgroundImage ? "has-task-background" : ""}`}
-                key={`${safe.id}-${task.playerId}-task`}
-                style={task.backgroundImage ? { "--task-bg": `url(${task.backgroundImage})`, "--task-bg-opacity": String(task.backgroundOpacity ?? 0.22) } as CSSProperties : undefined}
-              >
-                <small>{task.playerName} 的任务{task.assignedByName ? ` · ${task.assignedByName} 发布` : ""}</small>
-                <p>{task.taskText ? taskTextOnly(task.taskText, task.factionLabel) : "等待玩家发布任务"}</p>
-                 {proof ? (
+              <div className="history-task-group" key={`${safe.id}-${task.playerId}-group`}>
+                <div
+                  className={`history-task ${task.backgroundImage ? "has-task-background" : ""}`}
+                  style={taskStyle}
+                >
+                  <small>{task.playerName} 的任务{task.assignedByName ? ` · ${task.assignedByName} 发布` : ""}</small>
+                  <p>{task.taskText ? taskTextOnly(task.taskText, task.factionLabel) : "等待玩家发布任务"}</p>
+                </div>
+                {proof ? (
                   <div className="history-proof inline">
                     <span>完成证明 · {historyProofStatusLabel(proof)}</span>
                     {proof.taskText && proof.taskText !== task.taskText && <small>对应任务：{proof.taskText}</small>}
@@ -2906,7 +2921,9 @@ export function ChatPanel({
   const listRef = useRef<HTMLDivElement | null>(null);
   const stickRef = useRef(true);
   const [stick, setStick] = useState(true);
-  const [now, setNow] = useState(Date.now());
+  // 只在确实有带 expiresAt 的消息时才起 1Hz 定时器，避免大厅聊天面板（常驻挂载）无谓地
+  // 每秒重渲染整个面板——见 useNow 的注释。
+  const now = useNow(1000, messages.some((m) => m.expiresAt));
 
   useEffect(() => {
     stickRef.current = true;
@@ -2927,11 +2944,6 @@ export function ChatPanel({
       ask("lobby:suggestions:unsubscribe", {}).catch(() => undefined);
     };
   }, [subscribeLobbyChannel, scope]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   const visible = messages.filter((m) => !m.expiresAt || m.expiresAt > now);
 
@@ -3188,8 +3200,10 @@ export function roomInfoTag(config: AppConfig, key: string, extra = "", prefix =
 
 export function punishmentInfoTag(config: AppConfig, room: RoomSnapshot) {
   if (!room.settings.enablePunishment) return roomInfoTag(config, "noPunishment");
-  if (room.settings.punishmentSource === "player") return roomInfoTag(config, "punishment", "：玩家发布任务");
-  return roomInfoTag(config, "punishment", punishmentSelectionText(config, room.settings));
+  // 房内标签统一成与大厅列表一致的措辞（punishmentSourceTagText），不再套「惩罚开启：」
+  // 前缀——大厅、房间内看到的应当是同一句话；房间内标签数量不设上限（大厅列表限 3 个）。
+  const style = roomInfoTag(config, "punishment").style;
+  return { key: `punishment-${room.id}-${room.settings.punishmentSource || "random"}`, text: punishmentSourceTagText(config, room.settings), style };
 }
 
 export function rankedInfoExtra(stake: number, multiplier = 1, gameId: RoomSettings["gameId"] = "rps") {
@@ -3326,35 +3340,27 @@ export function gameInfoTag(config: AppConfig, gameId: RoomSettings["gameId"]) {
               : roomInfoTag(config, "gameRps");
 }
 
-export function punishmentSelectionText(config: AppConfig, settings: Pick<RoomSettings, "punishmentSource" | "punishmentTagsIncluded" | "punishmentSeriesId" | "punishmentId" | "punishmentIds">) {
-  const src = settings.punishmentSource === "system" ? "random" : (settings.punishmentSource || "random");
-  if (src === "player") return "：玩家发布";
-  if (src === "series") {
-    const series = (config.punishmentSeriesSummaries || []).find((s) => s.id === settings.punishmentSeriesId);
-    return series ? `：${series.name}` : "：系列任务";
-  }
-  const names = (settings.punishmentTagsIncluded || [])
-    .map((id) => (config.punishmentTags || []).find((t) => t.id === id)?.name)
-    .filter((name): name is string => Boolean(name));
-  if (!names.length) return "：随机任务";
-  return `：${names.join("、")}`;
-}
-
-/** 大厅房间列表的惩罚标签正文：自定义惩罚直接写“自定义惩罚”，随机任务写最多三个
- * “#标签”（空格分隔），系列任务直接写系列名——都不带“惩罚开启：”这层前缀。 */
-export function lobbyPunishmentTagText(config: AppConfig, settings: Pick<RoomSettings, "punishmentSource" | "punishmentTagsIncluded" | "punishmentSeriesId" | "punishmentId" | "punishmentIds">) {
+/** 惩罚来源标签正文：自定义惩罚直接写“自定义惩罚”，随机任务写“#标签”（空格分隔；
+ * maxTags 限制大厅列表最多显示 3 个，房间内头部不传即不限），系列任务直接写系列名——
+ * 都不带“惩罚开启：”这层前缀。大厅列表（lobbyPunishmentTagText）与房间头部
+ * （punishmentInfoTag）共用这份措辞，避免同一房间进出显示两种文案。 */
+export function punishmentSourceTagText(config: AppConfig, settings: Pick<RoomSettings, "punishmentSource" | "punishmentTagsIncluded" | "punishmentSeriesId" | "punishmentId" | "punishmentIds">, maxTags?: number) {
   const src = settings.punishmentSource === "system" ? "random" : (settings.punishmentSource || "random");
   if (src === "player") return "自定义惩罚";
   if (src === "series") {
     const series = (config.punishmentSeriesSummaries || []).find((s) => s.id === settings.punishmentSeriesId);
     return series ? series.name : "系列任务";
   }
-  const names = (settings.punishmentTagsIncluded || [])
+  let names = (settings.punishmentTagsIncluded || [])
     .map((id) => (config.punishmentTags || []).find((t) => t.id === id)?.name)
-    .filter((name): name is string => Boolean(name))
-    .slice(0, 3);
+    .filter((name): name is string => Boolean(name));
+  if (maxTags) names = names.slice(0, maxTags);
   if (!names.length) return "随机任务";
   return names.map((name) => `#${name}`).join(" ");
+}
+
+export function lobbyPunishmentTagText(config: AppConfig, settings: Pick<RoomSettings, "punishmentSource" | "punishmentTagsIncluded" | "punishmentSeriesId" | "punishmentId" | "punishmentIds">) {
+  return punishmentSourceTagText(config, settings, 3);
 }
 
 export function RoomInfoTagList({ tags }: { tags: RoomInfoTagView[] }) {
@@ -5056,7 +5062,12 @@ export const titleTagStyleOrder = [
   { key: "admin", label: "管理员赋予" }
 ];
 
-function ContributionVoteLazy({ eventId, onError }: { eventId: string; onError?: (message: string) => void }) {
+// proofStatus：任务发布时评价请求就会立刻发出（此时证明多半还没通过审核），后端在证明
+// 未通过前本就会把 canVote 判为 false 且不给理由（区别于"评价自己贡献的内容"那种有明确
+// 理由的不可评价）——若只在 eventId 变化时才请求一次，证明后来转为已通过也不会重新拉取，
+// 评价交互组件就会一直空着。把证明状态也纳入依赖，状态一变（尤其转为 approved）就重新拉，
+// 这样"对方任务已完成后可以评价"才能正常出现。
+function ContributionVoteLazy({ eventId, proofStatus, onError }: { eventId: string; proofStatus?: string; onError?: (message: string) => void }) {
   const [card, setCard] = useState<VoteCard | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -5066,7 +5077,7 @@ function ContributionVoteLazy({ eventId, onError }: { eventId: string; onError?:
       if (!cancelled) setCard(null);
     });
     return () => { cancelled = true; };
-  }, [eventId]);
+  }, [eventId, proofStatus]);
   if (!card || !card.targetId) return null;
   return <ContributionVote card={card} onError={onError ?? (() => undefined)} />;
 }

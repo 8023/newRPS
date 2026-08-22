@@ -43,7 +43,7 @@ func TestOnRoomCreateRejectsUnknownSeriesID(t *testing.T) {
 	s.roomBroadcastTimers = map[string]*roomBroadcastPending{}
 	s.cfg.AccessControl.MaxActiveRoomsPerOwner = 2
 	s.punishmentSeriesCache = []types.PunishmentSeriesTaskConfig{
-		{ID: "real-series", Name: "真实系列", Steps: []types.PunishmentSeriesStep{{TaskIDs: []string{"t1"}}}},
+		{ID: "real-series", Name: "真实系列", StepCount: 1},
 	}
 
 	player := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "p1", Name: "玩家"}, SocketID: "sock-1"}
@@ -76,7 +76,7 @@ func TestOnRoomCreateAcceptsKnownSeriesID(t *testing.T) {
 	s.roomBroadcastTimers = map[string]*roomBroadcastPending{}
 	s.cfg.AccessControl.MaxActiveRoomsPerOwner = 2
 	s.punishmentSeriesCache = []types.PunishmentSeriesTaskConfig{
-		{ID: "real-series", Name: "真实系列", Steps: []types.PunishmentSeriesStep{{TaskIDs: []string{"t1"}}}},
+		{ID: "real-series", Name: "真实系列", StepCount: 1},
 	}
 
 	player := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "p1", Name: "玩家"}, SocketID: "sock-1"}

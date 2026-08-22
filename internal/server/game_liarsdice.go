@@ -500,22 +500,21 @@ func punishedIDs(players []*PlayerState) []string {
 
 // buildLiarsDicePunishmentTasks：与 buildPunishmentTasksWithWinnerName 同构，但赢家/受罚者都是
 // 直接传入的 *PlayerState（不走 RoundHistory[0] 反查）——此时本局 item 尚未写入
-// room.RoundHistory，liarsDicePunishmentReviewer 那套按历史反查赢家的逻辑在这里还用不了。
+// room.RoundHistory，liarsDicePunishmentReviewer 那套按历史反查赢家的逻辑在这里还用不了，
+// 直接用调用方传入的 winner 充当 approver（大话骰的 approver 恒定是本局赢家，见
+// eventstore.go punishment_events 表注释）。
 func (s *Server) buildLiarsDicePunishmentTasks(room *RoomState, punishedPlayers []*PlayerState, winner *PlayerState) []types.PunishmentTask {
 	out := make([]types.PunishmentTask, 0, len(punishedPlayers))
 	winnerName := ""
 	if winner != nil {
 		winnerName = playerShortName(winner)
 	}
+	src := normalizePunishmentSource(room.Settings.PunishmentSource)
 	for _, player := range punishedPlayers {
-		var assigner *PlayerState
 		var systemTask *punishmentTaskResult
-		src := normalizePunishmentSource(room.Settings.PunishmentSource)
-		if src == "player" {
-			assigner = winner
-		} else if src == "series" {
+		if src == "series" {
 			systemTask = s.pickSeriesTaskForPlayer(room, player, room.Settings.PunishmentSeriesID, winnerName)
-		} else {
+		} else if src != "player" {
 			systemTask = s.pickSystemTaskForPlayerAdvancing(room, player, winnerName)
 		}
 		task := types.PunishmentTask{
@@ -529,18 +528,26 @@ func (s *Server) buildLiarsDicePunishmentTasks(room *RoomState, punishedPlayers 
 			if systemTask.BackgroundOpacity != nil {
 				task.BackgroundOpacity = systemTask.BackgroundOpacity
 			}
-			if s.eventDB != nil {
-				eventID := randomID()
-				if err := s.eventDB.insertPunishmentTask(eventID, nowMs(), "system", room.ID, "", "", player.ID, task.PlayerName, task.TaskText, systemTask.EventMeta); err != nil {
-					s.errorLog("punishment_event_insert_failed", err.Error())
-				} else {
-					task.EventID = eventID
-				}
-			}
 		}
-		if assigner != nil {
-			task.AssignedBy = assigner.ID
-			task.AssignedByName = assigner.Name
+		if winner != nil {
+			task.AssignedBy = winner.ID
+			task.AssignedByName = winner.Name
+		}
+		// player 来源不在这里建事件行：此时玩家还没输入任务文案，事件要等
+		// handlers_room.go 里赢家真正提交自定义任务文案时才创建。
+		if s.eventDB != nil && systemTask != nil {
+			eventID := randomID()
+			approverID, approverName := "", ""
+			if winner != nil {
+				approverID, approverName = winner.ID, playerShortName(winner)
+			}
+			meta := systemTask.EventMeta
+			meta.Trigger = "round_end"
+			if err := s.eventDB.insertPunishmentTask(eventID, nowMs(), room.ID, approverID, approverName, player.ID, task.PlayerName, task.TaskText, meta); err != nil {
+				s.errorLog("punishment_event_insert_failed", err.Error())
+			} else {
+				task.EventID = eventID
+			}
 		}
 		out = append(out, task)
 	}

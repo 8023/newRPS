@@ -1,45 +1,33 @@
 package types
 
 const (
-	ContributionKindGender = "gender"
 	ContributionKindTask   = "task"
 	ContributionKindSeries = "series"
 
-	ContributionDraft            = "draft"
-	ContributionPending          = "pending"
-	ContributionApproved         = "approved"
-	ContributionRejected         = "rejected"
-	ContributionWithdrawn        = "withdrawn"
-	ContributionRevisionDraft    = "revision_draft"
-	ContributionRevisionPending  = "revision_pending"
-	ContributionRevisionRejected = "revision_rejected"
-	ContributionUnpublishPending = "unpublish_pending"
+	// 状态直接落在 sub_tasks/series 每一行上，不再有单独的"投稿信封"表。全量版本化之后
+	// 不需要 revision_* 这类状态——"这是不是一次修订"由"这个 ID 是否已有更早的版本"反映，
+	// 不需要单独枚举值区分初审/复审。
+	ContributionDraft     = "draft"
+	ContributionPending   = "pending"
+	ContributionApproved  = "approved"
+	ContributionRejected  = "rejected"
+	ContributionWithdrawn = "withdrawn"
 
 	ContributionVoteUp   = 1
 	ContributionVoteDown = -1
-
-	RoundRoleWinner = "winner"
-	RoundRoleLoser  = "loser"
 
 	DefaultAnonymousContributorLabel = "匿名贡献者"
 	DefaultContributionBGOpacity     = 0.22
 )
 
-type GenderDraft struct {
-	Label     string `json:"label"`
-	FactionID string `json:"factionId"`
-}
-
-// TaskVariantDraft 是 step 里的一份文案变体。
+// TaskVariantDraft 是一份任务/系列步骤里的一份文案变体。
 type TaskVariantDraft struct {
 	Text       string   `json:"text"`
 	FactionIDs []string `json:"factionIds"`
 }
 
-// StepDraft 是随机任务投稿 / 系列某一步共用的编辑单元。不设人肉可读的"名称"字段——
-// 玩家和管理员都不会看到它：游戏内展示的分类文字来自惩罚标签名，系列本身的展示名是
-// SeriesDraft.Name，发布后每份变体各自的 PunishmentTaskConfig.ID 已经是唯一标识，
-// 不需要再额外维护一个标题。
+// StepDraft 是随机任务投稿 / 系列某一步共用的编辑单元，同时也是 sub_tasks 一行的
+// "内容"部分（不含 ID/Version/Status/审核信息等行元数据，那些由 ContributionItem 承载）。
 type StepDraft struct {
 	Variants          []TaskVariantDraft `json:"variants"`
 	InRandomPool      bool               `json:"inRandomPool"` // false ⇒ 发布时 Order 落库为 -1
@@ -49,81 +37,41 @@ type StepDraft struct {
 	BackgroundOpacity float64            `json:"backgroundOpacity"`
 }
 
+// SeriesDraft 是系列任务的编辑单元：Steps 里每一步都是一个完整的 StepDraft，
+// 保存/提交时前后端始终把整个系列（含所有步骤）当一个整体传输，落库时才拆成
+// series 表一行 + 每步一行 sub_tasks（见 internal/server/seriesstore.go）。
 type SeriesDraft struct {
 	Name             string      `json:"name"`
 	TargetFactionIDs []string    `json:"targetFactionIds"`
 	Steps            []StepDraft `json:"steps"`
 }
 
-// TaskDraft 是旧版单条文案投稿形状，仅供兼容解码。旧 JSON 里可能仍带 name 字段，
-// 解码时按未知字段丢弃即可。
-type TaskDraft struct {
-	Text              string   `json:"text"`
-	FactionIDs        []string `json:"factionIds"`
-	TagIDs            []string `json:"tagIds"`
-	Order             int      `json:"order"`
-	BackgroundImage   string   `json:"backgroundImage"`
-	BackgroundOpacity float64  `json:"backgroundOpacity"`
-}
-
-// LegacySeriesDraft 是旧版「steps.taskRefs + tasks[]」形状，仅供兼容解码。
-type LegacySeriesDraft struct {
-	Name  string             `json:"name"`
-	Steps []SeriesDraftStep  `json:"steps"`
-	Tasks []TaskDraftWithRef `json:"tasks"`
-}
-
-type SeriesDraftStep struct {
-	TaskRefs []string `json:"taskRefs"`
-}
-
-type TaskDraftWithRef struct {
-	Ref  string    `json:"ref"`
-	Task TaskDraft `json:"task"`
-}
-
-type ContributionSubmission struct {
-	ID                   string `json:"id"`
-	Kind                 string `json:"kind"`
-	SubmitterPlayerID    string `json:"submitterPlayerId"`
-	SubmitterNameSnap    string `json:"submitterNameSnapshot"`
-	Anonymous            bool   `json:"anonymous"`
-	Status               string `json:"status"`
-	PublishedTargetID    string `json:"publishedTargetId"`
-	PublishedVersion     int    `json:"publishedVersion"`
-	ActiveVersion        int    `json:"activeVersion"`
-	CreatedAt            int64  `json:"createdAt"`
-	UpdatedAt            int64  `json:"updatedAt"`
-	SubmittedAt          int64  `json:"submittedAt"`
-	ReviewedAt           int64  `json:"reviewedAt"`
-	ReviewedBy           string `json:"reviewedBy"`
-	ReviewComment        string `json:"reviewComment"`
-	UnpublishRequestedAt int64  `json:"unpublishRequestedAt,omitempty"`
-	// Title 是列表用的展示标题（从当前版本内容解析，不落库）。
-	Title string `json:"title,omitempty"`
-}
-
-type ContributionVersion struct {
-	ID              int64  `json:"id"`
-	SubmissionID    string `json:"submissionId"`
-	Version         int    `json:"version"`
-	Content         string `json:"content"`
-	CreatedBy       string `json:"createdBy"`
-	CreatedAt       int64  `json:"createdAt"`
-	ReviewedContent string `json:"reviewedContent"`
-	ReviewedAt      int64  `json:"reviewedAt"`
-	ReviewedBy      string `json:"reviewedBy"`
-	ReviewResult    string `json:"reviewResult"`
-	ReviewComment   string `json:"reviewComment"`
-}
-
-type ContributionDetail struct {
-	Submission ContributionSubmission `json:"submission"`
-	Version    ContributionVersion    `json:"version"`
-	LikeCount  int                    `json:"likeCount"`
-	DownCount  int                    `json:"downCount"`
-	VoteCount  int                    `json:"voteCount"`
-	RealRatio  *int                   `json:"realRatio"`
+// ContributionItem 是玩家"参与共建"列表/详情、以及后台共建审核用的统一视图，
+// 覆盖 task 和 series 两种 kind——取代旧版 ContributionSubmission+ContributionVersion
+// 两张表拼出来的结构：sub_tasks/series 每一行本身就同时是"投稿信封"和"内容"，不用再
+// 分两张表 JOIN。Content 对 kind=task 是 StepDraft，对 kind=series 是 SeriesDraft
+// （其 Steps 由后端从 sub_tasks 按 SeriesID 查出来拼装，不单独落成一份 JSON）。
+type ContributionItem struct {
+	ID            string `json:"id"`
+	Kind          string `json:"kind"`
+	Version       int    `json:"version"`
+	Status        string `json:"status"`
+	Anonymous     bool   `json:"anonymous"`
+	SubmitterID   string `json:"submitterId"`
+	SubmitterName string `json:"submitterName"`
+	ReviewedBy    string `json:"reviewedBy,omitempty"`
+	ReviewedAt    int64  `json:"reviewedAt,omitempty"`
+	ReviewComment string `json:"reviewComment,omitempty"`
+	CreatedAt     int64  `json:"createdAt"`
+	UpdatedAt     int64  `json:"updatedAt"`
+	LikeCount     int    `json:"likeCount,omitempty"`
+	DownCount     int    `json:"downCount,omitempty"`
+	// Content 只在详情（Get）响应里填充；列表（List）响应为节省带宽不带内容，
+	// 只用 Title 做展示。
+	Content any `json:"content,omitempty"`
+	// Title 是列表用的展示标题（从内容解析，不落库）：任务用第一份文案的前若干字，
+	// 系列用系列名称。
+	Title      string                 `json:"title,omitempty"`
 	Completion *SeriesCompletionStats `json:"completion,omitempty"`
 }
 
@@ -138,25 +86,11 @@ type SeriesCompletionStats struct {
 	Rate         *int `json:"rate"`
 }
 
-type VoteStats struct {
-	TargetKind   string `json:"targetKind"`
-	TargetID     string `json:"targetId"`
-	TargetVer    int    `json:"targetVersion"`
-	LikeCount    int    `json:"likeCount"`
-	DownCount    int    `json:"downCount"`
-	VoteCount    int    `json:"voteCount"`
-	RealRatio    *int   `json:"realRatio"`
-	DisplayRatio *int   `json:"displayRatio"`
-	OverrideOn   bool   `json:"overrideOn"`
-	OverrideBy   string `json:"overrideBy,omitempty"`
-	OverrideNote string `json:"overrideNote,omitempty"`
-	OverrideAt   int64  `json:"overrideAt,omitempty"`
-}
-
+// VoteCard 是某次惩罚事件对应的评价卡片：能不能评价、我的评价、当前点赞率。
+// 投票前（MyVote==0）服务端不下发 DisplayRatio/VoteCount/ContributorDisplayName，
+// 避免"剧透"影响玩家评价前的独立判断。
 type VoteCard struct {
 	EventID                string `json:"eventId"`
-	RoundID                string `json:"roundId"`
-	TargetKind             string `json:"targetKind"`
 	TargetID               string `json:"targetId"`
 	CanVote                bool   `json:"canVote"`
 	CannotVoteReason       string `json:"cannotVoteReason,omitempty"`
@@ -166,11 +100,4 @@ type VoteCard struct {
 	HasVotes               bool   `json:"hasVotes"`
 	ContributorDisplayName string `json:"contributorDisplayName"`
 	ContributorAnonymous   bool   `json:"contributorAnonymous"`
-}
-
-type RoundParticipant struct {
-	RoundID  string `json:"roundId"`
-	RoomID   string `json:"roomId"`
-	PlayerID string `json:"playerId"`
-	Role     string `json:"role"`
 }

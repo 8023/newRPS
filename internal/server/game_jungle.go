@@ -723,7 +723,7 @@ func (s *Server) applyJungleDisconnectForfeit(room *RoomState, forfeit Disconnec
 	for i, p := range punishedPlayers {
 		punishedNames[i] = playerShortName(p)
 	}
-	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, types.RoundResult(forfeit.WinnerSeat))
+	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, types.RoundResult(forfeit.WinnerSeat), "round_end")
 	if winner != nil {
 		s.refreshPlayerSnapshots(winner)
 	}

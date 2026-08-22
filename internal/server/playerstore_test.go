@@ -29,13 +29,30 @@ func TestPlayerStoreUpsertAndLoadRoundTrip(t *testing.T) {
 			RPS:     types.GameWLD{Wins: 2, Losses: 1},
 			Othello: types.GameWLD{Wins: 1},
 		},
-		NameWarEnabled:     boolPtr(true),
-		PushMentionEnabled: boolPtr(true),
-		PushTurnEnabled:    boolPtr(false),
-		PushSeatEnabled:    boolPtr(true),
-		PushBondEnabled:    boolPtr(true),
-		GiveawayValue:      floatPtr(1.5),
-		RankedLastDecayDay: int64Ptr(42),
+		NameWarEnabled:               boolPtr(true),
+		NameWarAllowRename:           boolPtr(false),
+		NameWarToggledAt:             int64Ptr(1700),
+		NameWarOriginalName:          "原名",
+		NameWarPenaltyName:           "母狗003",
+		NameWarPunished:              boolPtr(true),
+		NameWarRenameProtectedUntil:  int64Ptr(1800),
+		NameWarRenamedBy:             "admin1",
+		NameWarRenamedByName:         "管理员甲",
+		NameWarRenameWindowStartedAt: int64Ptr(1600),
+		NameWarRenameCount:           intPtr(2),
+		PushMentionEnabled:           boolPtr(true),
+		PushTurnEnabled:              boolPtr(false),
+		PushSeatEnabled:              boolPtr(true),
+		PushBondEnabled:              boolPtr(true),
+		GiveawayValue:                floatPtr(1.5),
+		GiveawayEnabled:              boolPtr(true),
+		RankMultiplierUnlocked:       boolPtr(true),
+		RankedLastDecayDay:           int64Ptr(42),
+		ExtremeModeEnabled:           boolPtr(true),
+		ExtremeModeToggledAt:         int64Ptr(5000),
+		ExtremeModeCooldownUntil:     int64Ptr(6000),
+		ExtremeWinStreak:             intPtr(7),
+		ExtremeLastDecayHour:         int64Ptr(8000),
 		// 白给自救板 + 极限强关改名标记：均是此前只在内存、进程重启即丢失，
 		// 本次补落库的字段（见 v38 迁移），一并纳入往返验证。
 		GiveawayBoardText:           "我错了",
@@ -92,6 +109,27 @@ func TestPlayerStoreUpsertAndLoadRoundTrip(t *testing.T) {
 		got.ExtremeRenamedBy != "actor1" || got.ExtremeRenamedByName != "Bob" {
 		t.Fatalf("extreme force-closed round trip: %+v", got)
 	}
+	// player_name_war 子表：三态语义（true/false/nil）与文本字段全部往返。
+	if !ptrBool(got.NameWarEnabled) || ptrBool(got.NameWarAllowRename) || ptrInt64(got.NameWarToggledAt) != 1700 ||
+		got.NameWarOriginalName != "原名" || got.NameWarPenaltyName != "母狗003" || !ptrBool(got.NameWarPunished) ||
+		ptrInt64(got.NameWarRenameProtectedUntil) != 1800 || got.NameWarRenamedBy != "admin1" ||
+		got.NameWarRenamedByName != "管理员甲" || ptrInt64(got.NameWarRenameWindowStartedAt) != 1600 ||
+		ptrInt(got.NameWarRenameCount) != 2 {
+		t.Fatalf("name war round trip: %+v", got)
+	}
+	// player_extreme_mode 子表：force_closed 一组之外，enabled/toggled_at/cooldown/win_streak/decay_hour 也要往返。
+	if !ptrBool(got.ExtremeModeEnabled) || ptrInt64(got.ExtremeModeToggledAt) != 5000 || ptrInt64(got.ExtremeModeCooldownUntil) != 6000 ||
+		ptrInt(got.ExtremeWinStreak) != 7 || ptrInt64(got.ExtremeLastDecayHour) != 8000 {
+		t.Fatalf("extreme mode round trip: %+v", got)
+	}
+	// player_giveaway 子表：enabled 单独校验（value/clicks 已由 highest/lowest score 那段旁的其余用例覆盖）。
+	if !ptrBool(got.GiveawayEnabled) {
+		t.Fatalf("giveaway enabled round trip: %+v", got)
+	}
+	// players 主表上未拆分的两列：rank_multiplier_unlocked 单独往返校验（ranked_last_decay_day 已在上方校验）。
+	if !ptrBool(got.RankMultiplierUnlocked) {
+		t.Fatalf("rank multiplier unlocked round trip: %v", got.RankMultiplierUnlocked)
+	}
 	// 更新密钥列表
 	item.PlayerSecrets = []string{"sec-b", "sec-c"}
 	item.Name = "Alice2"
@@ -115,6 +153,66 @@ func TestPlayerStoreUpsertAndLoadRoundTrip(t *testing.T) {
 	}
 	if !has["sec-b"] || !has["sec-c"] || has["sec-a"] {
 		t.Fatalf("secret rotation failed: %v", got.PlayerSecrets)
+	}
+}
+
+// TestPlayerStoreUpsertAndLoadRoundTrip_NeverTouchedFeaturesStayNil 补 v47 拆表之后的一个
+// 关键场景：一个从没碰过名争/白给/极限模式的玩家，四张子表里对应的行仍然要被稠密地
+// 建出来（loadAll/upsertInTx 不做"行缺失=跳过"的稀疏判断），但里面的指针字段要维持
+// NULL——不能因为拆表就把"从未设置过"误变成"显式设置为 false/0"。
+func TestPlayerStoreUpsertAndLoadRoundTrip_NeverTouchedFeaturesStayNil(t *testing.T) {
+	dir := t.TempDir()
+	db, err := openDatabase(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := newPlayerStore(db)
+
+	item := persistedPlayer{
+		ID: "pub2", PlayerID: "ident2", ClaimKey: "claim2",
+		Name: "Nobody", CreatedAt: 1, LastSeenAt: 2,
+	}
+	if err := store.upsert(item); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := store.loadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("want 1 row, got %d", len(rows))
+	}
+	got := rows[0].item
+	if got.NameWarEnabled != nil || got.NameWarAllowRename != nil || got.NameWarPunished != nil ||
+		got.NameWarToggledAt != nil || got.NameWarOriginalName != "" || got.NameWarPenaltyName != "" {
+		t.Fatalf("name war fields should stay nil/empty for untouched player: %+v", got)
+	}
+	if got.GiveawayEnabled != nil || got.GiveawayValue != nil || got.GiveawayClicks != nil || got.GiveawayBoardText != "" {
+		t.Fatalf("giveaway fields should stay nil/empty for untouched player: %+v", got)
+	}
+	if got.ExtremeModeEnabled != nil || got.ExtremeWinStreak != nil || got.ExtremeForceClosed != nil {
+		t.Fatalf("extreme mode fields should stay nil for untouched player: %+v", got)
+	}
+	// player_game_stats 仍然是稠密的 7 行，只是每行都是 0/0/0。
+	if got.GameStats != (types.GameStats{}) {
+		t.Fatalf("game stats should be all-zero for a player who never played: %+v", got.GameStats)
+	}
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM player_game_stats WHERE player_id = ?`, item.ID).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != len(gameIDsForStats) {
+		t.Fatalf("player_game_stats should have one dense row per game, got %d want %d", n, len(gameIDsForStats))
+	}
+	for _, table := range []string{"player_name_war", "player_giveaway", "player_extreme_mode"} {
+		var rowN int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM `+table+` WHERE player_id = ?`, item.ID).Scan(&rowN); err != nil {
+			t.Fatal(err)
+		}
+		if rowN != 1 {
+			t.Fatalf("%s should have exactly one dense row for the player, got %d", table, rowN)
+		}
 	}
 }
 

@@ -7335,7 +7335,7 @@ type PunishmentSeriesSummary struct {
 	RoomNamePool         *RoomNamePool          `protobuf:"bytes,3,opt,name=room_name_pool,json=roomNamePool,proto3" json:"room_name_pool,omitempty"`
 	RoomBackgroundImages []string               `protobuf:"bytes,4,rep,name=room_background_images,json=roomBackgroundImages,proto3" json:"room_background_images,omitempty"`
 	StepCount            int32                  `protobuf:"varint,5,opt,name=step_count,json=stepCount,proto3" json:"step_count,omitempty"`
-	PublishedVersion     int32                  `protobuf:"varint,6,opt,name=published_version,json=publishedVersion,proto3" json:"published_version,omitempty"`
+	Version              int32                  `protobuf:"varint,6,opt,name=version,proto3" json:"version,omitempty"`
 	// 系列声明的目标阵营；供进战斗席本地校验，不在建房面板展示。
 	TargetFactionIds []string `protobuf:"bytes,10,rep,name=target_faction_ids,json=targetFactionIds,proto3" json:"target_faction_ids,omitempty"`
 	unknownFields    protoimpl.UnknownFields
@@ -7407,9 +7407,9 @@ func (x *PunishmentSeriesSummary) GetStepCount() int32 {
 	return 0
 }
 
-func (x *PunishmentSeriesSummary) GetPublishedVersion() int32 {
+func (x *PunishmentSeriesSummary) GetVersion() int32 {
 	if x != nil {
-		return x.PublishedVersion
+		return x.Version
 	}
 	return 0
 }
@@ -10283,15 +10283,15 @@ const file_api_proto_game_proto_rawDesc = "" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x128\n" +
 	"\x0eroom_name_pool\x18\x03 \x01(\v2\x12.game.RoomNamePoolR\froomNamePool\x124\n" +
 	"\x16room_background_images\x18\x04 \x03(\tR\x14roomBackgroundImages\x123\n" +
-	"\bsubtasks\x18\x05 \x03(\v2\x17.game.PunishmentSubtaskR\bsubtasks\"\xa7\x02\n" +
+	"\bsubtasks\x18\x05 \x03(\v2\x17.game.PunishmentSubtaskR\bsubtasks\"\x94\x02\n" +
 	"\x17PunishmentSeriesSummary\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x128\n" +
 	"\x0eroom_name_pool\x18\x03 \x01(\v2\x12.game.RoomNamePoolR\froomNamePool\x124\n" +
 	"\x16room_background_images\x18\x04 \x03(\tR\x14roomBackgroundImages\x12\x1d\n" +
 	"\n" +
-	"step_count\x18\x05 \x01(\x05R\tstepCount\x12+\n" +
-	"\x11published_version\x18\x06 \x01(\x05R\x10publishedVersion\x12,\n" +
+	"step_count\x18\x05 \x01(\x05R\tstepCount\x12\x18\n" +
+	"\aversion\x18\x06 \x01(\x05R\aversion\x12,\n" +
 	"\x12target_faction_ids\x18\n" +
 	" \x03(\tR\x10targetFactionIds\"j\n" +
 	"\n" +

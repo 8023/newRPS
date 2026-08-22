@@ -718,8 +718,9 @@ export function AnalyticsPanel({ onError, config }: { onError: (message: string)
           <div className="analytics-row-2">
             <TagCompareChart rows={tagCompareRows} />
             <HBarCard
-              title="系列惩罚·任务选中"
+              title="热门系列任务"
               rows={relabelBuckets(data.punishSeriesSelect || [], seriesLabels)}
+              height={260}
             />
           </div>
 
@@ -1067,7 +1068,7 @@ function TagCompareChart({ rows }: { rows: TagCompareRow[] }) {
     </table>
   );
   return (
-    <ChartCard title="随机惩罚·标签选中/拒绝" table={table}>
+    <ChartCard title="热门惩罚标签" table={table}>
       {top.length ? (
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={top} margin={{ top: 8, right: 6, left: 0, bottom: 32 }}>
@@ -1092,13 +1093,16 @@ function TagCompareChart({ rows }: { rows: TagCompareRow[] }) {
   );
 }
 
-function HBarCard({ title, rows, donut, showPercent, limit }: {
+function HBarCard({ title, rows, donut, showPercent, limit, height = 200 }: {
   title: string; rows: AnalyticsBucket[]; donut?: boolean;
   /** 非圆环（横向条形）分支是否附带百分比；圆环分支恒有百分比，不受此开关影响。 */
   showPercent?: boolean;
   /** 展示的柱数上限，默认圆环 4、条形 10；调用方须传入未截断的完整 rows，
    * 截断交给本组件做，否则下面的 fullTotal 会算不出「Top N 之外还有多少」。 */
   limit?: number;
+  /** 图表高度，默认 200；与同一行相邻卡片高度不一致时会被 CSS grid 拉伸出空白，
+   * 需要按同行搭档的实际高度传入以对齐（参照「对局时长」/「惩罚任务」一行的配平方式）。 */
+  height?: number;
 }) {
   const n = limit ?? (donut ? 4 : 10);
   const top = rows.slice(0, n);
@@ -1111,7 +1115,7 @@ function HBarCard({ title, rows, donut, showPercent, limit }: {
     <ChartCard title={title} table={<BucketTable rows={top} />}>
       {donut && top.length > 0 ? (
         <div className="analytics-donut-wrap">
-          <ResponsiveContainer width="100%" height={200}>
+          <ResponsiveContainer width="100%" height={height}>
             <PieChart>
               <Pie data={top} dataKey="value" nameKey="key" innerRadius="60%" outerRadius="85%" paddingAngle={2}
                 isAnimationActive={false}>
@@ -1129,7 +1133,7 @@ function HBarCard({ title, rows, donut, showPercent, limit }: {
           </div>
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={200}>
+        <ResponsiveContainer width="100%" height={height}>
           <BarChart layout="vertical" data={top} margin={{ top: 8, right: 6, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="var(--chart-grid)" horizontal={false} strokeDasharray="" />
             <XAxis type="number" tick={{ fill: "var(--chart-ink-muted)", fontSize: 11 }} stroke="var(--chart-axis)" />

@@ -380,8 +380,10 @@ type Server struct {
 	punishmentSeriesCache []types.PunishmentSeriesTaskConfig
 	// 由 reloadPunishmentCaches 与上面两份切片同时重建；避免系列每次抽取任务都把整个
 	// 任务池重新扫一遍建 map。测试里若只直接注入切片，读取辅助函数会安全回退到临时索引。
-	punishmentTaskByID   map[string]*types.PunishmentTaskConfig
-	punishmentSeriesByID map[string]*types.PunishmentSeriesTaskConfig
+	// punishmentSeriesSteps：某系列 ID 当前展开出的全部步骤变体（未按 StepIndex 分组，
+	// 调用方按需过滤），供 pickSeriesStepTask/seriesTagTriState 使用。
+	punishmentSeriesByID  map[string]*types.PunishmentSeriesTaskConfig
+	punishmentSeriesSteps map[string][]*types.PunishmentTaskConfig
 	// petBondDB / petBonds / petBondRequests：认主关系与待办申请（内存权威 + SQLite 写穿）
 	petBondDB       *petBondStore
 	petBonds        map[string]*petBond        // bondKey(master,pet) -> bond

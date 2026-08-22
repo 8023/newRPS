@@ -329,7 +329,7 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 	for _, p := range punishedPlayers {
 		punishedNames = append(punishedNames, playerShortName(p))
 	}
-	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, result)
+	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, result, "round_end")
 	room.Phase = types.PhaseResult
 	room.RevealedChoices = finalChoices
 

@@ -12,20 +12,13 @@ func TestPickSeriesTaskProgressAndClamp(t *testing.T) {
 	s := &Server{
 		players: map[string]*PlayerState{},
 		punishmentTasksCache: []types.PunishmentTaskConfig{
-			{ID: "t_step1", Text: "第一步 {loser}", FactionIDs: []string{"female_faction"}, Order: 50},
-			{ID: "t_step2", Text: "第二步 {loser}", FactionIDs: []string{"female_faction"}, Order: 50},
-			{ID: "t_step3", Text: "第三步 {loser}", FactionIDs: []string{"female_faction"}, Order: 50},
+			{ID: "t_step1", Text: "第一步 {loser}", FactionIDs: []string{"female_faction"}, Order: 50, SeriesID: "s1", StepIndex: 0},
+			{ID: "t_step2", Text: "第二步 {loser}", FactionIDs: []string{"female_faction"}, Order: 50, SeriesID: "s1", StepIndex: 1},
+			{ID: "t_step3", Text: "第三步 {loser}", FactionIDs: []string{"female_faction"}, Order: 50, SeriesID: "s1", StepIndex: 2},
 		},
-		punishmentSeriesCache: []types.PunishmentSeriesTaskConfig{{
-			ID:   "s1",
-			Name: "试炼",
-			Steps: []types.PunishmentSeriesStep{
-				{TaskIDs: []string{"t_step1"}},
-				{TaskIDs: []string{"t_step2"}},
-				{TaskIDs: []string{"t_step3"}},
-			},
-		}},
+		punishmentSeriesCache: []types.PunishmentSeriesTaskConfig{{ID: "s1", Name: "试炼"}},
 	}
+	s.rebuildPunishmentCacheIndexes()
 	pa := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "pa", Name: "小甲", FactionID: "female_faction"}, PlayerID: "pid1", Persistent: true}
 	pb := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "pb", Name: "小乙", FactionID: "female_faction"}, PlayerID: "pid2", Persistent: true}
 	s.players[pa.ID] = pa
@@ -81,9 +74,11 @@ func TestPickSeriesTaskProgressAndClamp(t *testing.T) {
 	}
 
 	// 房间换成另一个系列：a 对新系列的计数器重新从 0 开始。
-	s.punishmentSeriesCache = append(s.punishmentSeriesCache, types.PunishmentSeriesTaskConfig{
-		ID: "s2", Name: "另一条", Steps: []types.PunishmentSeriesStep{{TaskIDs: []string{"t_step2"}}},
+	s.punishmentTasksCache = append(s.punishmentTasksCache, types.PunishmentTaskConfig{
+		ID: "t2_step2", Text: "第二步 {loser}", FactionIDs: []string{"female_faction"}, Order: 50, SeriesID: "s2", StepIndex: 0,
 	})
+	s.punishmentSeriesCache = append(s.punishmentSeriesCache, types.PunishmentSeriesTaskConfig{ID: "s2", Name: "另一条"})
+	s.rebuildPunishmentCacheIndexes()
 	room.Settings.PunishmentSeriesID = "s2"
 	r9 := s.pickSeriesTaskForPlayer(room, pa, "s2", "胜者")
 	if r9 == nil || r9.TaskText != "第二步 小甲" {
@@ -95,54 +90,52 @@ func TestPickSeriesTaskProgressAndClamp(t *testing.T) {
 	}
 }
 
-// TestPickSeriesStepTaskIgnoresNegativeOrder：系列抽取只看 FactionIDs 精确匹配，
+// TestPickSeriesStepTaskIgnoresNegativeOrder：系列抽取只看 FactionIDs 精确匹配 + StepIndex，
 // 不看 Order；难度为负数（"仅供系列引用"标记）的任务照常可被系列步骤命中。
 func TestPickSeriesStepTaskIgnoresNegativeOrder(t *testing.T) {
-	taskByID := map[string]*types.PunishmentTaskConfig{
-		"series_only": {ID: "series_only", Text: "仅系列", FactionIDs: []string{"female_faction"}, Order: -1},
+	variants := []*types.PunishmentTaskConfig{
+		{ID: "series_only", Text: "仅系列", FactionIDs: []string{"female_faction"}, Order: -1, StepIndex: 0},
 	}
-	tsk := pickSeriesStepTask([]string{"series_only"}, "female_faction", taskByID)
+	tsk := pickSeriesStepTask(variants, 0, "female_faction")
 	if tsk == nil || tsk.Text != "仅系列" {
 		t.Fatalf("negative-order task should still be pickable via series step, got %#v", tsk)
 	}
 }
 
 func TestPickSeriesStepTaskExactFactionOnly(t *testing.T) {
-	taskByID := map[string]*types.PunishmentTaskConfig{
-		"male":   {ID: "male", Text: "男", FactionIDs: []string{"male_faction"}},
-		"dead":   {ID: "dead", Text: "未勾选阵营", FactionIDs: []string{}},
-		"female": {ID: "female", Text: "女", FactionIDs: []string{"female_faction"}},
+	variants := []*types.PunishmentTaskConfig{
+		{ID: "male", Text: "男", FactionIDs: []string{"male_faction"}, StepIndex: 0},
+		{ID: "dead", Text: "未勾选阵营", FactionIDs: []string{}, StepIndex: 0},
+		{ID: "female", Text: "女", FactionIDs: []string{"female_faction"}, StepIndex: 0},
 	}
 	// 精确命中阵营
-	if tsk := pickSeriesStepTask([]string{"male", "dead", "female"}, "female_faction", taskByID); tsk == nil || tsk.Text != "女" {
+	if tsk := pickSeriesStepTask(variants, 0, "female_faction"); tsk == nil || tsk.Text != "女" {
 		t.Fatalf("exact faction match: %#v", tsk)
 	}
 	// 未勾选任何阵营的任务永不参与匹配，不再作为通用兜底
-	if tsk := pickSeriesStepTask([]string{"male", "dead", "female"}, "unknown_faction", taskByID); tsk != nil {
+	if tsk := pickSeriesStepTask(variants, 0, "unknown_faction"); tsk != nil {
 		t.Fatalf("no exact match should return nil (no generic fallback), got %#v", tsk)
 	}
-	if tsk := pickSeriesStepTask([]string{"dead"}, "female_faction", taskByID); tsk != nil {
+	deadOnly := []*types.PunishmentTaskConfig{{ID: "dead", Text: "未勾选阵营", FactionIDs: []string{}, StepIndex: 0}}
+	if tsk := pickSeriesStepTask(deadOnly, 0, "female_faction"); tsk != nil {
 		t.Fatalf("faction-less task should never match, got %#v", tsk)
 	}
-	// 悬空引用跳过
-	if tsk := pickSeriesStepTask([]string{"missing", "also_gone"}, "female_faction", taskByID); tsk != nil {
-		t.Fatalf("all dangling should return nil: %#v", tsk)
-	}
-	if tsk := pickSeriesStepTask([]string{"missing", "female"}, "female_faction", taskByID); tsk == nil || tsk.Text != "女" {
-		t.Fatalf("dangling then exact match: %#v", tsk)
+	// 步骤不匹配：同样的候选，查询别的 StepIndex 应该返回 nil。
+	if tsk := pickSeriesStepTask(variants, 1, "female_faction"); tsk != nil {
+		t.Fatalf("step index mismatch should return nil: %#v", tsk)
 	}
 }
 
 // TestPickSeriesStepTaskRandomAmongMatches：同一阵营有多个候选任务时随机抽取，
 // 而不是固定取列表顺序里的第一个。
 func TestPickSeriesStepTaskRandomAmongMatches(t *testing.T) {
-	taskByID := map[string]*types.PunishmentTaskConfig{
-		"f1": {ID: "f1", Text: "女A", FactionIDs: []string{"female_faction"}},
-		"f2": {ID: "f2", Text: "女B", FactionIDs: []string{"female_faction"}},
+	variants := []*types.PunishmentTaskConfig{
+		{ID: "f1", Text: "女A", FactionIDs: []string{"female_faction"}, StepIndex: 0},
+		{ID: "f2", Text: "女B", FactionIDs: []string{"female_faction"}, StepIndex: 0},
 	}
 	seen := map[string]bool{}
 	for i := 0; i < 200; i++ {
-		tsk := pickSeriesStepTask([]string{"f1", "f2"}, "female_faction", taskByID)
+		tsk := pickSeriesStepTask(variants, 0, "female_faction")
 		if tsk == nil || (tsk.Text != "女A" && tsk.Text != "女B") {
 			t.Fatalf("unexpected pick: %#v", tsk)
 		}
@@ -153,9 +146,9 @@ func TestPickSeriesStepTaskRandomAmongMatches(t *testing.T) {
 	}
 }
 
-// TestSeriesUsableRequiresSteps：系列只要有步骤就可用——阵营覆盖不全不再拦截，
-// findSeriesByID / buildPunishmentSeriesSummaries 都会放行，运行时未覆盖阵营
-// 从随机池抽替补（见 TestSeriesFactionReplacement）。
+// TestSeriesUsableRequiresSteps 覆盖运行时对历史异常数据的防御：审批后的新系列会保证
+// 声明的目标阵营逐步覆盖；但缓存里若出现没有目标声明的旧系列，只要仍有步骤就可运行，
+// 未命中玩家阵营时由随机池替补（见 TestSeriesFactionReplacement）。
 func TestSeriesUsableRequiresSteps(t *testing.T) {
 	s := &Server{
 		cfg: types.AppConfig{
@@ -165,20 +158,17 @@ func TestSeriesUsableRequiresSteps(t *testing.T) {
 			},
 		},
 		punishmentTasksCache: []types.PunishmentTaskConfig{
-			{ID: "male_only", Text: "男", FactionIDs: []string{"male_faction"}},
-			{ID: "female_only", Text: "女", FactionIDs: []string{"female_faction"}},
-			{ID: "both", Text: "通用", FactionIDs: []string{"male_faction", "female_faction"}},
+			{ID: "male_only", Text: "男", FactionIDs: []string{"male_faction"}, SeriesID: "incomplete", StepIndex: 0},
+			{ID: "male_split", Text: "男", FactionIDs: []string{"male_faction"}, SeriesID: "complete_split", StepIndex: 0},
+			{ID: "female_split", Text: "女", FactionIDs: []string{"female_faction"}, SeriesID: "complete_split", StepIndex: 0},
 		},
 		punishmentSeriesCache: []types.PunishmentSeriesTaskConfig{
-			{ID: "incomplete", Name: "覆盖不全", Steps: []types.PunishmentSeriesStep{
-				{TaskIDs: []string{"male_only"}}, // 缺 female_faction，但依旧生效
-			}},
-			{ID: "complete_split", Name: "分开覆盖", Steps: []types.PunishmentSeriesStep{
-				{TaskIDs: []string{"male_only", "female_only"}},
-			}},
-			{ID: "no_steps", Name: "没有步骤", Steps: nil},
+			{ID: "incomplete", Name: "覆盖不全"}, // 缺 female_faction，但依旧生效
+			{ID: "complete_split", Name: "分开覆盖"},
+			{ID: "no_steps", Name: "没有步骤"}, // 没有任何 sub_tasks 引用它
 		},
 	}
+	s.rebuildPunishmentCacheIndexes()
 	if s.findSeriesByID("incomplete") == nil {
 		t.Fatal("incomplete series should still be usable")
 	}
@@ -197,7 +187,7 @@ func TestSeriesUsableRequiresSteps(t *testing.T) {
 }
 
 // TestSeriesFactionReplacement：受罚者阵营没有被当前步候选任务覆盖时，从随机池抽替补，
-// 进度照常推进；票记到替补任务自己的投稿，不记到系列头上。
+// 进度照常推进；票记到替补任务自己的 ID，不记到系列头上。
 func TestSeriesFactionReplacement(t *testing.T) {
 	s := &Server{
 		players: map[string]*PlayerState{},
@@ -206,18 +196,15 @@ func TestSeriesFactionReplacement(t *testing.T) {
 			PunishmentTags:           []types.PunishmentTagConfig{{ID: "truth", Name: "真心话"}},
 		},
 		punishmentTasksCache: []types.PunishmentTaskConfig{
-			{ID: "male_only", Text: "男向第一步", FactionIDs: []string{"male_faction"}, Order: 50, TagIDs: []string{"truth"}},
-			{ID: "female_only", Text: "女向第二步", FactionIDs: []string{"female_faction"}, Order: 50},
-			{ID: "random_f", Text: "随机替补 {loser}", FactionIDs: []string{"female_faction"}, Order: 40, SubmissionID: "sub_rand", TaskGroupID: "sub_rand", ContributorPlayerID: "c1"},
+			{ID: "male_only", Text: "男向第一步", FactionIDs: []string{"male_faction"}, Order: 50, TagIDs: []string{"truth"}, SeriesID: "s1", StepIndex: 0},
+			{ID: "female_only", Text: "女向第二步", FactionIDs: []string{"female_faction"}, Order: 50, SeriesID: "s1", StepIndex: 1},
+			{ID: "random_f", Text: "随机替补 {loser}", FactionIDs: []string{"female_faction"}, Order: 40, ContributorPlayerID: "c1"},
 		},
 		punishmentSeriesCache: []types.PunishmentSeriesTaskConfig{{
-			ID: "s1", Name: "试炼", ContributorPlayerID: "series_author", VoteVersion: 1,
-			Steps: []types.PunishmentSeriesStep{
-				{TaskIDs: []string{"male_only"}},
-				{TaskIDs: []string{"female_only"}},
-			},
+			ID: "s1", Name: "试炼", ContributorPlayerID: "series_author", Version: 1,
 		}},
 	}
+	s.rebuildPunishmentCacheIndexes()
 	player := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "p1", Name: "小败", FactionID: "female_faction"}, PlayerID: "pid1", Persistent: true}
 	s.players[player.ID] = player
 	room := &RoomState{Settings: types.RoomSettings{PunishmentSource: "series", PunishmentSeriesID: "s1"}}
@@ -226,11 +213,8 @@ func TestSeriesFactionReplacement(t *testing.T) {
 	if r1 == nil || r1.TaskText != "随机替补 小败" {
 		t.Fatalf("step1 should pick random replacement: %#v", r1)
 	}
-	if r1.EventMeta.FormalSeriesID != "" {
-		t.Fatalf("replacement must not vote on the series: %#v", r1.EventMeta)
-	}
-	if r1.EventMeta.FormalTaskID != "sub_rand" {
-		t.Fatalf("replacement vote should use its own task group id: %#v", r1.EventMeta)
+	if r1.EventMeta.FormalTaskID != "random_f" {
+		t.Fatalf("replacement vote should use its own task id: %#v", r1.EventMeta)
 	}
 	prog := room.PunishmentSeriesPlayerProgress[player.ID]
 	if prog == nil || prog.Step != 1 {
@@ -253,21 +237,19 @@ func TestSeriesTagTriState(t *testing.T) {
 			},
 		},
 		punishmentTasksCache: []types.PunishmentTaskConfig{
-			{ID: "a", TagIDs: []string{"truth", "dare"}},
-			{ID: "b", TagIDs: []string{"truth"}},
-			{ID: "c", TagIDs: []string{"dare"}},
+			{ID: "a", TagIDs: []string{"truth", "dare"}, SeriesID: "s1", StepIndex: 0},
+			{ID: "b", TagIDs: []string{"truth"}, SeriesID: "s1", StepIndex: 0},
+			{ID: "c", TagIDs: []string{"dare"}, SeriesID: "s1", StepIndex: 1},
 		},
+		punishmentSeriesCache: []types.PunishmentSeriesTaskConfig{{ID: "s1", Name: "试炼"}},
 	}
-	series := types.PunishmentSeriesTaskConfig{Steps: []types.PunishmentSeriesStep{
-		{TaskIDs: []string{"a", "b"}},
-		{TaskIDs: []string{"c"}},
-	}}
-	incl, excl := s.seriesTagTriState(series)
-	if len(incl) != 1 || incl[0] != "dare" && incl[0] != "truth" {
+	s.rebuildPunishmentCacheIndexes()
+	series := s.punishmentSeriesByID["s1"]
+	incl, excl := s.seriesTagTriState(*series)
+	if len(incl) != 1 || (incl[0] != "dare" && incl[0] != "truth") {
 		t.Fatalf("included=%v", incl)
 	}
-	// truth 出现 2 次，dare 出现 2 次，并列按 ID 字典序取 dare 之前的… dare < truth，应取 dare？
-	// a: truth,dare  b: truth  c: dare  → truth=2, dare=2。并列按 ID 字典序取第一个：dare < truth，所以 dare。
+	// truth 出现 2 次，dare 出现 2 次，并列按 ID 字典序取第一个：dare < truth，所以 dare。
 	if incl[0] != "dare" {
 		t.Fatalf("tie should pick lexicographically first, got %v", incl)
 	}
@@ -287,10 +269,13 @@ func TestRecordSeriesRunProgressOnCloseAveragesPercent(t *testing.T) {
 	}
 	defer db.Close()
 	ps := newPunishmentStore(db)
-	s := &Server{punishmentStore: ps}
-
-	series := types.PunishmentSeriesTaskConfig{ID: "s1", VoteVersion: 1, Steps: make([]types.PunishmentSeriesStep, 4)}
-	s.punishmentSeriesCache = []types.PunishmentSeriesTaskConfig{series}
+	s := &Server{punishmentStore: ps, punishmentTasksCache: []types.PunishmentTaskConfig{
+		{ID: "s1_0", SeriesID: "s1", StepIndex: 0},
+		{ID: "s1_1", SeriesID: "s1", StepIndex: 1},
+		{ID: "s1_2", SeriesID: "s1", StepIndex: 2},
+		{ID: "s1_3", SeriesID: "s1", StepIndex: 3},
+	}, punishmentSeriesCache: []types.PunishmentSeriesTaskConfig{{ID: "s1", Version: 1}}}
+	s.rebuildPunishmentCacheIndexes()
 
 	room := &RoomState{PunishmentSeriesPlayerProgress: map[string]*seriesPlayerProgress{
 		"pa": {SeriesID: "s1", Step: 3}, // 3/4 = 75%

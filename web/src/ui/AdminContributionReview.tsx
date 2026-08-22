@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { AppConfig, ContributionStatus, ContributionSubmission, PublicPlayer } from "../shared/types";
+import type { AppConfig, ContributionItem, ContributionStatus, PublicPlayer } from "../shared/types";
 import { ask } from "../lib/rpc";
 import { ContributionStatusChip, PlayerAvatar, PlayerBadge } from "./AppViews";
 import { ContributeSeriesForm } from "./ContributeSeriesForm";
-import { ContributionPreview, effectiveContributionContent, parseContributionDraft, type StepPreview } from "./ContributionPreview";
+import { ContributionPreview, asContributionDraft, type StepPreview } from "./ContributionPreview";
 import { StepEditor } from "./StepEditor";
 import {
   contributionDraftTitle,
-  contributionHasPublishedVersion,
   contributionStatusLabel,
   contributionVoteTail,
   emptySeriesStep,
@@ -15,36 +14,27 @@ import {
   formatContributionDay,
   formatContributionListMeta,
   stepHasFactionOverlap,
+  voteRatio,
   type StepDraft,
 } from "./contributeSeries";
 
 const kindLabel: Record<string, string> = {
-  gender: "性别",
   task: "随机任务",
   series: "系列任务",
 };
 
-// 需要管理员做决定的状态：排在任意列表的最前面。其余（已通过/已驳回）按更新时间倒序跟在后面。
-const pendingLikeStatuses = new Set<ContributionStatus>(["pending", "revision_pending", "unpublish_pending"]);
+// 需要管理员做决定的状态：排在任意列表的最前面。其余（已通过/已驳回/已撤回）按更新时间倒序跟在后面。
+const pendingLikeStatuses = new Set<ContributionStatus>(["pending"]);
 
-function sortReviewQueue(items: ContributionSubmission[]): ContributionSubmission[] {
+function sortReviewQueue(items: ContributionItem[]): ContributionItem[] {
   const pendingGroup = items
     .filter((it) => pendingLikeStatuses.has(it.status))
-    .sort((a, b) => (a.submittedAt || a.updatedAt) - (b.submittedAt || b.updatedAt));
+    .sort((a, b) => a.updatedAt - b.updatedAt);
   const restGroup = items
     .filter((it) => !pendingLikeStatuses.has(it.status))
     .sort((a, b) => b.updatedAt - a.updatedAt);
   return [...pendingGroup, ...restGroup];
 }
-
-type VoteInfo = { likeCount?: number; downCount?: number; voteCount?: number; realRatio?: number | null; displayRatio?: number | null };
-type CompletionInfo = { participants: number; rate: number | null };
-type ContributionDetailResponse = {
-  submission: ContributionSubmission;
-  version: { content: string; reviewedContent?: string };
-  votes: VoteInfo | null;
-  completion: CompletionInfo | null;
-};
 
 function toAdminStepDraft(raw: StepPreview | null | undefined, config: AppConfig): StepDraft {
   const factionIds = config.genderFactions.map((f) => f.id);
@@ -68,34 +58,23 @@ function toAdminStepDraft(raw: StepPreview | null | undefined, config: AppConfig
 
 export type ContributionReviewCounts = {
   pending: number;
-  revisionPending: number;
-  unpublishPending: number;
 };
 
 type OverviewCounts = Record<string, number>;
 type PoolStats = { randomTasks?: number; series?: number };
 type PendingOverviewResponse = {
-  genders: ContributionSubmission[];
   counts: { task?: OverviewCounts; series?: OverviewCounts };
   poolStats?: PoolStats;
 };
 
 type JumpTarget = { status: ContributionStatus; nonce: number };
-type ListMeta = { updatedAt: number; likeRatio?: number | null; completionRate?: number | null };
 
-/** 三种投稿类型（性别 + 随机任务 + 系列任务）加总的初审/复审/下架申请条数，供顶部
-    「待处理」选项卡摘要与父组件（AdminViews.tsx）的审核徽标共用同一份口径。 */
+/** 随机任务 + 系列任务加总的待审条数，供顶部「待处理」选项卡摘要与父组件
+    （AdminViews.tsx）的审核徽标共用同一份口径。 */
 function reviewQueueCounts(res: PendingOverviewResponse): ContributionReviewCounts {
-  const gPending = (res.genders || []).filter((g) => g.status === "pending").length;
-  const gRevision = (res.genders || []).filter((g) => g.status === "revision_pending").length;
-  const gUnpublish = (res.genders || []).filter((g) => g.status === "unpublish_pending").length;
   const t = res.counts?.task || {};
   const s = res.counts?.series || {};
-  return {
-    pending: gPending + (t.pending || 0) + (s.pending || 0),
-    revisionPending: gRevision + (t.revision_pending || 0) + (s.revision_pending || 0),
-    unpublishPending: gUnpublish + (t.unpublish_pending || 0) + (s.unpublish_pending || 0),
-  };
+  return { pending: (t.pending || 0) + (s.pending || 0) };
 }
 
 export function AdminContributionReview({ config, password, onError, onCounts }: {
@@ -125,11 +104,11 @@ export function AdminContributionReview({ config, password, onError, onCounts }:
     setJumpTarget({ kind, status, nonce: Date.now() });
   }
 
-  // 「待处理」= 三种投稿类型加总的初审/复审/下架申请条数；「随机任务」「系列任务」=
+  // 「待处理」= 随机任务 + 系列任务待审条数之和；「随机任务」「系列任务」=
   // 各自当前已批准（正在使用）的投稿数——系列任务的每一步不是独立投稿，天然不会被随机
   // 任务这边重复计入。
   const queueCounts = overview ? reviewQueueCounts(overview) : null;
-  const pendingTotal = queueCounts ? queueCounts.pending + queueCounts.revisionPending + queueCounts.unpublishPending : null;
+  const pendingTotal = queueCounts ? queueCounts.pending : null;
   const taskApproved = overview?.counts?.task?.approved ?? null;
   const seriesApproved = overview?.counts?.series?.approved ?? null;
 
@@ -150,7 +129,7 @@ export function AdminContributionReview({ config, password, onError, onCounts }:
         </button>
       </div>
       {section === "pending" ? (
-        <PendingSection data={overview} config={config} password={password} onError={onError} onChanged={refreshOverview} onJump={jumpTo} />
+        <PendingSection data={overview} onJump={jumpTo} />
       ) : (
         <ReviewKindPanel
           key={section}
@@ -167,39 +146,18 @@ export function AdminContributionReview({ config, password, onError, onCounts }:
 }
 
 const overviewStatusOrder: Array<{ status: ContributionStatus; label: string }> = [
-  { status: "pending", label: "初审" },
-  { status: "revision_draft", label: "修订草稿" },
-  { status: "revision_pending", label: "修订审核中" },
-  { status: "revision_rejected", label: "修订被驳回" },
+  { status: "pending", label: "待审" },
   { status: "approved", label: "通过" },
   { status: "rejected", label: "驳回" },
-  { status: "unpublish_pending", label: "下架" },
+  { status: "withdrawn", label: "撤回" },
 ];
 
-function PendingSection({ data, config, password, onError, onChanged, onJump }: {
+function PendingSection({ data, onJump }: {
   data: PendingOverviewResponse | null;
-  config: AppConfig;
-  password: string;
-  onError: (message: string) => void;
-  onChanged: () => void;
   onJump: (kind: "task" | "series", status: ContributionStatus) => void;
 }) {
-  const genders = useMemo(() => (data ? sortReviewQueue(data.genders) : []), [data]);
-
   return (
     <div className="stack">
-      <div className="admin-review-section">
-        <h3>性别审批</h3>
-        <SubmissionReviewPanel
-          items={genders}
-          kindLabelText="性别"
-          config={config}
-          password={password}
-          onError={onError}
-          onChanged={onChanged}
-          emptyText="暂无待审性别投稿"
-        />
-      </div>
       <div className="admin-review-section">
         <h3>总览</h3>
         {data ? (
@@ -255,12 +213,12 @@ function ReviewKindPanel({ kind, config, password, onError, onChanged, jumpTarge
   onChanged: () => void;
   jumpTarget: ({ kind: "task" | "series" } & JumpTarget) | null;
 }) {
-  const [items, setItems] = useState<ContributionSubmission[]>([]);
+  const [items, setItems] = useState<ContributionItem[]>([]);
   const [reloadNonce, setReloadNonce] = useState(0);
 
   async function reload() {
     try {
-      const res = await ask<{ items?: ContributionSubmission[] } | ContributionSubmission[]>(
+      const res = await ask<{ items?: ContributionItem[] } | ContributionItem[]>(
         "admin:action", { action: "contributionList", status: "", kind, password },
       );
       const list = Array.isArray(res) ? res : (res.items || []);
@@ -278,7 +236,7 @@ function ReviewKindPanel({ kind, config, password, onError, onChanged, jumpTarge
   return (
     <SubmissionReviewPanel
       items={items}
-      kindLabelText={kindLabel[kind]}
+      kind={kind}
       config={config}
       password={password}
       onError={onError}
@@ -289,12 +247,12 @@ function ReviewKindPanel({ kind, config, password, onError, onChanged, jumpTarge
   );
 }
 
-/** 列表 + 详情的共建审核核心组件：待处理 tab 的性别审批、随机任务/系列任务 tab 都复用它，
-    与玩家端「参与共建」（ContributeView.tsx）同一套 .contribute-layout 骨架，只是右侧
-    换成预览+审核操作而非编辑表单。 */
-function SubmissionReviewPanel({ items, kindLabelText, config, password, onError, onChanged, jumpTarget, emptyText }: {
-  items: ContributionSubmission[];
-  kindLabelText: string;
+/** 列表 + 详情的共建审核核心组件：随机任务/系列任务 tab 都复用它，与玩家端「参与共建」
+    （ContributeView.tsx）同一套 .contribute-layout 骨架，只是右侧换成预览+审核操作而非
+    编辑表单。 */
+function SubmissionReviewPanel({ items, kind, config, password, onError, onChanged, jumpTarget, emptyText }: {
+  items: ContributionItem[];
+  kind: "task" | "series";
   config: AppConfig;
   password: string;
   onError: (message: string) => void;
@@ -303,13 +261,10 @@ function SubmissionReviewPanel({ items, kindLabelText, config, password, onError
   emptyText: string;
 }) {
   const [currentId, setCurrentId] = useState<string | null>(null);
-  const [content, setContent] = useState("");
+  const [current, setCurrent] = useState<ContributionItem | null>(null);
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
-  const [votes, setVotes] = useState<VoteInfo | null>(null);
-  const [completion, setCompletion] = useState<CompletionInfo | null>(null);
   const [search, setSearch] = useState("");
-  const [metaById, setMetaById] = useState<Record<string, ListMeta>>({});
   const [editing, setEditing] = useState(false);
   const [editTask, setEditTask] = useState<StepDraft>(() => emptyStepDraft(config.genderFactions.map((f) => f.id), true));
   const [editSeriesName, setEditSeriesName] = useState("");
@@ -318,48 +273,16 @@ function SubmissionReviewPanel({ items, kindLabelText, config, password, onError
   const itemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const consumedJumpNonce = useRef<number | null>(null);
 
-  const current = items.find((it) => it.id === currentId) || null;
-  const draft = useMemo(() => parseContributionDraft(content), [content]);
+  const draft = useMemo(() => asContributionDraft(current?.content), [current]);
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return items;
     return items.filter((it) => {
       const t = it.title || kindLabel[it.kind] || it.kind;
-      return t.toLowerCase().includes(q) || (it.submitterNameSnapshot || "").toLowerCase().includes(q);
+      return t.toLowerCase().includes(q) || (it.submitterName || "").toLowerCase().includes(q);
     });
   }, [items, search]);
-
-  // 已通过的条目左栏要显示点赞率/完成率（见 formatContributionListMeta），但列表接口本身
-  // 不带这两项——按条逐个补拉详情，与玩家端「参与共建」列表（ContributeView.tsx 的
-  // prefetchDetails）同一套按需预取思路。updatedAt 变化（重新审核/下架又通过等）会使缓存
-  // 失效重新拉取，其余状态不需要这两项，不发请求。
-  useEffect(() => {
-    const stale = items.filter((it) => {
-      if (!contributionHasPublishedVersion(it.status) || it.kind === "gender") return false;
-      const cached = metaById[it.id];
-      return !cached || cached.updatedAt !== it.updatedAt;
-    });
-    if (stale.length === 0) return;
-    let cancelled = false;
-    Promise.all(stale.map(async (it) => {
-      try {
-        const detail = await ask<ContributionDetailResponse>("admin:action", { action: "contributionGet", id: it.id, password });
-        return [it.id, { updatedAt: it.updatedAt, likeRatio: detail.votes?.realRatio, completionRate: detail.completion?.rate }] as const;
-      } catch {
-        return [it.id, { updatedAt: it.updatedAt }] as const;
-      }
-    })).then((pairs) => {
-      if (cancelled) return;
-      setMetaById((prev) => {
-        const next = { ...prev };
-        for (const [id, meta] of pairs) next[id] = meta;
-        return next;
-      });
-    });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]);
 
   function factionLabel(id: string) {
     return config.genderFactions.find((f) => f.id === id)?.label || id;
@@ -370,12 +293,10 @@ function SubmissionReviewPanel({ items, kindLabelText, config, password, onError
 
   async function openItem(id: string) {
     try {
-      const detail = await ask<ContributionDetailResponse>("admin:action", { action: "contributionGet", id, password });
+      const detail = await ask<ContributionItem>("admin:action", { action: "contributionGet", id, kind, password });
       setCurrentId(id);
-      setContent(effectiveContributionContent(detail.version));
-      setVotes(detail.votes || null);
-      setCompletion(detail.completion || null);
-      setComment(detail.submission.reviewComment || "");
+      setCurrent(detail);
+      setComment(detail.reviewComment || "");
       setEditing(false);
     } catch (e) {
       onError(e instanceof Error ? e.message : "加载失败");
@@ -385,7 +306,7 @@ function SubmissionReviewPanel({ items, kindLabelText, config, password, onError
   useEffect(() => {
     if (currentId && !items.some((it) => it.id === currentId)) {
       setCurrentId(null);
-      setContent("");
+      setCurrent(null);
     }
   }, [items, currentId]);
 
@@ -396,7 +317,7 @@ function SubmissionReviewPanel({ items, kindLabelText, config, password, onError
     consumedJumpNonce.current = jumpTarget.nonce;
     const match = items.find((it) => it.status === jumpTarget.status);
     if (!match) {
-      onError(`没有「${contributionStatusLabel[jumpTarget.status] || jumpTarget.status}」状态的${kindLabelText}投稿`);
+      onError(`没有「${contributionStatusLabel[jumpTarget.status] || jumpTarget.status}」状态的${kindLabel[kind]}投稿`);
       return;
     }
     setSearch("");
@@ -409,8 +330,9 @@ function SubmissionReviewPanel({ items, kindLabelText, config, password, onError
     if (!currentId) return;
     setBusy(true);
     try {
-      await ask("admin:action", { action, id: currentId, comment, password, ...(reviewedContent == null ? {} : { reviewedContent }) });
+      await ask("admin:action", { action, id: currentId, kind, comment, password, ...(reviewedContent == null ? {} : { reviewedContent }) });
       setCurrentId(null);
+      setCurrent(null);
       setComment("");
       setEditing(false);
       onChanged();
@@ -422,7 +344,7 @@ function SubmissionReviewPanel({ items, kindLabelText, config, password, onError
   }
 
   function beginEditing() {
-    if (!current || !draft || current.kind === "gender") return;
+    if (!current || !draft) return;
     if (current.kind === "task") {
       setEditTask(toAdminStepDraft(draft, config));
     } else {
@@ -445,7 +367,7 @@ function SubmissionReviewPanel({ items, kindLabelText, config, password, onError
     if (!currentId) return;
     setBusy(true);
     try {
-      await ask("admin:action", { action: "contributionUpdateComment", id: currentId, comment, password });
+      await ask("admin:action", { action: "contributionUpdateComment", id: currentId, kind, comment, password });
       onError("批注已保存");
       onChanged();
     } catch (e) {
@@ -457,7 +379,7 @@ function SubmissionReviewPanel({ items, kindLabelText, config, password, onError
 
   const title = current ? (current.title || contributionDraftTitle(draft) || kindLabel[current.kind]) : "";
   const voteTail = current
-    ? contributionVoteTail({ kind: current.kind, status: current.status, likeRatio: votes?.realRatio, completionRate: completion?.rate })
+    ? contributionVoteTail({ kind: current.kind, status: current.status, likeRatio: voteRatio(current.likeCount, current.downCount), completionRate: current.completion?.rate })
     : "";
 
   return (
@@ -470,24 +392,21 @@ function SubmissionReviewPanel({ items, kindLabelText, config, password, onError
           placeholder="搜索标题 / 投稿者"
         />
         <div className="contribute-list">
-          {filteredItems.map((item) => {
-            const meta = metaById[item.id];
-            return (
-              <button
-                key={item.id}
-                ref={(el) => { itemRefs.current[item.id] = el; }}
-                type="button"
-                className={`contribute-item${currentId === item.id ? " active" : ""}`}
-                onClick={() => void openItem(item.id)}
-              >
-                <strong>{item.title || kindLabel[item.kind] || item.kind}</strong>
-                <small className="hint">
-                  <ContributionStatusChip status={item.status} />{" "}
-                  {formatContributionListMeta({ kind: item.kind, status: item.status, updatedAt: item.updatedAt, likeRatio: meta?.likeRatio, completionRate: meta?.completionRate })}
-                </small>
-              </button>
-            );
-          })}
+          {filteredItems.map((item) => (
+            <button
+              key={item.id}
+              ref={(el) => { itemRefs.current[item.id] = el; }}
+              type="button"
+              className={`contribute-item${currentId === item.id ? " active" : ""}`}
+              onClick={() => void openItem(item.id)}
+            >
+              <strong>{item.title || kindLabel[item.kind] || item.kind}</strong>
+              <small className="hint">
+                <ContributionStatusChip status={item.status} />{" "}
+                {formatContributionListMeta({ kind: item.kind, status: item.status, updatedAt: item.updatedAt, likeRatio: voteRatio(item.likeCount, item.downCount), completionRate: item.completion?.rate, short: true })}
+              </small>
+            </button>
+          ))}
           {items.length === 0 ? <p className="hint">{emptyText}</p> : null}
           {items.length > 0 && filteredItems.length === 0 ? <p className="hint">没有匹配的投稿</p> : null}
         </div>
@@ -501,8 +420,8 @@ function SubmissionReviewPanel({ items, kindLabelText, config, password, onError
                 <ContributionStatusChip status={current.status} />{" "}
                 {formatContributionDay(current.updatedAt)} ·{" "}
                 <SubmitterHoverName
-                  playerId={current.submitterPlayerId}
-                  label={current.anonymous ? `${current.submitterNameSnapshot}（匿名）` : current.submitterNameSnapshot}
+                  playerId={current.submitterId}
+                  label={current.anonymous ? `${current.submitterName}（匿名）` : current.submitterName}
                 />
                 {voteTail ? ` · ${voteTail}` : null}
               </small>
@@ -526,7 +445,6 @@ function SubmissionReviewPanel({ items, kindLabelText, config, password, onError
               </form>
             ) : editing && current.kind === "series" ? (
               <div className="stack">
-                <button type="button" disabled={busy} onClick={() => setEditing(false)}>取消编辑</button>
                 <ContributeSeriesForm
                   config={config}
                   name={editSeriesName}
@@ -544,53 +462,52 @@ function SubmissionReviewPanel({ items, kindLabelText, config, password, onError
                   onError={onError}
                   showAnonymous={false}
                   showSaveDraft={false}
-                  submitLabel="保存并立即发布"
+                  submitLabel="保存并批准"
                 />
+                <div className="row">
+                  <button type="button" disabled={busy} onClick={() => setEditing(false)}>取消编辑</button>
+                </div>
               </div>
             ) : draft ? (
               <ContributionPreview draft={draft} kind={current.kind} factionLabel={factionLabel} tagLabel={tagLabel} />
             ) : <p className="notice">内容解析失败。</p>}
-            {votes && (votes.voteCount || 0) > 0 ? (
-              <p className="hint">获赞 {votes.likeCount ?? 0} · 点踩 {votes.downCount ?? 0} · 点赞率 {votes.displayRatio ?? votes.realRatio ?? 0}%</p>
-            ) : null}
-            {current.kind === "series" && completion ? (
-              <p className="hint">{completion.participants > 0 ? `完成率 ${completion.rate}% · ${completion.participants} 人走过` : "还没有完成率数据"}</p>
+            {(current.likeCount || current.downCount) ? (
+              <p className="hint">获赞 {current.likeCount ?? 0} · 点踩 {current.downCount ?? 0} · 点赞率 {voteRatio(current.likeCount, current.downCount)}%</p>
             ) : null}
 
-            {!editing && (current.status === "pending" || current.status === "revision_pending") ? (
+            {!editing && current.status === "pending" ? (
               <>
                 <label className="field-label"><span>批注</span><textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="驳回时给投稿者看的说明（选填）" /></label>
                 <div className="row">
-                  {current.kind !== "gender" ? <button type="button" disabled={busy} onClick={beginEditing}>编辑</button> : null}
+                  <button type="button" disabled={busy} onClick={beginEditing}>编辑</button>
                   <button type="button" className="primary" disabled={busy} onClick={() => void act("contributionPublish")}>批准</button>
                   <button type="button" className="danger-button" disabled={busy} onClick={() => void act("contributionReject")}>驳回</button>
                 </div>
               </>
             ) : null}
 
-            {!editing && contributionHasPublishedVersion(current.status) && current.status !== "revision_pending" && current.status !== "unpublish_pending" ? (
+            {!editing && current.status === "approved" ? (
               <div className="row">
-                {current.kind !== "gender" ? <button type="button" disabled={busy} onClick={beginEditing}>编辑</button> : null}
+                <button type="button" disabled={busy} onClick={beginEditing}>编辑</button>
                 <button type="button" className="danger-button" disabled={busy} onClick={() => void act("contributionUnpublish")}>下架</button>
               </div>
             ) : null}
 
-            {!editing && current.status === "unpublish_pending" ? (
-              <>
-                <label className="field-label"><span>批注</span><textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="驳回下架申请时可以给投稿者留言（选填）" /></label>
-                <div className="row">
-                  <button type="button" className="danger-button" disabled={busy} onClick={() => void act("contributionUnpublish")}>确认下架</button>
-                  <button type="button" disabled={busy} onClick={() => void act("contributionReject")}>驳回申请（保留发布）</button>
-                </div>
-              </>
-            ) : null}
-
-            {!editing && (current.status === "rejected" || current.status === "revision_rejected") ? (
+            {!editing && current.status === "rejected" ? (
               <>
                 <label className="field-label"><span>批注</span><textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="驳回理由" /></label>
                 <div className="row">
                   <button type="button" disabled={busy} onClick={() => void saveComment()}>保存批注</button>
                   <button type="button" className="primary" disabled={busy} onClick={() => void act("contributionRevertReject")}>撤销驳回</button>
+                </div>
+              </>
+            ) : null}
+
+            {!editing && current.status === "withdrawn" ? (
+              <>
+                <label className="field-label"><span>批注</span><textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="取消撤回时可以给投稿者留言（选填）" /></label>
+                <div className="row">
+                  <button type="button" className="primary" disabled={busy} onClick={() => void act("contributionRevertWithdraw")}>取消撤回</button>
                 </div>
               </>
             ) : null}

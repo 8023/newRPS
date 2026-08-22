@@ -36872,7 +36872,7 @@ export const game = $root.game = (() => {
          * @property {game.RoomNamePool.$Properties|null} [roomNamePool] PunishmentSeriesSummary roomNamePool
          * @property {Array.<string>|null} [roomBackgroundImages] PunishmentSeriesSummary roomBackgroundImages
          * @property {number|null} [stepCount] PunishmentSeriesSummary stepCount
-         * @property {number|null} [publishedVersion] PunishmentSeriesSummary publishedVersion
+         * @property {number|null} [version] PunishmentSeriesSummary version
          * @property {Array.<string>|null} [targetFactionIds] PunishmentSeriesSummary targetFactionIds
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
@@ -36948,12 +36948,12 @@ export const game = $root.game = (() => {
         PunishmentSeriesSummary.prototype.stepCount = 0;
 
         /**
-         * PunishmentSeriesSummary publishedVersion.
-         * @member {number} publishedVersion
+         * PunishmentSeriesSummary version.
+         * @member {number} version
          * @memberof game.PunishmentSeriesSummary
          * @instance
          */
-        PunishmentSeriesSummary.prototype.publishedVersion = 0;
+        PunishmentSeriesSummary.prototype.version = 0;
 
         /**
          * PunishmentSeriesSummary targetFactionIds.
@@ -37006,8 +37006,8 @@ export const game = $root.game = (() => {
                     writer.uint32(/* id 4, wireType 2 =*/34).string(message.roomBackgroundImages[i]);
             if (message.stepCount != null && $Object.hasOwnProperty.call(message, "stepCount") && message.stepCount !== 0)
                 writer.uint32(/* id 5, wireType 0 =*/40).int32(message.stepCount);
-            if (message.publishedVersion != null && $Object.hasOwnProperty.call(message, "publishedVersion") && message.publishedVersion !== 0)
-                writer.uint32(/* id 6, wireType 0 =*/48).int32(message.publishedVersion);
+            if (message.version != null && $Object.hasOwnProperty.call(message, "version") && message.version !== 0)
+                writer.uint32(/* id 6, wireType 0 =*/48).int32(message.version);
             if (message.targetFactionIds != null && message.targetFactionIds.length)
                 for (let i = 0; i < message.targetFactionIds.length; ++i)
                     writer.uint32(/* id 10, wireType 2 =*/82).string(message.targetFactionIds[i]);
@@ -37103,9 +37103,9 @@ export const game = $root.game = (() => {
                         if (wireType !== 0)
                             break;
                         if (value = reader.int32())
-                            message.publishedVersion = value;
+                            message.version = value;
                         else
-                            delete message.publishedVersion;
+                            delete message.version;
                         continue;
                     }
                 case 10: {
@@ -37180,9 +37180,9 @@ export const game = $root.game = (() => {
             if (message.stepCount != null && $Object.hasOwnProperty.call(message, "stepCount"))
                 if (!$util.isInteger(message.stepCount))
                     return "stepCount: integer expected";
-            if (message.publishedVersion != null && $Object.hasOwnProperty.call(message, "publishedVersion"))
-                if (!$util.isInteger(message.publishedVersion))
-                    return "publishedVersion: integer expected";
+            if (message.version != null && $Object.hasOwnProperty.call(message, "version"))
+                if (!$util.isInteger(message.version))
+                    return "version: integer expected";
             if (message.targetFactionIds != null && $Object.hasOwnProperty.call(message, "targetFactionIds")) {
                 if (!$Array.isArray(message.targetFactionIds))
                     return "targetFactionIds: array expected";
@@ -37232,9 +37232,9 @@ export const game = $root.game = (() => {
             if (object.stepCount != null)
                 if ($Number(object.stepCount) !== 0)
                     message.stepCount = object.stepCount | 0;
-            if (object.publishedVersion != null)
-                if ($Number(object.publishedVersion) !== 0)
-                    message.publishedVersion = object.publishedVersion | 0;
+            if (object.version != null)
+                if ($Number(object.version) !== 0)
+                    message.version = object.version | 0;
             if (object.targetFactionIds) {
                 if (!$Array.isArray(object.targetFactionIds))
                     throw $TypeError(".game.PunishmentSeriesSummary.targetFactionIds: array expected");
@@ -37271,7 +37271,7 @@ export const game = $root.game = (() => {
                 object.name = "";
                 object.roomNamePool = null;
                 object.stepCount = 0;
-                object.publishedVersion = 0;
+                object.version = 0;
             }
             if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
                 object.id = message.id;
@@ -37286,8 +37286,8 @@ export const game = $root.game = (() => {
             }
             if (message.stepCount != null && $Object.hasOwnProperty.call(message, "stepCount"))
                 object.stepCount = message.stepCount;
-            if (message.publishedVersion != null && $Object.hasOwnProperty.call(message, "publishedVersion"))
-                object.publishedVersion = message.publishedVersion;
+            if (message.version != null && $Object.hasOwnProperty.call(message, "version"))
+                object.version = message.version;
             if (message.targetFactionIds && message.targetFactionIds.length) {
                 object.targetFactionIds = $Array(message.targetFactionIds.length);
                 for (let j = 0; j < message.targetFactionIds.length; ++j)

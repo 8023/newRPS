@@ -11690,8 +11690,8 @@ export namespace game {
         /** PunishmentSeriesSummary stepCount. */
         stepCount: number;
 
-        /** PunishmentSeriesSummary publishedVersion. */
-        publishedVersion: number;
+        /** PunishmentSeriesSummary version. */
+        version: number;
 
         /** PunishmentSeriesSummary targetFactionIds. */
         targetFactionIds: string[];
@@ -11795,8 +11795,8 @@ export namespace game {
             /** PunishmentSeriesSummary stepCount */
             stepCount?: (number|null);
 
-            /** PunishmentSeriesSummary publishedVersion */
-            publishedVersion?: (number|null);
+            /** PunishmentSeriesSummary version */
+            version?: (number|null);
 
             /** PunishmentSeriesSummary targetFactionIds */
             targetFactionIds?: (string[]|null);

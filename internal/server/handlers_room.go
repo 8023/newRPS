@@ -1573,7 +1573,10 @@ func (s *Server) onPunishmentSubmit(client *Client, env wsEnvelope) {
 		Text     string `json:"text"`
 		ImageURL string `json:"imageUrl"`
 	}
-	_ = decodeD(env, &p)
+	if err := decodeD(env, &p); err != nil {
+		client.reply(env.ID, nil, "参数格式错误")
+		return
+	}
 	player := s.requirePlayerQuiet(client)
 	if player == nil || player.RoomID == "" {
 		client.reply(env.ID, nil, "你当前不需要提交惩罚")
@@ -1663,7 +1666,15 @@ func (s *Server) onPunishmentAssignTask(client *Client, env wsEnvelope) {
 		PlayerID string `json:"playerId"`
 		TaskText string `json:"taskText"`
 	}
-	_ = decodeD(env, &p)
+	if err := decodeD(env, &p); err != nil {
+		client.reply(env.ID, nil, "参数格式错误")
+		return
+	}
+	p.PlayerID = strings.TrimSpace(p.PlayerID)
+	if p.PlayerID == "" || len([]rune(p.PlayerID)) > maxContributionIDRunes {
+		client.reply(env.ID, nil, "玩家 ID 无效")
+		return
+	}
 	player, room, ok := s.requireRoomPlayer(client, env)
 	if !ok {
 		return
@@ -1720,7 +1731,7 @@ func (s *Server) onPunishmentAssignTask(client *Client, env wsEnvelope) {
 	if s.eventDB != nil {
 		if updated := latestPunishmentTask(room, p.PlayerID); updated != nil {
 			updated.EventID = randomID()
-			if err := s.eventDB.insertPunishmentTask(updated.EventID, nowMs(), "player", room.ID, player.ID, playerShortName(player), p.PlayerID, updated.PlayerName, cleanTask, punishmentEventMeta{}); err != nil {
+			if err := s.eventDB.insertPunishmentTask(updated.EventID, nowMs(), room.ID, player.ID, playerShortName(player), p.PlayerID, updated.PlayerName, cleanTask, punishmentEventMeta{}); err != nil {
 				s.errorLog("punishment_event_insert_failed", err.Error())
 			}
 		}
@@ -1734,7 +1745,20 @@ func (s *Server) onPunishmentReview(client *Client, env wsEnvelope) {
 		Action       string `json:"action"`
 		RedoTaskText string `json:"redoTaskText"`
 	}
-	_ = decodeD(env, &p)
+	if err := decodeD(env, &p); err != nil {
+		client.reply(env.ID, nil, "参数格式错误")
+		return
+	}
+	p.PlayerID = strings.TrimSpace(p.PlayerID)
+	p.Action = strings.TrimSpace(p.Action)
+	if p.PlayerID == "" || len([]rune(p.PlayerID)) > maxContributionIDRunes {
+		client.reply(env.ID, nil, "玩家 ID 无效")
+		return
+	}
+	if p.Action != "approve" && p.Action != "reject" && p.Action != "forgive" {
+		client.reply(env.ID, nil, "审核动作无效")
+		return
+	}
 	player, room, ok := s.requireRoomPlayer(client, env)
 	if !ok {
 		return
@@ -1796,7 +1820,7 @@ func (s *Server) onPunishmentReview(client *Client, env wsEnvelope) {
 			if newTask != nil {
 				targetName = newTask.PlayerName
 			}
-			if err := s.eventDB.insertPunishmentTask(newID, reviewedAt, "player", room.ID, player.ID, playerShortName(player), p.PlayerID, targetName, cleanTask, punishmentEventMeta{}); err != nil {
+			if err := s.eventDB.insertPunishmentTask(newID, reviewedAt, room.ID, player.ID, playerShortName(player), p.PlayerID, targetName, cleanTask, punishmentEventMeta{}); err != nil {
 				s.errorLog("punishment_event_insert_failed", err.Error())
 			}
 		}
@@ -1839,7 +1863,15 @@ func (s *Server) onPunishmentConfirm(client *Client, env wsEnvelope) {
 	var p struct {
 		PlayerID string `json:"playerId"`
 	}
-	_ = decodeD(env, &p)
+	if err := decodeD(env, &p); err != nil {
+		client.reply(env.ID, nil, "参数格式错误")
+		return
+	}
+	p.PlayerID = strings.TrimSpace(p.PlayerID)
+	if p.PlayerID == "" || len([]rune(p.PlayerID)) > maxContributionIDRunes {
+		client.reply(env.ID, nil, "玩家 ID 无效")
+		return
+	}
 	player, room, ok := s.requireRoomPlayer(client, env)
 	if !ok {
 		return
@@ -2067,20 +2099,23 @@ func (s *Server) chatAuthorsFor(messages []types.ChatMessage) map[string]types.P
 
 func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 	var p struct {
-		Action             string                             `json:"action"`
-		RoomID             string                             `json:"roomId"`
-		PlayerID           string                             `json:"playerId"`
-		Name               string                             `json:"name"`
-		RankedPoints       *float64                           `json:"rankedPoints"`
-		Title              *string                            `json:"title"`
-		GenderID           *string                            `json:"genderId"`
-		GiveawayValueInput *string                            `json:"giveawayValueInput"`
-		Message            string                             `json:"message"`
-		DurationSeconds    *float64                           `json:"durationSeconds"`
-		Result             types.RoundResult                  `json:"result"`
-		Refs               []chatMessageRef                   `json:"refs"`
+		Action             string            `json:"action"`
+		RoomID             string            `json:"roomId"`
+		PlayerID           string            `json:"playerId"`
+		Name               string            `json:"name"`
+		RankedPoints       *float64          `json:"rankedPoints"`
+		Title              *string           `json:"title"`
+		GenderID           *string           `json:"genderId"`
+		GiveawayValueInput *string           `json:"giveawayValueInput"`
+		Message            string            `json:"message"`
+		DurationSeconds    *float64          `json:"durationSeconds"`
+		Result             types.RoundResult `json:"result"`
+		Refs               []chatMessageRef  `json:"refs"`
 	}
-	_ = decodeD(env, &p)
+	if err := decodeD(env, &p); err != nil {
+		client.reply(env.ID, nil, "参数格式错误")
+		return
+	}
 	admin := s.getPlayerByClient(client)
 	_, isAdminSocket := s.adminClientIDs[client.id]
 	// 只认本 socket 的 admin:login 会话，不认粘滞的 player.IsAdmin。

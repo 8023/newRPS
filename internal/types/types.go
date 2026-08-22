@@ -87,41 +87,45 @@ type RoomInfoTagStyle struct {
 }
 
 // PunishmentTaskConfig 是一条拍平的任务池任务（一行 = 一份文案变体）：
-// 一条共建投稿的多个变体会落成多行，靠 SubmissionID 归属同一份投稿。
-// TagIDs 可选 0/1/多个，决定标签过滤，留空表示这条任务不受标签筛选控制、任何随机房间
-// 都可能抽到它（房主无法用选中/拒绝标签把它挡在外面）；FactionIDs 为具体阵营 ID
-// （GenderFaction.ID）多选，留空表示永不匹配任何阵营；Order（1-99，语义为任务难度）
-// 决定抽取时房间级"目标难度"的靠拢方向，具体算法见 internal/server/punishment.go。
-// Order 合法取值仅 -1 或 1-99：-1 是"不参与随机抽取"的显式标记（仅供系列任务按 ID
-// 引用），不参与难度加权计算；由 s.validatePunishmentTask 在投稿发布/审批时校验，
-// 不合法的值直接拒绝落库（不做归一化/夹紧）。创作者侧用 InRandomPool 开关表达，看不到 -1。
+// sub_tasks 一行 = 一个逻辑任务的一个版本（同 ID 不同 Version），插入不更新，版本历史
+// 永久保留；运行时缓存（s.punishmentTasksCache）只加载每个 ID 当前 Status=approved 的
+// 那一行。TagIDs 可选 0/1/多个，决定标签过滤，留空表示这条任务不受标签筛选控制、任何
+// 随机房间都可能抽到它（房主无法用选中/拒绝标签把它挡在外面）；FactionIDs 为具体阵营 ID
+// （GenderFaction.ID），留空表示永不匹配任何阵营；Order（1-99，语义为任务难度）决定抽取时
+// 房间级"目标难度"的靠拢方向，具体算法见 internal/server/punishment.go。Order 合法取值
+// 仅 -1 或 1-99：-1 是"不参与随机抽取"的显式标记（仅供系列任务引用），不参与难度加权计算；
+// 由 s.validatePunishmentTask 在投稿发布/审批时校验，不合法的值直接拒绝落库（不做归一化/
+// 夹紧）。创作者侧用 InRandomPool 开关表达，看不到 -1。
+//
+// 一个任务/系列步骤可以有多份"文案变体"（同一段惩罚，给不同阵营各写一份不同措辞），运行时
+// 展开成多个 PunishmentTaskConfig（每份变体各一个），共享同一个 ID/Version/SeriesID/
+// StepIndex/TagIDs/Order 等行级字段，只有 Text/FactionIDs 各自不同——与旧版"一行一变体"
+// 物理存储时完全同构，只是现在从 sub_tasks.variants（一行内的小 JSON 数组）在加载缓存时
+// 展开出来，而不是本来就是多行。
 type PunishmentTaskConfig struct {
-	ID                string   `json:"id"`
-	Text              string   `json:"text"`
-	TagIDs            []string `json:"tagIds"`
-	FactionIDs        []string `json:"factionIds"`
-	Order             int      `json:"order"`
-	BackgroundImages  []string `json:"backgroundImages,omitempty"`
-	BackgroundOpacity float64  `json:"backgroundOpacity,omitempty"`
-	// Variants：旧版按任务分组保存的文案。仅用于旧单体配置迁移，
-	// 新版任务运行时使用 Text + FactionIDs。
-	Variants map[string]string `json:"variants,omitempty"`
-	// 共建发布元数据：管理员直接创建时 ContributorPlayerID 为空。
+	ID         string   `json:"id"`
+	Version    int      `json:"version,omitempty"`
+	Text       string   `json:"text"`
+	TagIDs     []string `json:"tagIds"`
+	FactionIDs []string `json:"factionIds"`
+	Order      int      `json:"order"`
+	// SeriesID/StepIndex：属于系列任务的某一步时非空/有意义；独立随机任务留空/0。
+	// 系列步骤查找按 (SeriesID, StepIndex) 而不是显式的任务 ID 列表——见
+	// internal/server/punishment.go 的 pickSeriesStepTask。
+	SeriesID          string  `json:"seriesId,omitempty"`
+	StepIndex         int     `json:"stepIndex,omitempty"`
+	BackgroundImage   string  `json:"backgroundImage,omitempty"`
+	BackgroundOpacity float64 `json:"backgroundOpacity,omitempty"`
+	// 共建发布元数据：管理员直接创建时 ContributorPlayerID 为空。ContributorName 是提交时
+	// 的姓名快照（改名后不回溯更新，与 punishment_events.publisher_name 等同一套约定）。
 	ContributorPlayerID  string `json:"contributorPlayerId,omitempty"`
+	ContributorName      string `json:"contributorName,omitempty"`
 	ContributorAnonymous bool   `json:"contributorAnonymous,omitempty"`
-	ContentVersion       int    `json:"contentVersion,omitempty"`
-	VoteVersion          int    `json:"voteVersion,omitempty"`
-	SubmissionID         string `json:"submissionId,omitempty"`
-	// TaskGroupID：投票目标的分组键——同一次发布（独立任务的一整份投稿，或系列的某一步）
-	// 生成的所有阵营变体行共享同一个 TaskGroupID；系列的不同步骤各自拥有不同的 TaskGroupID，
-	// 从而做到"系列里每一步独立计票"而不是整份系列/整份投稿合并计票。见
-	// contribution_codec.go 的 tasksFromStepDraft 与 punishment.go 的 metaForFormalTask。
-	TaskGroupID string `json:"taskGroupId,omitempty"`
-	// CreatedAt：该行首次写入 punishment_tasks 的时间（毫秒）。仅用于数据分析「随机任务」
-	// 增长图与后台共建审核总览的池子大小统计（见 analytics_agg.go / contribution_admin.go），
-	// 不随内容修订更新——task_group_id 在每次审批通过（含修订重审）时都会重新生成，
-	// 所以修订会让 CreatedAt 一并刷新，这是有意的简化（与 pet_bonds 的 created_at 口径
-	// 一致：反映"这一行何时开始存在"，而不追踪跨版本的连续血统）。存量迁移行为 0。
+	// LikeCount/DownCount：这一个 ID 名下所有历史版本行的赞踩计数之和（不止这一行自己的）。
+	LikeCount int `json:"likeCount,omitempty"`
+	DownCount int `json:"downCount,omitempty"`
+	// CreatedAt：这个 ID 首次创建（version=1）的时间（毫秒），后续版本不更新它——用于数据
+	// 分析「随机任务」增长图与后台共建审核总览的池子大小统计。存量迁移行为 0。
 	CreatedAt int64 `json:"-"`
 }
 
@@ -147,29 +151,23 @@ type PunishmentRandomSettings struct {
 	MaxSeriesSteps int `json:"maxSeriesSteps"`
 }
 
-// PunishmentSeriesStep 是系列任务中的一步：引用任务池里的任务 ID。
-// 运行时收集所有精确命中受罚者阵营的任务并随机选择；FactionIDs 为空的任务
-// 永不命中，指向不存在 ID 的引用直接跳过。
-type PunishmentSeriesStep struct {
-	TaskIDs []string `json:"taskIds"`
-}
-
-// PunishmentSeriesTaskConfig 是一个系列任务的管理详情（SQLite 存储，不进 AppConfig）：
-// 步骤严格按数组下标顺序执行；进度是房间内按玩家各自独立的内存态，不落盘、不跨房间。
+// PunishmentSeriesTaskConfig 是一个系列任务的元信息（SQLite series 表存储，不进
+// AppConfig，不含步骤内容）：步骤内容是 sub_tasks 里 SeriesID=ID 的那些行，按 StepIndex
+// 排序执行；进度是房间内按玩家各自独立的内存态，不落盘、不跨房间。
 type PunishmentSeriesTaskConfig struct {
-	ID                   string                 `json:"id"`
-	Name                 string                 `json:"name"`
-	RoomNamePool         *RoomNamePool          `json:"roomNamePool,omitempty"`
-	RoomBackgroundImages []string               `json:"roomBackgroundImages,omitempty"`
-	Steps                []PunishmentSeriesStep `json:"steps"`
-	ContributorPlayerID  string                 `json:"contributorPlayerId,omitempty"`
-	ContributorAnonymous bool                   `json:"contributorAnonymous,omitempty"`
-	ContentVersion       int                    `json:"contentVersion,omitempty"`
-	VoteVersion          int                    `json:"voteVersion,omitempty"`
-	SubmissionID         string                 `json:"submissionId,omitempty"`
-	TargetFactionIDs     []string               `json:"targetFactionIds,omitempty"`
-	// CreatedAt：首次审批通过时写入 punishment_series 的时间（毫秒），后续修订重审（同一个
-	// series ID 原地 UPDATE）不会更新它——与 PunishmentTaskConfig.CreatedAt 的口径刻意不同：
+	ID                   string        `json:"id"`
+	Version              int           `json:"version,omitempty"`
+	Name                 string        `json:"name"`
+	RoomNamePool         *RoomNamePool `json:"roomNamePool,omitempty"`
+	RoomBackgroundImages []string      `json:"roomBackgroundImages,omitempty"`
+	// StepCount：这个系列当前有多少步（sub_tasks 里 SeriesID=ID 且 Status=approved 的
+	// 步骤数，即 DISTINCT StepIndex 计数），运行时用它代替旧版的 len(Steps)。
+	StepCount            int      `json:"stepCount"`
+	ContributorPlayerID  string   `json:"contributorPlayerId,omitempty"`
+	ContributorName      string   `json:"contributorName,omitempty"`
+	ContributorAnonymous bool     `json:"contributorAnonymous,omitempty"`
+	TargetFactionIDs     []string `json:"targetFactionIds,omitempty"`
+	// CreatedAt：这个系列 ID 首次创建（version=1）的时间（毫秒），后续版本不更新它——
 	// 系列 ID 跨版本稳定，所以能真正做到"记录首次发布日期"。仅用于数据分析「系列任务」
 	// 增长图与后台共建审核总览统计。存量迁移行为 0。
 	CreatedAt int64 `json:"-"`
@@ -183,7 +181,7 @@ type PunishmentSeriesSummary struct {
 	RoomNamePool         *RoomNamePool `json:"roomNamePool,omitempty"`
 	RoomBackgroundImages []string      `json:"roomBackgroundImages,omitempty"`
 	StepCount            int           `json:"stepCount"`
-	PublishedVersion     int           `json:"publishedVersion,omitempty"`
+	Version              int           `json:"version,omitempty"`
 	// TargetFactionIDs 供客户端进战斗席时本地判断阵营是否匹配；不在建房面板渲染。
 	TargetFactionIDs []string `json:"targetFactionIds,omitempty"`
 }
@@ -1008,7 +1006,7 @@ type AppConfig struct {
 	GenderFactions     []GenderFaction          `json:"genderFactions"`
 	Titles             []TitleSegment           `json:"titles"`
 	// Punishments：旧版任务类型列表，仅迁移读入；新代码读写用 punishmentTags + 随机难度参数。
-	// 任务池 / 系列任务详情已迁到 SQLite（punishment_tasks / punishment_series）。
+	// 任务池 / 系列任务详情已迁到 SQLite（sub_tasks / series）。
 	Punishments    []PunishmentConfig    `json:"punishments,omitempty"`
 	PunishmentTags []PunishmentTagConfig `json:"punishmentTags"`
 	// PunishmentSeriesSummaries：建房选系列用的公开目录，不从 JSON 加载；

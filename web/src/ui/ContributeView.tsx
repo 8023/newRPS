@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import type { AppConfig, ContributionKind, ContributionStatus, ContributionSubmission, PublicPlayer } from "../shared/types";
+import type { AppConfig, ContributionItem, ContributionKind, ContributionStatus, PublicPlayer } from "../shared/types";
 import { ask } from "../lib/rpc";
 import { ContributeSeriesForm } from "./ContributeSeriesForm";
 import { StepEditor } from "./StepEditor";
 import { ContributionStatusChip } from "./AppViews";
-import { ContributionPreview, effectiveContributionContent, parseContributionDraft, type StepPreview } from "./ContributionPreview";
+import { ContributionPreview, asContributionDraft, type StepPreview } from "./ContributionPreview";
 import {
   buildSeriesContent,
-  contributionHasPublishedVersion,
   emptySeriesStep,
   emptyStepDraft,
   contributionDraftTitle,
@@ -15,20 +14,24 @@ import {
   seriesDraftHasContent,
   stepHasContent,
   stepHasFactionOverlap,
+  toggleId,
+  voteRatio,
   type StepDraft,
 } from "./contributeSeries";
 
 const tabs = [
-  { id: "gender", label: "性别共建", noun: "性别类型" },
   { id: "task", label: "随机任务", noun: "随机任务" },
   { id: "series", label: "系列任务", noun: "系列任务" },
 ] as const;
 
-// 与后端 contributionStore.saveDraft 的可编辑状态判定保持一致（contribution_save.go）：
-// 待审批/复审中/下架申请中都是"已经在流转中"，不允许直接改内容，只能撤回/等审核。
-const editableStatuses = new Set<ContributionStatus>(["draft", "rejected", "withdrawn", "approved", "revision_draft", "revision_rejected"]);
+// 与后端 saveDraft/withdraw 的可编辑/可撤回状态判定保持一致（contribution_service.go）：
+// draft/rejected/withdrawn/approved 都能继续编辑（编辑已通过投稿会另起一个 draft 版本，
+// 并立即让旧正式内容退出任务池，待新版本重新审批通过后恢复）；pending 是唯一"正在审批中、不能改内容"的状态。
+const editableStatuses = new Set<ContributionStatus>(["draft", "rejected", "withdrawn", "approved"]);
+// 不能撤回的状态：draft（还没提交过，没什么可撤）、withdrawn（已经是这个状态了）。
+const nonWithdrawableStatuses = new Set<ContributionStatus>(["draft", "withdrawn"]);
 
-/** 把投稿内容 JSON 还原成 StepEditor 需要的 StepDraft 形状，供"选中已有投稿→回填编辑器"使用；
+/** 把投稿内容还原成 StepEditor 需要的 StepDraft 形状，供"选中已有投稿→回填编辑器"使用；
     字段全部做防御性校验，早期投稿/手改内容缺字段时退回 emptyStepDraft 的默认值。 */
 function toStepDraft(raw: StepPreview | null | undefined, factionIds: string[], tagIds: string[]): StepDraft {
   const base = emptyStepDraft(factionIds, true);
@@ -49,16 +52,6 @@ function toStepDraft(raw: StepPreview | null | undefined, factionIds: string[], 
   };
 }
 
-type ContributionDetail = {
-  submission: ContributionSubmission;
-  version: { content: string; reviewedContent?: string };
-  likeCount?: number;
-  downCount?: number;
-  voteCount?: number;
-  realRatio?: number | null;
-  completion?: { participants: number; rate: number | null };
-};
-
 export function ContributeView({ config, me, onBack, onError, ensureSession }: {
   config: AppConfig;
   me: PublicPlayer;
@@ -68,12 +61,10 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
 }) {
   const allFactionIds = config.genderFactions.map((f) => f.id);
   const allTagIds = (config.punishmentTags || []).map((t) => t.id);
-  const [tab, setTab] = useState<(typeof tabs)[number]["id"]>("gender");
-  const [items, setItems] = useState<ContributionSubmission[]>([]);
+  const [tab, setTab] = useState<(typeof tabs)[number]["id"]>("task");
+  const [items, setItems] = useState<ContributionItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detailsById, setDetailsById] = useState<Record<string, ContributionDetail>>({});
-  const [genderLabel, setGenderLabel] = useState("");
-  const [factionId, setFactionId] = useState(config.genderFactions[0]?.id || "");
+  const [detailsById, setDetailsById] = useState<Record<string, ContributionItem>>({});
   const [taskStep, setTaskStep] = useState<StepDraft>(() => emptyStepDraft(allFactionIds, true));
   const [taskAnon, setTaskAnon] = useState(false);
   const [seriesName, setSeriesName] = useState("");
@@ -95,7 +86,6 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
     return (config.punishmentTags || []).find((t) => t.id === id)?.name || id;
   }
   function formHasContent() {
-    if (tab === "gender") return genderLabel.trim().length > 0;
     if (tab === "task") return stepHasContent(taskStep);
     return seriesDraftHasContent(seriesName, seriesSteps);
   }
@@ -107,28 +97,25 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
     setLeaveConfirm({ action });
   }
   function currentContent(): unknown {
-    if (tab === "gender") return { label: genderLabel, factionId };
     if (tab === "task") return { ...taskStep, inRandomPool: true };
     return buildSeriesContent(seriesName, seriesTargets, seriesSteps);
   }
   function currentAnonymous() {
-    if (tab === "gender") return false;
-    if (tab === "task") return taskAnon;
-    return seriesAnon;
+    return tab === "task" ? taskAnon : seriesAnon;
   }
 
   // 详情缓存只用于「左栏摘要/点赞率展示」，绝不反向驱动表单回填——回填只在用户点击某一条
   // 投稿的那一刻（selectItem）触发一次；如果改成对 detailsById 的 useEffect 联动，别的投稿
   // 后台预取完成时会让 detailsById 引用变化，从而把用户正在编辑的表单内容用旧内容覆盖掉。
-  async function prefetchDetails(list: ContributionSubmission[]) {
+  async function prefetchDetails(list: ContributionItem[]) {
     const stale = list.filter((it) => {
       const cached = detailsById[it.id];
-      return !cached || cached.submission.updatedAt !== it.updatedAt;
+      return !cached || cached.updatedAt !== it.updatedAt;
     });
     if (stale.length === 0) return;
     const results = await Promise.all(stale.map(async (it) => {
       try {
-        return [it.id, await contributionAsk<ContributionDetail>("contribution:get", { id: it.id })] as const;
+        return [it.id, await contributionAsk<ContributionItem>("contribution:get", { id: it.id, kind: it.kind })] as const;
       } catch {
         return null;
       }
@@ -141,7 +128,7 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
   }
 
   async function reload() {
-    const res = await contributionAsk<{ items: ContributionSubmission[] }>("contribution:list", {});
+    const res = await contributionAsk<{ items: ContributionItem[] }>("contribution:list", {});
     const list = res.items || [];
     setItems(list);
     void prefetchDetails(list);
@@ -153,11 +140,6 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
 
   function resetFormFor(kind: ContributionKind) {
     setDirty(false);
-    if (kind === "gender") {
-      setGenderLabel("");
-      setFactionId(config.genderFactions[0]?.id || "");
-      return;
-    }
     if (kind === "task") {
       setTaskStep(emptyStepDraft(allFactionIds, true));
       setTaskAnon(false);
@@ -169,22 +151,17 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
     setSeriesSteps([emptySeriesStep(allFactionIds)]);
   }
 
-  function populateFormFromDetail(d: ContributionDetail) {
-    const raw = parseContributionDraft(effectiveContributionContent(d.version));
+  function populateFormFromDetail(d: ContributionItem) {
+    const raw = asContributionDraft(d.content);
     setDirty(false);
     if (!raw) return;
-    if (d.submission.kind === "gender") {
-      setGenderLabel(raw.label || "");
-      setFactionId(raw.factionId && allFactionIds.includes(raw.factionId) ? raw.factionId : (config.genderFactions[0]?.id || ""));
-      return;
-    }
-    if (d.submission.kind === "task") {
+    if (d.kind === "task") {
       setTaskStep(toStepDraft(raw, allFactionIds, allTagIds));
-      setTaskAnon(d.submission.anonymous);
+      setTaskAnon(d.anonymous);
       return;
     }
     setSeriesName(raw.name || "");
-    setSeriesAnon(d.submission.anonymous);
+    setSeriesAnon(d.anonymous);
     const retainedTargets = (raw.targetFactionIds || []).filter((id) => allFactionIds.includes(id));
     setSeriesTargets(retainedTargets.length ? retainedTargets : [...allFactionIds]);
     const steps = raw.steps || [];
@@ -211,17 +188,17 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
     });
   }
 
-  async function selectItem(item: ContributionSubmission) {
+  async function selectItem(item: ContributionItem) {
     requestLeave(() => { void loadItem(item); });
   }
 
-  async function loadItem(item: ContributionSubmission) {
+  async function loadItem(item: ContributionItem) {
     setSelected(item.id);
     setDirty(false);
     let d = detailsById[item.id];
-    if (!d || d.submission.updatedAt !== item.updatedAt) {
+    if (!d || d.updatedAt !== item.updatedAt) {
       try {
-        d = await contributionAsk<ContributionDetail>("contribution:get", { id: item.id });
+        d = await contributionAsk<ContributionItem>("contribution:get", { id: item.id, kind: item.kind });
         setDetailsById((prev) => ({ ...prev, [item.id]: d! }));
       } catch (e) {
         onError(e instanceof Error ? e.message : "加载失败");
@@ -229,7 +206,7 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
       }
     }
     // 拉取期间用户可能已经切走了选中项，此时只更新缓存，不能再回填表单（见 selectedIdRef 注释）。
-    if (selectedIdRef.current === item.id && editableStatuses.has(d.submission.status)) {
+    if (selectedIdRef.current === item.id && editableStatuses.has(d.status)) {
       populateFormFromDetail(d);
     }
   }
@@ -250,9 +227,9 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
     }
   }
 
-  async function persistDraft(): Promise<ContributionSubmission | null> {
+  async function persistDraft(): Promise<ContributionItem | null> {
     const content = currentContent();
-    const draft = await contributionAsk<ContributionSubmission>("contribution:saveDraft", {
+    const draft = await contributionAsk<ContributionItem>("contribution:saveDraft", {
       id: selectedId || "",
       kind: tab,
       content,
@@ -260,14 +237,7 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
     });
     setSelected(draft.id);
     setDirty(false);
-    setDetailsById((prev) => ({
-      ...prev,
-      [draft.id]: {
-        ...prev[draft.id],
-        submission: draft,
-        version: { content: JSON.stringify(content) },
-      },
-    }));
+    setDetailsById((prev) => ({ ...prev, [draft.id]: { ...draft, content } }));
     return draft;
   }
 
@@ -291,9 +261,8 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
     try {
       const draft = await persistDraft();
       if (!draft) return;
-      await contributionAsk("contribution:submit", { id: draft.id });
-      // 提交成功后清空表单：上一次上传的封面图已绑定到这条投稿，若不清空，
-      // 不刷新页面直接改文字连续提交下一条会因为图片归属校验失败而报错。
+      await contributionAsk("contribution:submit", { id: draft.id, kind: draft.kind });
+      // 提交成功后清空表单，避免下一次新建时误复用上一条投稿的文案和封面。
       resetFormFor(tab);
       setSelected(null);
       await reload();
@@ -328,8 +297,9 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
 
   async function withdrawSelected() {
     if (!selectedId) return;
+    const kind = detailsById[selectedId]?.kind || items.find((it) => it.id === selectedId)?.kind || tab;
     try {
-      await ask("contribution:withdraw", { id: selectedId });
+      await contributionAsk("contribution:withdraw", { id: selectedId, kind });
       await reload();
       setSelected(null);
     } catch (e) {
@@ -337,32 +307,22 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
     }
   }
 
-  async function requestUnpublishSelected() {
-    if (!selectedId) return;
-    try {
-      await ask("contribution:requestUnpublish", { id: selectedId });
-      await reload();
-      setSelected(null);
-    } catch (e) {
-      onError(e instanceof Error ? e.message : "申请失败");
-    }
-  }
-
-  function itemSummary(item: ContributionSubmission): string {
+  function itemSummary(item: ContributionItem): string {
     if (item.title) return item.title;
     const d = detailsById[item.id];
     if (!d) return "…";
-    const raw = parseContributionDraft(effectiveContributionContent(d.version));
+    const raw = asContributionDraft(d.content);
     if (!raw) return "(内容解析失败)";
     return contributionDraftTitle(raw);
   }
 
   // 状态药丸徽标 + 日期（+ 已通过投稿的点赞率/完成率），与后台共建审核统一同一套样式
-  // （见 ContributionStatusChip / formatContributionListMeta 的注释）。
-  function itemMetaLine(item: ContributionSubmission) {
+  // （见 ContributionStatusChip / formatContributionListMeta 的注释）。列表里日期不带
+  // 年份（short），详情头里保留 YY/MM/DD——同一份数据、两处显示要求不同，靠 short 区分。
+  function itemMetaLine(item: ContributionItem, short: boolean) {
     const chip = <ContributionStatusChip status={item.status} />;
-    if (item.publishedVersion <= 0) {
-      return <>{chip} {formatContributionListMeta({ kind: item.kind, status: item.status, updatedAt: item.updatedAt })}</>;
+    if (item.status !== "approved") {
+      return <>{chip} {formatContributionListMeta({ kind: item.kind, status: item.status, updatedAt: item.updatedAt, short })}</>;
     }
     const d = detailsById[item.id];
     if (!d) return <>{chip} …</>;
@@ -373,8 +333,9 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
           kind: item.kind,
           status: item.status,
           updatedAt: item.updatedAt,
-          likeRatio: d.realRatio ?? 0,
+          likeRatio: voteRatio(d.likeCount, d.downCount),
           completionRate: d.completion?.rate ?? 0,
+          short,
         })}
       </>
     );
@@ -383,11 +344,16 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
   const currentTab = tabs.find((t) => t.id === tab)!;
   const itemsForTab = items.filter((it) => it.kind === tab);
   const selectedDetail = selectedId ? detailsById[selectedId] : null;
-  const selectedStatus = selectedDetail?.submission.status;
+  const selectedStatus = selectedDetail?.status;
   const selectedEditable = selectedStatus ? editableStatuses.has(selectedStatus) : false;
-  const selectedDraft = selectedDetail ? parseContributionDraft(effectiveContributionContent(selectedDetail.version)) : null;
+  const selectedDraft = selectedDetail ? asContributionDraft(selectedDetail.content) : null;
   const canSaveDraft = !busy && formHasContent() && (!selectedId || selectedEditable);
   const taskHasOverlap = tab === "task" && stepHasFactionOverlap(taskStep);
+  // 撤回按钮放在编辑表单最下面、保存/提交的左边（与它们同一行），而不是单独占一整行浮在
+  // 表单上方——避免玩家一进编辑态就先看到一个孤立的危险操作。
+  const withdrawButton = selectedDetail && !nonWithdrawableStatuses.has(selectedDetail.status)
+    ? <button type="button" onClick={() => void withdrawSelected()}>撤回</button>
+    : null;
 
   return (
     <section className="contribute-page">
@@ -415,7 +381,7 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
                   onClick={() => void selectItem(item)}
                 >
                   <strong>{itemSummary(item)}</strong>
-                  <small className="hint">{itemMetaLine(item)}</small>
+                  <small className="hint">{itemMetaLine(item, true)}</small>
                 </button>
               ))}
               <button type="button" className="contribute-item contribute-item-new" onClick={startNew}>
@@ -430,17 +396,17 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
                   <>
                     <div className="contribute-detail-head">
                       <strong>{contributionDraftTitle(selectedDraft)}</strong>
-                      <small className="hint">{itemMetaLine(selectedDetail.submission)}</small>
+                      <small className="hint">{itemMetaLine(selectedDetail, false)}</small>
                     </div>
-                    {selectedDetail.submission.reviewComment ? <p className="notice">批注：{selectedDetail.submission.reviewComment}</p> : null}
+                    {selectedDetail.reviewComment ? <p className="notice">批注：{selectedDetail.reviewComment}</p> : null}
                   </>
                 ) : null}
                 {selectedDetail && !selectedEditable ? (
                   <>
                     {selectedDraft ? (
-                      <ContributionPreview draft={selectedDraft} kind={selectedDetail.submission.kind} factionLabel={factionLabel} tagLabel={tagLabel} />
+                      <ContributionPreview draft={selectedDraft} kind={selectedDetail.kind} factionLabel={factionLabel} tagLabel={tagLabel} />
                     ) : <p className="notice">内容解析失败。</p>}
-                    {(selectedDetail.submission.status === "pending" || selectedDetail.submission.status === "revision_pending") ? (
+                    {selectedDetail.status === "pending" ? (
                       <div className="row">
                         <button type="button" onClick={() => void withdrawSelected()}>撤回</button>
                       </div>
@@ -448,30 +414,6 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
                   </>
                 ) : (
                   <>
-                    {selectedDetail && contributionHasPublishedVersion(selectedDetail.submission.status)
-                      && selectedDetail.submission.status !== "revision_pending"
-                      && selectedDetail.submission.status !== "unpublish_pending" ? (
-                      <div className="row">
-                        <button type="button" onClick={() => void requestUnpublishSelected()}>申请下架</button>
-                      </div>
-                    ) : null}
-                    {tab === "gender" && (
-                      <form className="stack" onSubmit={(e) => { e.preventDefault(); void saveAndSubmit(); }}>
-                        <div className="contribute-split-row">
-                          <label className="field-label"><span>性别名称</span><input value={genderLabel} onChange={(e) => { setGenderLabel(e.target.value); setDirty(true); }} required /></label>
-                          <label className="field-label">
-                            <span>归属阵营</span>
-                            <select value={factionId} onChange={(e) => { setFactionId(e.target.value); setDirty(true); }}>
-                              {config.genderFactions.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
-                            </select>
-                          </label>
-                        </div>
-                        <div className="contribute-submit-row">
-                          <button type="button" disabled={!canSaveDraft} onClick={() => { void saveDraftOnly(); }}>保存草稿</button>
-                          <button className="primary" disabled={busy} type="submit">提交审批</button>
-                        </div>
-                      </form>
-                    )}
                     {tab === "task" && (
                       <form className="stack" onSubmit={(e) => { e.preventDefault(); void saveAndSubmit(); }}>
                         <StepEditor
@@ -483,8 +425,9 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
                           rightOfPreview={<label className="checkbox-inline"><input type="checkbox" checked={taskAnon} onChange={(e) => { setTaskAnon(e.target.checked); setDirty(true); }} />匿名贡献</label>}
                         />
                         <div className="contribute-submit-row">
-                          <button type="button" disabled={!canSaveDraft} onClick={() => { void saveDraftOnly(); }}>保存草稿</button>
-                          <button className="primary" disabled={busy || taskHasOverlap} type="submit">提交审批</button>
+                          {withdrawButton}
+                          <button type="button" disabled={!canSaveDraft} onClick={() => { void saveDraftOnly(); }}>保存</button>
+                          <button className="primary" disabled={busy || taskHasOverlap} type="submit">提交</button>
                         </div>
                       </form>
                     )}
@@ -504,6 +447,9 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
                         onSaveDraft={() => { void saveDraftOnly(); }}
                         onSubmit={() => { void saveAndSubmit(); }}
                         onError={onError}
+                        saveDraftLabel="保存"
+                        submitLabel="提交"
+                        extraSubmitActions={withdrawButton}
                       />
                     )}
                   </>

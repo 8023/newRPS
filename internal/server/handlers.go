@@ -222,8 +222,6 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{8, 60_000, 60_000}, s.onContributionSubmit
 	case "contribution:withdraw":
 		return RateLimitOptions{8, 60_000, 30_000}, s.onContributionWithdraw
-	case "contribution:requestUnpublish":
-		return RateLimitOptions{6, 60_000, 60_000}, s.onContributionRequestUnpublish
 	case "contribution:vote":
 		return RateLimitOptions{20, 60_000, 15_000}, s.onContributionVote
 	case "contribution:votePreview":

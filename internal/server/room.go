@@ -377,7 +377,8 @@ func (s *Server) firstTagWithBackground(included []string) *types.PunishmentTagC
 
 // findSeriesByID 只返回"可用"的系列（seriesIsUsable：至少要有一步）。没有步骤的
 // 系列即便已保存到库里，对外也视为不存在：建房面板选不到，房间设置校验拒绝，
-// 运行时也不会产出任务。阵营覆盖不全不再拦截（运行时从随机池抽替补）。
+// 运行时也不会产出任务。新系列在审批时保证每一步覆盖声明的目标阵营；目标阵营外的
+// 玩家和历史异常数据仍由运行时从其阵营随机池抽替补。
 func (s *Server) findSeriesByID(id string) *types.PunishmentSeriesTaskConfig {
 	id = strings.TrimSpace(id)
 	if id == "" {

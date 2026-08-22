@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { seriesFactionWarning } from "./seriesFaction";
+import { seriesFactionWarning, seriesFactionWarningFor } from "./seriesFaction";
 
 const config = {
   genderFactions: [
@@ -20,7 +20,7 @@ describe("seriesFactionWarning", () => {
     )).toBeNull();
   });
 
-  it("warns when sitting into a series that does not cover the player", () => {
+  it("warns when entering a series room that does not cover the player", () => {
     const msg = seriesFactionWarning(
       { settings: { punishmentSource: "series", punishmentSeriesId: "s1" } } as never,
       config,
@@ -28,5 +28,15 @@ describe("seriesFactionWarning", () => {
     );
     expect(msg).toContain("甲营");
     expect(msg).toContain("剧情会断");
+  });
+
+  it("uses the same warning for the flat lobby-room summary before joining", () => {
+    const msg = seriesFactionWarningFor("series", "s1", config, { factionId: "f2" });
+    expect(msg).toContain("甲营");
+    expect(msg).toContain("仍然要进入吗");
+  });
+
+  it("does not warn before joining a random-task room", () => {
+    expect(seriesFactionWarningFor("random", "s1", config, { factionId: "f2" })).toBeNull();
   });
 });

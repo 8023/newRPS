@@ -215,3 +215,60 @@ func TestJungleForcedGiveawaySkipsCurrentTurn(t *testing.T) {
 		t.Fatal("forced giveaway should be consumed")
 	}
 }
+
+// 国际象棋每子惩罚在对局中途插入一条 history，前端靠 ChessWhiteSeat 判断哪一边执白；
+// 该字段留空时两个座位都会被判成黑棋，对局记录会显示成"黑棋子被黑棋子吃掉"。
+func TestChessCapturePunishmentHistoryKeepsWhiteSeat(t *testing.T) {
+	s := newTestServer(t)
+	s.rooms = map[string]*RoomState{}
+	s.roomBroadcastTimers = map[string]*roomBroadcastPending{}
+	s.turnBasedClockTimers = map[string]*turnBasedClockTimer{}
+	s.players["playerA"] = &PlayerState{PublicPlayer: types.PublicPlayer{ID: "playerA", Name: "甲", DisplayName: "甲", RoomID: "chess-piece"}}
+	s.players["playerB"] = &PlayerState{PublicPlayer: types.PublicPlayer{ID: "playerB", Name: "乙", DisplayName: "乙", RoomID: "chess-piece"}}
+	room := &RoomState{
+		ID:     "chess-piece",
+		Phase:  types.PhaseReady,
+		Status: "waiting",
+		Settings: types.RoomSettings{
+			GameID:                   types.GameChess,
+			EnablePunishment:         true,
+			EnablePerPiecePunishment: true,
+			PunishmentSource:         "random",
+		},
+		Seats: map[types.SeatKey]SeatOccupant{
+			types.SeatA: &HumanSeat{Player: types.PublicPlayer{ID: "playerA", Name: "甲", DisplayName: "甲"}},
+			types.SeatB: &HumanSeat{Player: types.PublicPlayer{ID: "playerB", Name: "乙", DisplayName: "乙"}},
+		},
+		Ready:       map[types.SeatKey]bool{types.SeatA: true, types.SeatB: true},
+		Score:       map[types.SeatKey]int{},
+		SeatedScore: map[types.SeatKey]int{},
+		SeatStats:   map[types.SeatKey]types.SeatStats{},
+	}
+	s.rooms[room.ID] = room
+	s.startChessRoom(room)
+	white := room.Chess.WhiteSeat
+	black := oppositeSeat(white)
+	// 1. e4 d5 2. exd5 —— 白吃黑兵，触发每子惩罚
+	if ok, msg := s.applyChessMove(room, white, 6, 4, 4, 4, ""); !ok {
+		t.Fatalf("e4: %s", msg)
+	}
+	if ok, msg := s.applyChessMove(room, black, 1, 3, 3, 3, ""); !ok {
+		t.Fatalf("d5: %s", msg)
+	}
+	if ok, msg := s.applyChessMove(room, white, 4, 4, 3, 3, ""); !ok {
+		t.Fatalf("exd5: %s", msg)
+	}
+	if room.Phase != types.PhasePunishment {
+		t.Fatalf("吃子后应进入惩罚阶段，got %s", room.Phase)
+	}
+	if len(room.RoundHistory) == 0 {
+		t.Fatal("吃子惩罚应写入一条对局记录")
+	}
+	item := room.RoundHistory[0]
+	if item.ResultLabel != "吃子惩罚" {
+		t.Fatalf("resultLabel=%q, want 吃子惩罚", item.ResultLabel)
+	}
+	if item.ChessWhiteSeat != white {
+		t.Fatalf("history.ChessWhiteSeat=%q, want %q（留空会让前端把两边都显示成黑棋）", item.ChessWhiteSeat, white)
+	}
+}

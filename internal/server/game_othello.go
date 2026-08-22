@@ -840,7 +840,7 @@ func (s *Server) forceEndOthelloGame(room *RoomState, result types.RoundResult, 
 	for i, p := range punishedPlayers {
 		punishedNames[i] = playerShortName(p)
 	}
-	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, result)
+	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, result, "round_end")
 	playerA := s.humanPlayerFromSeat(room, types.SeatA)
 	playerB := s.humanPlayerFromSeat(room, types.SeatB)
 	room.Othello.BlackCount = blackCount
@@ -962,7 +962,7 @@ func (s *Server) applyOthelloDisconnectForfeit(room *RoomState, forfeit Disconne
 	for i, p := range punishedPlayers {
 		punishedNames[i] = playerShortName(p)
 	}
-	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, types.RoundResult(forfeit.WinnerSeat))
+	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, types.RoundResult(forfeit.WinnerSeat), "round_end")
 	s.resetExtremeWinStreak(loser)
 	streakText := ""
 	if room.Settings.EnableRanked {

@@ -62,15 +62,35 @@ func hashRoomPassword(password string) string {
 // task_at/proof_at 分别是任务发布、证明提交的时间，二者不共用一列。
 // 驳回重做不会复用旧行：旧行 status 置为 rejected、redo_id 指向新插入的任务行 id，
 // 新一轮任务重新走一次 insert，这样每次尝试都留痕，不会被覆盖。
+//
+// performer_id/performer_name：执行这个任务的人（原 target_id/target_name）。
+// approver_id/approver_name：审批这个任务证明的人（原 publisher_id/publisher_name）——
+// 不管任务来源是随机/系列/玩家发布都会有值（座位制游戏固定是对手，大话骰固定是本局赢家，
+// 见 canReviewPlayer/liarsDicePunishmentReviewer），不像旧版 publisher 只有玩家发布任务
+// 时才有值。performer_vote/approver_vote 是这两人各自的评价（0 未投/1 赞/-1 踩），
+// 直接作为持久化审计记录——防重复投票就靠这两列本身（非 0 即视为已投过，见
+// contribution_vote_rpc.go 的 castContributionVote），不需要另外的内存态或投票表。
+// trigger 区分这次惩罚是终局触发（round_end）还是国际象棋/斗兽棋每子惩罚触发
+// （piece_capture）。tie_double_punish 标记这一行是不是"平局双罚"产生的——这种场景下
+// approver_id 存的是"这局里另一个被罚的人"而不是字面意义的赢家（双罚本就没有真正的
+// 赢家，但审批关系不看输赢，两人依然互审对方证明，见 canReviewPlayer），这一列纯粹是
+// 审计用的显式说明，不参与任何业务判断。
+// task_source/formal_series_id/formal_series_version/contributor_player_id/
+// contributor_name_snapshot/contributor_anonymous 六列在 v48 迁移已 DROP：是否玩家自定义
+// 任务恒等于 formal_task_id 是否为空，系列归属/贡献者/匿名与否/昵称都现查 sub_tasks +
+// s.players，不必在事件行上再存一份（见 punishmentEventMeta 顶部注释）。仍留在这份 DDL
+// 里，是因为更早的迁移（execSchemaQuarantiningLegacyTables 的隔离重建、
+// punishment_migrate_v43.go 的存量搬迁）按列名显式写过它们，DDL 提前少列会让那些老库
+// 升级路径直接报错，只能等它们跑完后再由 v48 删掉。
 const punishmentEventSchema = `
 CREATE TABLE IF NOT EXISTS punishment_events (
 	id             TEXT PRIMARY KEY,
 	room_id        TEXT NOT NULL,
 	task_source    TEXT,
-	publisher_id   TEXT,
-	publisher_name TEXT,
-	target_id      TEXT NOT NULL,
-	target_name    TEXT,
+	approver_id    TEXT,
+	approver_name  TEXT,
+	performer_id   TEXT NOT NULL,
+	performer_name TEXT,
 	task_text      TEXT,
 	task_at        INTEGER NOT NULL,
 	proof_text     TEXT,
@@ -86,12 +106,19 @@ CREATE TABLE IF NOT EXISTS punishment_events (
 	contributor_player_id TEXT NOT NULL DEFAULT '',
 	contributor_name_snapshot TEXT NOT NULL DEFAULT '',
 	contributor_anonymous INTEGER NOT NULL DEFAULT 0,
+	performer_vote INTEGER NOT NULL DEFAULT 0,
+	approver_vote  INTEGER NOT NULL DEFAULT 0,
+	trigger        TEXT NOT NULL DEFAULT 'round_end',
+	tie_double_punish INTEGER NOT NULL DEFAULT 0,
 	completed_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_punishment_events_room   ON punishment_events(room_id, task_at);
-CREATE INDEX IF NOT EXISTS idx_punishment_events_target ON punishment_events(target_id, task_at);
 CREATE INDEX IF NOT EXISTS idx_punishment_events_at    ON punishment_events(task_at);
 CREATE INDEX IF NOT EXISTS idx_punishment_events_proof ON punishment_events(proof_at);
+-- idx_punishment_events_target（performer_id 上的索引）不放在这里：这段 DDL 在每次启动时
+-- 无条件先于 migrations 执行，老库此时这张表还叫 target_id（改名要等 v43 迁移跑完），
+-- 提前对着不存在的列建索引会直接报错。改名后的索引改在 v43 迁移里显式建
+-- （punishment_migrate_v43.go），不受这个先后顺序问题影响。
 `
 
 func newEventStore(db *sql.DB) *eventStore {
@@ -131,32 +158,39 @@ func (e *eventStore) insertRoomEvent(in roomEventInput) error {
 
 // insertPunishmentTask 在任务发布时插入一行；id 由调用方生成（randomID()），后续
 // updatePunishmentProof/updatePunishmentStatus/markPunishmentRedo 都按这个 id 定位同一行。
+//
+// task_source/formal_series_id/formal_series_version/contributor_player_id/
+// contributor_name_snapshot/contributor_anonymous 六列仍留在建表 DDL 里（老库升级路径
+// 里更早的迁移——execSchemaQuarantiningLegacyTables 的隔离重建、punishment_migrate_v43.go
+// 的存量搬迁——按列名显式读写过它们，DDL 提前少一列会直接报错），但现在的业务代码不再
+// 读写：是否玩家自定义任务恒等于 formal_task_id 是否为空（贡献者、系列归属、匿名与否都
+// 现查 sub_tasks，见 contribution_vote_rpc.go 的 atVersion；昵称统一现查 s.players，不做
+// 快照），v48 迁移在所有历史迁移跑完后把这六列物理 DROP 掉。
 type punishmentEventMeta struct {
-	RoundID              string
-	FormalTaskID         string
-	FormalTaskVersion    int
-	FormalSeriesID       string
-	FormalSeriesVersion  int
-	ContributorPlayerID  string
-	ContributorNameSnap  string
-	ContributorAnonymous bool
+	RoundID           string
+	FormalTaskID      string
+	FormalTaskVersion int
+	Trigger           string // "" 时落库按 round_end 兜底（见建表 DEFAULT）
+	TieDoublePunish   bool
 }
 
-func (e *eventStore) insertPunishmentTask(id string, taskAt int64, source, roomID, publisherID, publisherName, targetID, targetName, taskText string, meta punishmentEventMeta) error {
+func (e *eventStore) insertPunishmentTask(id string, taskAt int64, roomID, approverID, approverName, performerID, performerName, taskText string, meta punishmentEventMeta) error {
 	if e == nil || e.db == nil {
 		return nil
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	trigger := meta.Trigger
+	if trigger == "" {
+		trigger = "round_end"
+	}
 	_, err := e.db.Exec(
 		`INSERT INTO punishment_events (
-			id, room_id, task_source, publisher_id, publisher_name, target_id, target_name, task_text, task_at, status,
-			round_id, formal_task_id, formal_task_version, formal_series_id, formal_series_version,
-			contributor_player_id, contributor_name_snapshot, contributor_anonymous
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, roomID, source, publisherID, publisherName, targetID, targetName, taskText, taskAt, "assigned",
-		meta.RoundID, meta.FormalTaskID, meta.FormalTaskVersion, meta.FormalSeriesID, meta.FormalSeriesVersion,
-		meta.ContributorPlayerID, meta.ContributorNameSnap, boolInt(meta.ContributorAnonymous),
+			id, room_id, approver_id, approver_name, performer_id, performer_name, task_text, task_at, status,
+			round_id, formal_task_id, formal_task_version, trigger, tie_double_punish
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, roomID, approverID, approverName, performerID, performerName, taskText, taskAt, "assigned",
+		meta.RoundID, meta.FormalTaskID, meta.FormalTaskVersion, trigger, boolInt(meta.TieDoublePunish),
 	)
 	return err
 }
@@ -209,31 +243,29 @@ func (e *eventStore) getPunishmentEvent(id string) (punishmentEventRow, error) {
 		return row, sql.ErrNoRows
 	}
 	err := e.db.QueryRow(`
-		SELECT id, room_id, task_source, status, redo_id, round_id, formal_task_id, formal_task_version,
-			formal_series_id, formal_series_version, contributor_player_id, contributor_name_snapshot, contributor_anonymous, completed_at
+		SELECT id, room_id, status, redo_id, round_id, formal_task_id, formal_task_version,
+			performer_id, approver_id, performer_vote, approver_vote, completed_at
 		FROM punishment_events WHERE id = ?`, id).Scan(
-		&row.ID, &row.RoomID, &row.Source, &row.Status, &row.RedoID, &row.RoundID,
-		&row.FormalTaskID, &row.FormalTaskVersion, &row.FormalSeriesID, &row.FormalSeriesVersion,
-		&row.ContributorPlayerID, &row.ContributorNameSnap, &row.ContributorAnonymous, &row.CompletedAt,
+		&row.ID, &row.RoomID, &row.Status, &row.RedoID, &row.RoundID,
+		&row.FormalTaskID, &row.FormalTaskVersion,
+		&row.PerformerID, &row.ApproverID, &row.PerformerVote, &row.ApproverVote, &row.CompletedAt,
 	)
 	return row, err
 }
 
 type punishmentEventRow struct {
-	ID                   string
-	RoomID               string
-	Source               string
-	Status               string
-	RedoID               sql.NullString
-	RoundID              string
-	FormalTaskID         string
-	FormalTaskVersion    int
-	FormalSeriesID       string
-	FormalSeriesVersion  int
-	ContributorPlayerID  string
-	ContributorNameSnap  string
-	ContributorAnonymous int
-	CompletedAt          sql.NullInt64
+	ID                string
+	RoomID            string
+	Status            string
+	RedoID            sql.NullString
+	RoundID           string
+	FormalTaskID      string
+	FormalTaskVersion int
+	PerformerID       string
+	ApproverID        string
+	PerformerVote     int
+	ApproverVote      int
+	CompletedAt       sql.NullInt64
 }
 
 // markPunishmentRedo 驳回重做时收尾旧行：status 置为 rejected，redo_id 指向新插入的
@@ -246,4 +278,50 @@ func (e *eventStore) markPunishmentRedo(id, redoID string) error {
 	defer e.mu.Unlock()
 	_, err := e.db.Exec(`UPDATE punishment_events SET status = 'rejected', redo_id = ? WHERE id = ?`, redoID, id)
 	return err
+}
+
+// castPunishmentEventVoteAndAggregate 在同一个事务里写入事件侧防重列，并把票累加到
+// 玩家实际体验的 formal_task_id + formal_task_version。任一步失败都回滚，避免“资格已消耗
+// 但统计未增加”，也避免投稿后来修订后把旧事件的票误记到新版本。
+func (e *eventStore) castPunishmentEventVoteAndAggregate(id string, asPerformer bool, vote int, taskID string, taskVersion int) (bool, error) {
+	if e == nil || e.db == nil {
+		return false, sql.ErrNoRows
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	tx, err := e.db.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	col := "approver_vote"
+	if asPerformer {
+		col = "performer_vote"
+	}
+	res, err := tx.Exec(`UPDATE punishment_events SET `+col+` = ? WHERE id = ? AND `+col+` = 0`, vote, id)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil || n == 0 {
+		return false, err
+	}
+	voteCol := "down_count"
+	if vote == 1 {
+		voteCol = "like_count"
+	}
+	res, err = tx.Exec(`UPDATE sub_tasks SET `+voteCol+` = `+voteCol+` + 1, updated_at = ?
+		WHERE id = ? AND version = ?`, nowMs(), taskID, taskVersion)
+	if err != nil {
+		return false, err
+	}
+	if n, err = res.RowsAffected(); err != nil {
+		return false, err
+	} else if n == 0 {
+		return false, errContributionNotFound
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
 }

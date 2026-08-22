@@ -1,8 +1,8 @@
 package server
 
 import (
+	"database/sql"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/doumiao/newRPS/internal/config"
@@ -15,6 +15,7 @@ type legacySeriesDisk struct {
 	Name                 string              `json:"name"`
 	RoomNamePool         *types.RoomNamePool `json:"roomNamePool"`
 	RoomBackgroundImages []string            `json:"roomBackgroundImages"`
+	TargetFactionIDs     []string            `json:"targetFactionIds"`
 	Subtasks             []legacySubtaskDisk `json:"subtasks"`
 }
 
@@ -29,14 +30,16 @@ type legacyVariantDisk struct {
 	BackgroundOpacity float64  `json:"backgroundOpacity"`
 }
 
-// migratePunishmentPoolFromJSONIfNeeded 一次性把 punishments.json 里的 tasks/seriesTasks
-// 导入 SQLite。幂等条件：punishment_tasks 表行数为 0 且磁盘 tasks（或 seriesTasks）非空。
-// 迁移完不清理源头 JSON（字段变成死数据，config 加载器已不再读写）。
+// migratePunishmentPoolFromJSONIfNeeded 一次性把 punishments.json 里已废弃的 tasks/
+// seriesTasks 字段导入 SQLite（sub_tasks/series，均标记 status=approved，贡献者归属为
+// legacyPunishmentContributorID，与 schema_migrations.go v43 迁移存量数据时的约定一致）。
+// 幂等条件：sub_tasks 表行数为 0 且磁盘 tasks（或 seriesTasks）非空——只有全新安装、且
+// punishments.json 里仍残留这两个死字段时才会走到这里；线上库早就迁移过，不会重复导入。
 func (s *Server) migratePunishmentPoolFromJSONIfNeeded() {
-	if s.punishmentStore == nil {
+	if s.contributionStore == nil {
 		return
 	}
-	n, err := s.punishmentStore.countTasks()
+	n, err := s.contributionStore.tasks.countAll()
 	if err != nil {
 		s.errorLog("punishment_migrate_count_failed", err.Error())
 		return
@@ -53,7 +56,7 @@ func (s *Server) migratePunishmentPoolFromJSONIfNeeded() {
 	if len(seriesRaw) > 0 && string(seriesRaw) != "null" {
 		if err := json.Unmarshal(seriesRaw, &legacySeries); err != nil {
 			s.errorLog("punishment_migrate_series_parse_failed", err.Error())
-			// 不能先导入 tasks：幂等哨兵正是 punishment_tasks 非空；一旦先写成功，
+			// 不能先导入 tasks：幂等哨兵正是 sub_tasks 非空；一旦先写成功，
 			// 后续重启会跳过迁移，修复 JSON 后系列也永远无法自动补回。
 			return
 		}
@@ -62,96 +65,96 @@ func (s *Server) migratePunishmentPoolFromJSONIfNeeded() {
 		return
 	}
 
-	// 系列变体打散为任务池条目，挂 series:<id> 内部标签。
-	extraTasks := make([]types.PunishmentTaskConfig, 0)
-	seriesOut := make([]types.PunishmentSeriesTaskConfig, 0, len(legacySeries))
-	for _, ser := range legacySeries {
+	tx, err := s.db.Begin()
+	if err != nil {
+		s.errorLog("punishment_migrate_begin_failed", err.Error())
+		return
+	}
+	if err := seedLegacyPunishmentTx(tx, s.contributionStore, tasks, legacySeries); err != nil {
+		_ = tx.Rollback()
+		s.errorLog("punishment_migrate_seed_failed", err.Error())
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		s.errorLog("punishment_migrate_commit_failed", err.Error())
+	}
+}
+
+// seedLegacyPunishmentTx 把独立随机任务（每条本身就是一个只含单一变体的 StepDraft）与
+// 系列（每个 subtask 是一步，其 variants 直接搬进该步的 Variants）写入 sub_tasks/series。
+func seedLegacyPunishmentTx(tx *sql.Tx, cs *contributionStore, tasks []types.PunishmentTaskConfig, series []legacySeriesDisk) error {
+	for _, t := range tasks {
+		draft := types.StepDraft{
+			Variants:          []types.TaskVariantDraft{{Text: strings.TrimSpace(t.Text), FactionIDs: t.FactionIDs}},
+			InRandomPool:      t.Order != -1,
+			Order:             t.Order,
+			TagIDs:            t.TagIDs,
+			BackgroundImage:   t.BackgroundImage,
+			BackgroundOpacity: fallbackOpacity(t.BackgroundOpacity),
+		}
+		if _, err := cs.tasks.insertVersion(tx, strings.TrimSpace(t.ID), "", 0, draft, types.ContributionApproved,
+			legacyPunishmentContributorID, false, legacyPunishmentContributorID, ""); err != nil {
+			return err
+		}
+	}
+
+	for _, ser := range series {
 		sid := strings.TrimSpace(ser.ID)
 		if sid == "" {
 			continue
 		}
-		steps := make([]types.PunishmentSeriesStep, 0, len(ser.Subtasks))
+		seriesRow, err := cs.series.insertVersion(tx, sid, strings.TrimSpace(ser.Name), ser.TargetFactionIDs, types.ContributionApproved,
+			legacyPunishmentContributorID, false, legacyPunishmentContributorID, "")
+		if err != nil {
+			return err
+		}
+		pool := any(seriesRow.RoomNamePool)
+		if ser.RoomNamePool != nil {
+			pool = ser.RoomNamePool
+		}
+		poolJSON, err := json.Marshal(pool)
+		if err != nil {
+			return err
+		}
+		bgJSON, err := json.Marshal(nonNilStrings(ser.RoomBackgroundImages))
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`UPDATE series SET room_name_pool=?, room_background_images=? WHERE id=? AND version=?`,
+			string(poolJSON), string(bgJSON), seriesRow.ID, seriesRow.Version); err != nil {
+			return err
+		}
 		for si, sub := range ser.Subtasks {
-			taskIDs := make([]string, 0, len(sub.Variants))
+			variants := make([]types.TaskVariantDraft, 0, len(sub.Variants))
+			bgImage := ""
+			op := 0.22
 			for vi, v := range sub.Variants {
-				tid := fmt.Sprintf("%s_s%d_v%d", sid, si, vi)
-				op := v.BackgroundOpacity
-				if op <= 0 {
-					op = 0.22
-				}
-				extraTasks = append(extraTasks, types.PunishmentTaskConfig{
-					ID:                tid,
-					Text:              strings.TrimSpace(v.Text),
-					TagIDs:            []string{"series:" + sid},
-					FactionIDs:        append([]string(nil), v.FactionIDs...),
-					Order:             50,
-					BackgroundImages:  append([]string(nil), v.BackgroundImages...),
-					BackgroundOpacity: op,
+				variants = append(variants, types.TaskVariantDraft{
+					Text: strings.TrimSpace(v.Text), FactionIDs: v.FactionIDs,
 				})
-				taskIDs = append(taskIDs, tid)
+				if vi == 0 {
+					if len(v.BackgroundImages) > 0 {
+						bgImage = v.BackgroundImages[0]
+					}
+					op = fallbackOpacity(v.BackgroundOpacity)
+				}
 			}
-			steps = append(steps, types.PunishmentSeriesStep{TaskIDs: taskIDs})
-		}
-		seriesOut = append(seriesOut, types.PunishmentSeriesTaskConfig{
-			ID:                   sid,
-			Name:                 strings.TrimSpace(ser.Name),
-			RoomNamePool:         ser.RoomNamePool,
-			RoomBackgroundImages: append([]string(nil), ser.RoomBackgroundImages...),
-			Steps:                steps,
-		})
-	}
-
-	allTasks := make([]types.PunishmentTaskConfig, 0, len(tasks)+len(extraTasks))
-	allTasks = append(allTasks, tasks...)
-	allTasks = append(allTasks, extraTasks...)
-	stampLegacyPunishmentAttribution(allTasks, seriesOut)
-
-	// 先写系列、最后写作为幂等哨兵的 tasks。若系列写入成功而 tasks 失败，下一次
-	// 启动仍会因 tasks 为空而完整重试；反过来会造成系列永久漏迁。
-	if len(seriesOut) > 0 {
-		if err := s.punishmentStore.replaceSeries(seriesOut); err != nil {
-			s.errorLog("punishment_migrate_series_failed", err.Error())
-			return
+			draft := types.StepDraft{
+				Variants: variants, InRandomPool: true, Order: 50,
+				BackgroundImage: bgImage, BackgroundOpacity: op,
+			}
+			if _, err := cs.tasks.insertVersion(tx, "", seriesRow.ID, si, draft, types.ContributionApproved,
+				legacyPunishmentContributorID, false, legacyPunishmentContributorID, ""); err != nil {
+				return err
+			}
 		}
 	}
-	if len(allTasks) > 0 {
-		if err := s.punishmentStore.replaceTasks(allTasks); err != nil {
-			s.errorLog("punishment_migrate_tasks_failed", err.Error())
-			return
-		}
-	}
+	return nil
 }
 
-// stampLegacyPunishmentAttribution 补齐“迁移执行后才从 JSON 导入”的旧内容元数据。
-// schema v33/v35 的 SQL 回填只能看见打开数据库时已经在表里的行，无法覆盖随后由
-// migratePunishmentPoolFromJSONIfNeeded 插入的数据；导入入口必须镜像补上贡献者、版本和
-// task_group_id，否则旧任务会丢贡献者署名、无法稳定计票，也不会进入按组统计口径。
-func stampLegacyPunishmentAttribution(tasks []types.PunishmentTaskConfig, series []types.PunishmentSeriesTaskConfig) {
-	for i := range tasks {
-		if tasks[i].ContributorPlayerID == "" {
-			tasks[i].ContributorPlayerID = legacyPunishmentContributorID
-			tasks[i].ContributorAnonymous = false
-		}
-		if tasks[i].ContentVersion <= 0 {
-			tasks[i].ContentVersion = 1
-		}
-		if tasks[i].VoteVersion <= 0 {
-			tasks[i].VoteVersion = 1
-		}
-		if strings.TrimSpace(tasks[i].TaskGroupID) == "" {
-			tasks[i].TaskGroupID = tasks[i].ID
-		}
+func fallbackOpacity(op float64) float64 {
+	if op <= 0 {
+		return 0.22
 	}
-	for i := range series {
-		if series[i].ContributorPlayerID == "" {
-			series[i].ContributorPlayerID = legacyPunishmentContributorID
-			series[i].ContributorAnonymous = false
-		}
-		if series[i].ContentVersion <= 0 {
-			series[i].ContentVersion = 1
-		}
-		if series[i].VoteVersion <= 0 {
-			series[i].VoteVersion = 1
-		}
-	}
+	return op
 }

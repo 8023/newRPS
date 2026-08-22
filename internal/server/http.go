@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/doumiao/newRPS/internal/config"
 )
 
 func (s *Server) securityHeaders(next http.Handler) http.Handler {
@@ -542,7 +540,6 @@ func (s *Server) handleContributionImage(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusTooManyRequests, map[string]string{"message": "上传过于频繁，请稍后再试"})
 		return
 	}
-	playerID := player.ID
 	s.mu.Unlock()
 	file, header, err := r.FormFile("image")
 	if err != nil {
@@ -569,70 +566,11 @@ func (s *Server) handleContributionImage(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "保存失败"})
 		return
 	}
-	if s.contributionStore == nil {
-		removeUnrecordedContributionUpload(s.uploadsDir, url)
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"message": "共建存储不可用"})
-		return
-	}
-	if err := s.contributionStore.recordImage(url, playerID, ""); err != nil {
-		removeUnrecordedContributionUpload(s.uploadsDir, url)
-		s.errorLog("contribution_image_record_failed", err.Error())
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "保存失败"})
-		return
-	}
+	// 不再有独立的图片登记表：这张图此刻只是落了盘，要等玩家把它填进草稿的
+	// background_image 字段并保存才会被 imageIsLive 判定为"活的"（见
+	// contributionImageAccessible）；上传成功但从未被任何草稿引用的文件永久留在磁盘上
+	// 不对外可访问，不需要显式回滚删除。
 	writeJSON(w, http.StatusOK, map[string]string{"imageUrl": url})
-}
-
-// removeUnrecordedContributionUpload 只回滚“文件写入成功、但审计数据库登记失败”的 HTTP
-// 失败请求；客户端拿到的是错误而不是 imageUrl，因此它不属于已经成功上传的永久审计材料。
-// 一旦 recordImage 成功，业务服务没有任何删除共建图片的路径。
-func removeUnrecordedContributionUpload(uploadsDir, imageURL string) {
-	rel := strings.TrimPrefix(imageURL, "/uploads/")
-	if rel == "" || rel == imageURL {
-		return
-	}
-	_ = os.Remove(filepath.Join(uploadsDir, filepath.FromSlash(rel)))
-}
-
-func (s *Server) handleConfigExport(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	// 优先取请求头，避免口令出现在反代访问日志 / URL 里；兼容旧客户端的 query。
-	password := r.Header.Get("X-Admin-Password")
-	if password == "" {
-		password = r.URL.Query().Get("password")
-	}
-	s.mu.Lock()
-	ok := s.adminPasswordMatches(password, clientIP(r))
-	s.mu.Unlock()
-	if !ok {
-		writeJSON(w, http.StatusForbidden, map[string]string{"message": "Admin password is required"})
-		return
-	}
-	text, err := s.exportConfigText()
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
-		return
-	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_, _ = w.Write([]byte(text))
-}
-
-func (s *Server) exportConfigText() (string, error) {
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		return "", fmt.Errorf("导出配置失败: %w", err)
-	}
-	if err := s.loadGendersIntoConfig(&cfg); err != nil {
-		return "", fmt.Errorf("导出性别与阵营失败: %w", err)
-	}
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("导出配置失败: %w", err)
-	}
-	return string(data) + "\n", nil
 }
 
 // noDirListingFS 禁止目录列表：只允许打开具体文件，访问 /uploads/ 或子目录本身返回 404。
@@ -653,6 +591,27 @@ func (fs noDirListingFS) Open(name string) (http.File, error) {
 		return nil, os.ErrNotExist
 	}
 	return f, nil
+}
+
+// contributionImageAccessible 判断某张共建封面图当前是否仍是它所属投稿"最新版本"引用的
+// 图（草稿/待审/已通过/被驳回/已撤回都算数，不看状态），只有"重新上传另一张图覆盖掉"
+// 产生的孤儿文件才拒绝——图片文件本身永远不硬删，只是不再对外可访问。走独立只读连接
+// （不可用时退回主连接），避免这条高频的静态资源请求占用主写连接（SetMaxOpenConns(1)）。
+func (s *Server) contributionImageAccessible(path string) bool {
+	if s.contributionStore == nil {
+		return false
+	}
+	db := s.altAccountsReadDB()
+	ts := s.contributionStore.tasks
+	if db != s.db && db != nil {
+		ts = newSubTaskStore(db)
+	}
+	live, err := ts.imageIsLive(path)
+	if err != nil {
+		s.errorLog("contribution_image_check_failed", err.Error())
+		return false
+	}
+	return live
 }
 
 func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
@@ -693,6 +652,17 @@ func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
 				http.NotFound(w, r)
 				return
 			}
+		}
+		// 共建封面图额外一层限制：只要这张图当前仍是某份投稿引用的封面就放行，不管那份投稿
+		// 是草稿、待审、已通过还是被驳回/撤回——状态完全不影响；只有"上传后又被重新上传
+		// 覆盖替换掉"产生的孤儿文件才拒绝（见 contributionImageAccessible 的注释）。图片
+		// 文件本身永远不硬删，只是不再对外可访问。
+		if strings.HasPrefix(r.URL.Path, "/uploads/contributions/") && !s.contributionImageAccessible(r.URL.Path) {
+			s.securityLog("upload_orphaned_image_blocked", map[string]any{
+				"ip": clientIP(r), "path": r.URL.Path, "userAgent": r.UserAgent(),
+			})
+			http.NotFound(w, r)
+			return
 		}
 		// security headers for uploads
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -794,7 +764,6 @@ func (s *Server) routes() http.Handler {
 	mux.Handle("/api/avatar-image", s.httpRateLimit("avatar-image", 60_000, 12)(http.HandlerFunc(s.handleAvatarImage)))
 	mux.Handle("/api/admin-image", s.httpRateLimit("admin-image", 60_000, 12)(http.HandlerFunc(s.handleAdminImage)))
 	mux.Handle("/api/contribution-image", s.httpRateLimit("contribution-image", 60_000, 12)(http.HandlerFunc(s.handleContributionImage)))
-	mux.Handle("/api/config/export", s.httpRateLimit("config-export", 60_000, 12)(http.HandlerFunc(s.handleConfigExport)))
 	mux.HandleFunc("/ws", s.handleWS)
 	mux.HandleFunc("/", s.serveStatic)
 

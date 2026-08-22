@@ -321,7 +321,8 @@ func likeContainsPattern(raw string) string {
 
 // chatAuthorNameMatchSQL 只匹配昵称/用户名，不匹配落在 author 里的性别、称号。
 // author 运行时存的是 formatDisplayName（"性别 - 称号 - 昵称"，名争惩罚中则是惩罚名本身）：
-//  1. 现档 players.name / name_war_penalty_name（改名后仍能按当前昵称搜到旧留言）
+//  1. 现档 players.name / player_name_war.penalty_name（改名后仍能按当前昵称搜到旧留言；
+//     惩罚名自 v47 起拆到独立子表，见 playerstore.go）
 //  2. 不含 " - " 的快照（惩罚名、早期纯昵称）
 //  3. 标准三段式的最后一段（历史快照里的当时昵称）
 //
@@ -332,7 +333,7 @@ func chatAuthorNameMatchSQL(table string) string {
 	playerID := table + ".player_id"
 	return `(` +
 		`EXISTS (SELECT 1 FROM players p WHERE p.id = ` + playerID + ` AND (` +
-		`p.name LIKE ? ESCAPE '\' OR IFNULL(p.name_war_penalty_name,'') LIKE ? ESCAPE '\'` +
+		`p.name LIKE ? ESCAPE '\' OR IFNULL((SELECT penalty_name FROM player_name_war WHERE player_id = p.id),'') LIKE ? ESCAPE '\'` +
 		`))` +
 		` OR (instr(` + author + `, ' - ') = 0 AND ` + author + ` LIKE ? ESCAPE '\')` +
 		` OR ` + author + ` LIKE '% - % - ' || ? ESCAPE '\'` +

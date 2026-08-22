@@ -17,7 +17,7 @@ func TestPunishmentEventInsertUpdateRedo(t *testing.T) {
 
 	// 任务发布：insert 一行，status 应为 assigned，proof 相关字段为空。
 	taskID := randomID()
-	if err := store.insertPunishmentTask(taskID, 1000, "system", "room1", "", "", "p1", "小明", "去阳台大喊三声", punishmentEventMeta{}); err != nil {
+	if err := store.insertPunishmentTask(taskID, 1000, "room1", "", "", "p1", "小明", "去阳台大喊三声", punishmentEventMeta{}); err != nil {
 		t.Fatalf("insertPunishmentTask: %v", err)
 	}
 	row := db.QueryRow(`SELECT task_text, status, proof_text, proof_at, redo_id FROM punishment_events WHERE id = ?`, taskID)
@@ -58,7 +58,7 @@ func TestPunishmentEventInsertUpdateRedo(t *testing.T) {
 	if err := store.markPunishmentRedo(taskID, newTaskID); err != nil {
 		t.Fatalf("markPunishmentRedo: %v", err)
 	}
-	if err := store.insertPunishmentTask(newTaskID, 3000, "player", "room1", "reviewer1", "审核员", "p1", "小明", "重新去阳台大喊十声", punishmentEventMeta{}); err != nil {
+	if err := store.insertPunishmentTask(newTaskID, 3000, "room1", "reviewer1", "审核员", "p1", "小明", "重新去阳台大喊十声", punishmentEventMeta{}); err != nil {
 		t.Fatalf("insertPunishmentTask redo: %v", err)
 	}
 	row = db.QueryRow(`SELECT status, redo_id FROM punishment_events WHERE id = ?`, taskID)
@@ -70,13 +70,13 @@ func TestPunishmentEventInsertUpdateRedo(t *testing.T) {
 	if oldStatus != "rejected" || oldRedoID == nil || *oldRedoID != newTaskID {
 		t.Fatalf("old row after redo: status=%q redoID=%v, want rejected -> %s", oldStatus, oldRedoID, newTaskID)
 	}
-	row = db.QueryRow(`SELECT task_text, status, publisher_id, target_name FROM punishment_events WHERE id = ?`, newTaskID)
+	row = db.QueryRow(`SELECT task_text, status, approver_id, performer_name FROM punishment_events WHERE id = ?`, newTaskID)
 	var newTaskText, newStatus, publisherID, targetName string
 	if err := row.Scan(&newTaskText, &newStatus, &publisherID, &targetName); err != nil {
 		t.Fatalf("scan new row after redo: %v", err)
 	}
 	if newTaskText != "重新去阳台大喊十声" || newStatus != "assigned" || publisherID != "reviewer1" || targetName != "小明" {
-		t.Fatalf("unexpected new row: text=%q status=%q publisher=%q target=%q", newTaskText, newStatus, publisherID, targetName)
+		t.Fatalf("unexpected new row: text=%q status=%q approver=%q performer=%q", newTaskText, newStatus, publisherID, targetName)
 	}
 
 	// 审核通过：只改 status，不动其他字段。
@@ -108,8 +108,8 @@ func TestSystemAutoFinishMarksPunishmentEventApproved(t *testing.T) {
 	defer db.Close()
 	s := &Server{eventDB: newEventStore(db)}
 	eventID := randomID()
-	if err := s.eventDB.insertPunishmentTask(eventID, nowMs(), "system", "r1", "", "", "p1", "甲", "任务", punishmentEventMeta{
-		ContributorPlayerID: "c1", FormalTaskID: "tg1", FormalTaskVersion: 1,
+	if err := s.eventDB.insertPunishmentTask(eventID, nowMs(), "r1", "", "", "p1", "甲", "任务", punishmentEventMeta{
+		FormalTaskID: "tg1", FormalTaskVersion: 1,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -131,8 +131,8 @@ func TestSystemAutoFinishMarksPunishmentEventApproved(t *testing.T) {
 	}
 
 	eventID2 := randomID()
-	if err := s.eventDB.insertPunishmentTask(eventID2, nowMs(), "system", "r1", "", "", "p2", "乙", "任务2", punishmentEventMeta{
-		ContributorPlayerID: "c1", FormalTaskID: "tg1", FormalTaskVersion: 1,
+	if err := s.eventDB.insertPunishmentTask(eventID2, nowMs(), "r1", "", "", "p2", "乙", "任务2", punishmentEventMeta{
+		FormalTaskID: "tg1", FormalTaskVersion: 1,
 	}); err != nil {
 		t.Fatal(err)
 	}

@@ -901,7 +901,7 @@ message PunishmentSeriesSummary {
   RoomNamePool room_name_pool = 3;
   repeated string room_background_images = 4;
   int32 step_count = 5;
-  int32 published_version = 6;
+  int32 version = 6;
   // 系列声明的目标阵营；供进战斗席本地校验，不在建房面板展示。
   repeated string target_faction_ids = 10;
 }

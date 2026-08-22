@@ -242,48 +242,43 @@ export type PunishmentSeriesSummary = {
   roomNamePool?: RoomNamePool;
   roomBackgroundImages?: string[];
   stepCount: number;
-  publishedVersion?: number;
+  version?: number;
   /** 供进战斗席本地校验，不在建房面板展示。 */
   targetFactionIds?: string[];
 };
 
-export type ContributionStatus =
-  | "draft"
-  | "pending"
-  | "approved"
-  | "rejected"
-  | "withdrawn"
-  | "revision_draft"
-  | "revision_pending"
-  | "revision_rejected"
-  | "unpublish_pending";
+// 状态直接落在 sub_tasks/series 每一行上，不再有单独的"投稿信封"表，也不再区分"初审"和
+// "修订审核"——这是不是一次修订由"这个 id 是否已有更早的版本"反映，不需要单独的状态值。
+export type ContributionStatus = "draft" | "pending" | "approved" | "rejected" | "withdrawn";
 
-export type ContributionKind = "gender" | "task" | "series";
+export type ContributionKind = "task" | "series";
 
-export type ContributionSubmission = {
+/** 玩家"参与共建"列表/详情、后台共建审核共用的统一视图，对应后端 types.ContributionItem——
+    取代旧版 ContributionSubmission + 单独的 {submission, version} 详情包装：sub_tasks/series
+    每一行本身就同时是"投稿信封"和"内容"。content 只在详情（get）响应里有值，且已经是解析好
+    的对象（StepDraft 或 SeriesDraft 形状），不是需要 JSON.parse 的字符串。 */
+export type ContributionItem = {
   id: string;
   kind: ContributionKind;
-  submitterPlayerId: string;
-  submitterNameSnapshot: string;
-  anonymous: boolean;
+  version: number;
   status: ContributionStatus;
-  publishedTargetId: string;
-  publishedVersion: number;
-  activeVersion: number;
+  anonymous: boolean;
+  submitterId: string;
+  submitterName: string;
+  reviewedBy?: string;
+  reviewedAt?: number;
+  reviewComment?: string;
   createdAt: number;
   updatedAt: number;
-  submittedAt: number;
-  reviewedAt: number;
-  reviewedBy: string;
-  reviewComment: string;
-  unpublishRequestedAt?: number;
+  likeCount?: number;
+  downCount?: number;
+  content?: unknown;
   title?: string;
+  completion?: { participants: number; rate: number | null };
 };
 
 export type VoteCard = {
   eventId: string;
-  roundId: string;
-  targetKind: ContributionKind;
   targetId: string;
   canVote: boolean;
   cannotVoteReason?: string;

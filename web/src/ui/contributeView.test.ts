@@ -2,29 +2,29 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("contribute view markup", () => {
-  it("keeps save-draft to the left of submit", () => {
+  it("keeps withdraw, save, submit in that order inside the submit row", () => {
     const src = readFileSync(new URL("./ContributeView.tsx", import.meta.url), "utf8");
-    const save = src.indexOf(">保存草稿<");
-    const submit = src.indexOf(">提交审批<");
-    expect(save).toBeGreaterThan(0);
+    const submitRow = src.indexOf("contribute-submit-row");
+    const withdraw = src.indexOf("{withdrawButton}", submitRow);
+    const save = src.indexOf(">保存<", withdraw);
+    const submit = src.indexOf(">提交<", save);
+    expect(submitRow).toBeGreaterThan(0);
+    expect(withdraw).toBeGreaterThan(submitRow);
+    expect(save).toBeGreaterThan(withdraw);
     expect(submit).toBeGreaterThan(save);
+    // 系列表单的撤回按钮同样通过 extraSubmitActions 传给 ContributeSeriesForm，
+    // 而不是单独浮在编辑器上方。
+    expect(src).toContain("extraSubmitActions={withdrawButton}");
     expect(src).toContain("内容尚未保存");
     expect(src).toContain("contribute-unsaved-card");
     expect(src).toContain(">放弃<");
     expect(src).toContain("requestLeave(onBack)");
   });
 
-  it("puts gender name and faction on one split row", () => {
+  it("no longer offers a gender contribution tab (feature removed)", () => {
     const src = readFileSync(new URL("./ContributeView.tsx", import.meta.url), "utf8");
-    const formStart = src.indexOf('tab === "gender" &&');
-    const gender = src.indexOf("性别名称", formStart);
-    const faction = src.indexOf("归属阵营", formStart);
-    const split = src.lastIndexOf("contribute-split-row", faction);
-    expect(formStart).toBeGreaterThan(0);
-    expect(gender).toBeGreaterThan(formStart);
-    expect(faction).toBeGreaterThan(gender);
-    expect(split).toBeGreaterThan(formStart);
-    expect(split).toBeLessThan(gender);
+    expect(src).not.toContain('"gender"');
+    expect(src).not.toContain("性别共建");
   });
 
   it("shows the selected title and a meta line led by the shared status chip", () => {
@@ -47,11 +47,17 @@ describe("series step toolbar markup", () => {
     expect(src).toContain(">添加<");
     expect(src).not.toContain("删除这步");
     expect(src).not.toContain("添加步骤");
-    const save = src.indexOf(">保存草稿<");
+    const extra = src.indexOf("{extraSubmitActions}");
+    const save = src.indexOf("{saveDraftLabel}", extra);
     const submit = src.indexOf("{submitLabel}", save);
-    expect(save).toBeGreaterThan(0);
+    expect(extra).toBeGreaterThan(0);
+    expect(save).toBeGreaterThan(extra);
     expect(submit).toBeGreaterThan(save);
     expect(src).toContain('submitLabel = "提交审批"');
+    // 玩家端「参与共建」通过 saveDraftLabel/submitLabel 覆盖成"保存"/"提交"；
+    // extraSubmitActions 用来插入撤回按钮，两者都是可选 prop，不影响后台共建审核的默认调用。
+    expect(src).toContain('saveDraftLabel = "保存草稿"');
+    expect(src).toContain("extraSubmitActions?:");
   });
 });
 

@@ -11,36 +11,36 @@ import (
 
 // 日聚合 metric 常量（EAV key 见 plan）。
 const (
-	metricDAU                = "dau"
-	metricSessions           = "sessions"
-	metricPageviews          = "pageviews"
-	metricNewVisitors        = "new_visitors"
-	metricAvgSessionMs       = "avg_session_ms"
-	metricBounceSessions     = "bounce_sessions"
-	metricSessionBucket      = "session_bucket"
-	metricViewPV             = "view_pv"
-	metricViewUV             = "view_uv"
-	metricPeakOnline         = "peak_online"
-	metricConnections        = "connections"
-	metricOnlineMs           = "online_ms"
-	metricRetention          = "retention"
-	metricBrowser            = "browser"
-	metricOS                 = "os"
-	metricDevice             = "device"
-	metricReferrer           = "referrer"
-	metricProvince           = "province"
-	metricCity               = "city"
-	metricISP                = "isp"
-	metricRoomCreate         = "room_create"
-	metricRoomJoin           = "room_join"
-	metricGameRound          = "game_round"
+	metricDAU            = "dau"
+	metricSessions       = "sessions"
+	metricPageviews      = "pageviews"
+	metricNewVisitors    = "new_visitors"
+	metricAvgSessionMs   = "avg_session_ms"
+	metricBounceSessions = "bounce_sessions"
+	metricSessionBucket  = "session_bucket"
+	metricViewPV         = "view_pv"
+	metricViewUV         = "view_uv"
+	metricPeakOnline     = "peak_online"
+	metricConnections    = "connections"
+	metricOnlineMs       = "online_ms"
+	metricRetention      = "retention"
+	metricBrowser        = "browser"
+	metricOS             = "os"
+	metricDevice         = "device"
+	metricReferrer       = "referrer"
+	metricProvince       = "province"
+	metricCity           = "city"
+	metricISP            = "isp"
+	metricRoomCreate     = "room_create"
+	metricRoomJoin       = "room_join"
+	metricGameRound      = "game_round"
 	// metricGameRoundDurationMs「每局时长」：round 结算(game_round.at)减同房间内最近一次
 	// game_start.at 的毫秒数，按 gameId 累加、按结算日归属——与 metricGameRound 同口径，
 	// 只是把「次」换成「累计耗时」。值以毫秒存库，forRange 输出前换算为分钟。
 	metricGameRoundDurationMs = "game_round_duration_ms"
 	// metricRoomDurationMs「房间时长」：房间 close.at 减 create.at 的毫秒数，按 gameId
 	// 累加、按创建日归属（与 metricRoomCreate 同口径）；尚未关闭的房间不计入。
-	metricRoomDurationMs = "room_duration_ms"
+	metricRoomDurationMs     = "room_duration_ms"
 	metricPunishPublish      = "punish_publish"
 	metricPunishDone         = "punish_done"
 	metricPunishReject       = "punish_reject"
@@ -51,24 +51,22 @@ const (
 	metricActivity           = "activity"
 	metricPetbondNew         = "petbond_new"
 	metricPetbondTotal       = "petbond_total"
-	// metricPunishTaskPoolNew/Total「随机任务」增长：punishment_tasks 里 difficulty_order<>-1
-	// （会真正进入随机候选池，含"同时发布到随机任务"的系列步骤）的 task_group_id 去重计数，
-	// 与 punishmentStore.randomTaskGroupCount 同口径。
+	// metricPunishTaskPoolNew/Total「随机任务」增长：sub_tasks 各逻辑 id 的最新 active、
+	// approved 且 difficulty_order<>-1 的行数，含“同时发布到随机任务”的系列步骤。
 	metricPunishTaskPoolNew   = "punish_task_pool_new"
 	metricPunishTaskPoolTotal = "punish_task_pool_total"
-	// metricPunishSeriesPoolNew/Total「系列任务」增长：punishment_series 行数，
-	// 与 punishmentStore.seriesGroupCount 同口径。
+	// metricPunishSeriesPoolNew/Total「系列任务」增长：series 各逻辑 id 的最新 approved 行数。
 	metricPunishSeriesPoolNew   = "punish_series_pool_new"
 	metricPunishSeriesPoolTotal = "punish_series_pool_total"
-	metricChatLobby          = "chat_lobby"
-	metricChatRoom           = "chat_room"
-	metricChatSpeakers       = "chat_speakers"      // 大厅发言去重人数（历史字段名）
-	metricChatRoomSpeakers   = "chat_room_speakers" // 房间发言去重人数
-	metricRoomRoundsMax      = "room_rounds_max"    // 当日单房对局数最大值
-	metricRoomRoundsAvg      = "room_rounds_avg"    // 当日有对局的房间局数均值（四舍五入为整数）
-	metricRegister           = "register"
-	metricFunnel             = "funnel"
-	metricLoggedDAU          = "logged_dau"
+	metricChatLobby             = "chat_lobby"
+	metricChatRoom              = "chat_room"
+	metricChatSpeakers          = "chat_speakers"      // 大厅发言去重人数（历史字段名）
+	metricChatRoomSpeakers      = "chat_room_speakers" // 房间发言去重人数
+	metricRoomRoundsMax         = "room_rounds_max"    // 当日单房对局数最大值
+	metricRoomRoundsAvg         = "room_rounds_avg"    // 当日有对局的房间局数均值（四舍五入为整数）
+	metricRegister              = "register"
+	metricFunnel                = "funnel"
+	metricLoggedDAU             = "logged_dau"
 )
 
 // analyticsSnapshot 是聚合器产出的不可变内存快照；RPC 只读它。
@@ -444,17 +442,17 @@ func (snap *analyticsSnapshot) forRange(days int) *analyticsRangeView {
 			Days: dayLabels, DAU: dau, Sessions: sessions, LoggedDAU: logged,
 			Pageviews: pageviews, NewVisitors: newVis, Returning: returning,
 		},
-		NewVsReturning: analyticsNewReturning{New: newVis, Returning: returning},
-		Devices:        sumByKey(snap, metricDevice, start, n),
-		Browsers:       sumByKey(snap, metricBrowser, start, n),
-		OS:             sumByKey(snap, metricOS, start, n),
-		Referrers:      sumByKey(snap, metricReferrer, start, n),
-		Provinces:      sumByKey(snap, metricProvince, start, n),
-		ISPs:           sumByKey(snap, metricISP, start, n),
-		SessionBuckets: orderedBuckets(sumByKey(snap, metricSessionBucket, start, n), []string{"10s", "1min", "2min", "5min", "10min", "30min", "60min", "60min+"}),
-		ViewPV:         sumByKey(snap, metricViewPV, start, n),
-		GameRounds:        namedSeries(snap, metricGameRound, start, n, dayLabels),
-		RoomCreates:       namedSeries(snap, metricRoomCreate, start, n, dayLabels),
+		NewVsReturning:      analyticsNewReturning{New: newVis, Returning: returning},
+		Devices:             sumByKey(snap, metricDevice, start, n),
+		Browsers:            sumByKey(snap, metricBrowser, start, n),
+		OS:                  sumByKey(snap, metricOS, start, n),
+		Referrers:           sumByKey(snap, metricReferrer, start, n),
+		Provinces:           sumByKey(snap, metricProvince, start, n),
+		ISPs:                sumByKey(snap, metricISP, start, n),
+		SessionBuckets:      orderedBuckets(sumByKey(snap, metricSessionBucket, start, n), []string{"10s", "1min", "2min", "5min", "10min", "30min", "60min", "60min+"}),
+		ViewPV:              sumByKey(snap, metricViewPV, start, n),
+		GameRounds:          namedSeries(snap, metricGameRound, start, n, dayLabels),
+		RoomCreates:         namedSeries(snap, metricRoomCreate, start, n, dayLabels),
 		GameRoundAvgMinutes: namedSeriesAvgMinutes(snap, metricGameRoundDurationMs, metricGameRound, start, n),
 		RoomAvgMinutes:      dailyAvgMinutesAll(snap, metricRoomDurationMs, metricRoomCreate, start, n),
 		Punishment: analyticsPunishmentBlock{
@@ -1089,25 +1087,35 @@ func (s *Server) rebuildDay(day int64, tz int) ([]analyticsDailyRow, error) {
 	_ = db.QueryRow(`SELECT COUNT(*) FROM pet_bonds WHERE created_at < ?`, dayEnd).Scan(&pbTotal)
 	add(metricPetbondTotal, "", pbTotal.Int64)
 
-	// 随机任务池增长：口径与 punishmentStore.randomTaskGroupCount 一致——按 task_group_id
-	// 去重，只算 difficulty_order<>-1（真正进入随机候选池）的行。存量迁移行 created_at=0，
-	// 恒计入「总量」但不会落进任何一天的「新增」区间（见 v36 迁移注释）。
+	// 随机任务池增长：只算每个逻辑 id 的最新 active+approved 版本，difficulty_order<>-1
+	// 表示会真正进入随机候选池；系列步骤勾选“同时发布到随机任务”时也包含在内。
 	var taskPoolNew, taskPoolTotal sql.NullInt64
-	_ = db.QueryRow(`
-		SELECT COUNT(DISTINCT task_group_id) FROM punishment_tasks
-		WHERE difficulty_order <> -1 AND task_group_id != '' AND created_at >= ? AND created_at < ?`, dayStart, dayEnd).Scan(&taskPoolNew)
+	taskPoolBase := ` FROM sub_tasks t
+		INNER JOIN (SELECT id, MAX(version) AS v FROM sub_tasks GROUP BY id) m
+			ON t.id=m.id AND t.version=m.v
+		WHERE t.active=1 AND t.status='approved' AND t.difficulty_order<>-1`
+	if err := db.QueryRow(`SELECT COUNT(*)`+taskPoolBase+` AND t.created_at>=? AND t.created_at<?`, dayStart, dayEnd).Scan(&taskPoolNew); err != nil {
+		return nil, err
+	}
 	add(metricPunishTaskPoolNew, "", taskPoolNew.Int64)
-	_ = db.QueryRow(`
-		SELECT COUNT(DISTINCT task_group_id) FROM punishment_tasks
-		WHERE difficulty_order <> -1 AND task_group_id != '' AND created_at < ?`, dayEnd).Scan(&taskPoolTotal)
+	if err := db.QueryRow(`SELECT COUNT(*)`+taskPoolBase+` AND t.created_at<?`, dayEnd).Scan(&taskPoolTotal); err != nil {
+		return nil, err
+	}
 	add(metricPunishTaskPoolTotal, "", taskPoolTotal.Int64)
 
-	// 系列任务增长：punishment_series 一行一系列，直接计数，口径与
-	// punishmentStore.seriesGroupCount 一致。
+	// 系列任务增长：只算每个逻辑 id 的最新 approved 版本。
 	var seriesPoolNew, seriesPoolTotal sql.NullInt64
-	_ = db.QueryRow(`SELECT COUNT(*) FROM punishment_series WHERE created_at >= ? AND created_at < ?`, dayStart, dayEnd).Scan(&seriesPoolNew)
+	seriesPoolBase := ` FROM series t
+		INNER JOIN (SELECT id, MAX(version) AS v FROM series GROUP BY id) m
+			ON t.id=m.id AND t.version=m.v
+		WHERE t.status='approved'`
+	if err := db.QueryRow(`SELECT COUNT(*)`+seriesPoolBase+` AND t.created_at>=? AND t.created_at<?`, dayStart, dayEnd).Scan(&seriesPoolNew); err != nil {
+		return nil, err
+	}
 	add(metricPunishSeriesPoolNew, "", seriesPoolNew.Int64)
-	_ = db.QueryRow(`SELECT COUNT(*) FROM punishment_series WHERE created_at < ?`, dayEnd).Scan(&seriesPoolTotal)
+	if err := db.QueryRow(`SELECT COUNT(*)`+seriesPoolBase+` AND t.created_at<?`, dayEnd).Scan(&seriesPoolTotal); err != nil {
+		return nil, err
+	}
 	add(metricPunishSeriesPoolTotal, "", seriesPoolTotal.Int64)
 
 	// chat：消息条数 + 发言去重人数（大厅 / 房间分开）

@@ -19,7 +19,7 @@ import (
 //
 // 是 var 不是 const，只是为了让测试能临时替换掉去验证迁移机制本身；正常代码路径里
 // 把它当常量对待，不要在业务逻辑里修改它。
-var currentSchemaVersion = 40
+var currentSchemaVersion = 48
 
 // schemaVersionSchema：只有一行的版本表，openDatabase 每次启动都会先确保它存在。
 const schemaVersionSchema = `
@@ -500,6 +500,166 @@ CREATE TABLE IF NOT EXISTS punishment_series (
 		}
 		return nil
 	}},
+	// v41：性别共建支持一次投稿勾选多个阵营——一份投稿展开成每个阵营一行 gender_options，
+	// 需要一列记录"这行是哪份投稿发布的"，供下架/取消撤回/编辑重发按投稿整体增删改
+	// （而不是像过去单阵营那样，投稿与正式行天然一一对应，直接用 published_target_id 定位）。
+	{version: 41, migrate: func(db sqlExecer) error {
+		if err := addColumnIfMissing(db, "gender_options", "submission_id", "TEXT NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
+		// 回填存量数据：改动前每份性别投稿正式发布后天然只有一行、且
+		// contribution_submissions.published_target_id 就是那一行的 id，一一对应。
+		// 不回填的话，存量已通过的性别投稿下次修订重新提交时，claimGenderNameTx 会把
+		// 它自己名下这行也当成"别人占用的同名行"而报错拒绝；下架/取消撤回时
+		// deleteGenderRowsBySubmissionTx 按 submission_id 也会找不到这行、删不掉。
+		// （这张表连同性别投稿功能本身已在 v43 一并删除/下线，这里的回填对现在的代码
+		// 已经没有实际效果，但迁移步骤本身仍要保留、且不能假设 contribution_submissions
+		// 一定存在——没有全部历史包袱的库/测试环境可能从没建过这张表。）
+		hasSubmissions, err := tableExists(db, "contribution_submissions")
+		if err != nil {
+			return err
+		}
+		if hasSubmissions {
+			if _, err := db.Exec(`
+				UPDATE gender_options SET submission_id = (
+					SELECT s.id FROM contribution_submissions s
+					WHERE s.kind = 'gender' AND s.published_target_id = gender_options.id
+					LIMIT 1
+				)
+				WHERE submission_id = '' AND EXISTS (
+					SELECT 1 FROM contribution_submissions s
+					WHERE s.kind = 'gender' AND s.published_target_id = gender_options.id
+				)`); err != nil {
+				return err
+			}
+		}
+		_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_gender_options_submission ON gender_options(submission_id)`)
+		return err
+	}},
+	// v42：共建封面图访问权限从"任务是否仍在正式任务池里启用"改成"这张图当前是不是它所属
+	// 投稿仍在引用的封面"（不看投稿审核状态），需要一列记录"是否仍被引用"——重新上传覆盖
+	// 替换掉的旧图才是孤儿（active=0），文件本身不删。存量数据统一按 active=1（可访问）
+	// 迁移：老库里从没追踪过"是否被替换过"，没法回溯哪些其实已经是孤儿，默认放行更安全，
+	// 后续这些投稿只要再保存/发布一次就会被 markOtherSubmissionImagesInactiveTx 自然纠正。
+	{version: 42, migrate: func(db sqlExecer) error {
+		if err := addColumnIfMissing(db, "contribution_images", "active", "INTEGER NOT NULL DEFAULT 1"); err != nil {
+			return err
+		}
+		_, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_contrib_images_submission_active ON contribution_images(submission_id, active)`)
+		return err
+	}},
+	// v43：共建投稿存储重构——punishment_tasks/punishment_series 整表替换式存储 +
+	// contribution_submissions/versions 投稿信封两层模型，改成 sub_tasks/series 两张
+	// 版本化、插入不更新的表（不再有单独的投稿信封/图片/投票表，见 CLAUDE.md「共建投稿」
+	// 一节）。旧内容（迁移前已在线上生效、从未走过投稿流程）原样迁移进新表并标记为
+	// approved；punishment_events 的 publisher/target 改名为 approver/performer，新增
+	// 评价与触发来源列；性别投稿功能下线，gender_options.submission_id 随之作废删除；
+	// 所有被取代的旧表整体 DROP（迁移逻辑见 punishment_migrate_v43.go）。
+	{version: 43, migrate: migratePunishmentToSubTasksV43},
+	// v44：系列缩短时需要给被删除的尾部步骤写一条 inactive 新版本，才能在保留完整
+	// 历史的同时明确区分“当前系列成员”和“历史上曾属于该系列的步骤”。仅靠 status
+	// 无法表达这个关系：整个系列下架后的 withdrawn 步骤与被缩短移除的步骤会混在一起，
+	// 取消下架时可能把已删除步骤误发布回来。全新库已由 contributionSchema 直接带此列；
+	// 跑过早期 v43 草案的库在这里补列并把既有行视为 active。
+	{version: 44, migrate: func(db sqlExecer) error {
+		if err := addColumnIfMissing(db, "sub_tasks", "active", "INTEGER NOT NULL DEFAULT 1"); err != nil {
+			return err
+		}
+		// CREATE INDEX IF NOT EXISTS 不会刷新早期 v43 草案已创建的旧索引定义，显式重建。
+		if _, err := db.Exec(`DROP INDEX IF EXISTS idx_sub_tasks_series`); err != nil {
+			return err
+		}
+		_, err := db.Exec(`CREATE INDEX idx_sub_tasks_series ON sub_tasks(series_id, active, step_index)`)
+		return err
+	}},
+	// v45：早期 v43 重构草案仍把旧兼容脚手架放在 allSchemas，导致已升级数据库重启后
+	// 又创建空旧表。再次清理一次，并由 ensureSchema 保证以后只在 version<43 时建脚手架。
+	{version: 45, migrate: dropLegacyPunishmentTables},
+	// v46：删除 gender_factions/gender_options 冗余的 normalized_label 列。它当初只是
+	// 为了让 DB 层唯一约束能做大小写/全半角不敏感去重而派生出来的比较键，同一份归一化
+	// 逻辑（normalizeGenderLabel）本就在应用层现算（contribution_admin.go 的后台保存
+	// 校验、gender_import.go 的种子去重），不需要额外持久化一列——单纯为了撑起
+	// UNIQUE(faction_id, normalized_label) 而多存一份数据。
+	// gender_factions.normalized_label 从未参与任何约束/索引，直接 DROP COLUMN 即可；
+	// gender_options.normalized_label 是表级 UNIQUE(faction_id, normalized_label) 的
+	// 组成部分，SQLite 不允许 DROP 参与 UNIQUE 约束的列，只能整表重建为
+	// UNIQUE(faction_id, label)。由"规范化后相同即冲突"（更严格）改成"原样相同才冲突"
+	// （更宽松）：任何满足旧约束的存量数据集合，天然也满足新约束（相同字面量必然规范化
+	// 相同，旧约束早已挡掉这类重复），重建过程不会因为约束放宽而产生新冲突。
+	{version: 46, migrate: func(db sqlExecer) error {
+		if err := dropColumnIfExists(db, "gender_factions", "normalized_label"); err != nil {
+			return err
+		}
+		return rebuildGenderOptionsWithoutNormalizedLabel(db)
+	}},
+	// v47：players 表的名争/白给/极限模式/分游戏胜负平四组共 50 列拆到四张独立子表
+	// （player_name_war/player_giveaway/player_extreme_mode/player_game_stats），
+	// 详见 player_migrate_v47.go 顶部注释。
+	{version: 47, migrate: migratePlayerSubTablesV47},
+	// v48：punishment_events 的 task_source/formal_series_id/formal_series_version/
+	// contributor_player_id/contributor_name_snapshot/contributor_anonymous 六列，以及
+	// sub_tasks/series 各自的 contributor_name 列，全部可以由 formal_task_id/
+	// formal_task_version（外加对 sub_tasks 的一次 JOIN）现查得到，不必在事件行/内容行上
+	// 各留一份快照——尤其是昵称快照，本站的一贯约定是玩家改名立即在所有历史记录里生效
+	// （聊天板块同理），不展示改名前的旧昵称，也就没有"snapshot 防止改名回溯"的需求。
+	// 保留到这个版本才删，是因为这几列的列名在更早的迁移里被显式引用过（quarantine 重建、
+	// v43 存量搬迁），DDL 提前少列会让那些历史迁移路径直接报错，只能等它们都跑完再删。
+	{version: 48, migrate: func(db sqlExecer) error {
+		for _, col := range []string{
+			"task_source", "formal_series_id", "formal_series_version",
+			"contributor_player_id", "contributor_name_snapshot", "contributor_anonymous",
+		} {
+			if err := dropColumnIfExists(db, "punishment_events", col); err != nil {
+				return err
+			}
+		}
+		if err := dropColumnIfExists(db, "sub_tasks", "contributor_name"); err != nil {
+			return err
+		}
+		return dropColumnIfExists(db, "series", "contributor_name")
+	}},
+}
+
+// rebuildGenderOptionsWithoutNormalizedLabel 把 gender_options 从
+// UNIQUE(faction_id, normalized_label) 重建为 UNIQUE(faction_id, label)，去掉冗余的
+// normalized_label 列。该列参与表级 UNIQUE 约束，SQLite 的 ALTER TABLE DROP COLUMN
+// 不支持直接删除参与约束/索引的列，只能新建目标结构的表、搬数据、原表替换。
+func rebuildGenderOptionsWithoutNormalizedLabel(db sqlExecer) error {
+	ok, err := tableExists(db, "gender_options")
+	if err != nil || !ok {
+		return err
+	}
+	hasCol, err := tableHasColumn(db, "gender_options", "normalized_label")
+	if err != nil || !hasCol {
+		return err
+	}
+	if _, err := db.Exec(`
+		CREATE TABLE gender_options_v46 (
+			id TEXT PRIMARY KEY,
+			label TEXT NOT NULL DEFAULT '',
+			faction_id TEXT NOT NULL,
+			sort_index INTEGER NOT NULL DEFAULT 0,
+			created_at INTEGER NOT NULL DEFAULT 0,
+			updated_at INTEGER NOT NULL DEFAULT 0,
+			FOREIGN KEY (faction_id) REFERENCES gender_factions(id),
+			UNIQUE (faction_id, label)
+		)
+	`); err != nil {
+		return fmt.Errorf("create gender_options_v46: %w", err)
+	}
+	if _, err := db.Exec(`
+		INSERT INTO gender_options_v46 (id, label, faction_id, sort_index, created_at, updated_at)
+		SELECT id, label, faction_id, sort_index, created_at, updated_at FROM gender_options
+	`); err != nil {
+		return fmt.Errorf("copy gender_options rows: %w", err)
+	}
+	if _, err := db.Exec(`DROP TABLE gender_options`); err != nil {
+		return fmt.Errorf("drop old gender_options: %w", err)
+	}
+	if _, err := db.Exec(`ALTER TABLE gender_options_v46 RENAME TO gender_options`); err != nil {
+		return fmt.Errorf("rename gender_options_v46: %w", err)
+	}
+	return nil
 }
 
 // backfillConnectionEventsGeo 用 connection_events.ip 批量解析归属地，回填同一行的
@@ -972,7 +1132,7 @@ func convertLegacyPunishmentEvents(db sqlExecer) error {
 			nr.status = "assigned"
 		}
 		if _, err := db.Exec(
-			`INSERT INTO punishment_events (id, room_id, task_source, publisher_id, publisher_name, target_id, target_name, task_text, task_at, proof_text, image_file, proof_at, status)
+			`INSERT INTO punishment_events (id, room_id, task_source, approver_id, approver_name, performer_id, performer_name, task_text, task_at, proof_text, image_file, proof_at, status)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			nr.id, nr.roomID, nr.taskSource, nr.publisherID, nr.publisherName,
 			nr.targetID, nr.targetName, nr.taskText, nr.taskAt,
@@ -1030,6 +1190,22 @@ func ensureSchema(db *sql.DB) error {
 		}
 		if _, err := db.Exec(schema); err != nil {
 			return fmt.Errorf("%s: %w", schema, err)
+		}
+	}
+
+	// v43 之前的迁移依赖旧任务池/投稿信封表存在；只为尚未走到 v43 的数据库临时建出。
+	// v43 会在数据完整搬运后删除它们。已经升级的库绝不能再创建这些死表。
+	if version < 43 {
+		for _, schema := range legacyMigrationSchemas {
+			if freshBootstrap {
+				if err := execSchemaQuarantiningLegacyTables(db, schema); err != nil {
+					return err
+				}
+				continue
+			}
+			if _, err := db.Exec(schema); err != nil {
+				return fmt.Errorf("%s: %w", schema, err)
+			}
 		}
 	}
 
