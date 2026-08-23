@@ -289,10 +289,10 @@ func (s *Server) startJungleRoom(room *RoomState) {
 	s.clearTurnBasedClockTimer(room.ID)
 	first := randomSeat()
 	s.startTurnBasedPlaying(room)
-		room.Jungle = freshJungleState(first)
-		room.jungleMoves = nil
-		s.maybeJungleGiveawaySkip(room)
-	}
+	room.Jungle = freshJungleState(first)
+	room.jungleMoves = nil
+	s.maybeJungleGiveawaySkip(room)
+}
 
 func (s *Server) pauseJungleTimers(room *RoomState) {
 	if room.Jungle != nil {
@@ -316,7 +316,7 @@ func (s *Server) jungleClockHooks() turnBasedClockHooks {
 			}
 			return turnBasedClockState{
 				turn: room.Jungle.Turn, ended: room.Jungle.Ended,
-					blocked:        room.Phase == types.PhasePunishment || room.Jungle.ResignRequest != nil || room.Jungle.UndoRequest != nil,
+				blocked:        room.Phase == types.PhasePunishment || room.Jungle.ResignRequest != nil || room.Jungle.UndoRequest != nil,
 				moveDeadlineAt: &room.Jungle.MoveDeadlineAt, clockDeadlineAt: &room.Jungle.ClockDeadlineAt,
 				clockRemaining: &room.Jungle.ClockRemaining,
 			}, true
@@ -406,8 +406,8 @@ func (s *Server) finishJungleGame(room *RoomState, result types.RoundResult, not
 			s.resetExtremeWinStreak(loser)
 			streakText = s.applyExtremeWinStreakRisk(room, winner)
 			rankedText = fmt.Sprintf("（%s %s，%s %d）",
-				occupantName(room.Seats[types.SeatKey(result)]), formatSigned(wD),
-				occupantName(room.Seats[loserSeat]), lD)
+				occupantShortName(room.Seats[types.SeatKey(result)]), formatSigned(wD),
+				occupantShortName(room.Seats[loserSeat]), lD)
 		}
 	}
 	room.Jungle.RankedDelta = rankedDelta
@@ -422,14 +422,14 @@ func (s *Server) finishJungleGame(room *RoomState, result types.RoundResult, not
 	if result == types.ResultDraw {
 		room.ResultText = "斗兽棋平局" + rankedText + noteSuffix
 	} else {
-		room.ResultText = occupantName(room.Seats[types.SeatKey(result)]) + " 斗兽棋胜利" + rankedText + streakText + noteSuffix
+		room.ResultText = seatShortLabel(types.SeatKey(result), room.Seats[types.SeatKey(result)]) + " 胜利" + rankedText + streakText + noteSuffix
 	}
 	s.refreshHumans(playerA, playerB)
 	resultLabel := "斗兽棋平局"
 	if result != types.ResultDraw {
 		resultLabel = seatWinLabel(room, types.SeatKey(result))
 	}
-	item := s.buildMatchHistoryShell(room, result, types.GameJungle, resultLabel, room.ResultText)
+	item := s.buildMatchHistoryShell(room, result, types.GameJungle, resultLabel, room.ResultText, "round_end")
 	item.ExtremeRanked = room.Settings.EnableExtremeRanked
 	if room.Settings.EnableRanked {
 		es := effectiveRankedStake(room.Settings)
@@ -501,31 +501,31 @@ func (s *Server) applyJungleMove(room *RoomState, seat types.SeatKey, fromRow, f
 	room.Jungle.LastTo = &to
 	room.Jungle.ResignRequest = nil
 
-		ending := ""
-		if denOwner, ok := jungleDenOwner(toRow, toCol); ok && denOwner != seat {
-			ending = "攻入兽穴"
-		} else {
-			next := oppositeSeat(seat)
-			room.Jungle.Turn = next
-			if !jungleHasAnyLegalMove(board, next) {
-				ending = "对方无子可走"
-			}
+	ending := ""
+	if denOwner, ok := jungleDenOwner(toRow, toCol); ok && denOwner != seat {
+		ending = "攻入兽穴"
+	} else {
+		next := oppositeSeat(seat)
+		room.Jungle.Turn = next
+		if !jungleHasAnyLegalMove(board, next) {
+			ending = "对方无子可走"
 		}
-		if captured != nil && perPiecePunishmentEnabled(room) {
-			if ending != "" {
-				room.pendingPieceEnd = &pendingPieceEnd{result: types.RoundResult(seat), note: ending}
-			}
-			s.beginMidGamePiecePunishment(room, oppositeSeat(seat), seat, "棋子被吃")
-			return true, ""
-		}
+	}
+	if captured != nil && perPiecePunishmentEnabled(room) {
 		if ending != "" {
-			s.finishJungleGame(room, types.RoundResult(seat), ending)
-			return true, ""
+			room.pendingPieceEnd = &pendingPieceEnd{result: types.RoundResult(seat), note: ending}
 		}
-		room.ResultText = ""
-		s.maybeJungleGiveawaySkip(room)
+		s.beginMidGamePiecePunishment(room, oppositeSeat(seat), seat, "棋子被吃")
 		return true, ""
 	}
+	if ending != "" {
+		s.finishJungleGame(room, types.RoundResult(seat), ending)
+		return true, ""
+	}
+	room.ResultText = ""
+	s.maybeJungleGiveawaySkip(room)
+	return true, ""
+}
 
 func (s *Server) requestJungleResign(room *RoomState, seat types.SeatKey) (bool, string) {
 	if room.Jungle == nil || room.Phase != types.PhaseChoosing || room.Jungle.Ended {
@@ -695,7 +695,7 @@ func (s *Server) applyJungleDisconnectForfeit(room *RoomState, forfeit Disconnec
 		rankedDelta[forfeit.LoserSeat] += lD
 		s.resetExtremeWinStreak(loser)
 		streakText = s.applyExtremeWinStreakRisk(room, winner)
-		rankedText = fmt.Sprintf("，排位 %d 分已结算（%s %s，%s %d）", forfeit.Stake, forfeit.WinnerName, formatSigned(wD), forfeit.LoserName, lD)
+		rankedText = fmt.Sprintf("，排位 %d 分已结算（%s %s，%s %d）", forfeit.Stake, occupantShortName(room.Seats[forfeit.WinnerSeat]), formatSigned(wD), occupantShortName(room.Seats[forfeit.LoserSeat]), lD)
 	}
 	s.recordGameOutcome(winner, types.GameJungle, "win")
 	s.recordGameOutcome(loser, types.GameJungle, "loss")
@@ -717,7 +717,7 @@ func (s *Server) applyJungleDisconnectForfeit(room *RoomState, forfeit Disconnec
 		room.Jungle.Ended = true
 		room.Jungle.Winner = types.RoundResult(forfeit.WinnerSeat)
 	}
-	room.ResultText = fmt.Sprintf("%s 断线超时判负，%s 斗兽棋胜利%s%s", forfeit.LoserName, forfeit.WinnerName, rankedText, streakText)
+	room.ResultText = fmt.Sprintf("%s 断线超时判负，%s 胜利%s%s", seatShortLabel(forfeit.LoserSeat, room.Seats[forfeit.LoserSeat]), seatShortLabel(forfeit.WinnerSeat, room.Seats[forfeit.WinnerSeat]), rankedText, streakText)
 	punishedPlayers := s.punishmentPlayersForResult(room, types.RoundResult(forfeit.WinnerSeat))
 	punishedNames := make([]string, len(punishedPlayers))
 	for i, p := range punishedPlayers {

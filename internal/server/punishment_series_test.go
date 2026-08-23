@@ -284,14 +284,58 @@ func TestRecordSeriesRunProgressOnCloseAveragesPercent(t *testing.T) {
 	}}
 	s.recordSeriesRunProgressOnClose(room)
 
-	participants, percentSum, err := ps.seriesRunStats("s1", 1)
-	if err != nil {
-		t.Fatalf("seriesRunStats: %v", err)
-	}
+	participants, percentSum := readSeriesRunStats(t, db, "s1", 1)
 	if participants != 2 || percentSum != 100 {
 		t.Fatalf("got participants=%d percentSum=%d, want 2/100 (75+25)", participants, percentSum)
 	}
 	if avg := float64(percentSum) / float64(participants); avg != 50 {
 		t.Fatalf("average completion rate = %v, want 50", avg)
+	}
+}
+
+func TestRecordSeriesRunProgressOnCloseKeepsVersionSnapshotAfterUnpublish(t *testing.T) {
+	dir := t.TempDir()
+	db, err := openDatabase(dir)
+	if err != nil {
+		t.Fatalf("openDatabase: %v", err)
+	}
+	defer db.Close()
+	ps := newPunishmentStore(db)
+	s := &Server{punishmentStore: ps}
+	room := &RoomState{PunishmentSeriesPlayerProgress: map[string]*seriesPlayerProgress{
+		"pa": {SeriesID: "s1", Step: 3, Version: 7, StepCount: 4},
+	}}
+
+	// 模拟玩家走完三步后，系列在关房前被编辑/下架，运行时缓存已经不再含该系列。
+	s.recordSeriesRunProgressOnClose(room)
+
+	participants, percentSum := readSeriesRunStats(t, db, "s1", 7)
+	if participants != 1 || percentSum != 75 {
+		t.Fatalf("got participants=%d percentSum=%d, want 1/75", participants, percentSum)
+	}
+}
+
+func TestPickSeriesTaskForPlayer_whenWinnerPlaceholderBecomesEmpty_thenStillAdvances(t *testing.T) {
+	p := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "p1", Name: "甲", FactionID: "f1"}}
+	room := &RoomState{
+		Settings:                       types.RoomSettings{PunishmentSource: "series", PunishmentSeriesID: "s1"},
+		PunishmentSeriesPlayerProgress: map[string]*seriesPlayerProgress{},
+	}
+	s := &Server{
+		players: map[string]*PlayerState{"p1": p},
+		punishmentSeriesByID: map[string]*types.PunishmentSeriesTaskConfig{
+			"s1": {ID: "s1", Version: 3, StepCount: 2},
+		},
+		punishmentSeriesSteps: map[string][]*types.PunishmentTaskConfig{
+			"s1": {{ID: "step1", Version: 1, StepIndex: 0, Text: "{winner}", FactionIDs: []string{"f1"}}},
+		},
+	}
+	got := s.pickSeriesTaskForPlayer(room, p, "s1", "")
+	if got == nil || got.TaskText != "请完成本局惩罚。" {
+		t.Fatalf("got=%+v", got)
+	}
+	prog := room.PunishmentSeriesPlayerProgress[p.ID]
+	if prog == nil || prog.Step != 1 || prog.Version != 3 || prog.StepCount != 2 {
+		t.Fatalf("fallback must still advance and snapshot the series: %+v", prog)
 	}
 }

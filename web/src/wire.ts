@@ -725,14 +725,14 @@ function materializeConfig(cfg: any): any {
   c.punishmentTags = Array.isArray(c.punishmentTags) ? c.punishmentTags : [];
   c.punishmentSeriesSummaries = Array.isArray(c.punishmentSeriesSummaries) ? c.punishmentSeriesSummaries : [];
   if (!c.punishmentRandomSettings || typeof c.punishmentRandomSettings !== "object") {
-    c.punishmentRandomSettings = { orderStep: 2, maxDifficultyOvershoot: 5, minSeriesSteps: 10, maxSeriesSteps: 20 };
+    c.punishmentRandomSettings = { orderStep: 2, maxDifficultyOvershoot: 5, minSeriesSteps: 5, maxSeriesSteps: 20 };
   } else {
-    const minSteps = numOr(c.punishmentRandomSettings.minSeriesSteps, 10);
+    const minSteps = numOr(c.punishmentRandomSettings.minSeriesSteps, 5);
     const maxSteps = numOr(c.punishmentRandomSettings.maxSeriesSteps, 20);
     c.punishmentRandomSettings = {
       orderStep: numOr(c.punishmentRandomSettings.orderStep, 2),
       maxDifficultyOvershoot: numOr(c.punishmentRandomSettings.maxDifficultyOvershoot, 5),
-      minSeriesSteps: minSteps > 0 ? minSteps : 10,
+      minSeriesSteps: minSteps > 0 ? minSteps : 5,
       maxSeriesSteps: maxSteps > 0 ? maxSteps : 20
     };
   }

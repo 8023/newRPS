@@ -1,11 +1,13 @@
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AppConfig } from "../shared/types";
 import { tokenKey } from "../lib/constants";
 import { prepareProofImageForUpload } from "../lib/proofImage";
+import { OptionalNumberField } from "./NumberField";
 import {
   DIFFICULTY_GUIDE,
   MAX_STEP_VARIANTS,
   TAG_GUIDE,
+  isValidOrder,
   overlappingFactionIds,
   toggleId,
   type StepDraft,
@@ -38,10 +40,15 @@ export function StepEditor({
   showErrors?: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadedPreview, setUploadedPreview] = useState<{ path: string; objectURL: string } | null>(null);
   const factionIds = config.genderFactions.map((f) => f.id);
   const maxVariants = Math.min(MAX_STEP_VARIANTS, Math.max(1, factionIds.length || MAX_STEP_VARIANTS));
   const showPoolFields = !showRandomPoolToggle || value.inRandomPool;
   const overlapFactions = new Set(overlappingFactionIds(value.variants));
+
+  useEffect(() => () => {
+    if (uploadedPreview) URL.revokeObjectURL(uploadedPreview.objectURL);
+  }, [uploadedPreview]);
 
   // 一律用函数式更新（读最新的 prev，而不是闭包捕获的 value）：uploadImage 是异步的，
   // 上传期间用户可能已经编辑/删除了别的步骤，patch 若直接拿渲染时闭包的 value 展开，
@@ -62,6 +69,10 @@ export function StepEditor({
     const res = await fetch("/api/contribution-image", { method: "POST", body });
     const data = await res.json() as { imageUrl?: string; message?: string };
     if (!res.ok || !data.imageUrl) throw new Error(data.message || "上传失败");
+    // 新上传的共建图在草稿真正保存、background_image 落库前按服务端规则不可公开访问，
+    // 直接拿远端 URL 做 <img> 会先得到 404。用已压缩文件的本地 object URL 预览；保存
+    // 后重新进入详情时再自然改用远端 URL，服务端访问控制无需为预览开口子。
+    setUploadedPreview({ path: data.imageUrl, objectURL: URL.createObjectURL(prepared) });
     patch({ backgroundImage: data.imageUrl });
   }
 
@@ -85,7 +96,16 @@ export function StepEditor({
   );
 
   const difficultyField = (
-    <label className="field-label"><span>难度 1-99</span><input type="number" min={1} max={99} value={value.order} onChange={(e) => patch({ order: Number(e.target.value) })} required /></label>
+    <label className="field-label">
+      <span>难度 1-99</span>
+      <OptionalNumberField
+        min={1}
+        max={99}
+        value={value.order}
+        onChange={(order) => patch({ order })}
+        invalid={showErrors && !isValidOrder(value.order)}
+      />
+    </label>
   );
 
   const coverPicker = (
@@ -95,15 +115,15 @@ export function StepEditor({
         <button type="button" onClick={() => fileInputRef.current?.click()}>选取文件</button>
         {value.backgroundImage ? (
           <>
-            <button type="button" onClick={() => patch({ backgroundImage: "" })}>移除封面</button>
-            <img src={value.backgroundImage} alt="" className="cover-thumb" />
+            <button type="button" onClick={() => { setUploadedPreview(null); patch({ backgroundImage: "" }); }}>移除封面</button>
+            <img src={uploadedPreview?.path === value.backgroundImage ? uploadedPreview.objectURL : value.backgroundImage} alt="" className="cover-thumb" />
           </>
         ) : null}
         <input
           ref={fileInputRef}
           className="cover-picker-input"
           type="file"
-          accept="image/*"
+          accept="image/*,.heic,.heif"
           onChange={(e) => {
             const file = e.target.files?.[0];
             e.target.value = "";

@@ -123,6 +123,7 @@ export function normalizePublicStats(stats: PublicPlayer["stats"] | null | undef
     title: title || "暂无称号",
     selfTitle: typeof s.selfTitle === "string" ? s.selfTitle : "",
     totalOnlineMs: statNum(s.totalOnlineMs),
+    contributionApprovedCount: statNum(s.contributionApprovedCount),
     titleSource: s.titleSource || "system",
     titleColors: s.titleColors,
     ...(s.titleSegmentId ? { titleSegmentId: s.titleSegmentId } : {}),
@@ -684,7 +685,7 @@ export function normalizeConfig(config: AppConfig): AppConfig {
     punishmentRandomSettings: {
       orderStep: config.punishmentRandomSettings?.orderStep ?? 2,
       maxDifficultyOvershoot: config.punishmentRandomSettings?.maxDifficultyOvershoot ?? 5,
-      minSeriesSteps: (config.punishmentRandomSettings?.minSeriesSteps ?? 10) > 0 ? (config.punishmentRandomSettings?.minSeriesSteps ?? 10) : 10,
+      minSeriesSteps: (config.punishmentRandomSettings?.minSeriesSteps ?? 5) > 0 ? (config.punishmentRandomSettings?.minSeriesSteps ?? 5) : 5,
       maxSeriesSteps: (config.punishmentRandomSettings?.maxSeriesSteps ?? 20) > 0 ? (config.punishmentRandomSettings?.maxSeriesSteps ?? 20) : 20
     },
     roomTags: config.roomTags || [],

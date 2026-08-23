@@ -6,6 +6,7 @@ import { ask } from "../lib/rpc";
 import { prepareProofImageForUpload } from "../lib/proofImage";
 import { formatBytes, formatDuration } from "../lib/format";
 import { encodeClaimCode } from "../lib/session";
+import { NumberField } from "./NumberField";
 import { PetBondGraphPanel } from "./PetBondGraphPanel";
 import {
   FactionSelect, GenderSelectField, GiveawayChip, ModeChip, PlayerAvatar, PlayerBadge, RoomInfoTagList, RoomTagList, Select, Stat, Toggle,
@@ -21,7 +22,7 @@ import { formatContributionReviewSubtitle, MAX_SERIES_STEPS } from "./contribute
 
 export type AdminSection = "site" | "analytics" | "factions" | "titles" | "punishments" | "contributions" | "roomTags" | "nameWar" | "giveaway" | "petBond" | "rooms";
 
-const SECTIONS_WITHOUT_SAVE = new Set<AdminSection>(["rooms", "analytics", "contributions", "factions"]);
+const SECTIONS_WITHOUT_SAVE = new Set<AdminSection>(["rooms", "analytics", "contributions"]);
 export type AdminRoomTab = "rooms" | "announcement" | "users";
 
 /** 用户管理的筛选/排序开关（与后端 admin:listPlayers 字段对应）。 */
@@ -417,23 +418,11 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                 <div className="config-row">
                   <label className="field-label">
                     <span>同指纹同时在线人数上限</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={draft.accessControl?.maxOnlinePerIp ?? ""}
-                      onChange={(event) => patchAccessControl({ maxOnlinePerIp: Number(event.target.value) || 1 })}
-                    />
+                    <NumberField min={1} max={100} value={draft.accessControl?.maxOnlinePerIp ?? 1} onChange={(maxOnlinePerIp) => patchAccessControl({ maxOnlinePerIp })} />
                   </label>
                   <label className="field-label">
                     <span>同指纹 10 分钟内新建玩家上限</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={200}
-                      value={draft.accessControl?.maxCreatesPer10Min ?? ""}
-                      onChange={(event) => patchAccessControl({ maxCreatesPer10Min: Number(event.target.value) || 1 })}
-                    />
+                    <NumberField min={1} max={200} value={draft.accessControl?.maxCreatesPer10Min ?? 1} onChange={(maxCreatesPer10Min) => patchAccessControl({ maxCreatesPer10Min })} />
                   </label>
                 </div>
                 <p className="hint">指纹由 FingerprintJS 在浏览器生成，与 IP 一起哈希为设备键。</p>
@@ -447,55 +436,25 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                 <div className="config-row">
                   <label className="field-label">
                     <span>同 IP 同时在线人数上限</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={500}
-                      value={draft.accessControl?.maxOnlinePerIpTotal ?? ""}
-                      onChange={(event) => patchAccessControl({ maxOnlinePerIpTotal: Number(event.target.value) || 1 })}
-                    />
+                    <NumberField min={1} max={500} value={draft.accessControl?.maxOnlinePerIpTotal ?? 1} onChange={(maxOnlinePerIpTotal) => patchAccessControl({ maxOnlinePerIpTotal })} />
                   </label>
                   <label className="field-label">
                     <span>同 IP 10 分钟内新建玩家上限</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={500}
-                      value={draft.accessControl?.maxCreatesPerIp ?? ""}
-                      onChange={(event) => patchAccessControl({ maxCreatesPerIp: Number(event.target.value) || 1 })}
-                    />
+                    <NumberField min={1} max={500} value={draft.accessControl?.maxCreatesPerIp ?? 1} onChange={(maxCreatesPerIp) => patchAccessControl({ maxCreatesPerIp })} />
                   </label>
                   <label className="field-label">
                     <span>同 IP 10 分钟内签发会话上限</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={500}
-                      value={draft.accessControl?.maxSessionIssuePerIp ?? ""}
-                      onChange={(event) => patchAccessControl({ maxSessionIssuePerIp: Number(event.target.value) || 1 })}
-                    />
+                    <NumberField min={1} max={500} value={draft.accessControl?.maxSessionIssuePerIp ?? 1} onChange={(maxSessionIssuePerIp) => patchAccessControl({ maxSessionIssuePerIp })} />
                   </label>
                 </div>
                 <div className="config-row">
                   <label className="field-label">
                     <span>单个操作的 IP 兜底倍数</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={draft.accessControl?.ipBackstopMultiplier ?? ""}
-                      onChange={(event) => patchAccessControl({ ipBackstopMultiplier: Number(event.target.value) || 1 })}
-                    />
+                    <NumberField min={1} max={100} value={draft.accessControl?.ipBackstopMultiplier ?? 1} onChange={(ipBackstopMultiplier) => patchAccessControl({ ipBackstopMultiplier })} />
                   </label>
                   <label className="field-label">
                     <span>IP 兜底最低下限（次/窗口）</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={1000}
-                      value={draft.accessControl?.ipBackstopMinLimit ?? ""}
-                      onChange={(event) => patchAccessControl({ ipBackstopMinLimit: Number(event.target.value) || 1 })}
-                    />
+                    <NumberField min={1} max={1000} value={draft.accessControl?.ipBackstopMinLimit ?? 1} onChange={(ipBackstopMinLimit) => patchAccessControl({ ipBackstopMinLimit })} />
                   </label>
                 </div>
                 <p className="hint">建房、出招、提交惩罚证明等操作会同时检查同一 IP 的总请求量；即使脚本不断换会话或指纹，也会被这层限制拦截。</p>
@@ -509,23 +468,11 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                 <div className="config-row">
                   <label className="field-label">
                     <span>单玩家同时开房数量上限</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={50}
-                      value={draft.accessControl?.maxActiveRoomsPerOwner ?? ""}
-                      onChange={(event) => patchAccessControl({ maxActiveRoomsPerOwner: Number(event.target.value) || 1 })}
-                    />
+                    <NumberField min={1} max={50} value={draft.accessControl?.maxActiveRoomsPerOwner ?? 1} onChange={(maxActiveRoomsPerOwner) => patchAccessControl({ maxActiveRoomsPerOwner })} />
                   </label>
                   <label className="field-label">
                     <span>单玩家 10 分钟内证明图上传上限</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={200}
-                      value={draft.accessControl?.maxProofUploadsPerPlayer ?? ""}
-                      onChange={(event) => patchAccessControl({ maxProofUploadsPerPlayer: Number(event.target.value) || 1 })}
-                    />
+                    <NumberField min={1} max={200} value={draft.accessControl?.maxProofUploadsPerPlayer ?? 1} onChange={(maxProofUploadsPerPlayer) => patchAccessControl({ maxProofUploadsPerPlayer })} />
                   </label>
                 </div>
               </section>
@@ -698,11 +645,6 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                 </div>
               )}
             </div>
-            <button className="primary" type="button" onClick={() => {
-              void ask("admin:action", { action: "gendersSave", password, genders: draft.genders, factions: draft.genderFactions })
-                .then(() => onError(""))
-                .catch((e: unknown) => onError(e instanceof Error ? e.message : "保存失败"));
-            }}>保存性别与阵营</button>
           </div>
         </>
       );
@@ -726,10 +668,10 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
           <div className="config-section admin-section-card">
             <AdminSectionHeader title="排位分显示" subtitle="控制排行榜/个人资料等展示时的封顶值，及每日衰减比例。数据库中的存储值无限制。" />
             <div className="config-row">
-              <label className="field-label"><span>展示上限</span><input type="number" min={1} value={rankedScore.max} onChange={(event) => patchRankedScore({ max: Number(event.target.value) })} /></label>
-              <label className="field-label"><span>普通玩家展示下限</span><input type="number" max={-1} value={rankedScore.min} onChange={(event) => patchRankedScore({ min: Number(event.target.value) })} /></label>
-              <label className="field-label"><span>名字争夺战展示下限</span><input type="number" value={rankedScore.nameWarMin} onChange={(event) => patchRankedScore({ nameWarMin: Number(event.target.value) })} /></label>
-              <label className="field-label"><span>每日衰减比例</span><input type="number" min={0.01} max={1} step={0.01} value={rankedScore.dailyDecayRatio} onChange={(event) => patchRankedScore({ dailyDecayRatio: Number(event.target.value) })} /></label>
+              <label className="field-label"><span>展示上限</span><NumberField min={1} value={rankedScore.max} onChange={(max) => patchRankedScore({ max })} /></label>
+              <label className="field-label"><span>普通玩家展示下限</span><NumberField max={-1} value={rankedScore.min} onChange={(min) => patchRankedScore({ min })} /></label>
+              <label className="field-label"><span>名字争夺战展示下限</span><NumberField value={rankedScore.nameWarMin} onChange={(nameWarMin) => patchRankedScore({ nameWarMin })} /></label>
+              <label className="field-label"><span>每日衰减比例</span><NumberField min={0.01} max={1} step={0.01} value={rankedScore.dailyDecayRatio} onChange={(dailyDecayRatio) => patchRankedScore({ dailyDecayRatio })} /></label>
             </div>
           </div>
           <div className="config-section admin-section-card">
@@ -780,8 +722,8 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                   </div>
                   <div className="config-row compact">
                     <label className="field-label"><span>段位 ID（自动生成，一般不用改）</span><input value={segment.id} onChange={(event) => { setActiveTitleId(event.target.value); patch({ titles: draft.titles.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, id: event.target.value } : item) }); }} /></label>
-                    <label className="field-label"><span>最低百分比（-100～100）</span><input type="number" min={-100} max={100} step={0.01} value={segment.minPercent} onChange={(event) => patch({ titles: draft.titles.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, minPercent: Number(event.target.value) } : item) })} /></label>
-                    <label className="field-label"><span>最高百分比（-100～100）</span><input type="number" min={-100} max={100} step={0.01} value={segment.maxPercent} onChange={(event) => patch({ titles: draft.titles.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, maxPercent: Number(event.target.value) } : item) })} /></label>
+                    <label className="field-label"><span>最低百分比（-100～100）</span><NumberField min={-100} max={100} step={0.01} value={segment.minPercent} onChange={(minPercent) => patch({ titles: draft.titles.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, minPercent } : item) })} /></label>
+                    <label className="field-label"><span>最高百分比（-100～100）</span><NumberField min={-100} max={100} step={0.01} value={segment.maxPercent} onChange={(maxPercent) => patch({ titles: draft.titles.map((item, itemIndex) => itemIndex === selectedIndex ? { ...item, maxPercent } : item) })} /></label>
                   </div>
                   <TagListEditor
                     label="通用称号（专属为空时兜底）"
@@ -905,11 +847,11 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
             <div className="config-row">
               <label className="field-label">
                 <span>难度推进步长（默认 2）</span>
-                <input type="number" min={0} step={1} value={rs.orderStep ?? 2} onChange={(event) => patch({ punishmentRandomSettings: { ...rs, orderStep: Number(event.target.value) } })} />
+                <NumberField min={0} step={1} value={rs.orderStep ?? 2} onChange={(orderStep) => patch({ punishmentRandomSettings: { ...rs, orderStep } })} />
               </label>
               <label className="field-label">
                 <span>难度上浮硬顶（默认 5）</span>
-                <input type="number" min={0} step={1} value={rs.maxDifficultyOvershoot ?? 5} onChange={(event) => patch({ punishmentRandomSettings: { ...rs, maxDifficultyOvershoot: Number(event.target.value) } })} />
+                <NumberField min={0} step={1} value={rs.maxDifficultyOvershoot ?? 5} onChange={(maxDifficultyOvershoot) => patch({ punishmentRandomSettings: { ...rs, maxDifficultyOvershoot } })} />
               </label>
             </div>
           </div>
@@ -917,12 +859,12 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
             <div className="admin-card-title"><strong>系列任务步数</strong></div>
             <div className="config-row">
               <label className="field-label">
-                <span>最低步数（默认 10）</span>
-                <input type="number" min={1} max={MAX_SERIES_STEPS} value={rs.minSeriesSteps ?? 10} onChange={(event) => patch({ punishmentRandomSettings: { ...rs, minSeriesSteps: Number(event.target.value) } })} />
+                <span>最低步数（默认 5）</span>
+                <NumberField min={1} max={MAX_SERIES_STEPS} value={rs.minSeriesSteps ?? 5} onChange={(minSeriesSteps) => patch({ punishmentRandomSettings: { ...rs, minSeriesSteps } })} />
               </label>
               <label className="field-label">
                 <span>最高步数（默认 20）</span>
-                <input type="number" min={1} max={MAX_SERIES_STEPS} value={rs.maxSeriesSteps ?? 20} onChange={(event) => patch({ punishmentRandomSettings: { ...rs, maxSeriesSteps: Number(event.target.value) } })} />
+                <NumberField min={1} max={MAX_SERIES_STEPS} value={rs.maxSeriesSteps ?? 20} onChange={(maxSeriesSteps) => patch({ punishmentRandomSettings: { ...rs, maxSeriesSteps } })} />
               </label>
             </div>
           </div>
@@ -971,11 +913,11 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
               </label>
               <label className="field-label">
                 <span>失格分阈值（真实分）</span>
-                <input type="number" max={-1} value={draft.nameWar.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD} onChange={(event) => patch({ nameWar: { ...draft.nameWar, penaltyThreshold: Number(event.target.value) } })} placeholder={String(DEFAULT_NAME_WAR_PENALTY_THRESHOLD)} />
+                <NumberField max={-1} value={draft.nameWar.penaltyThreshold ?? DEFAULT_NAME_WAR_PENALTY_THRESHOLD} onChange={(penaltyThreshold) => patch({ nameWar: { ...draft.nameWar, penaltyThreshold } })} placeholder={String(DEFAULT_NAME_WAR_PENALTY_THRESHOLD)} />
               </label>
               <label className="field-label">
                 <span>改名最低分（真实分）</span>
-                <input type="number" min={1} value={draft.nameWar.renameMinPoints ?? DEFAULT_NAME_WAR_RENAME_MIN_POINTS} onChange={(event) => patch({ nameWar: { ...draft.nameWar, renameMinPoints: Number(event.target.value) } })} placeholder={String(DEFAULT_NAME_WAR_RENAME_MIN_POINTS)} />
+                <NumberField min={1} value={draft.nameWar.renameMinPoints ?? DEFAULT_NAME_WAR_RENAME_MIN_POINTS} onChange={(renameMinPoints) => patch({ nameWar: { ...draft.nameWar, renameMinPoints } })} placeholder={String(DEFAULT_NAME_WAR_RENAME_MIN_POINTS)} />
               </label>
             </div>
             <p className="hint">随机码固定为 4 位大写字母/数字；已有惩罚名不会因为你改前缀立刻变化，新触发的玩家会使用新前缀。失格线、改名最低分均按数据库真实排位分判定，与展示封顶无关。</p>
@@ -990,12 +932,12 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
             <div className="config-row">
               <label className="field-label"><span>显示名称</span><input value={extreme.label} maxLength={16} onChange={(event) => patchExtreme({ ...extreme, label: event.target.value })} /></label>
               <label className="field-label"><span>标志 Emoji</span><input value={extreme.emoji} maxLength={4} onChange={(event) => patchExtreme({ ...extreme, emoji: event.target.value })} /></label>
-              <label className="field-label"><span>关闭后冷却小时</span><input type="number" min={1} max={168} value={extreme.cooldownHours} onChange={(event) => patchExtreme({ ...extreme, cooldownHours: Number(event.target.value) })} /></label>
-              <label className="field-label"><span>连胜阈值</span><input type="number" min={1} max={100} value={extreme.winStreakThreshold} onChange={(event) => patchExtreme({ ...extreme, winStreakThreshold: Number(event.target.value) })} /></label>
-              <label className="field-label"><span>连胜风险概率 0-1</span><input type="number" min={0} max={1} step={0.01} value={extreme.winStreakCrashChance ?? 0} onChange={(event) => patchExtreme({ ...extreme, winStreakCrashChance: Number(event.target.value) })} /></label>
-              <label className="field-label"><span>连胜风险扣分</span><input type="number" min={1} max={1999} value={extreme.crashTargetPoints} onChange={(event) => patchExtreme({ ...extreme, crashTargetPoints: Number(event.target.value) })} /></label>
-              <label className="field-label"><span>强关改名最低分</span><input type="number" min={1} max={999} value={extreme.forceRenameMinPoints || 1} onChange={(event) => patchExtreme({ ...extreme, forceRenameMinPoints: Number(event.target.value) })} /></label>
-              <label className="field-label"><span>强关保护小时</span><input type="number" min={1} max={168} value={extreme.forceRenameProtectHours || 4} onChange={(event) => patchExtreme({ ...extreme, forceRenameProtectHours: Number(event.target.value) })} /></label>
+              <label className="field-label"><span>关闭后冷却小时</span><NumberField min={1} max={168} value={extreme.cooldownHours} onChange={(cooldownHours) => patchExtreme({ ...extreme, cooldownHours })} /></label>
+              <label className="field-label"><span>连胜阈值</span><NumberField min={1} max={100} value={extreme.winStreakThreshold} onChange={(winStreakThreshold) => patchExtreme({ ...extreme, winStreakThreshold })} /></label>
+              <label className="field-label"><span>连胜风险概率 0-1</span><NumberField min={0} max={1} step={0.01} value={extreme.winStreakCrashChance ?? 0} onChange={(winStreakCrashChance) => patchExtreme({ ...extreme, winStreakCrashChance })} /></label>
+              <label className="field-label"><span>连胜风险扣分</span><NumberField min={1} max={1999} value={extreme.crashTargetPoints} onChange={(crashTargetPoints) => patchExtreme({ ...extreme, crashTargetPoints })} /></label>
+              <label className="field-label"><span>强关改名最低分</span><NumberField min={1} max={999} value={extreme.forceRenameMinPoints || 1} onChange={(forceRenameMinPoints) => patchExtreme({ ...extreme, forceRenameMinPoints })} /></label>
+              <label className="field-label"><span>强关保护小时</span><NumberField min={1} max={168} value={extreme.forceRenameProtectHours || 4} onChange={(forceRenameProtectHours) => patchExtreme({ ...extreme, forceRenameProtectHours })} /></label>
             </div>
             <label className="field-label">
               <span>强行关闭提示</span>
@@ -1008,7 +950,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
               </div>
               <div className="config-row">
                 {(["pos1", "pos2", "pos3", "pos4"] as const).map((key) => (
-                  <label className="field-label" key={key}><span>{key}</span><input type="number" min={0} max={1} step={0.01} value={extreme.positiveLossRates[key]} onChange={(event) => patchExtreme({ ...extreme, positiveLossRates: { ...extreme.positiveLossRates, [key]: Number(event.target.value) } })} /></label>
+                  <label className="field-label" key={key}><span>{key}</span><NumberField min={0} max={1} step={0.01} value={extreme.positiveLossRates[key]} onChange={(v) => patchExtreme({ ...extreme, positiveLossRates: { ...extreme.positiveLossRates, [key]: v } })} /></label>
                 ))}
               </div>
             </div>
@@ -1019,7 +961,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
               </div>
               <div className="config-row">
                 {(["neg1", "neg2", "neg3", "neg4"] as const).map((key) => (
-                  <label className="field-label" key={key}><span>{key}</span><input type="number" min={0} max={1} step={0.01} value={extreme.negativeWinRates[key]} onChange={(event) => patchExtreme({ ...extreme, negativeWinRates: { ...extreme.negativeWinRates, [key]: Number(event.target.value) } })} /></label>
+                  <label className="field-label" key={key}><span>{key}</span><NumberField min={0} max={1} step={0.01} value={extreme.negativeWinRates[key]} onChange={(v) => patchExtreme({ ...extreme, negativeWinRates: { ...extreme.negativeWinRates, [key]: v } })} /></label>
                 ))}
               </div>
             </div>
@@ -1030,7 +972,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
               </div>
               <div className="config-row">
                 {(["pos4", "pos3", "pos2", "pos1", "default"] as const).map((key) => (
-                  <label className="field-label" key={key}><span>{key}</span><input type="number" min={0} max={999} value={extreme.hourlyDecay[key]} onChange={(event) => patchExtreme({ ...extreme, hourlyDecay: { ...extreme.hourlyDecay, [key]: Number(event.target.value) } })} /></label>
+                  <label className="field-label" key={key}><span>{key}</span><NumberField min={0} max={999} value={extreme.hourlyDecay[key]} onChange={(v) => patchExtreme({ ...extreme, hourlyDecay: { ...extreme.hourlyDecay, [key]: v } })} /></label>
                 ))}
               </div>
             </div>
@@ -1070,11 +1012,11 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
             <div className="config-row">
               <label className="field-label">
                 <span>主动白给增量 (%)</span>
-                <input type="number" min={0.1} max={100} step={0.1} value={draft.giveaway.activeBoostValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, activeBoostValue: Number(event.target.value) } })} />
+                <NumberField min={0.1} max={100} step={0.1} value={draft.giveaway.activeBoostValue} onChange={(activeBoostValue) => patch({ giveaway: { ...draft.giveaway, activeBoostValue } })} />
               </label>
               <label className="field-label">
                 <span>胜利扣减白给值 (%)</span>
-                <input type="number" min={0.1} max={100} step={0.1} value={draft.giveaway.winPenaltyValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, winPenaltyValue: Number(event.target.value) } })} />
+                <NumberField min={0.1} max={100} step={0.1} value={draft.giveaway.winPenaltyValue} onChange={(winPenaltyValue) => patch({ giveaway: { ...draft.giveaway, winPenaltyValue } })} />
               </label>
             </div>
             <p className="hint">胜利扣减仅对已开启白给模式的胜方生效（含断线判负）。</p>
@@ -1091,21 +1033,21 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                 <div className="config-row">
                   <label className="field-label">
                     <span>点赞每小时次数上限</span>
-                    <input type="number" min={1} step={1} value={draft.giveaway.likeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, likeVoteLimitPerHour: Number(event.target.value) } })} />
+                    <NumberField min={1} step={1} value={draft.giveaway.likeVoteLimitPerHour} onChange={(likeVoteLimitPerHour) => patch({ giveaway: { ...draft.giveaway, likeVoteLimitPerHour } })} />
                   </label>
                   <label className="field-label">
                     <span>点赞降低值 (%)</span>
-                    <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.likeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, likeVoteValue: Number(event.target.value) } })} />
+                    <NumberField min={0.01} max={100} step={0.01} value={draft.giveaway.likeVoteValue} onChange={(likeVoteValue) => patch({ giveaway: { ...draft.giveaway, likeVoteValue } })} />
                   </label>
                 </div>
                 <div className="config-row">
                   <label className="field-label">
                     <span>倒赞每小时次数上限</span>
-                    <input type="number" min={1} step={1} value={draft.giveaway.dislikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, dislikeVoteLimitPerHour: Number(event.target.value) } })} />
+                    <NumberField min={1} step={1} value={draft.giveaway.dislikeVoteLimitPerHour} onChange={(dislikeVoteLimitPerHour) => patch({ giveaway: { ...draft.giveaway, dislikeVoteLimitPerHour } })} />
                   </label>
                   <label className="field-label">
                     <span>倒赞增加值 (%)</span>
-                    <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.dislikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, dislikeVoteValue: Number(event.target.value) } })} />
+                    <NumberField min={0.01} max={100} step={0.01} value={draft.giveaway.dislikeVoteValue} onChange={(dislikeVoteValue) => patch({ giveaway: { ...draft.giveaway, dislikeVoteValue } })} />
                   </label>
                 </div>
               </section>
@@ -1118,21 +1060,21 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                 <div className="config-row">
                   <label className="field-label">
                     <span>点赞每小时次数上限</span>
-                    <input type="number" min={1} step={1} value={draft.giveaway.petLikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, petLikeVoteLimitPerHour: Number(event.target.value) } })} />
+                    <NumberField min={1} step={1} value={draft.giveaway.petLikeVoteLimitPerHour} onChange={(petLikeVoteLimitPerHour) => patch({ giveaway: { ...draft.giveaway, petLikeVoteLimitPerHour } })} />
                   </label>
                   <label className="field-label">
                     <span>点赞降低值 (%)</span>
-                    <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.petLikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, petLikeVoteValue: Number(event.target.value) } })} />
+                    <NumberField min={0.01} max={100} step={0.01} value={draft.giveaway.petLikeVoteValue} onChange={(petLikeVoteValue) => patch({ giveaway: { ...draft.giveaway, petLikeVoteValue } })} />
                   </label>
                 </div>
                 <div className="config-row">
                   <label className="field-label">
                     <span>倒赞每小时次数上限</span>
-                    <input type="number" min={1} step={1} value={draft.giveaway.petDislikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, petDislikeVoteLimitPerHour: Number(event.target.value) } })} />
+                    <NumberField min={1} step={1} value={draft.giveaway.petDislikeVoteLimitPerHour} onChange={(petDislikeVoteLimitPerHour) => patch({ giveaway: { ...draft.giveaway, petDislikeVoteLimitPerHour } })} />
                   </label>
                   <label className="field-label">
                     <span>倒赞增加值 (%)</span>
-                    <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.petDislikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, petDislikeVoteValue: Number(event.target.value) } })} />
+                    <NumberField min={0.01} max={100} step={0.01} value={draft.giveaway.petDislikeVoteValue} onChange={(petDislikeVoteValue) => patch({ giveaway: { ...draft.giveaway, petDislikeVoteValue } })} />
                   </label>
                 </div>
               </section>
@@ -1145,21 +1087,21 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                 <div className="config-row">
                   <label className="field-label">
                     <span>点赞每小时次数上限</span>
-                    <input type="number" min={1} step={1} value={draft.giveaway.masterLikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, masterLikeVoteLimitPerHour: Number(event.target.value) } })} />
+                    <NumberField min={1} step={1} value={draft.giveaway.masterLikeVoteLimitPerHour} onChange={(masterLikeVoteLimitPerHour) => patch({ giveaway: { ...draft.giveaway, masterLikeVoteLimitPerHour } })} />
                   </label>
                   <label className="field-label">
                     <span>点赞降低值 (%)</span>
-                    <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.masterLikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, masterLikeVoteValue: Number(event.target.value) } })} />
+                    <NumberField min={0.01} max={100} step={0.01} value={draft.giveaway.masterLikeVoteValue} onChange={(masterLikeVoteValue) => patch({ giveaway: { ...draft.giveaway, masterLikeVoteValue } })} />
                   </label>
                 </div>
                 <div className="config-row">
                   <label className="field-label">
                     <span>倒赞每小时次数上限</span>
-                    <input type="number" min={1} step={1} value={draft.giveaway.masterDislikeVoteLimitPerHour} onChange={(event) => patch({ giveaway: { ...draft.giveaway, masterDislikeVoteLimitPerHour: Number(event.target.value) } })} />
+                    <NumberField min={1} step={1} value={draft.giveaway.masterDislikeVoteLimitPerHour} onChange={(masterDislikeVoteLimitPerHour) => patch({ giveaway: { ...draft.giveaway, masterDislikeVoteLimitPerHour } })} />
                   </label>
                   <label className="field-label">
                     <span>倒赞增加值 (%)</span>
-                    <input type="number" min={0.01} max={100} step={0.01} value={draft.giveaway.masterDislikeVoteValue} onChange={(event) => patch({ giveaway: { ...draft.giveaway, masterDislikeVoteValue: Number(event.target.value) } })} />
+                    <NumberField min={0.01} max={100} step={0.01} value={draft.giveaway.masterDislikeVoteValue} onChange={(masterDislikeVoteValue) => patch({ giveaway: { ...draft.giveaway, masterDislikeVoteValue } })} />
                   </label>
                 </div>
               </section>
@@ -1187,17 +1129,17 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
               </label>
               <label className="field-label">
                 <span>宠物称号最大字数</span>
-                <input type="number" min={1} max={24} step={1} value={pb.maxTitleLength} onChange={(event) => patch({ petBond: { ...pb, maxTitleLength: Number(event.target.value) } })} />
+                <NumberField min={1} max={24} step={1} value={pb.maxTitleLength} onChange={(maxTitleLength) => patch({ petBond: { ...pb, maxTitleLength } })} />
               </label>
             </div>
             <div className="config-row">
               <label className="field-label">
                 <span>每名主人最多宠物数</span>
-                <input type="number" min={1} max={20} step={1} value={pb.maxPetsPerMaster} onChange={(event) => patch({ petBond: { ...pb, maxPetsPerMaster: Number(event.target.value) } })} />
+                <NumberField min={1} max={20} step={1} value={pb.maxPetsPerMaster} onChange={(maxPetsPerMaster) => patch({ petBond: { ...pb, maxPetsPerMaster } })} />
               </label>
               <label className="field-label">
                 <span>每名宠物最多主人数</span>
-                <input type="number" min={1} max={20} step={1} value={pb.maxMastersPerPet} onChange={(event) => patch({ petBond: { ...pb, maxMastersPerPet: Number(event.target.value) } })} />
+                <NumberField min={1} max={20} step={1} value={pb.maxMastersPerPet} onChange={(maxMastersPerPet) => patch({ petBond: { ...pb, maxMastersPerPet } })} />
               </label>
             </div>
             <p className="hint">关闭玩家侧「开启认主/认宠」不会解除已有关系，只禁止新增；关闭「公开展示」则不出现在大厅关系图。</p>

@@ -13,6 +13,7 @@ import {
   emptyStepDraft,
   formatContributionDay,
   formatContributionListMeta,
+  isValidOrder,
   stepHasFactionOverlap,
   voteRatio,
   type StepDraft,
@@ -266,6 +267,9 @@ function SubmissionReviewPanel({ items, kind, config, password, onError, onChang
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(false);
+  // 点击过一次「保存并立即发布/批准」但校验没过（难度为空/越界等）：标红对应输入框，
+  // 与 ContributeSeriesForm 的 attempted 是同一套视觉语言。
+  const [editAttempted, setEditAttempted] = useState(false);
   const [editTask, setEditTask] = useState<StepDraft>(() => emptyStepDraft(config.genderFactions.map((f) => f.id), true));
   const [editSeriesName, setEditSeriesName] = useState("");
   const [editSeriesTargets, setEditSeriesTargets] = useState<string[]>([]);
@@ -298,6 +302,7 @@ function SubmissionReviewPanel({ items, kind, config, password, onError, onChang
       setCurrent(detail);
       setComment(detail.reviewComment || "");
       setEditing(false);
+      setEditAttempted(false);
     } catch (e) {
       onError(e instanceof Error ? e.message : "加载失败");
     }
@@ -356,6 +361,7 @@ function SubmissionReviewPanel({ items, kind, config, password, onError, onChang
         ? (draft.steps || []).map((step) => toAdminStepDraft(step, config))
         : [emptySeriesStep(allFactionIds)]);
     }
+    setEditAttempted(false);
     setEditing(true);
   }
 
@@ -427,9 +433,10 @@ function SubmissionReviewPanel({ items, kind, config, password, onError, onChang
               </small>
             </div>
             {editing && current.kind === "task" ? (
-              <form className="stack" onSubmit={(event) => {
+              <form className="stack" noValidate onSubmit={(event) => {
                 event.preventDefault();
-                if (!stepHasFactionOverlap(editTask)) publishEdited({ ...editTask, inRandomPool: true });
+                if (stepHasFactionOverlap(editTask) || !isValidOrder(editTask.order)) { setEditAttempted(true); return; }
+                publishEdited({ ...editTask, inRandomPool: true });
               }}>
                 <StepEditor
                   config={config}
@@ -437,10 +444,11 @@ function SubmissionReviewPanel({ items, kind, config, password, onError, onChang
                   onChange={setEditTask}
                   onError={onError}
                   showRandomPoolToggle={false}
+                  showErrors={editAttempted}
                 />
                 <div className="row">
                   <button type="button" disabled={busy} onClick={() => setEditing(false)}>取消编辑</button>
-                  <button type="submit" className="primary" disabled={busy || stepHasFactionOverlap(editTask)}>保存并立即发布</button>
+                  <button type="submit" className="primary" disabled={busy || stepHasFactionOverlap(editTask) || !isValidOrder(editTask.order)}>保存并立即发布</button>
                 </div>
               </form>
             ) : editing && current.kind === "series" ? (

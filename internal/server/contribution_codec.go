@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	defaultMinSeriesSteps = 10
+	defaultMinSeriesSteps = 5
 	// defaultMaxSeriesSteps：后台「最高步数」留空/填非正数时的默认值，与 maxSeriesSteps
 	// （contributionstore.go）这个纯防御性技术上限是两回事——后者只用来挡住畸形/超大
 	// payload，管理员配置的数值在其范围内完全生效，不会被静默收紧到这个默认值。

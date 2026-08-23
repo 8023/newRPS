@@ -77,7 +77,9 @@ func (s *Server) handleAdminContributionAction(action string, raw map[string]any
 		// 已通过投稿的点赞率/系列完成率一次性算好随列表下发，前端不必再对每条已通过
 		// 投稿单独发一次 contributionGet——审核队列条数一多，逐条请求很容易在几秒内
 		// 撞上 admin:action 的速率限制（见 AdminContributionReview.tsx 的 useEffect 注释）。
-		s.fillContributionListMeta(items)
+		if err := s.fillContributionListMetaWithoutServerLock(items); err != nil {
+			return nil, err
+		}
 		// 必须包成 object：protobuf Struct 不能以顶层数组作为 RPC 载荷。
 		return map[string]any{"items": items}, nil
 	case "contributionPendingOverview":
@@ -97,11 +99,12 @@ func (s *Server) handleAdminContributionAction(action string, raw map[string]any
 		if err != nil {
 			return nil, err
 		}
-		if kind == types.ContributionKindSeries {
-			item.Completion = s.seriesCompletionStats(id)
+		one := []types.ContributionItem{item}
+		if err := s.fillContributionListMetaWithoutServerLock(one); err != nil {
+			return nil, err
 		}
-		item.SubmitterName = s.playerName(item.SubmitterID)
-		return item, nil
+		one[0].SubmitterName = s.playerName(one[0].SubmitterID)
+		return one[0], nil
 	case "contributionUpdateComment":
 		if err := validateAdminContributionID(id); err != nil {
 			return nil, err
@@ -204,37 +207,74 @@ func (s *Server) adminListContributions(kind, status string) ([]types.Contributi
 	return out, nil
 }
 
-// fillContributionListMeta 就地补全列表里"已通过"投稿的点赞率原料（LikeCount/DownCount）与
-// 系列完成率（Completion）——这两项只有已通过的版本才会展示（见 contributeSeries.ts 的
-// contributionHasPublishedVersion），其余状态不查，省几次数据库往返。任务的赞踩沿用
-// contributionStore.get 同一份 voteAggregate（汇总该 id 名下所有历史版本），系列则沿用
-// seriesToItem(withContent=true) 那份"汇总当前各步骤"的口径——都是复用既有单条查询逻辑，
-// 只是在一次 RPC 里对列表批量跑一遍，换来的是前端不用再为每条已通过投稿单开一次
-// admin:action 请求（那样做很容易在打开一个条目略多的板块时就把速率限制打满）。
-func (s *Server) fillContributionListMeta(items []types.ContributionItem) {
+// fillContributionListMeta 就地补全列表里已通过投稿的点赞数与系列完成率。任务和系列都按
+// ID 批量查询，复杂度由原来的“每条任务 1 次、每个系列 2 次”降为每 400 条各 1 次；系列
+// 每一步的赞踩会跨该步骤的所有历史版本汇总，避免改稿后旧评价从列表里消失。
+func (s *Server) fillContributionListMeta(items []types.ContributionItem) error {
+	var taskIDs, seriesIDs []string
+	for i := range items {
+		if items[i].Status != types.ContributionApproved {
+			continue
+		}
+		switch items[i].Kind {
+		case types.ContributionKindTask:
+			taskIDs = append(taskIDs, items[i].ID)
+		case types.ContributionKindSeries:
+			seriesIDs = append(seriesIDs, items[i].ID)
+		}
+	}
+
+	readDB := s.contributionStore.db
+	if s.activityRO != nil {
+		readDB = s.activityRO
+	}
+	readTasks := newSubTaskStore(readDB)
+	taskVotes, err := readTasks.voteAggregates(taskIDs)
+	if err != nil {
+		return err
+	}
+	seriesVotes, err := readTasks.seriesVoteAggregates(seriesIDs)
+	if err != nil {
+		return err
+	}
+	seriesRuns := map[string]seriesRunCounts{}
+	if s.punishmentStore != nil {
+		seriesRuns, err = newPunishmentStore(readDB).currentSeriesRunStats(seriesIDs)
+		if err != nil {
+			return err
+		}
+	}
+
 	for i := range items {
 		it := &items[i]
 		if it.Status != types.ContributionApproved {
 			continue
 		}
-		switch it.Kind {
-		case types.ContributionKindTask:
-			likes, downs, err := s.contributionStore.tasks.voteAggregate(it.ID)
-			if err != nil {
-				continue
+		var counts contributionVoteCounts
+		if it.Kind == types.ContributionKindTask {
+			counts = taskVotes[it.ID]
+		} else if it.Kind == types.ContributionKindSeries {
+			counts = seriesVotes[it.ID]
+			run := seriesRuns[it.ID]
+			stats := &types.SeriesCompletionStats{Participants: run.Participants}
+			if run.Participants > 0 {
+				rate := int(float64(run.PercentSum)/float64(run.Participants) + 0.5)
+				stats.Rate = &rate
 			}
-			it.LikeCount, it.DownCount = likes, downs
-		case types.ContributionKindSeries:
-			steps, err := s.contributionStore.tasks.stepsForSeries(it.ID)
-			if err == nil {
-				for _, st := range steps {
-					it.LikeCount += st.LikeCount
-					it.DownCount += st.DownCount
-				}
-			}
-			it.Completion = s.seriesCompletionStats(it.ID)
+			it.Completion = stats
 		}
+		it.LikeCount, it.DownCount = counts.Likes, counts.Downs
 	}
+	return nil
+}
+
+// fillContributionListMetaWithoutServerLock 供持有 s.mu 的 WebSocket handler 调用。评价与
+// 系列完成率是后台列表的批量只读查询，必须使用独立连接并在 SQL 期间释放全局状态锁；回锁
+// 后 items 仍是调用方的局部切片，不需要重新读取内存状态。
+func (s *Server) fillContributionListMetaWithoutServerLock(items []types.ContributionItem) error {
+	s.mu.Unlock()
+	defer s.mu.Lock()
+	return s.fillContributionListMeta(items)
 }
 
 // contributionPendingOverview 统计任务/系列两种类型各状态的投稿条数（后台"待处理"总览用），
@@ -376,6 +416,12 @@ func (s *Server) validateContributionForApproval(kind, id, reviewedContent strin
 			return err
 		}
 	}
+	// 玩家保存草稿时 marshalDraft 已经限制为 maxContributionJSON；管理员就地改稿走的是
+	// reviewedContent 字符串，不能绕过同一上限。否则攻击者一旦拿到后台会话，就能构造一个
+	// 远大于正常表单的 JSON 字符串，让后续反复 Unmarshal/校验占用大量内存和 CPU。
+	if len(raw) > maxContributionJSON {
+		return fmt.Errorf("审核内容过大")
+	}
 	if err := s.contributionStore.validateOwnedDraft(kind, raw); err != nil {
 		return err
 	}
@@ -408,10 +454,22 @@ func (s *Server) adminApprove(kind, id, adminID, comment, reviewedContent string
 		if err != nil {
 			return err
 		}
-		if prev.Status != types.ContributionPending {
+		// 待审：正常审核批准，reviewedContent 可选（原样批准或就地改稿批准）。
+		// 已通过：管理员是终审者，改稿直接生效、不用退回待审再走一遍——但必须带新内容，
+		// 否则状态不用变、又没有新内容，等于什么都没做。
+		switch prev.Status {
+		case types.ContributionPending:
+		case types.ContributionApproved:
+			if strings.TrimSpace(reviewedContent) == "" {
+				return errContributionBadStatus
+			}
+		default:
 			return errContributionBadStatus
 		}
 		if strings.TrimSpace(reviewedContent) != "" {
+			if prev.Version >= maxContributionVersionsPerItem {
+				return fmt.Errorf("该投稿版本数量已达上限，不能由审核改稿再新增版本")
+			}
 			draft, err := decodeSeriesDraft(reviewedContent)
 			if err != nil {
 				return err
@@ -444,10 +502,19 @@ func (s *Server) adminApprove(kind, id, adminID, comment, reviewedContent string
 		if prev.SeriesID != "" || !prev.Active {
 			return errContributionNotFound
 		}
-		if prev.Status != types.ContributionPending {
+		switch prev.Status {
+		case types.ContributionPending:
+		case types.ContributionApproved:
+			if strings.TrimSpace(reviewedContent) == "" {
+				return errContributionBadStatus
+			}
+		default:
 			return errContributionBadStatus
 		}
 		if strings.TrimSpace(reviewedContent) != "" {
+			if prev.Version >= maxContributionVersionsPerItem {
+				return fmt.Errorf("该投稿版本数量已达上限，不能由审核改稿再新增版本")
+			}
 			draft, err := decodeStepDraft(reviewedContent)
 			if err != nil {
 				return err
@@ -463,29 +530,6 @@ func (s *Server) adminApprove(kind, id, adminID, comment, reviewedContent string
 		return fmt.Errorf("投稿类型无效")
 	}
 	return tx.Commit()
-}
-
-// seriesCompletionStats 读一个系列的完成率统计——各玩家"已走步数/总步数"百分比样本的
-// 算术平均（见 punishmentstore.go 的 punishment_series_run_stats）。store 不可用或查询出错
-// 都返回 nil，调用方按"没有完成率数据"处理，不当错误传播。
-func (s *Server) seriesCompletionStats(seriesID string) *types.SeriesCompletionStats {
-	if s.punishmentStore == nil || seriesID == "" {
-		return nil
-	}
-	row, err := s.contributionStore.series.latest(seriesID)
-	if err != nil {
-		return nil
-	}
-	participants, percentSum, err := s.punishmentStore.seriesRunStats(seriesID, row.Version)
-	if err != nil {
-		return nil
-	}
-	stats := &types.SeriesCompletionStats{Participants: participants}
-	if participants > 0 {
-		rate := int(float64(percentSum)/float64(participants) + 0.5)
-		stats.Rate = &rate
-	}
-	return stats
 }
 
 func validContributionStatus(status string) bool {
@@ -524,6 +568,69 @@ func optionalStringField(raw map[string]any, key string) (string, error) {
 	return s, nil
 }
 
+// sanitizeGenderInput 对性别/阵营批量提交做统一的清洗与校验（trim、长度上限、控制字符、
+// 同阵营重名去重、结构校验），供 gendersSave（admin:action）与 config:save 两条写入路径
+// 共用，避免两条路径的校验规则跑偏。返回清洗后的副本，不修改入参。
+func (s *Server) sanitizeGenderInput(genders []types.GenderOption, factions []types.GenderFaction) ([]types.GenderOption, []types.GenderFaction, error) {
+	if len(factions) > 100 || len(genders) > 500 {
+		return nil, nil, fmt.Errorf("性别或阵营数量过多")
+	}
+	factions = append([]types.GenderFaction(nil), factions...)
+	genders = append([]types.GenderOption(nil), genders...)
+	for i := range factions {
+		factions[i].ID = strings.TrimSpace(factions[i].ID)
+		factions[i].Label = strings.TrimSpace(factions[i].Label)
+		factions[i].TaskGroup = strings.TrimSpace(factions[i].TaskGroup)
+		if len([]rune(factions[i].ID)) > 64 || len([]rune(factions[i].Label)) > maxGenderLabelRunes {
+			return nil, nil, fmt.Errorf("阵营 ID 或名称过长")
+		}
+		if containsControlRune(factions[i].ID) || containsControlRune(factions[i].Label) {
+			return nil, nil, fmt.Errorf("阵营 ID 或名称包含控制字符")
+		}
+	}
+	seenLabels := map[string]struct{}{}
+	for i := range genders {
+		genders[i].ID = strings.TrimSpace(genders[i].ID)
+		genders[i].Label = strings.TrimSpace(genders[i].Label)
+		genders[i].FactionID = strings.TrimSpace(genders[i].FactionID)
+		if len([]rune(genders[i].ID)) > 64 || len([]rune(genders[i].Label)) > maxGenderLabelRunes {
+			return nil, nil, fmt.Errorf("性别 ID 或名称过长")
+		}
+		if containsControlRune(genders[i].ID) || containsControlRune(genders[i].Label) || containsControlRune(genders[i].FactionID) {
+			return nil, nil, fmt.Errorf("性别字段包含控制字符")
+		}
+		norm := normalizeGenderLabel(genders[i].Label)
+		if norm == "" {
+			return nil, nil, fmt.Errorf("性别名称包含无效字符")
+		}
+		key := genders[i].FactionID + "\x00" + norm
+		if _, exists := seenLabels[key]; exists {
+			return nil, nil, fmt.Errorf("同一阵营不能有重名性别")
+		}
+		seenLabels[key] = struct{}{}
+	}
+	cfg := s.cfg
+	cfg.Genders = genders
+	cfg.GenderFactions = factions
+	if err := config.ValidateGenders(cfg); err != nil {
+		return nil, nil, err
+	}
+	return genders, factions, nil
+}
+
+// persistGendersAndFactions 落库（整表覆盖）并刷新运行时缓存/s.cfg，调用前须先经过
+// sanitizeGenderInput 校验。同样供 gendersSave 与 config:save 共用。
+func (s *Server) persistGendersAndFactions(genders []types.GenderOption, factions []types.GenderFaction) error {
+	if s.genderStore == nil {
+		return fmt.Errorf("性别与阵营存储不可用")
+	}
+	if err := s.genderStore.replaceAll(factions, genders); err != nil {
+		return err
+	}
+	s.reloadGenderCaches()
+	return nil
+}
+
 // adminSaveGenders 是后台「性别与阵营」板块的直接批量增删改（与共建投稿系统无关，见
 // genderstore.go 顶部注释）：整份覆盖 gender_factions/gender_options 两张表。
 func (s *Server) adminSaveGenders(raw map[string]any) (any, error) {
@@ -538,51 +645,13 @@ func (s *Server) adminSaveGenders(raw map[string]any) (any, error) {
 	if err := json.Unmarshal(b, &in); err != nil {
 		return nil, err
 	}
-	if len(in.Factions) > 100 || len(in.Genders) > 500 {
-		return nil, fmt.Errorf("性别或阵营数量过多")
-	}
-	for i := range in.Factions {
-		in.Factions[i].ID = strings.TrimSpace(in.Factions[i].ID)
-		in.Factions[i].Label = strings.TrimSpace(in.Factions[i].Label)
-		in.Factions[i].TaskGroup = strings.TrimSpace(in.Factions[i].TaskGroup)
-		if len([]rune(in.Factions[i].ID)) > 64 || len([]rune(in.Factions[i].Label)) > maxGenderLabelRunes {
-			return nil, fmt.Errorf("阵营 ID 或名称过长")
-		}
-		if containsControlRune(in.Factions[i].ID) || containsControlRune(in.Factions[i].Label) {
-			return nil, fmt.Errorf("阵营 ID 或名称包含控制字符")
-		}
-	}
-	seenLabels := map[string]struct{}{}
-	for i := range in.Genders {
-		in.Genders[i].ID = strings.TrimSpace(in.Genders[i].ID)
-		in.Genders[i].Label = strings.TrimSpace(in.Genders[i].Label)
-		in.Genders[i].FactionID = strings.TrimSpace(in.Genders[i].FactionID)
-		if len([]rune(in.Genders[i].ID)) > 64 || len([]rune(in.Genders[i].Label)) > maxGenderLabelRunes {
-			return nil, fmt.Errorf("性别 ID 或名称过长")
-		}
-		if containsControlRune(in.Genders[i].ID) || containsControlRune(in.Genders[i].Label) || containsControlRune(in.Genders[i].FactionID) {
-			return nil, fmt.Errorf("性别字段包含控制字符")
-		}
-		norm := normalizeGenderLabel(in.Genders[i].Label)
-		if norm == "" {
-			return nil, fmt.Errorf("性别名称包含无效字符")
-		}
-		key := in.Genders[i].FactionID + "\x00" + norm
-		if _, exists := seenLabels[key]; exists {
-			return nil, fmt.Errorf("同一阵营不能有重名性别")
-		}
-		seenLabels[key] = struct{}{}
-	}
-	cfg := s.cfg
-	cfg.Genders = in.Genders
-	cfg.GenderFactions = in.Factions
-	if err := config.ValidateGenders(cfg); err != nil {
+	genders, factions, err := s.sanitizeGenderInput(in.Genders, in.Factions)
+	if err != nil {
 		return nil, err
 	}
-	if err := s.genderStore.replaceAll(in.Factions, in.Genders); err != nil {
+	if err := s.persistGendersAndFactions(genders, factions); err != nil {
 		return nil, err
 	}
-	s.reloadGenderCaches()
 	s.refreshAllPlayersForConfig()
 	s.emitConfigUpdate()
 	s.broadcastLobby()

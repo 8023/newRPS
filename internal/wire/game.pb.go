@@ -7064,7 +7064,7 @@ type PunishmentRandomSettings struct {
 	// 历史字段，倒伽马下不参与计算，保留以免旧配置/控件报错。
 	OrderSpread            float64 `protobuf:"fixed64,2,opt,name=order_spread,json=orderSpread,proto3" json:"order_spread,omitempty"`
 	MaxDifficultyOvershoot float64 `protobuf:"fixed64,3,opt,name=max_difficulty_overshoot,json=maxDifficultyOvershoot,proto3" json:"max_difficulty_overshoot,omitempty"`
-	// 系列投稿最低步数；<=0 时前后端都按 10 兜底。
+	// 系列投稿最低步数；<=0 时前后端都按 5 兜底。
 	MinSeriesSteps int32 `protobuf:"varint,5,opt,name=min_series_steps,json=minSeriesSteps,proto3" json:"min_series_steps,omitempty"`
 	// 系列投稿最高步数；<=0 时前后端都按 20 兜底。
 	MaxSeriesSteps int32 `protobuf:"varint,6,opt,name=max_series_steps,json=maxSeriesSteps,proto3" json:"max_series_steps,omitempty"`

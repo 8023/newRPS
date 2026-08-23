@@ -36,6 +36,11 @@ describe("contribute view markup", () => {
     expect(src).toContain("ContributionStatusChip");
     expect(src).not.toContain("status-chip");
   });
+
+  it("preserves an existing cover opacity when reopening a draft", () => {
+    const src = readFileSync(new URL("./ContributeView.tsx", import.meta.url), "utf8");
+    expect(src).toContain('backgroundOpacity: typeof raw.backgroundOpacity === "number" ? raw.backgroundOpacity : base.backgroundOpacity');
+  });
 });
 
 describe("series step toolbar markup", () => {
@@ -73,5 +78,10 @@ describe("step editor field order", () => {
     expect(src).toContain("选取文件");
     expect(src).toContain("cover-thumb");
     expect(src).not.toContain("任务封面预览");
+    // 新上传图片在草稿保存落库前不可由远端 URL 访问，必须用压缩后文件的 object URL
+    // 本地预览；在 image/* 之外显式列出 HEIC 扩展，避免 Chrome 文件选择器隐藏它。
+    expect(src).toContain("URL.createObjectURL(prepared)");
+    expect(src).toContain("URL.revokeObjectURL");
+    expect(src).toContain('accept="image/*,.heic,.heif"');
   });
 });

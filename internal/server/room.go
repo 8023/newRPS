@@ -55,8 +55,9 @@ func occupantName(occupant SeatOccupant) string {
 
 // occupantShortName 返回座位玩家的短名（不含性别/称号，名争惩罚态下为惩罚名），
 // 与 playerShortName 对 *PlayerState 的口径一致——供不应嵌入称号的场合使用
-// （如 seatWinLabel 的「玩家A/B「昵称」胜利」）；occupantName 仍保留完整的
-// 性别-称号-昵称，供 resultText 等既有场合使用。
+// （如 seatWinLabel 的「玩家A/B「昵称」胜利」、seatShortLabel、resultText 里的
+// 排位加减分明细）；occupantName 仍保留完整的性别-称号-昵称，只留给极少数确实需要
+// 完整身份信息的场合（如悔棋/上贡等房内通知）。
 func occupantShortName(occupant SeatOccupant) string {
 	if occupant == nil {
 		return "空位"
@@ -77,6 +78,17 @@ func seatWinLabel(room *RoomState, winnerSeat types.SeatKey) string {
 		seatText = "玩家B"
 	}
 	return fmt.Sprintf("%s「%s」胜利", seatText, occupantShortName(room.Seats[winnerSeat]))
+}
+
+// seatShortLabel 组装「玩家 A：昵称」格式，供"对战比分"区域的终局结算文案
+// （resultText）标注赢/输家身份——同样刻意不含性别/称号，格式改用全角冒号分隔
+// 而非「」包裹，与 seatWinLabel 服务的历史记录简讯区分开。
+func seatShortLabel(seat types.SeatKey, occupant SeatOccupant) string {
+	seatText := "玩家 A"
+	if seat == types.SeatB {
+		seatText = "玩家 B"
+	}
+	return seatText + "：" + occupantShortName(occupant)
 }
 
 func (s *Server) shouldCloseRoom(room *RoomState) bool {

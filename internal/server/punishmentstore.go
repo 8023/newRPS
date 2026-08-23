@@ -11,6 +11,11 @@ type punishmentStore struct {
 	db *sql.DB
 }
 
+type seriesRunCounts struct {
+	Participants int
+	PercentSum   int
+}
+
 func newPunishmentStore(db *sql.DB) *punishmentStore {
 	return &punishmentStore{db: db}
 }
@@ -30,18 +35,44 @@ func (ps *punishmentStore) recordSeriesRunProgress(seriesID string, version int,
 	return err
 }
 
-// seriesRunStats 返回某个系列版本累计的样本数与百分比之和；调用方自行相除得算术平均
-// （样本数为 0 时不要除，避免除零——见 seriesCompletionStats）。未命中的桶返回 0/0。
-func (ps *punishmentStore) seriesRunStats(seriesID string, version int) (participants, percentSum int, err error) {
-	err = ps.db.QueryRow(`
-		SELECT participant_count, progress_percent_sum FROM punishment_series_run_stats
-		WHERE series_id = ? AND series_version = ?`,
-		seriesID, version,
-	).Scan(&participants, &percentSum)
-	if err == sql.ErrNoRows {
-		return 0, 0, nil
+// currentSeriesRunStats 批量读取系列当前版本的完成率原料。直接与 series 的最新版本 JOIN，
+// 避免列表展示时先逐系列查版本、再逐系列查统计的两层 N+1。
+func (ps *punishmentStore) currentSeriesRunStats(seriesIDs []string) (map[string]seriesRunCounts, error) {
+	out := make(map[string]seriesRunCounts, len(seriesIDs))
+	for start := 0; start < len(seriesIDs); start += contributionQueryBatchSize {
+		end := min(start+contributionQueryBatchSize, len(seriesIDs))
+		batch := seriesIDs[start:end]
+		args := make([]any, len(batch))
+		for i := range batch {
+			args[i] = batch[i]
+		}
+		rows, err := ps.db.Query(`
+			SELECT t.id, COALESCE(stats.participant_count,0), COALESCE(stats.progress_percent_sum,0)
+			FROM series t
+			LEFT JOIN punishment_series_run_stats stats
+				ON stats.series_id = t.id AND stats.series_version = t.version
+			WHERE t.id IN (`+sqlPlaceholders(len(batch))+`)
+				AND t.version = (SELECT MAX(version) FROM series WHERE id = t.id)`, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var id string
+			var counts seriesRunCounts
+			if err := rows.Scan(&id, &counts.Participants, &counts.PercentSum); err != nil {
+				_ = rows.Close()
+				return nil, err
+			}
+			out[id] = counts
+		}
+		if err := rows.Close(); err != nil {
+			return nil, err
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
 	}
-	return participants, percentSum, err
+	return out, nil
 }
 
 func nonNilStrings(s []string) []string {

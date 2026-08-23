@@ -4096,6 +4096,17 @@ main {
   background: linear-gradient(180deg, color-mix(in srgb, var(--pink) 36%, var(--panel-solid)), color-mix(in srgb, var(--primary) 16%, var(--panel-soft)));
 }
 
+/* 出拳后同一个按钮变成「撤回」：用灰调而非选择态的粉/紫，提示这是撤销动作而不是新选项。 */
+.emoji-row .move-withdraw-button {
+  border-color: var(--border-strong);
+  background: var(--panel-soft);
+  opacity: 0.85;
+}
+
+.emoji-row .move-withdraw-button:not(:disabled):hover {
+  opacity: 1;
+}
+
 .choice-badge {
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -6880,7 +6891,7 @@ main {
 .history-task p {
   margin: 0;
   color: var(--page-text);
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 900;
   line-height: 1.45;
 }
@@ -6926,17 +6937,24 @@ main {
 }
 
 /* "评价任务："提示语与结果行统一走 --muted 弱化配色，避免比任务正文（.designed-task-card p，
-   16px/900 加粗）还醒目；赞/踩按钮沿用站内 .icon-button 同款 34px 紧凑尺寸，而不是全局默认
-   38px 按钮，让这一行看起来是卡片内的次要操作，不是独立的强调按钮。 */
+   17px/900 加粗）还醒目，但两者字号必须一致（.task-card-vote-row .contribution-vote-result
+   覆盖下面的通用 12px，与提示语同为 13px）——投票前后切换的是内容，不是字号，否则这一行
+   会随投票状态忽大忽小。赞/踩按钮字号沿用 13px 不变，仅把高度从 .icon-button 同款 34px
+   收窄到 26px（横向 padding 不变），使按钮与"评价任务："文字在垂直方向上更贴近、不再显得
+   突兀，而不是全局默认 38px 按钮那种独立强调按钮的观感。 */
 .task-card-vote-row .vote-actions span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .task-card-vote-row .vote-actions button {
   padding: 0 10px;
-  height: 34px;
-  min-height: 34px;
+  height: 26px;
+  min-height: 26px;
+  font-size: 13px;
+}
+
+.task-card-vote-row .contribution-vote-result {
   font-size: 13px;
 }
 

@@ -17,6 +17,11 @@ type subTaskStore struct {
 	db *sql.DB
 }
 
+type contributionVoteCounts struct {
+	Likes int
+	Downs int
+}
+
 func newSubTaskStore(db *sql.DB) *subTaskStore {
 	return &subTaskStore{db: db}
 }
@@ -36,6 +41,7 @@ type subTaskRow struct {
 	ContributorAnonymous bool
 	ReviewedBy           string
 	ReviewedAt           int64
+	FirstApprovedAt      int64
 	ReviewComment        string
 	CreatedAt            int64
 	UpdatedAt            int64
@@ -51,7 +57,7 @@ func scanSubTaskRow(row interface {
 		&r.ID, &r.Version, &r.SeriesID, &r.StepIndex, &active, &variantsJSON, &tagJSON,
 		&r.Draft.BackgroundImage, &r.Draft.BackgroundOpacity, &r.Draft.Order, &r.Status,
 		&r.LikeCount, &r.DownCount, &r.ContributorPlayerID, &anon,
-		&r.ReviewedBy, &r.ReviewedAt, &r.ReviewComment, &r.CreatedAt, &r.UpdatedAt,
+		&r.ReviewedBy, &r.ReviewedAt, &r.FirstApprovedAt, &r.ReviewComment, &r.CreatedAt, &r.UpdatedAt,
 	)
 	if err != nil {
 		return r, err
@@ -77,7 +83,7 @@ func scanSubTaskRow(row interface {
 const subTaskSelectCols = `t.id, t.version, t.series_id, t.step_index, t.active, t.variants, t.tag_ids,
 	t.background_image, t.background_opacity, t.difficulty_order, t.status,
 	t.like_count, t.down_count, t.contributor_player_id, t.contributor_anonymous,
-	t.reviewed_by, t.reviewed_at, t.review_comment, t.created_at, t.updated_at`
+	t.reviewed_by, t.reviewed_at, t.first_approved_at, t.review_comment, t.created_at, t.updated_at`
 
 // latest 返回某个 id 当前最新的一行（不管状态）；不存在返回 errContributionNotFound。
 func (ts *subTaskStore) latest(id string) (subTaskRow, error) {
@@ -123,12 +129,14 @@ func (ts *subTaskStore) insertVersion(tx *sql.Tx, id string, seriesID string, st
 	now := nowMs()
 	version := 1
 	createdAt := now
+	firstApprovedAt := int64(0)
 	if id == "" {
 		id = "st_" + randomID()
 	} else {
 		if prev, err := ts.latestTx(tx, id); err == nil {
 			version = prev.Version + 1
 			createdAt = prev.CreatedAt
+			firstApprovedAt = prev.FirstApprovedAt
 		} else if err != errContributionNotFound {
 			return subTaskRow{}, err
 		}
@@ -153,14 +161,17 @@ func (ts *subTaskStore) insertVersion(tx *sql.Tx, id string, seriesID string, st
 	if reviewedBy != "" {
 		reviewedAt = now
 	}
+	if status == "approved" && firstApprovedAt == 0 {
+		firstApprovedAt = now
+	}
 	_, err = tx.Exec(`INSERT INTO sub_tasks (
 		id, version, series_id, step_index, active, variants, tag_ids, background_image, background_opacity,
 		difficulty_order, status, like_count, down_count, contributor_player_id,
-		contributor_anonymous, reviewed_by, reviewed_at, review_comment, created_at, updated_at
-	) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?)`,
+		contributor_anonymous, reviewed_by, reviewed_at, first_approved_at, review_comment, created_at, updated_at
+	) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, version, seriesID, stepIndex, string(variantsJSON), string(tagJSON),
 		strings.TrimSpace(draft.BackgroundImage), draft.BackgroundOpacity, order, status,
-		contributorID, anon, reviewedBy, reviewedAt, reviewComment, createdAt, now,
+		contributorID, anon, reviewedBy, reviewedAt, firstApprovedAt, reviewComment, createdAt, now,
 	)
 	if err != nil {
 		return subTaskRow{}, err
@@ -182,10 +193,10 @@ func (ts *subTaskStore) deactivateVersion(tx *sql.Tx, id string) error {
 	_, err = tx.Exec(`INSERT INTO sub_tasks (
 		id, version, series_id, step_index, active, variants, tag_ids, background_image, background_opacity,
 		difficulty_order, status, like_count, down_count, contributor_player_id,
-		contributor_anonymous, reviewed_by, reviewed_at, review_comment, created_at, updated_at
+		contributor_anonymous, reviewed_by, reviewed_at, first_approved_at, review_comment, created_at, updated_at
 	) SELECT id, version + 1, series_id, step_index, 0, variants, tag_ids, background_image, background_opacity,
 		difficulty_order, status, 0, 0, contributor_player_id,
-		contributor_anonymous, reviewed_by, reviewed_at, review_comment, created_at, ?
+		contributor_anonymous, reviewed_by, reviewed_at, first_approved_at, review_comment, created_at, ?
 		FROM sub_tasks WHERE id = ? AND version = ?`, nowMs(), id, prev.Version)
 	return err
 }
@@ -207,9 +218,11 @@ func (ts *subTaskStore) setStatus(tx *sql.Tx, id, status, reviewedBy, reviewComm
 	if reviewedBy != "" {
 		reviewedAt = now
 	}
-	res, err := tx.Exec(`UPDATE sub_tasks SET status = ?, reviewed_by = ?, reviewed_at = ?, review_comment = ?, updated_at = ?
+	res, err := tx.Exec(`UPDATE sub_tasks SET status = ?, reviewed_by = ?, reviewed_at = ?,
+		first_approved_at = CASE WHEN ? = 'approved' AND first_approved_at = 0 THEN ? ELSE first_approved_at END,
+		review_comment = ?, updated_at = ?
 		WHERE id = ? AND version = (SELECT MAX(version) FROM sub_tasks WHERE id = ?)`,
-		status, reviewedBy, reviewedAt, reviewComment, now, id, id)
+		status, reviewedBy, reviewedAt, status, now, reviewComment, now, id, id)
 	if err != nil {
 		return err
 	}
@@ -342,6 +355,95 @@ func (ts *subTaskStore) voteAggregate(id string) (likes, downs int, err error) {
 	return
 }
 
+// voteAggregates 批量汇总若干独立任务 ID 的全历史版本赞踩。调用方传入的 ID 来自已经
+// 读取出的投稿列表；这里仍按 400 个一组，避免后台列表很大时撞上 SQLite 绑定参数上限。
+func (ts *subTaskStore) voteAggregates(ids []string) (map[string]contributionVoteCounts, error) {
+	out := make(map[string]contributionVoteCounts, len(ids))
+	for start := 0; start < len(ids); start += contributionQueryBatchSize {
+		end := min(start+contributionQueryBatchSize, len(ids))
+		batch := ids[start:end]
+		args := make([]any, len(batch))
+		for i := range batch {
+			args[i] = batch[i]
+		}
+		rows, err := ts.db.Query(`SELECT id, COALESCE(SUM(like_count),0), COALESCE(SUM(down_count),0)
+			FROM sub_tasks WHERE id IN (`+sqlPlaceholders(len(batch))+`) GROUP BY id`, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var id string
+			var counts contributionVoteCounts
+			if err := rows.Scan(&id, &counts.Likes, &counts.Downs); err != nil {
+				_ = rows.Close()
+				return nil, err
+			}
+			out[id] = counts
+		}
+		if err := rows.Close(); err != nil {
+			return nil, err
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// seriesVoteAggregates 批量汇总系列当前仍存在的每一步 ID 的全历史版本赞踩。系列改稿时
+// 步骤 ID 保持不变，因此旧版本上的评价仍属于同一步；已经通过 active=0 墓碑移除的步骤
+// 不再计入当前系列。一次查询处理一批系列，避免列表逐系列 stepsForSeries+SUM 的 N+1。
+func (ts *subTaskStore) seriesVoteAggregates(seriesIDs []string) (map[string]contributionVoteCounts, error) {
+	out := make(map[string]contributionVoteCounts, len(seriesIDs))
+	for start := 0; start < len(seriesIDs); start += contributionQueryBatchSize {
+		end := min(start+contributionQueryBatchSize, len(seriesIDs))
+		batch := seriesIDs[start:end]
+		args := make([]any, len(batch))
+		for i := range batch {
+			args[i] = batch[i]
+		}
+		rows, err := ts.db.Query(`
+			SELECT current_steps.series_id,
+				COALESCE(SUM(history.like_count),0), COALESCE(SUM(history.down_count),0)
+			FROM (
+				SELECT t.series_id, t.id
+				FROM sub_tasks t
+				WHERE t.active = 1 AND t.series_id IN (`+sqlPlaceholders(len(batch))+`)
+					AND t.version = (SELECT MAX(version) FROM sub_tasks WHERE id = t.id)
+			) current_steps
+			INNER JOIN sub_tasks history ON history.id = current_steps.id
+			GROUP BY current_steps.series_id`, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var id string
+			var counts contributionVoteCounts
+			if err := rows.Scan(&id, &counts.Likes, &counts.Downs); err != nil {
+				_ = rows.Close()
+				return nil, err
+			}
+			out[id] = counts
+		}
+		if err := rows.Close(); err != nil {
+			return nil, err
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+const contributionQueryBatchSize = 400
+
+func sqlPlaceholders(n int) string {
+	if n <= 0 {
+		return "NULL"
+	}
+	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
+}
+
 func nonNilVariants(v []types.TaskVariantDraft) []types.TaskVariantDraft {
 	if v == nil {
 		return []types.TaskVariantDraft{}
@@ -369,4 +471,31 @@ func (ts *subTaskStore) approvedRandomPoolCount() (int, error) {
 		INNER JOIN (SELECT id, MAX(version) AS v FROM sub_tasks GROUP BY id) m ON t.id=m.id AND t.version=m.v
 		WHERE t.status = 'approved' AND t.active = 1 AND t.difficulty_order <> -1`).Scan(&n)
 	return n, err
+}
+
+// approvedContributionCountsByContributor 统计每个投稿人名下"当前生效"（最新版本、
+// status=approved、active=1）的共建任务条数——独立随机任务与系列的每个子任务（步骤）
+// 各算一条，系列本身不作为单独单位计数，供「共建」排行榜使用（players:roster）。
+// 忽略 contributor_player_id 为空的历史/异常数据；不区分 difficulty_order（是否进
+// 随机池不影响这里的"是否算一条已通过投稿"）。
+func (ts *subTaskStore) approvedContributionCountsByContributor() (map[string]int, error) {
+	rows, err := ts.db.Query(`
+		SELECT t.contributor_player_id, COUNT(*) FROM sub_tasks t
+		INNER JOIN (SELECT id, MAX(version) AS v FROM sub_tasks GROUP BY id) m ON t.id=m.id AND t.version=m.v
+		WHERE t.status = 'approved' AND t.active = 1 AND t.contributor_player_id <> ''
+		GROUP BY t.contributor_player_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[string]int)
+	for rows.Next() {
+		var id string
+		var n int
+		if err := rows.Scan(&id, &n); err != nil {
+			return nil, err
+		}
+		out[id] = n
+	}
+	return out, rows.Err()
 }

@@ -24,6 +24,7 @@ type playerStore struct {
 //  2. game_stats 这组会随新游戏上线持续增长（jungle_wins/chess_wins 都是后补的 ALTER
 //     TABLE），拆成"一行一游戏"之后新游戏只是多插入几行数据，表结构不用再变；
 //  3. players 表原本 78 个位置参数的单条 INSERT，字段顺序错位的隐患随字段数下降而下降。
+//
 // persistedPlayer（persist.go）与 PlayerState 内存形状不变，拆分只发生在这个文件的
 // SQL 读写层——业务代码不需要感知这四张子表的存在。
 const playerSchema = `
@@ -145,6 +146,15 @@ type playerRow struct {
 var gameIDsForStats = []types.GameID{
 	types.GameRPS, types.GameOthello, types.GameTicTacToe, types.GameGomoku,
 	types.GameLiarsDice, types.GameJungle, types.GameChess,
+}
+
+func knownGameStatsID(gameID types.GameID) bool {
+	for _, known := range gameIDsForStats {
+		if gameID == known {
+			return true
+		}
+	}
+	return false
 }
 
 func (ps *playerStore) count() (int, error) {
@@ -412,8 +422,14 @@ func (ps *playerStore) loadAllGameStatsLocked() (map[string]types.GameStats, err
 		if err := rows.Scan(&pid, &gameID, &w, &l, &d); err != nil {
 			return nil, err
 		}
+		id := types.GameID(gameID)
+		// WLDFor 为兼容历史调用会把未知枚举回落到 RPS；数据库行不能沿用这个行为，
+		// 否则手工导入/未来版本留下的未知 game_id 会静默覆盖该玩家真实的 RPS 战绩。
+		if !knownGameStatsID(id) {
+			continue
+		}
 		gs := out[pid]
-		*gs.WLDFor(types.GameID(gameID)) = types.GameWLD{Wins: w, Losses: l, Draws: d}
+		*gs.WLDFor(id) = types.GameWLD{Wins: w, Losses: l, Draws: d}
 		out[pid] = gs
 	}
 	return out, rows.Err()

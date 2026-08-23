@@ -304,7 +304,7 @@ func normalizePunishmentRandomSettings(rs types.PunishmentRandomSettings) types.
 		rs.MaxDifficultyOvershoot = 0
 	}
 	if rs.MinSeriesSteps <= 0 {
-		rs.MinSeriesSteps = 10
+		rs.MinSeriesSteps = 5
 	}
 	if rs.MaxSeriesSteps <= 0 {
 		rs.MaxSeriesSteps = 20

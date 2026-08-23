@@ -523,6 +523,10 @@ func (s *Server) onPlayersRoster(client *Client, env wsEnvelope) {
 		end = total
 	}
 	pageIDs := ids[offset:end]
+	// 共建投稿审批通过数不是内存态战绩，只在这里按需查一次库（不区分分页，反正是全站
+	// 分组聚合），再按 id 挂到本页玩家上，供「共建」排行榜使用。查询期间释放 s.mu，避免
+	// 聚合 SQL 阻塞全服游戏事件。
+	contribCounts := s.approvedContributionCountsWithoutServerLock()
 	list := make([]types.LobbyPlayer, 0, len(pageIDs))
 	for _, id := range pageIDs {
 		player := s.players[id]
@@ -534,7 +538,9 @@ func (s *Server) onPlayersRoster(client *Client, env wsEnvelope) {
 			s.refreshPlayerSnapshots(player)
 		}
 		// roster 含 GameStats，供分游戏榜
-		list = append(list, types.ToLobbyPlayer(s.publicPlayer(player)))
+		lp := types.ToLobbyPlayer(s.publicPlayer(player))
+		lp.Stats.ContributionApprovedCount = contribCounts[id]
+		list = append(list, lp)
 	}
 	client.reply(env.ID, map[string]any{
 		"players": list,
@@ -543,6 +549,25 @@ func (s *Server) onPlayersRoster(client *Client, env wsEnvelope) {
 		"limit":   limit,
 		"hasMore": end < total,
 	}, "")
+}
+
+// approvedContributionCountsWithoutServerLock 供持有 s.mu 的 roster handler 调用；优先使用
+// analyticsRO，未启用独立只读连接时才退回共建主连接，但两种情况都不占着全局状态锁查询。
+func (s *Server) approvedContributionCountsWithoutServerLock() map[string]int {
+	if s.contributionStore == nil || s.contributionStore.tasks == nil {
+		return nil
+	}
+	readDB := s.contributionStore.db
+	if s.activityRO != nil {
+		readDB = s.activityRO
+	}
+	s.mu.Unlock()
+	defer s.mu.Lock()
+	counts, err := newSubTaskStore(readDB).approvedContributionCountsByContributor()
+	if err != nil {
+		return nil
+	}
+	return counts
 }
 
 func (s *Server) handleWSEvent(client *Client, env wsEnvelope) {

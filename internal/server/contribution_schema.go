@@ -4,8 +4,8 @@ package server
 // sub_tasks（随机任务 + 系列每一步，二合一）与 series（系列元信息，不含步骤内容）。
 // 同一个逻辑任务/系列永远用同一个 id，每次内容编辑都插入新的 (id, version) 行、版本历史
 // 永久保留；纯状态流转（提交审批/通过/驳回/下架）不产生新版本，直接在当前那一行上
-// UPDATE status。"取当前生效版本"统一是
-// "SELECT * FROM <table> WHERE id=? AND status='approved' ORDER BY version DESC LIMIT 1"。
+// UPDATE status。"取当前生效版本"统一先取该 id 的 MAX(version)，并且只在这行的 status
+// 为 approved 时生效；不能越过一个待复审的新版本回退去继续使用更早的 approved 版本。
 //
 // 图片、点赞点踩都不再单独建表：background_image 是 sub_tasks 一行上的单值字段（改图=
 // 插入新版本行，旧图所在的旧版本行永久保留，不会被覆盖/清空）；like_count/down_count
@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS sub_tasks (
 	contributor_anonymous INTEGER NOT NULL DEFAULT 0,
 	reviewed_by         TEXT NOT NULL DEFAULT '',
 	reviewed_at         INTEGER NOT NULL DEFAULT 0,
+	first_approved_at   INTEGER NOT NULL DEFAULT 0,
 	review_comment      TEXT NOT NULL DEFAULT '',
 	created_at          INTEGER NOT NULL DEFAULT 0,
 	updated_at          INTEGER NOT NULL DEFAULT 0,
@@ -59,6 +60,7 @@ CREATE TABLE IF NOT EXISTS series (
 	contributor_anonymous  INTEGER NOT NULL DEFAULT 0,
 	reviewed_by            TEXT NOT NULL DEFAULT '',
 	reviewed_at            INTEGER NOT NULL DEFAULT 0,
+	first_approved_at      INTEGER NOT NULL DEFAULT 0,
 	review_comment         TEXT NOT NULL DEFAULT '',
 	created_at             INTEGER NOT NULL DEFAULT 0,
 	updated_at             INTEGER NOT NULL DEFAULT 0,

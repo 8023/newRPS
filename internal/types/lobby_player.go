@@ -79,6 +79,11 @@ type LobbyStats struct {
 	// （大厅刷新、他人上下线等很频繁）合并进 App.tsx 的 me.player 时会把已设置的自设称号
 	// 覆盖抹掉——AppViews.tsx 的 ProfilePanel 重新打开时读到的就是被抹空后的值。
 	SelfTitle string `json:"selfTitle,omitempty"`
+	// ContributionApprovedCount：该玩家提交并审批通过的共建投稿任务条数（随机任务 +
+	// 系列任务的每个子任务各算一条），仅供「共建」排行榜用。不是内存态战绩字段——只由
+	// onPlayersRoster 按需查库后手动填充，不参与 lobbyStatsFromPublic/AsPublicPlayer 的
+	// 常规转换，也不随大厅实时广播下发。
+	ContributionApprovedCount int `json:"contributionApprovedCount,omitempty"`
 }
 
 // ToLobbyPlayer 从完整公开资料裁剪（含分游戏战绩，供 player:batch / roster 用）。

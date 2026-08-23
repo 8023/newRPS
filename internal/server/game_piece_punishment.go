@@ -30,7 +30,7 @@ func (s *Server) beginMidGamePiecePunishment(room *RoomState, loserSeat, winnerS
 	if note != "" {
 		text += "（" + note + "）"
 	}
-	item := s.buildMatchHistoryShell(room, result, room.Settings.GameID, "吃子惩罚", text)
+	item := s.buildMatchHistoryShell(room, result, room.Settings.GameID, "吃子惩罚", text, "piece_capture")
 	// 中途的吃子惩罚记录同样要带上棋色归属：前端 historySeatLabel 靠 chessWhiteSeat 判断
 	// 哪一边是白棋，字段留空时两个座位都会被判成黑棋，显示成"黑棋子被黑棋子吃掉"。
 	// 斗兽棋的边由座位直接决定（jungleSideLabel），不需要额外字段。

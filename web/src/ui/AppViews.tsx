@@ -488,13 +488,19 @@ export function safePlayerStats(player: PublicPlayer | null | undefined) {
     title: title || "暂无称号",
     titleCustom: !!s.titleCustom,
     titleColors: s.titleColors && typeof s.titleColors === "object" ? s.titleColors : DEFAULT_TITLE_COLORS,
-    totalOnlineMs: Number.isFinite(Number(s.totalOnlineMs)) ? Number(s.totalOnlineMs) : 0
+    totalOnlineMs: Number.isFinite(Number(s.totalOnlineMs)) ? Number(s.totalOnlineMs) : 0,
+    contributionApprovedCount: Number.isFinite(Number(s.contributionApprovedCount)) ? Number(s.contributionApprovedCount) : 0
   };
 }
 
 /** 排行榜展示用累计在线时长（毫秒）。 */
 export function totalOnlineMsOf(player: PublicPlayer) {
   return safePlayerStats(player).totalOnlineMs || 0;
+}
+
+/** 排行榜展示用共建投稿审批通过数（随机任务 + 系列每个子任务各算一条）。 */
+export function contributionApprovedCountOf(player: PublicPlayer) {
+  return safePlayerStats(player).contributionApprovedCount || 0;
 }
 
 export function Lobby({ config, lobby, me, punishmentTagPrefs, onError, onGoRoom, onContribute, onPunishmentTagPrefsChange }: { config: AppConfig; lobby: LobbySnapshot; me: PublicPlayer; punishmentTagPrefs?: Record<string, string>; onError: (message: string) => void; onGoRoom: (room?: RoomSnapshot) => void; onContribute?: () => void; onPunishmentTagPrefsChange?: (prefs: Record<string, string>) => void }) {
@@ -1641,6 +1647,19 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
     }
   }
 
+  // 撤回自己已出的拳（仅锤子剪刀布，对手还没出拳时）：乐观地先清掉本地出拳，让按钮立刻
+  // 变回可选状态；如果服务端拒绝（比如已经被主人强制白给锁死、或对手已经出拳导致这一局
+  // 刚好在这一瞬间结算了），choices[mySeat] 仍是服务端权威状态，myChoice 会自动回退显示
+  // 原来的选择，不需要额外的失败回滚逻辑。
+  async function withdrawMove() {
+    setLocalChoice(null);
+    try {
+      await ask("room:move:withdraw", {});
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "撤回失败");
+    }
+  }
+
   async function playOthello(row: number, col: number) {
     try {
       await ask("othello:move", { row, col });
@@ -1894,7 +1913,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
             <div className="move-panel">
               <div>
                 <h3>请选择出拳</h3>
-                <p className="hint">{room.phase === "punishment" ? "惩罚完成前不能出拳。" : myChoice ? `你已锁定：${choiceText(myChoice)}` : resultChoice ? `上一局：${choiceText(resultChoice)}，可直接开始下一局。` : canChoose ? "坐下不算出拳，点一个 emoji 才会锁定。" : "等待另一位玩家坐下。"}</p>
+                <p className="hint">{room.phase === "punishment" ? "惩罚完成前不能出拳。" : myChoice ? `你已出拳：${choiceText(myChoice)}，对方还没出拳，可以点按钮撤回。` : resultChoice ? `上一局：${choiceText(resultChoice)}，可直接开始下一局。` : canChoose ? "坐下不算出拳，点一个 emoji 才会锁定。" : "等待另一位玩家坐下。"}</p>
                 {room.forgiveAdvantageTargetId === me.id && (
                   <p className="hint forgive-advantage-hint">上局对方放过了你，本局你将受到"命运的安排"</p>
                 )}
@@ -1903,10 +1922,22 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
                 )}
               </div>
               <div className="move-row emoji-row">
-                <button disabled={!canChoose || Boolean(myChoice)} onClick={() => choose("rock")}>✊<span>锤子</span></button>
-                <button disabled={!canChoose || Boolean(myChoice)} onClick={() => choose("scissors")}>✌️<span>剪刀</span></button>
-                <button disabled={!canChoose || Boolean(myChoice)} onClick={() => choose("paper")}>🖐️<span>布</span></button>
-                {canShowGiveawayButton && <button className="giveaway-move-button" disabled={!canChoose || Boolean(myChoice)} onClick={() => choose("giveaway")}>🫴<span>白给</span></button>}
+                {myChoice ? (
+                  <button
+                    className={`move-withdraw-button${myChoice === "giveaway" ? " giveaway-move-button" : ""}`}
+                    disabled={!canChoose}
+                    onClick={() => void withdrawMove()}
+                  >
+                    {moveButtonIcon(myChoice)}<span>撤回{moveButtonLabel(myChoice)}</span>
+                  </button>
+                ) : (
+                  <>
+                    <button disabled={!canChoose} onClick={() => choose("rock")}>✊<span>锤子</span></button>
+                    <button disabled={!canChoose} onClick={() => choose("scissors")}>✌️<span>剪刀</span></button>
+                    <button disabled={!canChoose} onClick={() => choose("paper")}>🖐️<span>布</span></button>
+                    {canShowGiveawayButton && <button className="giveaway-move-button" disabled={!canChoose} onClick={() => choose("giveaway")}>🫴<span>白给</span></button>}
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -1951,7 +1982,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
                           <div className={`task-card designed-task-card ${task.backgroundImage ? "has-task-background" : ""}`} style={taskCardStyle}>
                             <b>{assignerName ? `由 ${assignerName} 发布给${isMine ? "你" : "对方"}的任务` : (isMine ? "你的任务" : "对方任务")}</b>
                             <p>{taskTextOnly(taskText, task.factionLabel)}</p>
-                            {task.eventId && <div className="task-card-vote-row"><ContributionVoteLazy eventId={task.eventId} proofStatus={proof?.status} onError={onError} /></div>}
+                            {task.eventId && <div className="task-card-vote-row"><ContributionVoteLazy eventId={task.eventId} onError={onError} /></div>}
                           </div>
                         );
                       })()}
@@ -3168,6 +3199,27 @@ export function SeatStatsView({ stats }: { stats: RoomSnapshot["seatStats"]["A"]
   return <small className="seat-stats">本席：{wins}胜 {losses}负 {draws}平 {punishments}惩罚 · 胜率 {rate}%</small>;
 }
 
+// 出拳按钮用：与 choiceText 分开是因为按钮里 emoji 和文字分两个节点渲染（撤回按钮要接
+// 着复用同一个 emoji），choiceText 是拼成一整句提示文案，两者用途不同不合并。
+function moveButtonIcon(move: Move | "hidden") {
+  switch (move) {
+    case "rock": return "✊";
+    case "scissors": return "✌️";
+    case "paper": return "🖐️";
+    case "giveaway": return "🫴";
+    default: return "❔";
+  }
+}
+function moveButtonLabel(move: Move | "hidden") {
+  switch (move) {
+    case "rock": return "锤子";
+    case "scissors": return "剪刀";
+    case "paper": return "布";
+    case "giveaway": return "白给";
+    default: return "";
+  }
+}
+
 export function choiceText(choice: Move | "hidden") {
   if (choice === "hidden") return "🔒 已出拳";
   if (choice === "noMove") return "⏳ 未出拳";
@@ -3432,7 +3484,7 @@ export function Leaderboard({ title, players }: { title: string; players: Public
 
 export type GlobalLeaderboardTab =
   | "positive" | "negative" | "historyPositive" | "historyNegative" | "extremePositive" | "extremeNegative" | "nameWar" | "giveaway"
-  | "totalWins" | "onlineTime"
+  | "totalWins" | "onlineTime" | "contribution"
   | "rps" | "othello" | "tictactoe" | "gomoku" | "liarsdice" | "jungle" | "chess";
 
 const GAME_LEADERBOARD_TABS: Array<{ id: GlobalLeaderboardTab; label: string; title: string }> = [
@@ -3665,7 +3717,9 @@ export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPl
                     ? "总局数榜"
                     : tab === "onlineTime"
                       ? "在线时长榜"
-                      : gameTabMeta?.title || "排行榜";
+                      : tab === "contribution"
+                        ? "共建榜"
+                        : gameTabMeta?.title || "排行榜";
   return (
     <div className="modal-backdrop leaderboard-backdrop" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="leaderboard-modal">
@@ -3687,6 +3741,7 @@ export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPl
           <button className={tab === "giveaway" ? "active" : ""} onClick={() => setTab("giveaway")}>白给</button>
           <button className={tab === "totalWins" ? "active" : ""} onClick={() => setTab("totalWins")}>总局数</button>
           <button className={tab === "onlineTime" ? "active" : ""} onClick={() => setTab("onlineTime")}>在线时长</button>
+          <button className={tab === "contribution" ? "active" : ""} onClick={() => setTab("contribution")}>共建</button>
           {GAME_LEADERBOARD_TABS.map((item) => (
             <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>{item.label}</button>
           ))}
@@ -3718,6 +3773,8 @@ export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPl
                       <span>累计在线 {formatOnlineDuration(totalOnlineMsOf(player))}</span>
                       <span>{stats.wins}胜 {stats.losses}负 {stats.draws}平</span>
                     </>
+                  ) : tab === "contribution" ? (
+                    <span>共建通过 {contributionApprovedCountOf(player)} 条</span>
                   ) : showGameStats ? (
                     <>
                       <span>{wins}胜 {losses}负 {draws}平</span>
@@ -3779,6 +3836,12 @@ export function leaderboardPlayers(players: PublicPlayer[], tab: GlobalLeaderboa
       .filter((player) => totalOnlineMsOf(player) > 0)
       .sort((a, b) => totalOnlineMsOf(b) - totalOnlineMsOf(a) || sortRankedPointsOf(b) - sortRankedPointsOf(a));
   }
+  // 共建：提交并审批通过的投稿任务条数（随机任务 + 系列每个子任务各算一条）从多到少。
+  if (tab === "contribution") {
+    return copy
+      .filter((player) => contributionApprovedCountOf(player) > 0)
+      .sort((a, b) => contributionApprovedCountOf(b) - contributionApprovedCountOf(a) || sortRankedPointsOf(b) - sortRankedPointsOf(a));
+  }
   if (isGameLeaderboardTab(tab)) {
     return copy
       .filter((player) => {
@@ -3813,6 +3876,13 @@ export function LeaderboardExtra({ player, tab, now }: { player: PublicPlayer; t
     return (
       <p className="global-rank-extra">
         累计在线时长优先 · {formatOnlineDuration(totalOnlineMsOf(player))}
+      </p>
+    );
+  }
+  if (tab === "contribution") {
+    return (
+      <p className="global-rank-extra">
+        共建审批通过条数优先 · {contributionApprovedCountOf(player)} 条
       </p>
     );
   }
@@ -5062,12 +5132,9 @@ export const titleTagStyleOrder = [
   { key: "admin", label: "管理员赋予" }
 ];
 
-// proofStatus：任务发布时评价请求就会立刻发出（此时证明多半还没通过审核），后端在证明
-// 未通过前本就会把 canVote 判为 false 且不给理由（区别于"评价自己贡献的内容"那种有明确
-// 理由的不可评价）——若只在 eventId 变化时才请求一次，证明后来转为已通过也不会重新拉取，
-// 评价交互组件就会一直空着。把证明状态也纳入依赖，状态一变（尤其转为 approved）就重新拉，
-// 这样"对方任务已完成后可以评价"才能正常出现。
-function ContributionVoteLazy({ eventId, proofStatus, onError }: { eventId: string; proofStatus?: string; onError?: (message: string) => void }) {
+// 正式任务一经分配即可评价；证明是否提交、通过或驳回都不改变投票资格，也不回滚票数。
+// eventId 是任务版本和双方资格的稳定边界，只有它变化时才需要重新获取评价卡片。
+function ContributionVoteLazy({ eventId, onError }: { eventId: string; onError?: (message: string) => void }) {
   const [card, setCard] = useState<VoteCard | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -5077,7 +5144,7 @@ function ContributionVoteLazy({ eventId, proofStatus, onError }: { eventId: stri
       if (!cancelled) setCard(null);
     });
     return () => { cancelled = true; };
-  }, [eventId, proofStatus]);
+  }, [eventId]);
   if (!card || !card.targetId) return null;
   return <ContributionVote card={card} onError={onError ?? (() => undefined)} />;
 }

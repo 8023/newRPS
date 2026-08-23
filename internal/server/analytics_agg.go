@@ -52,10 +52,12 @@ const (
 	metricPetbondNew         = "petbond_new"
 	metricPetbondTotal       = "petbond_total"
 	// metricPunishTaskPoolNew/Total「随机任务」增长：sub_tasks 各逻辑 id 的最新 active、
-	// approved 且 difficulty_order<>-1 的行数，含“同时发布到随机任务”的系列步骤。
+	// approved 且 difficulty_order<>-1 的行数，含“同时发布到随机任务”的系列步骤；
+	// New 按该逻辑任务首次正式通过时间归日，不按草稿创建时间。
 	metricPunishTaskPoolNew   = "punish_task_pool_new"
 	metricPunishTaskPoolTotal = "punish_task_pool_total"
-	// metricPunishSeriesPoolNew/Total「系列任务」增长：series 各逻辑 id 的最新 approved 行数。
+	// metricPunishSeriesPoolNew/Total「系列任务」增长：series 各逻辑 id 的最新 approved 行数；
+	// New 同样按首次正式通过时间归日。
 	metricPunishSeriesPoolNew   = "punish_series_pool_new"
 	metricPunishSeriesPoolTotal = "punish_series_pool_total"
 	metricChatLobby             = "chat_lobby"
@@ -93,6 +95,44 @@ type analyticsSnapshot struct {
 	LiveOnline int
 	LiveRooms  int
 	LiveBonds  int
+}
+
+type punishmentPoolGrowth struct {
+	TaskNew, TaskTotal     int64
+	SeriesNew, SeriesTotal int64
+}
+
+// computePunishmentPoolGrowth 是在线日聚合与 schema 迁移回算共用的唯一口径。
+// Total 看“截至当日结束前已经首次发布、且当前仍在线”的逻辑内容；first_approved_at=0
+// 是迁移前无法可靠还原首次发布时间的旧数据，为维持历史总量连续性而只计 Total、不计 New。
+func computePunishmentPoolGrowth(db sqlExecer, dayStart, dayEnd int64) (punishmentPoolGrowth, error) {
+	var out punishmentPoolGrowth
+	taskPoolBase := ` FROM sub_tasks t
+		INNER JOIN (SELECT id, MAX(version) AS v FROM sub_tasks GROUP BY id) m
+			ON t.id=m.id AND t.version=m.v
+		WHERE t.active=1 AND t.status='approved' AND t.difficulty_order<>-1`
+	if err := db.QueryRow(`SELECT COUNT(*)`+taskPoolBase+
+		` AND t.first_approved_at>=? AND t.first_approved_at<?`, dayStart, dayEnd).Scan(&out.TaskNew); err != nil {
+		return out, err
+	}
+	if err := db.QueryRow(`SELECT COUNT(*)`+taskPoolBase+
+		` AND (t.first_approved_at=0 OR t.first_approved_at<?)`, dayEnd).Scan(&out.TaskTotal); err != nil {
+		return out, err
+	}
+
+	seriesPoolBase := ` FROM series t
+		INNER JOIN (SELECT id, MAX(version) AS v FROM series GROUP BY id) m
+			ON t.id=m.id AND t.version=m.v
+		WHERE t.status='approved'`
+	if err := db.QueryRow(`SELECT COUNT(*)`+seriesPoolBase+
+		` AND t.first_approved_at>=? AND t.first_approved_at<?`, dayStart, dayEnd).Scan(&out.SeriesNew); err != nil {
+		return out, err
+	}
+	if err := db.QueryRow(`SELECT COUNT(*)`+seriesPoolBase+
+		` AND (t.first_approved_at=0 OR t.first_approved_at<?)`, dayEnd).Scan(&out.SeriesTotal); err != nil {
+		return out, err
+	}
+	return out, nil
 }
 
 type int64Slice []int64
@@ -1087,36 +1127,17 @@ func (s *Server) rebuildDay(day int64, tz int) ([]analyticsDailyRow, error) {
 	_ = db.QueryRow(`SELECT COUNT(*) FROM pet_bonds WHERE created_at < ?`, dayEnd).Scan(&pbTotal)
 	add(metricPetbondTotal, "", pbTotal.Int64)
 
-	// 随机任务池增长：只算每个逻辑 id 的最新 active+approved 版本，difficulty_order<>-1
-	// 表示会真正进入随机候选池；系列步骤勾选“同时发布到随机任务”时也包含在内。
-	var taskPoolNew, taskPoolTotal sql.NullInt64
-	taskPoolBase := ` FROM sub_tasks t
-		INNER JOIN (SELECT id, MAX(version) AS v FROM sub_tasks GROUP BY id) m
-			ON t.id=m.id AND t.version=m.v
-		WHERE t.active=1 AND t.status='approved' AND t.difficulty_order<>-1`
-	if err := db.QueryRow(`SELECT COUNT(*)`+taskPoolBase+` AND t.created_at>=? AND t.created_at<?`, dayStart, dayEnd).Scan(&taskPoolNew); err != nil {
+	// 任务池增长：“新增”按逻辑内容第一次正式通过的时间归日。该时间跨编辑、下架、
+	// 重审继承，不会因为重新通过而重复计为新增；first_approved_at=0 仅代表迁移前无法
+	// 还原准确首次通过日的存量，仍计入总量但不倒灌进某个历史日的新增。
+	poolGrowth, err := computePunishmentPoolGrowth(db, dayStart, dayEnd)
+	if err != nil {
 		return nil, err
 	}
-	add(metricPunishTaskPoolNew, "", taskPoolNew.Int64)
-	if err := db.QueryRow(`SELECT COUNT(*)`+taskPoolBase+` AND t.created_at<?`, dayEnd).Scan(&taskPoolTotal); err != nil {
-		return nil, err
-	}
-	add(metricPunishTaskPoolTotal, "", taskPoolTotal.Int64)
-
-	// 系列任务增长：只算每个逻辑 id 的最新 approved 版本。
-	var seriesPoolNew, seriesPoolTotal sql.NullInt64
-	seriesPoolBase := ` FROM series t
-		INNER JOIN (SELECT id, MAX(version) AS v FROM series GROUP BY id) m
-			ON t.id=m.id AND t.version=m.v
-		WHERE t.status='approved'`
-	if err := db.QueryRow(`SELECT COUNT(*)`+seriesPoolBase+` AND t.created_at>=? AND t.created_at<?`, dayStart, dayEnd).Scan(&seriesPoolNew); err != nil {
-		return nil, err
-	}
-	add(metricPunishSeriesPoolNew, "", seriesPoolNew.Int64)
-	if err := db.QueryRow(`SELECT COUNT(*)`+seriesPoolBase+` AND t.created_at<?`, dayEnd).Scan(&seriesPoolTotal); err != nil {
-		return nil, err
-	}
-	add(metricPunishSeriesPoolTotal, "", seriesPoolTotal.Int64)
+	add(metricPunishTaskPoolNew, "", poolGrowth.TaskNew)
+	add(metricPunishTaskPoolTotal, "", poolGrowth.TaskTotal)
+	add(metricPunishSeriesPoolNew, "", poolGrowth.SeriesNew)
+	add(metricPunishSeriesPoolTotal, "", poolGrowth.SeriesTotal)
 
 	// chat：消息条数 + 发言去重人数（大厅 / 房间分开）
 	var lobbyN, lobbySp, roomN, roomSp sql.NullInt64

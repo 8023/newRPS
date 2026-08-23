@@ -32,6 +32,10 @@ func (s *Server) onContributionList(client *Client, env wsEnvelope) {
 	for i := range list {
 		list[i].SubmitterName = s.playerName(list[i].SubmitterID)
 	}
+	if err := s.fillContributionListMetaWithoutServerLock(list); err != nil {
+		client.reply(env.ID, nil, "读取统计失败")
+		return
+	}
 	client.reply(env.ID, map[string]any{"items": list}, "")
 }
 
@@ -68,11 +72,13 @@ func (s *Server) onContributionGet(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, err.Error())
 		return
 	}
-	if in.Kind == types.ContributionKindSeries {
-		item.Completion = s.seriesCompletionStats(in.ID)
+	one := []types.ContributionItem{item}
+	if err := s.fillContributionListMetaWithoutServerLock(one); err != nil {
+		client.reply(env.ID, nil, "读取统计失败")
+		return
 	}
-	item.SubmitterName = s.playerName(item.SubmitterID)
-	client.reply(env.ID, item, "")
+	one[0].SubmitterName = s.playerName(one[0].SubmitterID)
+	client.reply(env.ID, one[0], "")
 }
 
 func (s *Server) onContributionSaveDraft(client *Client, env wsEnvelope) {
@@ -113,6 +119,14 @@ func (s *Server) onContributionSaveDraft(client *Client, env wsEnvelope) {
 	if err := s.validateContributionRefs(in.Kind, raw); err != nil {
 		client.reply(env.ID, nil, err.Error())
 		return
+	}
+	// 草稿可以少于最低步数（允许分次填写），但不能靠构造 RPC 绕过后台配置的最高
+	// 步数；否则前端最多 20 步时，攻击者仍能先向库里塞入数百步草稿，直到提交才被拦。
+	if in.Kind == types.ContributionKindSeries {
+		if err := s.validateSeriesMaxSteps(raw); err != nil {
+			client.reply(env.ID, nil, err.Error())
+			return
+		}
 	}
 	item, err := s.contributionStore.saveDraft(p.ID, in.Kind, in.Anonymous, in.ID, raw)
 	if err != nil {

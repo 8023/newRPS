@@ -89,6 +89,31 @@ func TestPickSystemTaskForPlayerPlaceholders(t *testing.T) {
 	}
 }
 
+func TestFormalPunishmentDoesNotMislabelReviewerAsPublisher(t *testing.T) {
+	reviewer := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "winner", Name: "胜者", FactionID: "f1"}}
+	performer := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "loser", Name: "败者", FactionID: "f1"}}
+	s := &Server{
+		players: map[string]*PlayerState{reviewer.ID: reviewer, performer.ID: performer},
+		punishmentTasksCache: []types.PunishmentTaskConfig{
+			{ID: "formal", Version: 1, Text: "正式任务", FactionIDs: []string{"f1"}, Order: 50},
+		},
+	}
+	room := &RoomState{
+		Settings: types.RoomSettings{PunishmentSource: "random"},
+		Seats: map[types.SeatKey]SeatOccupant{
+			types.SeatA: &HumanSeat{Player: reviewer.PublicPlayer},
+			types.SeatB: &HumanSeat{Player: performer.PublicPlayer},
+		},
+	}
+	tasks := s.buildPunishmentTasksWithWinnerName(room, []*PlayerState{performer}, "胜者", "round_end")
+	if len(tasks) != 1 || tasks[0].TaskText != "正式任务" {
+		t.Fatalf("unexpected formal punishment: %+v", tasks)
+	}
+	if tasks[0].AssignedBy != "" || tasks[0].AssignedByName != "" {
+		t.Fatalf("formal task reviewer must not be exposed as publisher: %+v", tasks[0])
+	}
+}
+
 // TestPickSystemTaskForPlayerExcludesNegativeOrder：难度为负数的任务是"仅供系列任务引用"的
 // 显式标记，随机模式绝不应抽到；候选池只剩负数任务时应退化为通用兜底话术（advanced=false）。
 func TestPickSystemTaskForPlayerExcludesNegativeOrder(t *testing.T) {

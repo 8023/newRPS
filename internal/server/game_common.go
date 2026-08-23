@@ -274,17 +274,13 @@ func (s *Server) applySeatOutcome(room *RoomState, result types.RoundResult) (pl
 }
 
 // buildMatchHistoryShell 组装终局 history 公共字段（惩罚任务 / 名字 / 排位元数据可选填）。
-func (s *Server) buildMatchHistoryShell(room *RoomState, result types.RoundResult, gameID types.GameID, resultLabel, resultText string) types.RoundHistoryItem {
+func (s *Server) buildMatchHistoryShell(room *RoomState, result types.RoundResult, gameID types.GameID, resultLabel, resultText, punishmentTrigger string) types.RoundHistoryItem {
 	punishedPlayers := s.punishmentPlayersForResult(room, result)
 	punishedNames := make([]string, len(punishedPlayers))
 	for i, p := range punishedPlayers {
 		punishedNames[i] = playerShortName(p)
 	}
-	trigger := "round_end"
-	if resultLabel == "吃子惩罚" {
-		trigger = "piece_capture"
-	}
-	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, result, trigger)
+	punishmentTasks := s.buildPunishmentTasks(room, punishedPlayers, result, punishmentTrigger)
 	item := types.RoundHistoryItem{
 		ID:              randomID(),
 		Round:           len(room.RoundHistory) + 1,

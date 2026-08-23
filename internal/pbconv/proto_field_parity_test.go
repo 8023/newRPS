@@ -42,6 +42,11 @@ func TestDomainWireFieldParity(t *testing.T) {
 			name:   "LobbyStats",
 			domain: types.LobbyStats{},
 			msg:    &wire.LobbyStats{},
+			// contributionApprovedCount 只随 players:roster RPC 应答下发，该 RPC 走
+			// pbconv.BuildRawBody 的默认「Struct 动态」分支（generic json→Struct），
+			// 不经过 lobbyStatsToProto 这条固定 wire message 路径，因此无需在
+			// api/proto/game.proto 里加对应字段。
+			skip: map[string]bool{"contributionApprovedCount": true},
 		},
 		{
 			name:   "ChatMessage",

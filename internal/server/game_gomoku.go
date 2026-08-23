@@ -273,8 +273,8 @@ func (s *Server) finishGomokuGame(room *RoomState, result types.RoundResult, win
 			s.resetExtremeWinStreak(loser)
 			streakText = s.applyExtremeWinStreakRisk(room, winner)
 			rankedText = fmt.Sprintf("（%s %s，%s %d）",
-				occupantName(room.Seats[types.SeatKey(result)]), formatSigned(wD),
-				occupantName(room.Seats[loserSeat]), lD)
+				occupantShortName(room.Seats[types.SeatKey(result)]), formatSigned(wD),
+				occupantShortName(room.Seats[loserSeat]), lD)
 		}
 	}
 	room.Gomoku.RankedDelta = rankedDelta
@@ -290,14 +290,14 @@ func (s *Server) finishGomokuGame(room *RoomState, result types.RoundResult, win
 	if result == types.ResultDraw {
 		room.ResultText = "五子棋平局" + rankedText + noteSuffix
 	} else {
-		room.ResultText = occupantName(room.Seats[types.SeatKey(result)]) + " 五子棋胜利" + rankedText + streakText + noteSuffix
+		room.ResultText = seatShortLabel(types.SeatKey(result), room.Seats[types.SeatKey(result)]) + " 胜利" + rankedText + streakText + noteSuffix
 	}
 	s.refreshHumans(playerA, playerB)
 	resultLabel := "五子棋平局"
 	if result != types.ResultDraw {
 		resultLabel = seatWinLabel(room, types.SeatKey(result))
 	}
-	item := s.buildMatchHistoryShell(room, result, types.GameGomoku, resultLabel, room.ResultText)
+	item := s.buildMatchHistoryShell(room, result, types.GameGomoku, resultLabel, room.ResultText, "round_end")
 	item.GomokuBlackSeat = room.Gomoku.BlackSeat
 	item.GomokuLine = winningLine
 	item.ExtremeRanked = room.Settings.EnableExtremeRanked
@@ -577,7 +577,7 @@ func (s *Server) applyGomokuDisconnectForfeit(room *RoomState, forfeit Disconnec
 		rankedDelta[forfeit.LoserSeat] += lD
 		s.resetExtremeWinStreak(loser)
 		streakText = s.applyExtremeWinStreakRisk(room, winner)
-		rankedText = fmt.Sprintf("，排位 %d 分已结算（%s %s，%s %d）", forfeit.Stake, forfeit.WinnerName, formatSigned(wD), forfeit.LoserName, lD)
+		rankedText = fmt.Sprintf("，排位 %d 分已结算（%s %s，%s %d）", forfeit.Stake, occupantShortName(room.Seats[forfeit.WinnerSeat]), formatSigned(wD), occupantShortName(room.Seats[forfeit.LoserSeat]), lD)
 	}
 	s.recordGameOutcome(winner, types.GameGomoku, "win")
 	s.recordGameOutcome(loser, types.GameGomoku, "loss")
@@ -604,7 +604,7 @@ func (s *Server) applyGomokuDisconnectForfeit(room *RoomState, forfeit Disconnec
 		room.Gomoku.Ended = true
 		room.Gomoku.Winner = types.RoundResult(forfeit.WinnerSeat)
 	}
-	room.ResultText = fmt.Sprintf("%s 断线超时判负，%s 五子棋胜利%s%s", forfeit.LoserName, forfeit.WinnerName, rankedText, streakText)
+	room.ResultText = fmt.Sprintf("%s 断线超时判负，%s 胜利%s%s", seatShortLabel(forfeit.LoserSeat, room.Seats[forfeit.LoserSeat]), seatShortLabel(forfeit.WinnerSeat, room.Seats[forfeit.WinnerSeat]), rankedText, streakText)
 	punishedPlayers := s.punishmentPlayersForResult(room, types.RoundResult(forfeit.WinnerSeat))
 	punishedNames := make([]string, len(punishedPlayers))
 	for i, p := range punishedPlayers {

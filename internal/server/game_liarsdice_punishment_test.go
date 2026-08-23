@@ -67,3 +67,23 @@ func TestLiarsDiceWinnerLeavesThenLoserSubmitIsAutoApproved(t *testing.T) {
 		t.Fatalf("历史记录里应留下一条系统自动通过的证明，got %+v", histProof)
 	}
 }
+
+func TestLiarsDiceFormalPunishmentDoesNotMislabelWinnerAsPublisher(t *testing.T) {
+	s := newLiarsDiceTestServer(t)
+	winner := newLiarsDiceTestPlayer("w", "胜方")
+	loser := newLiarsDiceTestPlayer("l", "败方")
+	loser.FactionID = "f1"
+	s.punishmentTasksCache = []types.PunishmentTaskConfig{
+		{ID: "formal", Version: 1, Text: "正式任务", FactionIDs: []string{"f1"}, Order: 50},
+	}
+	room := newLiarsDiceTestRoom("r1", 2, 8)
+	room.Settings.PunishmentSource = "random"
+
+	tasks := s.buildLiarsDicePunishmentTasks(room, []*PlayerState{loser}, winner)
+	if len(tasks) != 1 || tasks[0].TaskText != "正式任务" {
+		t.Fatalf("unexpected formal punishment: %+v", tasks)
+	}
+	if tasks[0].AssignedBy != "" || tasks[0].AssignedByName != "" {
+		t.Fatalf("formal task winner must not be exposed as publisher: %+v", tasks[0])
+	}
+}

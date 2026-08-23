@@ -321,8 +321,8 @@ func TestRebuildDayPunishmentDoneUsesApproved(t *testing.T) {
 	if err := events.updatePunishmentProof("t-rejected", taskAt+2000, "证明", "", "pending"); err != nil {
 		t.Fatalf("proof pending: %v", err)
 	}
-	if err := events.markPunishmentRedo("t-rejected", "t-redo"); err != nil {
-		t.Fatalf("mark redo: %v", err)
+	if err := events.updatePunishmentStatus("t-rejected", "rejected"); err != nil {
+		t.Fatalf("reject task: %v", err)
 	}
 	if err := events.insertPunishmentTask("t-pending", taskAt+2, "r1", "", "", "p3", "丙", "任务C", punishmentEventMeta{}); err != nil {
 		t.Fatalf("insert pending task: %v", err)

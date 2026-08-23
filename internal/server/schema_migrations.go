@@ -19,7 +19,7 @@ import (
 //
 // 是 var 不是 const，只是为了让测试能临时替换掉去验证迁移机制本身；正常代码路径里
 // 把它当常量对待，不要在业务逻辑里修改它。
-var currentSchemaVersion = 48
+var currentSchemaVersion = 49
 
 // schemaVersionSchema：只有一行的版本表，openDatabase 每次启动都会先确保它存在。
 const schemaVersionSchema = `
@@ -618,6 +618,94 @@ CREATE TABLE IF NOT EXISTS punishment_series (
 		}
 		return dropColumnIfExists(db, "series", "contributor_name")
 	}},
+	// v49：数据分析中的任务池/系列池“新增”改为第一次正式审批通过（上线）的日期，
+	// 不再错误地使用草稿 created_at。首次通过时间按逻辑 id 跨版本继承，后续下架、修订、
+	// 重新通过都不会重复计新；存量可从仍保留的 approved 历史版本 reviewed_at 还原，
+	// 无法还原的旧记录保持 0（只计总量、不虚构某天新增）。同时回算 sealed 历史日，
+	// 避免数据库列修正后后台仍继续展示旧聚合值。
+	{version: 49, migrate: migrateContributionFirstApprovedAtV49},
+}
+
+func migrateContributionFirstApprovedAtV49(db sqlExecer) error {
+	for _, table := range []string{"sub_tasks", "series"} {
+		ok, err := tableExists(db, table)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+		if err := addColumnIfMissing(db, table, "first_approved_at", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+			return err
+		}
+		// 同一逻辑 id 的任一仍标记 approved 的历史版本都能提供可信的正式通过时间；
+		// reviewed_at=0 的迁移前正式内容没有可靠日期，刻意保留 0。
+		if _, err := db.Exec(`UPDATE ` + table + ` AS t
+			SET first_approved_at = COALESCE((
+				SELECT MIN(NULLIF(h.reviewed_at, 0)) FROM ` + table + ` h
+				WHERE h.id = t.id AND h.status = 'approved'
+			), 0)
+			WHERE first_approved_at = 0`); err != nil {
+			return fmt.Errorf("backfill %s.first_approved_at: %w", table, err)
+		}
+	}
+	return recomputeAnalyticsPunishmentPoolGrowth(db)
+}
+
+// recomputeAnalyticsPunishmentPoolGrowth 重写已有日聚合中的四个池增长指标。
+// 日期列表必须在 DELETE 前取出，否则只有这些指标的极简历史日会被永久漏掉。
+func recomputeAnalyticsPunishmentPoolGrowth(db sqlExecer) error {
+	ok, err := tableExists(db, "analytics_daily")
+	if err != nil || !ok {
+		return err
+	}
+	rows, err := db.Query(`SELECT day, MAX(sealed) FROM analytics_daily GROUP BY day ORDER BY day`)
+	if err != nil {
+		return fmt.Errorf("list analytics days for punishment pool growth: %w", err)
+	}
+	type dailyState struct {
+		day    int64
+		sealed int
+	}
+	var days []dailyState
+	for rows.Next() {
+		var d dailyState
+		if err := rows.Scan(&d.day, &d.sealed); err != nil {
+			rows.Close()
+			return err
+		}
+		days = append(days, d)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	metrics := []string{
+		metricPunishTaskPoolNew, metricPunishTaskPoolTotal,
+		metricPunishSeriesPoolNew, metricPunishSeriesPoolTotal,
+	}
+	for _, metric := range metrics {
+		if _, err := db.Exec(`DELETE FROM analytics_daily WHERE metric = ?`, metric); err != nil {
+			return fmt.Errorf("delete old %s rows: %w", metric, err)
+		}
+	}
+	offsetMs := int64(envIntDefault("ANALYTICS_TZ_OFFSET_MIN", 480)) * 60_000
+	for _, d := range days {
+		dayStart := d.day*86_400_000 - offsetMs
+		growth, err := computePunishmentPoolGrowth(db, dayStart, dayStart+86_400_000)
+		if err != nil {
+			return fmt.Errorf("compute punishment pool growth day=%d: %w", d.day, err)
+		}
+		values := []int64{growth.TaskNew, growth.TaskTotal, growth.SeriesNew, growth.SeriesTotal}
+		for i, metric := range metrics {
+			if _, err := db.Exec(`INSERT INTO analytics_daily (day, metric, key, value, sealed)
+				VALUES (?, ?, '', ?, ?)
+				ON CONFLICT(day, metric, key) DO UPDATE SET value=excluded.value, sealed=excluded.sealed`,
+				d.day, metric, values[i], d.sealed); err != nil {
+				return fmt.Errorf("insert %s day=%d: %w", metric, d.day, err)
+			}
+		}
+	}
+	return nil
 }
 
 // rebuildGenderOptionsWithoutNormalizedLabel 把 gender_options 从

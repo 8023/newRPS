@@ -116,8 +116,8 @@ type PunishmentTaskConfig struct {
 	StepIndex         int     `json:"stepIndex,omitempty"`
 	BackgroundImage   string  `json:"backgroundImage,omitempty"`
 	BackgroundOpacity float64 `json:"backgroundOpacity,omitempty"`
-	// 共建发布元数据：管理员直接创建时 ContributorPlayerID 为空。ContributorName 是提交时
-	// 的姓名快照（改名后不回溯更新，与 punishment_events.publisher_name 等同一套约定）。
+	// 共建发布元数据：ContributorName 由服务端按 ContributorPlayerID 现查当前昵称，
+	// 不做姓名快照；匿名展示由 ContributorAnonymous 控制。
 	ContributorPlayerID  string `json:"contributorPlayerId,omitempty"`
 	ContributorName      string `json:"contributorName,omitempty"`
 	ContributorAnonymous bool   `json:"contributorAnonymous,omitempty"`
@@ -143,7 +143,7 @@ type PunishmentTagConfig struct {
 type PunishmentRandomSettings struct {
 	OrderStep              float64 `json:"orderStep"`
 	MaxDifficultyOvershoot float64 `json:"maxDifficultyOvershoot"`
-	// MinSeriesSteps：系列投稿提交审批/批准时的最低步数；<=0 时按 10 兜底。
+	// MinSeriesSteps：系列投稿提交审批/批准时的最低步数；<=0 时按 5 兜底。
 	// 保存草稿允许未写完；不回溯已发布的短系列。
 	MinSeriesSteps int `json:"minSeriesSteps"`
 	// MaxSeriesSteps：系列投稿提交审批/批准/保存草稿时的最高步数上限；<=0 时按 20 兜底。

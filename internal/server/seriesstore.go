@@ -28,6 +28,7 @@ type seriesRow struct {
 	ContributorAnonymous bool
 	ReviewedBy           string
 	ReviewedAt           int64
+	FirstApprovedAt      int64
 	ReviewComment        string
 	CreatedAt            int64
 	UpdatedAt            int64
@@ -48,7 +49,7 @@ type seriesRoomNamePool struct {
 // ContributorPlayerID 现查 s.players。
 const seriesSelectCols = `t.id, t.version, t.name, t.target_faction_ids, t.room_name_pool, t.room_background_images,
 	t.status, t.contributor_player_id, t.contributor_anonymous,
-	t.reviewed_by, t.reviewed_at, t.review_comment, t.created_at, t.updated_at`
+	t.reviewed_by, t.reviewed_at, t.first_approved_at, t.review_comment, t.created_at, t.updated_at`
 
 func scanSeriesRow(row interface{ Scan(dest ...any) error }) (seriesRow, error) {
 	var r seriesRow
@@ -57,7 +58,7 @@ func scanSeriesRow(row interface{ Scan(dest ...any) error }) (seriesRow, error) 
 	err := row.Scan(
 		&r.ID, &r.Version, &r.Name, &targetJSON, &poolJSON, &bgJSON,
 		&r.Status, &r.ContributorPlayerID, &anon,
-		&r.ReviewedBy, &r.ReviewedAt, &r.ReviewComment, &r.CreatedAt, &r.UpdatedAt,
+		&r.ReviewedBy, &r.ReviewedAt, &r.FirstApprovedAt, &r.ReviewComment, &r.CreatedAt, &r.UpdatedAt,
 	)
 	if err != nil {
 		return r, err
@@ -108,6 +109,7 @@ func (ss *seriesStore) insertVersion(tx *sql.Tx, id, name string, targetFactionI
 	now := nowMs()
 	version := 1
 	createdAt := now
+	firstApprovedAt := int64(0)
 	pool := &seriesRoomNamePool{Subjects: []string{name}, RoomWords: []string{"小屋"}, Adjectives: []string{"共建"}}
 	bgImages := []string{}
 	if id == "" {
@@ -115,6 +117,7 @@ func (ss *seriesStore) insertVersion(tx *sql.Tx, id, name string, targetFactionI
 	} else if prev, err := ss.latestTx(tx, id); err == nil {
 		version = prev.Version + 1
 		createdAt = prev.CreatedAt
+		firstApprovedAt = prev.FirstApprovedAt
 		if prev.RoomNamePool != nil {
 			pool = prev.RoomNamePool
 		}
@@ -142,13 +145,16 @@ func (ss *seriesStore) insertVersion(tx *sql.Tx, id, name string, targetFactionI
 	if reviewedBy != "" {
 		reviewedAt = now
 	}
+	if status == "approved" && firstApprovedAt == 0 {
+		firstApprovedAt = now
+	}
 	_, err = tx.Exec(`INSERT INTO series (
 		id, version, name, target_faction_ids, room_name_pool, room_background_images, status,
 		contributor_player_id, contributor_anonymous, reviewed_by, reviewed_at,
-		review_comment, created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		first_approved_at, review_comment, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, version, name, string(targetJSON), string(poolJSON), string(bgJSON), status,
-		contributorID, anon, reviewedBy, reviewedAt, reviewComment, createdAt, now,
+		contributorID, anon, reviewedBy, reviewedAt, firstApprovedAt, reviewComment, createdAt, now,
 	)
 	if err != nil {
 		return seriesRow{}, err
@@ -162,9 +168,11 @@ func (ss *seriesStore) setStatus(tx *sql.Tx, id, status, reviewedBy, reviewComme
 	if reviewedBy != "" {
 		reviewedAt = now
 	}
-	res, err := tx.Exec(`UPDATE series SET status = ?, reviewed_by = ?, reviewed_at = ?, review_comment = ?, updated_at = ?
+	res, err := tx.Exec(`UPDATE series SET status = ?, reviewed_by = ?, reviewed_at = ?,
+		first_approved_at = CASE WHEN ? = 'approved' AND first_approved_at = 0 THEN ? ELSE first_approved_at END,
+		review_comment = ?, updated_at = ?
 		WHERE id = ? AND version = (SELECT MAX(version) FROM series WHERE id = ?)`,
-		status, reviewedBy, reviewedAt, reviewComment, now, id, id)
+		status, reviewedBy, reviewedAt, status, now, reviewComment, now, id, id)
 	if err != nil {
 		return err
 	}

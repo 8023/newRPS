@@ -196,6 +196,11 @@ func (h *HumanSeat) GetID() string { return h.Player.ID }
 type seriesPlayerProgress struct {
 	SeriesID string
 	Step     int
+	// Version/StepCount 是第一次实际抽到该系列任务时的统计快照。系列在房间存活期间被
+	// 编辑、下架或重新审批，不应导致关房时因为缓存里已找不到旧版本而整份丢掉完成率样本。
+	// 纯内存字段，不进协议、不落盘；旧测试/异常状态留 0 时由关房逻辑回退到当前缓存。
+	Version   int
+	StepCount int
 }
 
 type RoomState struct {
@@ -369,7 +374,7 @@ type Server struct {
 	// pushDB：Web Push 订阅存储；vapid：VAPID 密钥对（work/vapid.json 或环境变量）
 	pushDB   *pushStore
 	playerDB *playerStore
-	// punishmentStore：任务池 + 系列任务 SQLite 持久化；运行时读路径走下方缓存。
+	// punishmentStore：只负责系列完成率统计；任务池/系列内容由 contributionStore 持久化。
 	punishmentStore   *punishmentStore
 	genderStore       *genderStore
 	contributionStore *contributionStore
@@ -379,7 +384,7 @@ type Server struct {
 	punishmentTasksCache  []types.PunishmentTaskConfig
 	punishmentSeriesCache []types.PunishmentSeriesTaskConfig
 	// 由 reloadPunishmentCaches 与上面两份切片同时重建；避免系列每次抽取任务都把整个
-	// 任务池重新扫一遍建 map。测试里若只直接注入切片，读取辅助函数会安全回退到临时索引。
+	// 任务池重新扫一遍建 map。
 	// punishmentSeriesSteps：某系列 ID 当前展开出的全部步骤变体（未按 StepIndex 分组，
 	// 调用方按需过滤），供 pickSeriesStepTask/seriesTagTriState 使用。
 	punishmentSeriesByID  map[string]*types.PunishmentSeriesTaskConfig

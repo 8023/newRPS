@@ -529,7 +529,9 @@ func (s *Server) buildLiarsDicePunishmentTasks(room *RoomState, punishedPlayers 
 				task.BackgroundOpacity = systemTask.BackgroundOpacity
 			}
 		}
-		if winner != nil {
+		// AssignedBy 只表示玩家临时任务的发布者；系统/系列任务的审批人虽仍是赢家，
+		// 但不能在 UI 上显示成“由赢家发布”。
+		if src == "player" && winner != nil {
 			task.AssignedBy = winner.ID
 			task.AssignedByName = winner.Name
 		}

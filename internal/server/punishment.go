@@ -156,7 +156,10 @@ func (s *Server) buildPunishmentTasksWithWinnerName(room *RoomState, punishedPla
 				task.BackgroundOpacity = systemTask.BackgroundOpacity
 			}
 		}
-		if reviewer != nil {
+		// AssignedBy 是玩家端展示的“谁发布了这条临时任务”，不是事件表里的审批人。
+		// 随机/系列任务由正式任务池发布，不能把对手误标成发布者；但事件行仍在下方
+		// 独立记录 reviewer 为 approver。
+		if src == "player" && reviewer != nil {
 			task.AssignedBy = reviewer.ID
 			task.AssignedByName = reviewer.Name
 		}
@@ -302,7 +305,19 @@ func (s *Server) pickSeriesTaskForPlayer(room *RoomState, player *PlayerState, s
 		if room.PunishmentSeriesPlayerProgress == nil {
 			room.PunishmentSeriesPlayerProgress = map[string]*seriesPlayerProgress{}
 		}
-		room.PunishmentSeriesPlayerProgress[player.ID] = &seriesPlayerProgress{SeriesID: seriesID, Step: next + 1}
+		version, stepCount := series.Version, series.StepCount
+		if prev := room.PunishmentSeriesPlayerProgress[player.ID]; prev != nil && prev.SeriesID == seriesID {
+			// 一间房的一份完成率样本归到玩家首次实际体验的版本；后续热更新不抹掉已走进度。
+			if prev.Version > 0 {
+				version = prev.Version
+			}
+			if prev.StepCount > 0 {
+				stepCount = prev.StepCount
+			}
+		}
+		room.PunishmentSeriesPlayerProgress[player.ID] = &seriesPlayerProgress{
+			SeriesID: seriesID, Step: next + 1, Version: version, StepCount: stepCount,
+		}
 	}
 	task := pickSeriesStepTask(s.punishmentSeriesSteps[seriesID], next, player.FactionID)
 	if task == nil {
@@ -310,10 +325,14 @@ func (s *Server) pickSeriesTaskForPlayer(room *RoomState, player *PlayerState, s
 		return s.pickSeriesReplacementTask(player, *series, next, winnerName)
 	}
 	if strings.TrimSpace(task.Text) == "" {
+		advance()
 		return fallback()
 	}
 	taskText := applyPunishmentPlaceholders(strings.TrimSpace(task.Text), playerShortName(player), winnerName)
 	if taskText == "" {
+		// 例如双罚没有明确胜者，而当前步骤只有 {winner} 占位符。仍应按“本步已被
+		// 消费、改用兜底文案”推进，否则合法投稿也会让玩家永久卡在同一步。
+		advance()
 		return fallback()
 	}
 	op := task.BackgroundOpacity
@@ -344,16 +363,20 @@ func (s *Server) recordSeriesRunProgressOnClose(room *RoomState) {
 		if prog == nil || prog.Step <= 0 {
 			continue
 		}
-		series := s.findSeriesByID(prog.SeriesID)
-		if series == nil || series.StepCount == 0 {
-			continue
+		version, stepCount := prog.Version, prog.StepCount
+		if version <= 0 || stepCount <= 0 {
+			series := s.findSeriesByID(prog.SeriesID)
+			if series == nil || series.StepCount == 0 {
+				continue
+			}
+			version, stepCount = series.Version, series.StepCount
 		}
 		steps := prog.Step
-		if steps > series.StepCount {
-			steps = series.StepCount
+		if steps > stepCount {
+			steps = stepCount
 		}
-		percent := int(float64(steps)/float64(series.StepCount)*100 + 0.5)
-		if err := s.punishmentStore.recordSeriesRunProgress(series.ID, series.Version, percent); err != nil {
+		percent := int(float64(steps)/float64(stepCount)*100 + 0.5)
+		if err := s.punishmentStore.recordSeriesRunProgress(prog.SeriesID, version, percent); err != nil {
 			s.errorLog("series_run_progress_record_failed", err.Error())
 		}
 	}

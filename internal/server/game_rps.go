@@ -276,8 +276,8 @@ func (s *Server) forceEndRpsRound(room *RoomState, result types.RoundResult) (bo
 			s.resetExtremeWinStreak(loser)
 			streakText = s.applyExtremeWinStreakRisk(room, winner)
 			rankedText = fmt.Sprintf("（%s %s，%s %d）",
-				occupantName(room.Seats[types.SeatKey(result)]), formatSigned(wD),
-				occupantName(room.Seats[loserSeat]), lD)
+				occupantShortName(room.Seats[types.SeatKey(result)]), formatSigned(wD),
+				occupantShortName(room.Seats[loserSeat]), lD)
 		}
 	}
 	room.Phase = types.PhaseResult
@@ -286,11 +286,11 @@ func (s *Server) forceEndRpsRound(room *RoomState, result types.RoundResult) (bo
 	if result == types.ResultDraw {
 		room.ResultText = "管理员判定：平局" + rankedText
 	} else {
-		room.ResultText = "管理员判定：" + occupantName(room.Seats[types.SeatKey(result)]) + " 胜利" + rankedText + streakText
+		room.ResultText = "管理员判定：" + seatShortLabel(types.SeatKey(result), room.Seats[types.SeatKey(result)]) + " 胜利" + rankedText + streakText
 	}
 	s.refreshHumans(playerA, playerB)
 	resultLabel := s.roundResultLabel(room, result)
-	item := s.buildMatchHistoryShell(room, result, types.GameRPS, resultLabel, room.ResultText)
+	item := s.buildMatchHistoryShell(room, result, types.GameRPS, resultLabel, room.ResultText, "round_end")
 	item.ExtremeRanked = room.Settings.EnableExtremeRanked
 	if room.Settings.EnableRanked {
 		es := rankedStake
@@ -337,29 +337,39 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 	playerB := s.humanPlayerFromSeat(room, types.SeatB)
 	rankedMultiplier := rankMultiplierFor(room.Settings)
 	rankedStake := effectiveRankedStake(room.Settings)
-	for seat := range giveawaySeats {
-		var player *PlayerState
-		if seat == types.SeatA {
-			player = playerA
-		} else {
-			player = playerB
-		}
-		if player != nil {
-			s.addGiveawayValue(player, s.cfg.Giveaway.ActiveBoostValue)
-		}
-	}
 	var giveawayResultSeats []types.SeatKey
 	for _, seat := range []types.SeatKey{types.SeatA, types.SeatB} {
 		if finalChoices[seat] == types.MoveGiveaway {
 			giveawayResultSeats = append(giveawayResultSeats, seat)
 		}
 	}
+	// 白给点击数/白给值加成统一在这里——回合真正结算的那一刻——才发放，不管是自己选的、
+	// 被主人强制的、还是按白给值概率随机触发的（giveawaySeats），一律只在这一次生效。这样
+	// 选白给本身不再有任何即时副作用，room:move:withdraw 才能安全撤回，不会被拿来刷分。
+	for _, seat := range giveawayResultSeats {
+		var player *PlayerState
+		if seat == types.SeatA {
+			player = playerA
+		} else {
+			player = playerB
+		}
+		if player == nil {
+			continue
+		}
+		// 随机触发（giveawaySeats）与玩家自己选/被主人强制两者互斥：giveawayForcedSeats 本身
+		// 就跳过了已经是白给的座位，所以这里不会重复计。GiveawayClicks 只统计玩家自己真正
+		// 点了白给的次数，随机触发/被强制都不算"点击"，与改动前的口径保持一致。
+		if _, randomForced := giveawaySeats[seat]; !randomForced && forcedGiveawayMasterName(room, seat) == "" {
+			player.GiveawayClicks = intPtr(ptrInt(player.GiveawayClicks) + 1)
+		}
+		s.addGiveawayValue(player, s.cfg.Giveaway.ActiveBoostValue)
+	}
 	var giveawayReasons []string
 	for _, seat := range giveawayResultSeats {
 		if masterName := forcedGiveawayMasterName(room, seat); masterName != "" {
-			giveawayReasons = append(giveawayReasons, fmt.Sprintf("主人（%s）强制（%s）白给", masterName, occupantName(room.Seats[seat])))
+			giveawayReasons = append(giveawayReasons, fmt.Sprintf("主人（%s）强制（%s）白给", masterName, occupantShortName(room.Seats[seat])))
 		} else {
-			giveawayReasons = append(giveawayReasons, occupantName(room.Seats[seat])+" 白给")
+			giveawayReasons = append(giveawayReasons, occupantShortName(room.Seats[seat])+" 白给")
 		}
 		if room.ForcedGiveawayBySeat != nil {
 			delete(room.ForcedGiveawayBySeat, seat)
@@ -413,18 +423,18 @@ func (s *Server) finishRoundIfReady(room *RoomState) {
 			s.resetExtremeWinStreak(loser)
 			streakText = s.applyExtremeWinStreakRisk(room, winner)
 			rankedText = fmt.Sprintf("（%s %s，%s %d）",
-				occupantName(room.Seats[winnerSeat]), formatSigned(wD),
-				occupantName(room.Seats[loserSeat]), lD)
+				occupantShortName(room.Seats[winnerSeat]), formatSigned(wD),
+				occupantShortName(room.Seats[loserSeat]), lD)
 		}
 		if giveawayText != "" {
-			room.ResultText = fmt.Sprintf("%s，%s胜利%s%s", giveawayText, occupantName(room.Seats[winnerSeat]), rankedText, streakText)
+			room.ResultText = fmt.Sprintf("%s，%s 胜利%s%s", giveawayText, seatShortLabel(winnerSeat, room.Seats[winnerSeat]), rankedText, streakText)
 		} else {
-			room.ResultText = fmt.Sprintf("%s胜利%s%s", occupantName(room.Seats[winnerSeat]), rankedText, streakText)
+			room.ResultText = fmt.Sprintf("%s 胜利%s%s", seatShortLabel(winnerSeat, room.Seats[winnerSeat]), rankedText, streakText)
 		}
 		if forgiveOutcome != nil {
 			// 命中命运安排时 winnerSeat 必是 forgiveOutcome 的受益方座位，loserSeat 是被放过方座位。
 			room.ResultText += fmt.Sprintf("（%s 上局放过了 %s，本局已受到「命运的干预」）",
-				occupantName(room.Seats[winnerSeat]), occupantName(room.Seats[loserSeat]))
+				occupantShortName(room.Seats[winnerSeat]), occupantShortName(room.Seats[loserSeat]))
 		}
 	}
 
@@ -515,9 +525,9 @@ func (s *Server) applyDisconnectForfeit(room *RoomState, player *PlayerState) bo
 	if forfeit.RankMultiplier > 1 {
 		stakeText = fmt.Sprintf("%d 分 ×%d = %d 分", forfeit.BaseStake, forfeit.RankMultiplier, forfeit.Stake)
 	}
-	room.ResultText = fmt.Sprintf("%s 断线超时判负，%s胜利，排位 %s 已结算（%s %s，%s %d）%s",
-		forfeit.LoserName, forfeit.WinnerName, stakeText,
-		forfeit.WinnerName, formatSigned(wD), forfeit.LoserName, lD, streakText)
+	room.ResultText = fmt.Sprintf("%s 断线超时判负，%s 胜利，排位 %s 已结算（%s %s，%s %d）%s",
+		seatShortLabel(forfeit.LoserSeat, room.Seats[forfeit.LoserSeat]), seatShortLabel(forfeit.WinnerSeat, room.Seats[forfeit.WinnerSeat]), stakeText,
+		occupantShortName(room.Seats[forfeit.WinnerSeat]), formatSigned(wD), occupantShortName(room.Seats[forfeit.LoserSeat]), lD, streakText)
 	moveA, moveB := types.MoveNoMove, types.MoveNoMove
 	if forfeit.LoserSeat == types.SeatA {
 		moveA = types.MoveForfeit

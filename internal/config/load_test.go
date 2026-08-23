@@ -48,6 +48,13 @@ func TestNormalizePunishmentRandomSettingsPreservesExplicitInvalidSeriesBounds(t
 	}
 }
 
+func TestNormalizePunishmentRandomSettingsUsesFiveStepDefault(t *testing.T) {
+	got := normalizePunishmentRandomSettings(types.PunishmentRandomSettings{})
+	if got.MinSeriesSteps != 5 || got.MaxSeriesSteps != 20 {
+		t.Fatalf("default series bounds=%d/%d want=5/20", got.MinSeriesSteps, got.MaxSeriesSteps)
+	}
+}
+
 func TestValidateConfigRejectsInvalidSeriesBounds(t *testing.T) {
 	cfg, err := LoadConfig()
 	if err != nil {

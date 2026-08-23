@@ -116,6 +116,8 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{12, 60_000, 30_000}, s.onRoomSpectate
 	case "room:move":
 		return RateLimitOptions{20, 10_000, 20_000}, s.onRoomMove
+	case "room:move:withdraw":
+		return RateLimitOptions{20, 10_000, 20_000}, s.onRoomMoveWithdraw
 	case "othello:ready":
 		return RateLimitOptions{12, 60_000, 30_000}, s.onOthelloReady
 	case "othello:move":
@@ -1109,13 +1111,27 @@ func (s *Server) onConfigSave(client *Client, env wsEnvelope) {
 	if strings.TrimSpace(next.Site.AdminPassword) == "" {
 		next.Site.AdminPassword = s.cfg.Site.AdminPassword
 	}
-	if err := s.loadGendersIntoConfig(&next); err != nil {
-		client.reply(env.ID, nil, "读取性别与阵营失败")
-		return
+	// 性别与阵营权威在 SQLite，不在 config/json 里；后台「性别与阵营」板块与其它板块共用
+	// 同一份底部「保存配置」，这里把 draft 里的编辑落库，而不是像早期版本那样在保存前就
+	// 用数据库当前值覆盖掉 next——那样做会导致这个板块的改动无论怎么点保存都不会生效。
+	// 客户端没带这两个字段（旧工具/部分请求只提交子集）时保留数据库当前值，不清空整表。
+	if len(next.Genders) > 0 || len(next.GenderFactions) > 0 {
+		genders, factions, err := s.sanitizeGenderInput(next.Genders, next.GenderFactions)
+		if err != nil {
+			client.reply(env.ID, nil, err.Error())
+			return
+		}
+		next.Genders, next.GenderFactions = genders, factions
+	} else {
+		next.Genders, next.GenderFactions = s.cfg.Genders, s.cfg.GenderFactions
 	}
 	oldTags := append([]types.PunishmentTagConfig(nil), s.cfg.PunishmentTags...)
 	valid, err := config.SaveConfig(next)
 	if err != nil {
+		client.reply(env.ID, nil, err.Error())
+		return
+	}
+	if err := s.persistGendersAndFactions(next.Genders, next.GenderFactions); err != nil {
 		client.reply(env.ID, nil, err.Error())
 		return
 	}

@@ -5,7 +5,7 @@ export const MAX_SERIES_STEPS = 1000;
 /** 后台「最高步数」留空/填非正数时的默认值，与上面的技术硬顶是两回事，见
     effectiveMaxSeriesSteps 的说明。 */
 export const DEFAULT_MAX_SERIES_STEPS = 20;
-export const DEFAULT_MIN_SERIES_STEPS = 10;
+export const DEFAULT_MIN_SERIES_STEPS = 5;
 /** 每一步最多 8 份阵营文案，与后端 maxStepCandidates 一致。 */
 export const MAX_STEP_VARIANTS = 8;
 
@@ -22,11 +22,17 @@ export type TaskVariantDraft = {
 export type StepDraft = {
   variants: TaskVariantDraft[];
   inRandomPool: boolean;
-  order: number;
+  /** 允许 ""（编辑中途清空输入框的过渡态）；提交/发布前必须先用 isValidOrder 校验掉。 */
+  order: number | "";
   tagIds: string[];
   backgroundImage: string;
   backgroundOpacity: number;
 };
+
+/** 难度是否为可以提交/发布的合法值：1-99 之间的整数，"" 或越界都不算。 */
+export function isValidOrder(order: number | ""): order is number {
+  return typeof order === "number" && Number.isInteger(order) && order >= 1 && order <= 99;
+}
 
 export function emptyStepDraft(factionIds: string[], inRandomPool = true): StepDraft {
   return {
@@ -103,7 +109,10 @@ export function buildSeriesContent(name: string, targetFactionIds: readonly stri
         factionIds: [...variant.factionIds],
       })),
       inRandomPool: step.inRandomPool,
-      order: step.inRandomPool ? step.order : -1,
+      // 兜底转成数字：真正拦截空值/越界的是 canSubmit（isValidOrder），这里只是防止
+      // "" 被 JSON.stringify 成字符串，导致后端 Order 字段类型不匹配、报出不友好的
+      // "格式错误"而不是「难度必须在 1 到 99 之间」。
+      order: step.inRandomPool ? (typeof step.order === "number" ? step.order : 0) : -1,
       tagIds: [...step.tagIds],
       backgroundImage: step.backgroundImage,
       backgroundOpacity: step.backgroundOpacity || 0.22,

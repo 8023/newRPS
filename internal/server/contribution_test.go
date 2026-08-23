@@ -2,7 +2,9 @@ package server
 
 import (
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/doumiao/newRPS/internal/types"
 )
@@ -63,6 +65,15 @@ func TestDecodeSeriesDraft_when_nameOrStepsMissing_then_rejected(t *testing.T) {
 	}
 	if len(draft.Steps) != 1 || draft.Steps[0].Variants[0].Text != "第一步" {
 		t.Fatalf("draft=%+v", draft)
+	}
+}
+
+func TestSeriesStepDefaults(t *testing.T) {
+	if got := effectiveMinSeriesSteps(types.AppConfig{}); got != 5 {
+		t.Fatalf("default minimum series steps=%d want=5", got)
+	}
+	if got := effectiveMaxSeriesSteps(types.AppConfig{}); got != 20 {
+		t.Fatalf("default maximum series steps=%d want=20", got)
 	}
 }
 
@@ -149,11 +160,14 @@ func newContributionTestServer(t *testing.T) *Server {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	return &Server{
-		db:                db,
-		players:           map[string]*PlayerState{},
-		contributionStore: newContributionStore(db),
-		punishmentStore:   newPunishmentStore(db),
-		eventDB:           newEventStore(db),
+		db:                  db,
+		players:             map[string]*PlayerState{},
+		contributionStore:   newContributionStore(db),
+		punishmentStore:     newPunishmentStore(db),
+		eventDB:             newEventStore(db),
+		lobbyBroadcastDelay: time.Hour,
+		roomBroadcastDelay:  time.Hour,
+		playerUpdateDelay:   time.Hour,
 		cfg: types.AppConfig{
 			GenderFactions:           []types.GenderFaction{{ID: "f1", Label: "阵营"}, {ID: "f2", Label: "阵营二"}},
 			PunishmentRandomSettings: types.PunishmentRandomSettings{MinSeriesSteps: 1},
@@ -280,6 +294,195 @@ func TestContributionAdminApprove_withReviewedContent_then_insertsNewApprovedVer
 	}
 }
 
+// TestContributionAdminApprove_whenAlreadyApproved_thenEditsInPlace 覆盖"管理员是终审者，
+// 已通过投稿改稿直接生效、不用退回待审再走一遍"这条规则（task 分支）。
+func TestContributionAdminApprove_whenAlreadyApproved_thenEditsInPlace(t *testing.T) {
+	s := newContributionTestServer(t)
+	raw, _ := marshalDraft(types.StepDraft{InRandomPool: true, Order: 10, Variants: []types.TaskVariantDraft{{Text: "原文案", FactionIDs: []string{"f1"}}}})
+	sub, err := s.contributionStore.saveDraft("p1", types.ContributionKindTask, false, "", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.contributionStore.submit(types.ContributionKindTask, "p1", sub.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.adminApprove(types.ContributionKindTask, sub.ID, "admin", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	// 空内容：已通过状态下没有新内容就没意义，必须拒绝。
+	if err := s.adminApprove(types.ContributionKindTask, sub.ID, "admin", "", ""); err != errContributionBadStatus {
+		t.Fatalf("approved item with empty reviewedContent must be rejected, got %v", err)
+	}
+	edited, _ := marshalDraft(types.StepDraft{InRandomPool: true, Order: 30, Variants: []types.TaskVariantDraft{{Text: "终审改稿", FactionIDs: []string{"f1"}}}})
+	if err := s.adminApprove(types.ContributionKindTask, sub.ID, "admin", "已经通过后再改", edited); err != nil {
+		t.Fatalf("approved item must be directly editable by admin, got %v", err)
+	}
+	got, err := s.contributionStore.get(types.ContributionKindTask, sub.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// version=1 是最初批准（原样批准，未改稿，不产生新版本）；version=2 才是这次就地改稿。
+	if got.Status != types.ContributionApproved || got.Version != 2 {
+		t.Fatalf("got=%+v", got)
+	}
+	draft, ok := got.Content.(types.StepDraft)
+	if !ok || draft.Variants[0].Text != "终审改稿" {
+		t.Fatalf("content not updated in place: %+v", got.Content)
+	}
+	// 投稿归属不变：玩家自己打开看到的就是管理员改后的最新版。
+	if _, err := s.contributionStore.getOwned(types.ContributionKindTask, sub.ID, "p1"); err != nil {
+		t.Fatalf("ownership must be retained after admin in-place edit: %v", err)
+	}
+}
+
+// TestContributionAdminApprove_series_whenAlreadyApproved_thenEditsInPlace 与上面的 task
+// 用例对称，覆盖 series 分支（连带步骤一起改）。
+func TestContributionAdminApprove_series_whenAlreadyApproved_thenEditsInPlace(t *testing.T) {
+	s := newContributionTestServer(t)
+	step := func(text string) types.StepDraft {
+		return types.StepDraft{InRandomPool: true, Order: 10, Variants: []types.TaskVariantDraft{{Text: text, FactionIDs: []string{"f1"}}}}
+	}
+	raw, _ := marshalDraft(types.SeriesDraft{Name: "终审系列", TargetFactionIDs: []string{"f1"}, Steps: []types.StepDraft{step("原第一步")}})
+	sub, err := s.contributionStore.saveDraft("p1", types.ContributionKindSeries, false, "", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.contributionStore.submit(types.ContributionKindSeries, "p1", sub.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.adminApprove(types.ContributionKindSeries, sub.ID, "admin", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	edited, _ := marshalDraft(types.SeriesDraft{Name: "终审系列", TargetFactionIDs: []string{"f1"}, Steps: []types.StepDraft{step("改后第一步")}})
+	if err := s.adminApprove(types.ContributionKindSeries, sub.ID, "admin", "终审改稿", edited); err != nil {
+		t.Fatalf("approved series must be directly editable by admin, got %v", err)
+	}
+	got, err := s.contributionStore.get(types.ContributionKindSeries, sub.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != types.ContributionApproved {
+		t.Fatalf("got=%+v", got)
+	}
+	draft, ok := got.Content.(types.SeriesDraft)
+	if !ok || len(draft.Steps) != 1 || draft.Steps[0].Variants[0].Text != "改后第一步" {
+		t.Fatalf("series content not updated in place: %+v", got.Content)
+	}
+}
+
+func TestValidateContributionForApproval_whenReviewedContentTooLarge_thenRejectedBeforeDecode(t *testing.T) {
+	s := newContributionTestServer(t)
+	raw, _ := marshalDraft(types.StepDraft{InRandomPool: true, Order: 10, Variants: []types.TaskVariantDraft{{Text: "原文案", FactionIDs: []string{"f1"}}}})
+	sub, err := s.contributionStore.saveDraft("p1", types.ContributionKindTask, false, "", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.contributionStore.submit(types.ContributionKindTask, "p1", sub.ID); err != nil {
+		t.Fatal(err)
+	}
+	oversized := `{"inRandomPool":true,"order":10,"variants":[{"text":"` + strings.Repeat("x", maxContributionJSON) + `"}]}`
+	if err := s.validateContributionForApproval(types.ContributionKindTask, sub.ID, oversized); err == nil || err.Error() != "审核内容过大" {
+		t.Fatalf("oversized reviewedContent must be rejected by size guard, got %v", err)
+	}
+}
+
+func TestFillContributionListMeta_whenSeriesStepHasMultipleVersions_thenKeepsHistoricalVotes(t *testing.T) {
+	s := newContributionTestServer(t)
+	first, _ := marshalDraft(types.SeriesDraft{
+		Name: "共建系列", TargetFactionIDs: []string{"f1"},
+		Steps: []types.StepDraft{{InRandomPool: true, Order: 10, Variants: []types.TaskVariantDraft{{Text: "第一版", FactionIDs: []string{"f1"}}}}},
+	})
+	sub, err := s.contributionStore.saveDraft("p1", types.ContributionKindSeries, false, "", first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.contributionStore.submit(types.ContributionKindSeries, "p1", sub.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.adminApprove(types.ContributionKindSeries, sub.ID, "admin", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	steps, err := s.contributionStore.tasks.stepsForSeries(sub.ID)
+	if err != nil || len(steps) != 1 {
+		t.Fatalf("steps=%v err=%v", steps, err)
+	}
+	stepID := steps[0].ID
+	if _, err := s.db.Exec(`UPDATE sub_tasks SET like_count=2, down_count=1 WHERE id=? AND version=1`, stepID); err != nil {
+		t.Fatal(err)
+	}
+
+	second, _ := marshalDraft(types.SeriesDraft{
+		Name: "共建系列", TargetFactionIDs: []string{"f1"},
+		Steps: []types.StepDraft{{InRandomPool: true, Order: 20, Variants: []types.TaskVariantDraft{{Text: "第二版", FactionIDs: []string{"f1"}}}}},
+	})
+	if _, err := s.contributionStore.saveDraft("p1", types.ContributionKindSeries, false, sub.ID, second); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.contributionStore.submit(types.ContributionKindSeries, "p1", sub.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.adminApprove(types.ContributionKindSeries, sub.ID, "admin", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`UPDATE sub_tasks SET like_count=3, down_count=2 WHERE id=? AND version=2`, stepID); err != nil {
+		t.Fatal(err)
+	}
+
+	item, err := s.contributionStore.get(types.ContributionKindSeries, sub.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := []types.ContributionItem{item}
+	if err := s.fillContributionListMeta(items); err != nil {
+		t.Fatal(err)
+	}
+	if items[0].LikeCount != 5 || items[0].DownCount != 3 {
+		t.Fatalf("historical step votes lost: likes=%d downs=%d", items[0].LikeCount, items[0].DownCount)
+	}
+}
+
+func TestFillContributionListMeta_seriesLikeRatioUsesVoteWeightedStepTotals(t *testing.T) {
+	s := newContributionTestServer(t)
+	step := func(text string) types.StepDraft {
+		return types.StepDraft{InRandomPool: true, Order: 10, Variants: []types.TaskVariantDraft{{Text: text, FactionIDs: []string{"f1"}}}}
+	}
+	raw, _ := marshalDraft(types.SeriesDraft{
+		Name: "加权系列", TargetFactionIDs: []string{"f1"}, Steps: []types.StepDraft{step("一步"), step("二步")},
+	})
+	item, err := s.contributionStore.saveDraft("p1", types.ContributionKindSeries, false, "", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.contributionStore.submit(types.ContributionKindSeries, "p1", item.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.adminApprove(types.ContributionKindSeries, item.ID, "admin", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	steps, err := s.contributionStore.tasks.stepsForSeries(item.ID)
+	if err != nil || len(steps) != 2 {
+		t.Fatalf("steps=%v err=%v", steps, err)
+	}
+	if _, err := s.db.Exec(`UPDATE sub_tasks SET like_count=1, down_count=1 WHERE id=?`, steps[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`UPDATE sub_tasks SET like_count=9, down_count=1 WHERE id=?`, steps[1].ID); err != nil {
+		t.Fatal(err)
+	}
+	listed, err := s.contributionStore.get(types.ContributionKindSeries, item.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := []types.ContributionItem{listed}
+	if err := s.fillContributionListMeta(items); err != nil {
+		t.Fatal(err)
+	}
+	// 合并票数为 10/12（前端展示 83%）；若误做步骤百分比等权平均会得到 70%。
+	if items[0].LikeCount != 10 || items[0].DownCount != 2 {
+		t.Fatalf("series votes must be merged by vote count: likes=%d downs=%d", items[0].LikeCount, items[0].DownCount)
+	}
+}
+
 // TestSaveSeriesSteps_when_savedTwice_then_reusesPositionalStepID 覆盖系列步骤"位置 i 的内容
 // 延续该系列此前位置 i 那一步的 ID"这条续版规则。
 func TestSaveSeriesSteps_when_savedTwice_then_reusesPositionalStepID(t *testing.T) {
@@ -386,6 +589,9 @@ func TestContributionVote_dedupAndSpoilerFree(t *testing.T) {
 	if err := s.eventDB.updatePunishmentStatus("e1", "approved"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := s.db.Exec(`UPDATE sub_tasks SET updated_at=123 WHERE id=?`, taskItem.ID); err != nil {
+		t.Fatal(err)
+	}
 
 	row, err := s.eventDB.getPunishmentEvent("e1")
 	if err != nil {
@@ -423,6 +629,10 @@ func TestContributionVote_dedupAndSpoilerFree(t *testing.T) {
 	likes, downs, err := s.contributionStore.tasks.voteAggregate(taskItem.ID)
 	if err != nil || likes != 2 || downs != 0 {
 		t.Fatalf("likes=%d downs=%d err=%v", likes, downs, err)
+	}
+	latest, err := s.contributionStore.tasks.latest(taskItem.ID)
+	if err != nil || latest.UpdatedAt != 123 {
+		t.Fatalf("voting must not rewrite content updated_at: got=%d err=%v", latest.UpdatedAt, err)
 	}
 }
 
@@ -467,6 +677,70 @@ func TestVoteCardFor_beforeProofApproved_thenAlreadyVotable(t *testing.T) {
 	}
 	if card.CannotVoteReason != "" {
 		t.Fatalf("votable card must not carry a reason, got %+v", card)
+	}
+	if _, err := s.castContributionVote(performer, "e1", types.ContributionVoteUp); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.eventDB.updatePunishmentProof("e1", nowMs(), "第一次证明", "", "pending"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.eventDB.redoPunishmentTask("e1", "e2", nowMs(), "room1", "approver", "审批者", performer.ID, "执行者", "文案", punishmentEventMeta{
+		FormalTaskID: taskItem.ID, FormalTaskVersion: taskItem.Version,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var oldVote int
+	if err := s.db.QueryRow(`SELECT performer_vote FROM punishment_events WHERE id='e1'`).Scan(&oldVote); err != nil {
+		t.Fatal(err)
+	}
+	likes, downs, err := s.contributionStore.tasks.voteAggregate(taskItem.ID)
+	if err != nil || oldVote != 1 || likes != 1 || downs != 0 {
+		t.Fatalf("proof rejection must preserve votes: oldVote=%d likes=%d downs=%d err=%v", oldVote, likes, downs, err)
+	}
+}
+
+func TestContributionFirstApprovedAtPersistsAcrossLifecycleAndVersions(t *testing.T) {
+	s := newContributionTestServer(t)
+	taskRaw, _ := marshalDraft(types.StepDraft{InRandomPool: true, Order: 10, Variants: []types.TaskVariantDraft{{Text: "初稿", FactionIDs: []string{"f1"}}}})
+	item, err := s.contributionStore.saveDraft("p1", types.ContributionKindTask, false, "", taskRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	row, err := s.contributionStore.tasks.latest(item.ID)
+	if err != nil || row.FirstApprovedAt != 0 {
+		t.Fatalf("draft first approved=%d err=%v", row.FirstApprovedAt, err)
+	}
+	if err := s.contributionStore.submit(types.ContributionKindTask, "p1", item.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.adminApprove(types.ContributionKindTask, item.ID, "admin", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	approved, err := s.contributionStore.tasks.latest(item.ID)
+	if err != nil || approved.FirstApprovedAt <= 0 {
+		t.Fatalf("approved first approved=%d err=%v", approved.FirstApprovedAt, err)
+	}
+	firstApprovedAt := approved.FirstApprovedAt
+	if err := s.contributionStore.withdraw(types.ContributionKindTask, "p1", item.ID); err != nil {
+		t.Fatal(err)
+	}
+	editedRaw, _ := marshalDraft(types.StepDraft{InRandomPool: true, Order: 11, Variants: []types.TaskVariantDraft{{Text: "修订", FactionIDs: []string{"f1"}}}})
+	if _, err := s.contributionStore.saveDraft("p1", types.ContributionKindTask, false, item.ID, editedRaw); err != nil {
+		t.Fatal(err)
+	}
+	edited, err := s.contributionStore.tasks.latest(item.ID)
+	if err != nil || edited.FirstApprovedAt != firstApprovedAt {
+		t.Fatalf("new version lost first approval: got=%d want=%d err=%v", edited.FirstApprovedAt, firstApprovedAt, err)
+	}
+	if err := s.contributionStore.submit(types.ContributionKindTask, "p1", item.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.adminApprove(types.ContributionKindTask, item.ID, "admin", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	reapproved, err := s.contributionStore.tasks.latest(item.ID)
+	if err != nil || reapproved.FirstApprovedAt != firstApprovedAt {
+		t.Fatalf("reapproval must not count as new: got=%d want=%d err=%v", reapproved.FirstApprovedAt, firstApprovedAt, err)
 	}
 }
 
@@ -628,6 +902,35 @@ func TestContributionAdminStateAndKindValidation(t *testing.T) {
 	}
 }
 
+func TestContributionSaveDraftRejectsConfiguredSeriesMaximum(t *testing.T) {
+	s := newContributionTestServer(t)
+	s.cfg.PunishmentRandomSettings.MaxSeriesSteps = 1
+	player := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "p1", Name: "玩家"}, Persistent: true, SocketID: "sock-1"}
+	s.players[player.ID] = player
+	client := &Client{id: "sock-1", playerID: player.ID, sendCh: make(chan []byte, 1)}
+	step := map[string]any{
+		"inRandomPool": true,
+		"order":        10,
+		"variants":     []any{map[string]any{"text": "一步", "factionIds": []any{"f1"}}},
+	}
+	s.onContributionSaveDraft(client, wsEnvelope{ID: 1, D: map[string]any{
+		"kind": "series",
+		"content": map[string]any{
+			"name":             "超长系列",
+			"targetFactionIds": []any{"f1"},
+			"steps":            []any{step, step},
+		},
+	}})
+	_, errMsg := lastReplyEnvelope(t, client)
+	if errMsg != "系列任务最多 1 步，当前有 2 步" {
+		t.Fatalf("configured maximum must be enforced while saving a draft, got %q", errMsg)
+	}
+	var count int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM series`).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("rejected oversized draft must not be persisted: count=%d err=%v", count, err)
+	}
+}
+
 func TestContributionSaveDraft_whenVersionLimitReached_thenRejected(t *testing.T) {
 	s := newContributionTestServer(t)
 	taskRaw, _ := marshalDraft(types.StepDraft{
@@ -645,6 +948,12 @@ func TestContributionSaveDraft_whenVersionLimitReached_thenRejected(t *testing.T
 	if _, err := s.contributionStore.saveDraft("p1", types.ContributionKindTask, false, task.ID, taskRaw); err == nil {
 		t.Fatal("task at the version limit must reject another save")
 	}
+	if _, err := s.db.Exec(`UPDATE sub_tasks SET status='pending' WHERE id=?`, task.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.adminApprove(types.ContributionKindTask, task.ID, "admin", "", taskRaw); err == nil {
+		t.Fatal("admin reviewedContent must not bypass the task version limit")
+	}
 
 	seriesRaw, _ := marshalDraft(types.SeriesDraft{
 		Name:             "系列",
@@ -660,6 +969,12 @@ func TestContributionSaveDraft_whenVersionLimitReached_thenRejected(t *testing.T
 	}
 	if _, err := s.contributionStore.saveDraft("p1", types.ContributionKindSeries, false, series.ID, seriesRaw); err == nil {
 		t.Fatal("series at the version limit must reject another save")
+	}
+	if _, err := s.db.Exec(`UPDATE series SET status='pending' WHERE id=?`, series.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.adminApprove(types.ContributionKindSeries, series.ID, "admin", "", seriesRaw); err == nil {
+		t.Fatal("admin reviewedContent must not bypass the series version limit")
 	}
 }
 
@@ -677,6 +992,9 @@ func TestAnalyticsPunishmentPoolMetricsUseVersionedTables(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := s.contributionStore.submit(types.ContributionKindTask, "p1", task.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`UPDATE sub_tasks SET created_at=created_at-86400000 WHERE id=?`, task.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.adminApprove(types.ContributionKindTask, task.ID, "admin", "", ""); err != nil {
@@ -699,6 +1017,12 @@ func TestAnalyticsPunishmentPoolMetricsUseVersionedTables(t *testing.T) {
 	if err := s.contributionStore.submit(types.ContributionKindSeries, "p1", series.ID); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := s.db.Exec(`UPDATE series SET created_at=created_at-86400000 WHERE id=?`, series.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`UPDATE sub_tasks SET created_at=created_at-86400000 WHERE series_id=?`, series.ID); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.adminApprove(types.ContributionKindSeries, series.ID, "admin", "", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -719,5 +1043,108 @@ func TestAnalyticsPunishmentPoolMetricsUseVersionedTables(t *testing.T) {
 	}
 	if got[metricPunishSeriesPoolNew] != 1 || got[metricPunishSeriesPoolTotal] != 1 {
 		t.Fatalf("series pool metrics new/total=%d/%d", got[metricPunishSeriesPoolNew], got[metricPunishSeriesPoolTotal])
+	}
+}
+
+// TestApprovedContributionCountsByContributor 覆盖「共建」排行榜的统计口径：独立随机
+// 任务与系列每个子任务各算一条，系列本身不单独计数；被驳回/撤回/仍处草稿的投稿不计数。
+func TestApprovedContributionCountsByContributor(t *testing.T) {
+	s := newContributionTestServer(t)
+
+	// p1：1 条已通过独立任务 + 1 个已通过、含 2 步的系列（应计 1+2=3 条）。
+	taskRaw, _ := marshalDraft(types.StepDraft{
+		InRandomPool: true,
+		Order:        10,
+		Variants:     []types.TaskVariantDraft{{Text: "独立任务", FactionIDs: []string{"f1"}}},
+	})
+	task, err := s.contributionStore.saveDraft("p1", types.ContributionKindTask, false, "", taskRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.contributionStore.submit(types.ContributionKindTask, "p1", task.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.adminApprove(types.ContributionKindTask, task.ID, "admin", "", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	seriesRaw, _ := marshalDraft(types.SeriesDraft{
+		Name:             "系列",
+		TargetFactionIDs: []string{"f1"},
+		Steps: []types.StepDraft{
+			{InRandomPool: true, Order: 20, Variants: []types.TaskVariantDraft{{Text: "步骤一", FactionIDs: []string{"f1"}}}},
+			{InRandomPool: true, Order: 20, Variants: []types.TaskVariantDraft{{Text: "步骤二", FactionIDs: []string{"f1"}}}},
+		},
+	})
+	series, err := s.contributionStore.saveDraft("p1", types.ContributionKindSeries, false, "", seriesRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.contributionStore.submit(types.ContributionKindSeries, "p1", series.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.adminApprove(types.ContributionKindSeries, series.ID, "admin", "", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// p2：1 条已通过独立任务（应计 1 条）。
+	task2Raw, _ := marshalDraft(types.StepDraft{
+		InRandomPool: true,
+		Order:        10,
+		Variants:     []types.TaskVariantDraft{{Text: "p2 的任务", FactionIDs: []string{"f1"}}},
+	})
+	task2, err := s.contributionStore.saveDraft("p2", types.ContributionKindTask, false, "", task2Raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.contributionStore.submit(types.ContributionKindTask, "p2", task2.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.adminApprove(types.ContributionKindTask, task2.ID, "admin", "", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// p3：被驳回的任务不计数。
+	task3Raw, _ := marshalDraft(types.StepDraft{
+		InRandomPool: true,
+		Order:        10,
+		Variants:     []types.TaskVariantDraft{{Text: "p3 的任务", FactionIDs: []string{"f1"}}},
+	})
+	task3, err := s.contributionStore.saveDraft("p3", types.ContributionKindTask, false, "", task3Raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.contributionStore.submit(types.ContributionKindTask, "p3", task3.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.adminReject(types.ContributionKindTask, task3.ID, "admin", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// p4：仍处草稿，未提交，不计数。
+	task4Raw, _ := marshalDraft(types.StepDraft{
+		InRandomPool: true,
+		Order:        10,
+		Variants:     []types.TaskVariantDraft{{Text: "p4 的草稿", FactionIDs: []string{"f1"}}},
+	})
+	if _, err := s.contributionStore.saveDraft("p4", types.ContributionKindTask, false, "", task4Raw); err != nil {
+		t.Fatal(err)
+	}
+
+	counts, err := s.contributionStore.tasks.approvedContributionCountsByContributor()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if counts["p1"] != 3 {
+		t.Fatalf("p1 count = %d, want 3", counts["p1"])
+	}
+	if counts["p2"] != 1 {
+		t.Fatalf("p2 count = %d, want 1", counts["p2"])
+	}
+	if _, ok := counts["p3"]; ok {
+		t.Fatalf("p3 should not appear in approved counts, got %d", counts["p3"])
+	}
+	if _, ok := counts["p4"]; ok {
+		t.Fatalf("p4 should not appear in approved counts, got %d", counts["p4"])
 	}
 }

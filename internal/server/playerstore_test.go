@@ -216,6 +216,32 @@ func TestPlayerStoreUpsertAndLoadRoundTrip_NeverTouchedFeaturesStayNil(t *testin
 	}
 }
 
+func TestPlayerStoreLoad_whenUnknownGameID_thenDoesNotOverwriteRPS(t *testing.T) {
+	db, err := openDatabase(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := newPlayerStore(db)
+	item := persistedPlayer{
+		ID: "p-unknown-game", PlayerID: "identity", Name: "玩家",
+		GameStats: types.GameStats{RPS: types.GameWLD{Wins: 7, Losses: 2, Draws: 1}},
+	}
+	if err := store.upsert(item); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO player_game_stats (player_id, game_id, wins, losses, draws) VALUES (?,?,?,?,?)`, item.ID, "future-game", 99, 88, 77); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := store.loadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].item.GameStats.RPS != item.GameStats.RPS {
+		t.Fatalf("unknown game row corrupted RPS stats: %+v", rows)
+	}
+}
+
 func TestRefreshAllPlayersForConfig_whenGenderDeleted_thenResetsAndPersistsDefault(t *testing.T) {
 	dir := t.TempDir()
 	db, err := openDatabase(dir)

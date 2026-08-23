@@ -1,10 +1,26 @@
 package server
 
 import (
+	"database/sql"
 	"testing"
 
 	"github.com/doumiao/newRPS/internal/types"
 )
+
+func readSeriesRunStats(t *testing.T, db *sql.DB, seriesID string, version int) (int, int) {
+	t.Helper()
+	var participants, percentSum int
+	err := db.QueryRow(`SELECT participant_count, progress_percent_sum
+		FROM punishment_series_run_stats WHERE series_id=? AND series_version=?`, seriesID, version).
+		Scan(&participants, &percentSum)
+	if err == sql.ErrNoRows {
+		return 0, 0
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return participants, percentSum
+}
 
 // TestSeriesOnlyOrderMarkerExcludedFromRandomPoolButAvailableToSeries 直接构造
 // punishmentTasksCache（不再经过已下线的后台任务池编辑器）验证：order=-1（"仅供系列引用，
@@ -52,8 +68,8 @@ func TestSeriesRunStatsRecordAndRead(t *testing.T) {
 	defer db.Close()
 	ps := newPunishmentStore(db)
 
-	if participants, percentSum, err := ps.seriesRunStats("s1", 1); err != nil || participants != 0 || percentSum != 0 {
-		t.Fatalf("unseen bucket should read as 0/0, got %d/%d err=%v", participants, percentSum, err)
+	if participants, percentSum := readSeriesRunStats(t, db, "s1", 1); participants != 0 || percentSum != 0 {
+		t.Fatalf("unseen bucket should read as 0/0, got %d/%d", participants, percentSum)
 	}
 
 	for _, percent := range []int{100, 75, 50} {
@@ -61,19 +77,19 @@ func TestSeriesRunStatsRecordAndRead(t *testing.T) {
 			t.Fatalf("recordSeriesRunProgress: %v", err)
 		}
 	}
-	participants, percentSum, err := ps.seriesRunStats("s1", 1)
-	if err != nil || participants != 3 || percentSum != 225 {
-		t.Fatalf("s1/v1 = %d/%d err=%v, want 3/225", participants, percentSum, err)
+	participants, percentSum := readSeriesRunStats(t, db, "s1", 1)
+	if participants != 3 || percentSum != 225 {
+		t.Fatalf("s1/v1 = %d/%d, want 3/225", participants, percentSum)
 	}
 
 	// 改版（version 变化）另起一桶，不与旧版本混算。
 	if err := ps.recordSeriesRunProgress("s1", 2, 60); err != nil {
 		t.Fatalf("recordSeriesRunProgress v2: %v", err)
 	}
-	if participants, percentSum, err := ps.seriesRunStats("s1", 2); err != nil || participants != 1 || percentSum != 60 {
-		t.Fatalf("s1/v2 = %d/%d err=%v, want 1/60", participants, percentSum, err)
+	if participants, percentSum := readSeriesRunStats(t, db, "s1", 2); participants != 1 || percentSum != 60 {
+		t.Fatalf("s1/v2 = %d/%d, want 1/60", participants, percentSum)
 	}
-	if participants, percentSum, err := ps.seriesRunStats("s1", 1); err != nil || participants != 3 || percentSum != 225 {
-		t.Fatalf("s1/v1 should be unaffected by v2, got %d/%d err=%v", participants, percentSum, err)
+	if participants, percentSum := readSeriesRunStats(t, db, "s1", 1); participants != 3 || percentSum != 225 {
+		t.Fatalf("s1/v1 should be unaffected by v2, got %d/%d", participants, percentSum)
 	}
 }

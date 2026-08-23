@@ -781,7 +781,7 @@ func (s *Server) finishOthelloGame(room *RoomState) {
 	if result == types.ResultDraw {
 		room.ResultText = fmt.Sprintf("黑白棋平局：黑 %d，白 %d", blackCount, whiteCount)
 	} else {
-		room.ResultText = fmt.Sprintf("%s胜利：黑 %d，白 %d", occupantName(room.Seats[types.SeatKey(result)]), blackCount, whiteCount)
+		room.ResultText = fmt.Sprintf("%s 胜利：黑 %d，白 %d", seatShortLabel(types.SeatKey(result), room.Seats[types.SeatKey(result)]), blackCount, whiteCount)
 	}
 	rankedDelta := room.Othello.RankedDelta
 	if rankedDelta == nil {
@@ -797,7 +797,7 @@ func (s *Server) finishOthelloGame(room *RoomState) {
 	if result != types.ResultDraw {
 		resultLabel = seatWinLabel(room, types.SeatKey(result))
 	}
-	item := s.buildMatchHistoryShell(room, result, types.GameOthello, resultLabel, room.ResultText)
+	item := s.buildMatchHistoryShell(room, result, types.GameOthello, resultLabel, room.ResultText, "round_end")
 	item.OthelloScore = &types.OthelloScore{Black: blackCount, White: whiteCount}
 	item.OthelloBlackSeat = blackSeat
 	if room.Settings.EnableRanked {
@@ -987,8 +987,8 @@ func (s *Server) applyOthelloDisconnectForfeit(room *RoomState, forfeit Disconne
 		room.Othello.SurrenderRequest = nil
 		room.Othello.UndoRequest = nil
 	}
-	room.ResultText = fmt.Sprintf("%s 断线超时判负，%s胜利（黑 %d，白 %d；实时结算：%s%s%s）%s%s",
-		forfeit.LoserName, forfeit.WinnerName, blackCount, whiteCount,
+	room.ResultText = fmt.Sprintf("%s 断线超时判负，%s 胜利（黑 %d，白 %d；实时结算：%s%s%s）%s%s",
+		seatShortLabel(forfeit.LoserSeat, room.Seats[forfeit.LoserSeat]), seatShortLabel(forfeit.WinnerSeat, room.Seats[forfeit.WinnerSeat]), blackCount, whiteCount,
 		othelloRankedText(room.Othello), rankedFloorText, fullForfeitText, streakText, othelloSettlementSummary(room.Othello))
 	if winner != nil {
 		s.refreshPlayerSnapshots(winner)

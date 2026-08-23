@@ -145,3 +145,44 @@ func TestOnPunishmentReviewRejectsUnknownAction(t *testing.T) {
 		t.Fatalf("unknown action changed proof status to %q", got)
 	}
 }
+
+func TestOnPunishmentAssignTaskPersistsEventBeforeExposingEventID(t *testing.T) {
+	s := newTestServer(t)
+	db, err := openDatabase(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	s.db = db
+	s.eventDB = newEventStore(db)
+	s.rooms = map[string]*RoomState{}
+	s.roomBroadcastTimers = map[string]*roomBroadcastPending{}
+	winner := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "w", Name: "赢家", RoomID: "room1"}, SocketID: "sock-w"}
+	loser := &PlayerState{PublicPlayer: types.PublicPlayer{ID: "l", Name: "输家", RoomID: "room1"}}
+	s.players[winner.ID], s.players[loser.ID] = winner, loser
+	room := &RoomState{
+		ID: "room1", Phase: types.PhasePunishment,
+		Settings:          types.RoomSettings{GameID: types.GameRPS, EnablePunishment: true, PunishmentSource: "player"},
+		PunishedPlayerIDs: []string{loser.ID},
+		Seats: map[types.SeatKey]SeatOccupant{
+			types.SeatA: &HumanSeat{Player: winner.PublicPlayer},
+			types.SeatB: &HumanSeat{Player: loser.PublicPlayer},
+		},
+		RoundHistory: []types.RoundHistoryItem{{PunishmentTasks: []types.PunishmentTask{{
+			PlayerID: loser.ID, PlayerName: loser.Name, AssignedBy: winner.ID, AssignedByName: winner.Name,
+		}}}},
+	}
+	s.rooms[room.ID] = room
+	client := &Client{id: winner.SocketID, playerID: winner.ID, sendCh: make(chan []byte, 8)}
+	s.onPunishmentAssignTask(client, wsEnvelope{ID: 1, D: map[string]any{"playerId": loser.ID, "taskText": "完成任务"}})
+	if data := lastReplyData(t, client); data["ok"] != true {
+		t.Fatalf("assignment failed: %#v", data)
+	}
+	task := latestPunishmentTask(room, loser.ID)
+	if task == nil || task.EventID == "" {
+		t.Fatalf("persisted task must expose an event id: %+v", task)
+	}
+	if _, err := s.eventDB.getPunishmentEvent(task.EventID); err != nil {
+		t.Fatalf("exposed event id must already exist in SQLite: %v", err)
+	}
+}

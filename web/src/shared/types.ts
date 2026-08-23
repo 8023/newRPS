@@ -215,7 +215,7 @@ export type PunishmentTagConfig = {
 export type PunishmentRandomSettings = {
   orderStep: number;
   maxDifficultyOvershoot: number;
-  /** 系列投稿最低步数；<=0 时按 10 兜底。 */
+  /** 系列投稿最低步数；<=0 时按 5 兜底。 */
   minSeriesSteps?: number;
   /** 系列投稿最高步数；<=0 或超过技术硬顶（MAX_SERIES_STEPS，见 contributeSeries.ts）时按硬顶兜底。 */
   maxSeriesSteps?: number;
@@ -313,6 +313,9 @@ export type PublicStats = {
   titleColors?: GenderColors;
   /** 累计在线时长（毫秒）；在线时服务端会加上本会话已持续时长。 */
   totalOnlineMs?: number;
+  /** 提交并审批通过的共建投稿任务条数（随机任务 + 系列每个子任务各算一条）；
+   * 仅 players:roster 按需下发，供「共建」排行榜使用。 */
+  contributionApprovedCount?: number;
 };
 
 export type GameWLD = {

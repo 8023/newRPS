@@ -1,6 +1,7 @@
 package server
 
 import (
+	"database/sql"
 	"testing"
 
 	"github.com/doumiao/newRPS/internal/types"
@@ -55,11 +56,8 @@ func TestPunishmentEventInsertUpdateRedo(t *testing.T) {
 
 	// 驳回重做：旧行 status=rejected 且 redo_id 指向新行；新行独立 insert，status=assigned。
 	newTaskID := randomID()
-	if err := store.markPunishmentRedo(taskID, newTaskID); err != nil {
-		t.Fatalf("markPunishmentRedo: %v", err)
-	}
-	if err := store.insertPunishmentTask(newTaskID, 3000, "room1", "reviewer1", "审核员", "p1", "小明", "重新去阳台大喊十声", punishmentEventMeta{}); err != nil {
-		t.Fatalf("insertPunishmentTask redo: %v", err)
+	if err := store.redoPunishmentTask(taskID, newTaskID, 3000, "room1", "reviewer1", "审核员", "p1", "小明", "重新去阳台大喊十声", punishmentEventMeta{}); err != nil {
+		t.Fatalf("redoPunishmentTask: %v", err)
 	}
 	row = db.QueryRow(`SELECT status, redo_id FROM punishment_events WHERE id = ?`, taskID)
 	var oldStatus string
@@ -148,5 +146,35 @@ func TestSystemAutoFinishMarksPunishmentEventApproved(t *testing.T) {
 	}
 	if row2.Status != "approved" {
 		t.Fatalf("timeout auto-proof must mark event approved for voting, got %q", row2.Status)
+	}
+}
+
+func TestRedoPunishmentTaskRollsBackOldEventWhenNewInsertFails(t *testing.T) {
+	dir := t.TempDir()
+	db, err := openDatabase(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := newEventStore(db)
+	if err := store.insertPunishmentTask("old", 1, "room", "reviewer", "审核方", "performer", "执行方", "旧任务", punishmentEventMeta{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.updatePunishmentProof("old", 2, "证明", "", "pending"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.insertPunishmentTask("collision", 3, "room", "reviewer", "审核方", "performer", "执行方", "已存在", punishmentEventMeta{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.redoPunishmentTask("old", "collision", 4, "room", "reviewer", "审核方", "performer", "执行方", "新任务", punishmentEventMeta{}); err == nil {
+		t.Fatal("duplicate new event id must fail")
+	}
+	var status string
+	var redoID sql.NullString
+	if err := db.QueryRow(`SELECT status, redo_id FROM punishment_events WHERE id='old'`).Scan(&status, &redoID); err != nil {
+		t.Fatal(err)
+	}
+	if status != "pending" || redoID.Valid {
+		t.Fatalf("old event update must roll back: status=%q redo=%v", status, redoID)
 	}
 }

@@ -111,7 +111,7 @@ func (s *Server) chessClockHooks() turnBasedClockHooks {
 			}
 			return turnBasedClockState{
 				turn: room.Chess.Turn, ended: room.Chess.Ended,
-					blocked:        room.Phase == types.PhasePunishment || room.Chess.ResignRequest != nil || room.Chess.UndoRequest != nil,
+				blocked:        room.Phase == types.PhasePunishment || room.Chess.ResignRequest != nil || room.Chess.UndoRequest != nil,
 				moveDeadlineAt: &room.Chess.MoveDeadlineAt, clockDeadlineAt: &room.Chess.ClockDeadlineAt,
 				clockRemaining: &room.Chess.ClockRemaining,
 			}, true
@@ -226,8 +226,8 @@ func (s *Server) finishChessGame(room *RoomState, result types.RoundResult, note
 			s.resetExtremeWinStreak(loser)
 			streakText = s.applyExtremeWinStreakRisk(room, winner)
 			rankedText = fmt.Sprintf("（%s %s，%s %d）",
-				occupantName(room.Seats[types.SeatKey(result)]), formatSigned(wD),
-				occupantName(room.Seats[loserSeat]), lD)
+				occupantShortName(room.Seats[types.SeatKey(result)]), formatSigned(wD),
+				occupantShortName(room.Seats[loserSeat]), lD)
 		}
 	}
 	room.Chess.RankedDelta = rankedDelta
@@ -242,14 +242,14 @@ func (s *Server) finishChessGame(room *RoomState, result types.RoundResult, note
 	if result == types.ResultDraw {
 		room.ResultText = "国际象棋平局" + rankedText + noteSuffix
 	} else {
-		room.ResultText = occupantName(room.Seats[types.SeatKey(result)]) + " 国际象棋胜利" + rankedText + streakText + noteSuffix
+		room.ResultText = seatShortLabel(types.SeatKey(result), room.Seats[types.SeatKey(result)]) + " 胜利" + rankedText + streakText + noteSuffix
 	}
 	s.refreshHumans(playerA, playerB)
 	resultLabel := "国际象棋平局"
 	if result != types.ResultDraw {
 		resultLabel = seatWinLabel(room, types.SeatKey(result))
 	}
-	item := s.buildMatchHistoryShell(room, result, types.GameChess, resultLabel, room.ResultText)
+	item := s.buildMatchHistoryShell(room, result, types.GameChess, resultLabel, room.ResultText, "round_end")
 	item.ChessWhiteSeat = room.Chess.WhiteSeat
 	item.ExtremeRanked = room.Settings.EnableExtremeRanked
 	if room.Settings.EnableRanked {
@@ -306,37 +306,37 @@ func (s *Server) applyChessMove(room *RoomState, seat types.SeatKey, fromRow, fr
 		return false, "这步棋不合法"
 	}
 
-		captured := chessMoveCaptures(room.Chess, move)
-		s.pauseChessTimers(room)
-		room.chessUndoStack = append(room.chessUndoStack, snapshotChessState(room.Chess, len(room.chessRepetition)))
-		chessApplyMoveToState(room.Chess, move)
-		room.Chess.ResignRequest = nil
-		room.chessRepetition = append(room.chessRepetition, chessPositionKey(room.Chess))
+	captured := chessMoveCaptures(room.Chess, move)
+	s.pauseChessTimers(room)
+	room.chessUndoStack = append(room.chessUndoStack, snapshotChessState(room.Chess, len(room.chessRepetition)))
+	chessApplyMoveToState(room.Chess, move)
+	room.Chess.ResignRequest = nil
+	room.chessRepetition = append(room.chessRepetition, chessPositionKey(room.Chess))
 
-		outcome := chessEvaluateOutcome(room.Chess, room.chessRepetition)
-		note := chessOutcomeNote(outcome)
-		if captured && perPiecePunishmentEnabled(room) {
-			switch outcome {
-			case chessCheckmate:
-				room.pendingPieceEnd = &pendingPieceEnd{result: types.RoundResult(seat), note: note}
-			case chessStalemate, chessFiftyMove, chessInsufficient, chessRepetition:
-				room.pendingPieceEnd = &pendingPieceEnd{result: types.ResultDraw, note: note}
-			}
-			s.beginMidGamePiecePunishment(room, oppositeSeat(seat), seat, "棋子被吃")
-			return true, ""
-		}
+	outcome := chessEvaluateOutcome(room.Chess, room.chessRepetition)
+	note := chessOutcomeNote(outcome)
+	if captured && perPiecePunishmentEnabled(room) {
 		switch outcome {
 		case chessCheckmate:
-			s.finishChessGame(room, types.RoundResult(seat), note)
+			room.pendingPieceEnd = &pendingPieceEnd{result: types.RoundResult(seat), note: note}
 		case chessStalemate, chessFiftyMove, chessInsufficient, chessRepetition:
-			s.finishChessGame(room, types.ResultDraw, note)
-		default:
-			room.ResultText = ""
-			s.armChessTimers(room, room.Chess.Turn)
-			s.notifyOpponentTurn(room, room.Chess.Turn)
+			room.pendingPieceEnd = &pendingPieceEnd{result: types.ResultDraw, note: note}
 		}
+		s.beginMidGamePiecePunishment(room, oppositeSeat(seat), seat, "棋子被吃")
 		return true, ""
 	}
+	switch outcome {
+	case chessCheckmate:
+		s.finishChessGame(room, types.RoundResult(seat), note)
+	case chessStalemate, chessFiftyMove, chessInsufficient, chessRepetition:
+		s.finishChessGame(room, types.ResultDraw, note)
+	default:
+		room.ResultText = ""
+		s.armChessTimers(room, room.Chess.Turn)
+		s.notifyOpponentTurn(room, room.Chess.Turn)
+	}
+	return true, ""
+}
 
 func (s *Server) requestChessResign(room *RoomState, seat types.SeatKey) (bool, string) {
 	if room.Chess == nil || room.Phase != types.PhaseChoosing || room.Chess.Ended {
@@ -491,7 +491,7 @@ func (s *Server) applyChessDisconnectForfeit(room *RoomState, forfeit Disconnect
 		rankedDelta[forfeit.LoserSeat] += lD
 		s.resetExtremeWinStreak(loser)
 		streakText = s.applyExtremeWinStreakRisk(room, winner)
-		rankedText = fmt.Sprintf("，排位 %d 分已结算（%s %s，%s %d）", forfeit.Stake, forfeit.WinnerName, formatSigned(wD), forfeit.LoserName, lD)
+		rankedText = fmt.Sprintf("，排位 %d 分已结算（%s %s，%s %d）", forfeit.Stake, occupantShortName(room.Seats[forfeit.WinnerSeat]), formatSigned(wD), occupantShortName(room.Seats[forfeit.LoserSeat]), lD)
 	}
 	s.recordGameOutcome(winner, types.GameChess, "win")
 	s.recordGameOutcome(loser, types.GameChess, "loss")
@@ -514,7 +514,7 @@ func (s *Server) applyChessDisconnectForfeit(room *RoomState, forfeit Disconnect
 		room.Chess.Ended = true
 		room.Chess.Winner = types.RoundResult(forfeit.WinnerSeat)
 	}
-	room.ResultText = fmt.Sprintf("%s 断线超时判负，%s 国际象棋胜利%s%s", forfeit.LoserName, forfeit.WinnerName, rankedText, streakText)
+	room.ResultText = fmt.Sprintf("%s 断线超时判负，%s 胜利%s%s", seatShortLabel(forfeit.LoserSeat, room.Seats[forfeit.LoserSeat]), seatShortLabel(forfeit.WinnerSeat, room.Seats[forfeit.WinnerSeat]), rankedText, streakText)
 	punishedPlayers := s.punishmentPlayersForResult(room, types.RoundResult(forfeit.WinnerSeat))
 	punishedNames := make([]string, len(punishedPlayers))
 	for i, p := range punishedPlayers {

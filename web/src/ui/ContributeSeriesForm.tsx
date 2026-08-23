@@ -7,6 +7,7 @@ import {
   effectiveMinSeriesSteps,
   emptySeriesStep,
   insertStepAfter,
+  isValidOrder,
   moveStep,
   removeStep,
   seriesCoverageGaps,
@@ -68,6 +69,7 @@ export function ContributeSeriesForm({
     && steps.length <= maxSteps
     && gaps.length === 0
     && steps.every((step) => step.variants.some((variant) => variant.text.trim()))
+    && steps.every((step) => !step.inRandomPool || isValidOrder(step.order))
     && !steps.some(stepHasFactionOverlap);
 
   return (

@@ -63,8 +63,6 @@ func seriesToItem(r seriesRow, steps []subTaskRow, withContent bool) types.Contr
 		draft := types.SeriesDraft{Name: r.Name, TargetFactionIDs: r.TargetFactionIDs, Steps: make([]types.StepDraft, len(steps))}
 		for i, st := range steps {
 			draft.Steps[i] = st.Draft
-			item.LikeCount += st.LikeCount
-			item.DownCount += st.DownCount
 		}
 		item.Content = draft
 	}
@@ -128,6 +126,12 @@ func (cs *contributionStore) get(kind, id string) (types.ContributionItem, error
 			return types.ContributionItem{}, err
 		}
 		item := seriesToItem(r, steps, true)
+		votes, err := cs.tasks.seriesVoteAggregates([]string{id})
+		if err != nil {
+			return types.ContributionItem{}, err
+		}
+		item.LikeCount = votes[id].Likes
+		item.DownCount = votes[id].Downs
 		return item, nil
 	default:
 		return types.ContributionItem{}, fmt.Errorf("未知投稿类型")

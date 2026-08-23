@@ -157,7 +157,7 @@ func (e *eventStore) insertRoomEvent(in roomEventInput) error {
 }
 
 // insertPunishmentTask 在任务发布时插入一行；id 由调用方生成（randomID()），后续
-// updatePunishmentProof/updatePunishmentStatus/markPunishmentRedo 都按这个 id 定位同一行。
+// updatePunishmentProof/updatePunishmentStatus/redoPunishmentTask 都按这个 id 定位同一行。
 //
 // task_source/formal_series_id/formal_series_version/contributor_player_id/
 // contributor_name_snapshot/contributor_anonymous 六列仍留在建表 DDL 里（老库升级路径
@@ -180,11 +180,15 @@ func (e *eventStore) insertPunishmentTask(id string, taskAt int64, roomID, appro
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	return insertPunishmentTaskRow(e.db, id, taskAt, roomID, approverID, approverName, performerID, performerName, taskText, meta)
+}
+
+func insertPunishmentTaskRow(db sqlExecer, id string, taskAt int64, roomID, approverID, approverName, performerID, performerName, taskText string, meta punishmentEventMeta) error {
 	trigger := meta.Trigger
 	if trigger == "" {
 		trigger = "round_end"
 	}
-	_, err := e.db.Exec(
+	_, err := db.Exec(
 		`INSERT INTO punishment_events (
 			id, room_id, approver_id, approver_name, performer_id, performer_name, task_text, task_at, status,
 			round_id, formal_task_id, formal_task_version, trigger, tie_double_punish
@@ -244,11 +248,11 @@ func (e *eventStore) getPunishmentEvent(id string) (punishmentEventRow, error) {
 	}
 	err := e.db.QueryRow(`
 		SELECT id, room_id, status, redo_id, round_id, formal_task_id, formal_task_version,
-			performer_id, approver_id, performer_vote, approver_vote, completed_at
+			performer_id, approver_id, performer_vote, approver_vote
 		FROM punishment_events WHERE id = ?`, id).Scan(
 		&row.ID, &row.RoomID, &row.Status, &row.RedoID, &row.RoundID,
 		&row.FormalTaskID, &row.FormalTaskVersion,
-		&row.PerformerID, &row.ApproverID, &row.PerformerVote, &row.ApproverVote, &row.CompletedAt,
+		&row.PerformerID, &row.ApproverID, &row.PerformerVote, &row.ApproverVote,
 	)
 	return row, err
 }
@@ -265,19 +269,35 @@ type punishmentEventRow struct {
 	ApproverID        string
 	PerformerVote     int
 	ApproverVote      int
-	CompletedAt       sql.NullInt64
 }
 
-// markPunishmentRedo 驳回重做时收尾旧行：status 置为 rejected，redo_id 指向新插入的
-// 任务行 id，新行本身由调用方另外调用 insertPunishmentTask 写入。
-func (e *eventStore) markPunishmentRedo(id, redoID string) error {
+// redoPunishmentTask 把“旧事件标成 rejected 并指向新事件”与“插入新事件”放在同一事务。
+// 两步任何一步失败都回滚，不能留下 redo_id 指向不存在行的悬空审计链。
+func (e *eventStore) redoPunishmentTask(oldID, newID string, taskAt int64, roomID, approverID, approverName, performerID, performerName, taskText string, meta punishmentEventMeta) error {
 	if e == nil || e.db == nil {
 		return nil
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	_, err := e.db.Exec(`UPDATE punishment_events SET status = 'rejected', redo_id = ? WHERE id = ?`, redoID, id)
-	return err
+	tx, err := e.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	res, err := tx.Exec(`UPDATE punishment_events SET status = 'rejected', redo_id = ?
+		WHERE id = ? AND status = 'pending' AND (redo_id IS NULL OR redo_id = '')`, newID, oldID)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n != 1 {
+		return sql.ErrNoRows
+	}
+	if err := insertPunishmentTaskRow(tx, newID, taskAt, roomID, approverID, approverName, performerID, performerName, taskText, meta); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // castPunishmentEventVoteAndAggregate 在同一个事务里写入事件侧防重列，并把票累加到
@@ -310,8 +330,11 @@ func (e *eventStore) castPunishmentEventVoteAndAggregate(id string, asPerformer 
 	if vote == 1 {
 		voteCol = "like_count"
 	}
-	res, err = tx.Exec(`UPDATE sub_tasks SET `+voteCol+` = `+voteCol+` + 1, updated_at = ?
-		WHERE id = ? AND version = ?`, nowMs(), taskID, taskVersion)
+	// updated_at 表示内容/审核状态最后变更时间，后台和玩家投稿列表都拿它显示日期及判断
+	// 详情缓存是否过期。评价只是独立的计数累加，不能把每一票伪装成一次内容编辑，否则
+	// 热门任务会不断被顶到列表最前面，前端也会误判详情失效并重复拉取。
+	res, err = tx.Exec(`UPDATE sub_tasks SET `+voteCol+` = `+voteCol+` + 1
+		WHERE id = ? AND version = ?`, taskID, taskVersion)
 	if err != nil {
 		return false, err
 	}

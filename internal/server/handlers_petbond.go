@@ -105,12 +105,11 @@ func (s *Server) onPetBondForceGiveaway(client *Client, env wsEnvelope) {
 		if room.Choices == nil {
 			room.Choices = map[types.SeatKey]types.Move{}
 		}
-		previous := room.Choices[petSeat]
 		setForcedGiveaway(room, petSeat, masterName)
 		room.Choices[petSeat] = types.MoveGiveaway
-		if previous != types.MoveGiveaway {
-			s.addGiveawayValue(pet, s.cfg.Giveaway.ActiveBoostValue)
-		}
+		// 白给值加成统一挪到 finishRoundIfReady 真正结算时才发放（见该函数注释），这里不再
+		// 立即加成，也不用再判断 previous 是否已经是白给来避免重复计——结算时按最终座位状态
+		// 只发一次。
 		s.roomNotice(room, fmt.Sprintf("主人（%s）强制（%s）白给，本轮选择已改为白给。", masterName, petName))
 		oldStatus := room.Status
 		s.finishRoundIfReady(room)

@@ -14,13 +14,8 @@ export function ContributionVote({ card, onError, onVoted }: {
 }) {
   const [busy, setBusy] = useState(false);
   const [current, setCurrent] = useState(card);
-  // useState(card) 只在组件首次挂载时生效——证明还没审核通过时任务卡片就已经挂载了这个
-  // 组件（见 ContributionVoteLazy 的调用点），之后证明状态从 pending 变成 approved，父组件
-  // 重新请求 votePreview 拿到新的 card（canVote 从 false 变 true）传下来，但 React 只是给
-  // 同一个组件实例换 props，不会重新跑 useState 初始化，current 就永远停在挂载那一刻的旧值，
-  // 评价按钮实际上永远不会出现。这里用 effect 把 prop 变化同步进本地 state，vote() 自己的
-  // 乐观更新（setCurrent(next)）不受影响，因为投票后 eventId/proofStatus 不变、父组件不会
-  // 再传入更旧的 card 把它覆盖回去。
+  // useState(card) 只在首次挂载时生效；父组件若因任务切换或重新取数传入新 card，仍需把
+  // prop 同步进本地状态。vote() 自己的乐观更新不受影响，因为父组件不会同时回传旧 card。
   useEffect(() => {
     setCurrent(card);
   }, [card]);

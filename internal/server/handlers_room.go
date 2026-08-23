@@ -528,10 +528,8 @@ func (s *Server) onRoomMove(client *Client, env wsEnvelope) {
 		return
 	}
 	room.Choices[seat] = p.Move
-	if p.Move == types.MoveGiveaway {
-		player.GiveawayClicks = intPtr(ptrInt(player.GiveawayClicks) + 1)
-		s.addGiveawayValue(player, s.cfg.Giveaway.ActiveBoostValue)
-	}
+	// 白给点击数/白给值加成统一挪到 finishRoundIfReady 真正结算的那一刻才发放（见该函数
+	// 内的说明）：选择本身不再有任何即时副作用，允许下面 room:move:withdraw 安全撤回。
 	// 对手还没出拳：提醒 Ta 该出拳了；双方都出了就直接进结算，不用再提醒。
 	if room.Choices[oppositeSeat(seat)] == "" {
 		s.notifyOpponentTurn(room, oppositeSeat(seat))
@@ -539,6 +537,43 @@ func (s *Server) onRoomMove(client *Client, env wsEnvelope) {
 	oldStatus := room.Status
 	s.finishRoundIfReady(room)
 	s.broadcastRoom(room.ID, oldStatus != room.Status)
+	client.reply(env.ID, map[string]any{"ok": true}, "")
+}
+
+// onRoomMoveWithdraw 撤回自己在本局已经出的拳（仅锤子剪刀布，仅出拳阶段、对局还没结算
+// 时）：解决"一方出拳后另一方挂机不出，出拳方彻底卡在房间里退不出去"的问题——挂机不会
+// 触发断线判负（那套计时器只在 socket 真断开时才走），撤回是唯一的自救手段。
+// 白给可以撤回（选择本身不再有即时副作用，见 onRoomMove 的注释），但被主人强制的白给
+// 不行——那是"身不由己"的强制机制，允许撤回就名存实亡了。
+func (s *Server) onRoomMoveWithdraw(client *Client, env wsEnvelope) {
+	player, room, ok := s.requireRoomPlayer(client, env)
+	if !ok {
+		return
+	}
+	if room.Settings.GameID != types.GameRPS {
+		client.reply(env.ID, nil, "当前玩法不支持撤回出拳")
+		return
+	}
+	seat, ok := s.seatOf(room, player.ID)
+	if !ok {
+		client.reply(env.ID, nil, "只有战斗席玩家可以撤回出拳")
+		return
+	}
+	if room.Phase != types.PhaseChoosing {
+		client.reply(env.ID, nil, "现在不能撤回出拳")
+		return
+	}
+	if room.Choices[seat] == "" {
+		client.reply(env.ID, nil, "你还没有出拳")
+		return
+	}
+	if forcedGiveawayMasterName(room, seat) != "" {
+		client.reply(env.ID, nil, "已被主人强制白给，无法撤回")
+		return
+	}
+	delete(room.Choices, seat)
+	s.roomNotice(room, playerShortName(player)+" 撤回了出拳。")
+	s.broadcastRoom(room.ID, false)
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
@@ -1727,15 +1762,18 @@ func (s *Server) onPunishmentAssignTask(client *Client, env wsEnvelope) {
 	}
 	// 玩家临时任务：直接使用原文，不替换 {winner}/{loser}（占位符仅用于系统任务配置）
 	s.updatePunishmentTask(room, p.PlayerID, cleanTask, player)
-	s.broadcastRoomImmediate(room.ID, false)
 	if s.eventDB != nil {
 		if updated := latestPunishmentTask(room, p.PlayerID); updated != nil {
-			updated.EventID = randomID()
-			if err := s.eventDB.insertPunishmentTask(updated.EventID, nowMs(), room.ID, player.ID, playerShortName(player), p.PlayerID, updated.PlayerName, cleanTask, punishmentEventMeta{}); err != nil {
+			eventID := randomID()
+			if err := s.eventDB.insertPunishmentTask(eventID, nowMs(), room.ID, player.ID, playerShortName(player), p.PlayerID, updated.PlayerName, cleanTask, punishmentEventMeta{}); err != nil {
 				s.errorLog("punishment_event_insert_failed", err.Error())
+			} else {
+				updated.EventID = eventID
 			}
 		}
 	}
+	// EventID 成功落库后再广播，保证客户端第一次看见任务时评价入口已经可用。
+	s.broadcastRoomImmediate(room.ID, false)
 	client.reply(env.ID, map[string]any{"ok": true}, "")
 }
 
@@ -1811,17 +1849,17 @@ func (s *Server) onPunishmentReview(client *Client, env wsEnvelope) {
 			newTask := latestPunishmentTask(room, p.PlayerID)
 			newID := randomID()
 			if newTask != nil {
-				newTask.EventID = newID
-			}
-			if err := s.eventDB.markPunishmentRedo(oldEventID, newID); err != nil {
-				s.errorLog("punishment_event_update_failed", err.Error())
+				// 旧事件已被驳回；若新事件落库失败，不能继续把旧 EventID 暴露成当前任务。
+				newTask.EventID = ""
 			}
 			targetName := ""
 			if newTask != nil {
 				targetName = newTask.PlayerName
 			}
-			if err := s.eventDB.insertPunishmentTask(newID, reviewedAt, room.ID, player.ID, playerShortName(player), p.PlayerID, targetName, cleanTask, punishmentEventMeta{}); err != nil {
+			if err := s.eventDB.redoPunishmentTask(oldEventID, newID, reviewedAt, room.ID, player.ID, playerShortName(player), p.PlayerID, targetName, cleanTask, punishmentEventMeta{}); err != nil {
 				s.errorLog("punishment_event_insert_failed", err.Error())
+			} else if newTask != nil {
+				newTask.EventID = newID
 			}
 		}
 		s.updateProofInLatestHistory(room, p.PlayerID, types.HistoryProof{

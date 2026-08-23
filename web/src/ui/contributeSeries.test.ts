@@ -41,7 +41,7 @@ describe("buildSeriesContent", () => {
 
   it("keeps the documented step ceiling and default min", () => {
     expect(MAX_SERIES_STEPS).toBe(1000);
-    expect(effectiveMinSeriesSteps(0)).toBe(10);
+    expect(effectiveMinSeriesSteps(0)).toBe(5);
     expect(effectiveMinSeriesSteps(12)).toBe(12);
     expect(effectiveMinSeriesSteps(5000)).toBe(1000);
   });

@@ -11,6 +11,7 @@ import {
   emptyStepDraft,
   contributionDraftTitle,
   formatContributionListMeta,
+  isValidOrder,
   seriesDraftHasContent,
   stepHasContent,
   stepHasFactionOverlap,
@@ -48,7 +49,7 @@ function toStepDraft(raw: StepPreview | null | undefined, factionIds: string[], 
     order: typeof raw.order === "number" && raw.order > 0 ? raw.order : base.order,
     tagIds: Array.isArray(raw.tagIds) ? raw.tagIds.filter((id) => tagIds.includes(id)) : [],
     backgroundImage: typeof raw.backgroundImage === "string" ? raw.backgroundImage : "",
-    backgroundOpacity: 0.22,
+    backgroundOpacity: typeof raw.backgroundOpacity === "number" ? raw.backgroundOpacity : base.backgroundOpacity,
   };
 }
 
@@ -67,6 +68,9 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
   const [detailsById, setDetailsById] = useState<Record<string, ContributionItem>>({});
   const [taskStep, setTaskStep] = useState<StepDraft>(() => emptyStepDraft(allFactionIds, true));
   const [taskAnon, setTaskAnon] = useState(false);
+  // 点击过一次「提交」但校验没过（难度为空/越界等）：把还没填好的输入框标红，与
+  // ContributeSeriesForm 的 attempted 是同一套视觉语言。
+  const [taskAttempted, setTaskAttempted] = useState(false);
   const [seriesName, setSeriesName] = useState("");
   const [seriesAnon, setSeriesAnon] = useState(false);
   const [seriesTargets, setSeriesTargets] = useState<string[]>([...allFactionIds]);
@@ -97,41 +101,21 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
     setLeaveConfirm({ action });
   }
   function currentContent(): unknown {
-    if (tab === "task") return { ...taskStep, inRandomPool: true };
+    if (tab === "task") {
+      // 兜底转数字，理由同 contributeSeries.ts 的 buildSeriesContent：真正拦截空值/
+      // 越界的是提交前的 isValidOrder 校验，这里只是不让 "" 被序列化成字符串。
+      return { ...taskStep, order: typeof taskStep.order === "number" ? taskStep.order : 0, inRandomPool: true };
+    }
     return buildSeriesContent(seriesName, seriesTargets, seriesSteps);
   }
   function currentAnonymous() {
     return tab === "task" ? taskAnon : seriesAnon;
   }
 
-  // 详情缓存只用于「左栏摘要/点赞率展示」，绝不反向驱动表单回填——回填只在用户点击某一条
-  // 投稿的那一刻（selectItem）触发一次；如果改成对 detailsById 的 useEffect 联动，别的投稿
-  // 后台预取完成时会让 detailsById 引用变化，从而把用户正在编辑的表单内容用旧内容覆盖掉。
-  async function prefetchDetails(list: ContributionItem[]) {
-    const stale = list.filter((it) => {
-      const cached = detailsById[it.id];
-      return !cached || cached.updatedAt !== it.updatedAt;
-    });
-    if (stale.length === 0) return;
-    const results = await Promise.all(stale.map(async (it) => {
-      try {
-        return [it.id, await contributionAsk<ContributionItem>("contribution:get", { id: it.id, kind: it.kind })] as const;
-      } catch {
-        return null;
-      }
-    }));
-    setDetailsById((prev) => {
-      const next = { ...prev };
-      for (const r of results) if (r) next[r[0]] = r[1];
-      return next;
-    });
-  }
-
   async function reload() {
     const res = await contributionAsk<{ items: ContributionItem[] }>("contribution:list", {});
     const list = res.items || [];
     setItems(list);
-    void prefetchDetails(list);
   }
 
   useEffect(() => {
@@ -143,6 +127,7 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
     if (kind === "task") {
       setTaskStep(emptyStepDraft(allFactionIds, true));
       setTaskAnon(false);
+      setTaskAttempted(false);
       return;
     }
     setSeriesName("");
@@ -158,6 +143,7 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
     if (d.kind === "task") {
       setTaskStep(toStepDraft(raw, allFactionIds, allTagIds));
       setTaskAnon(d.anonymous);
+      setTaskAttempted(false);
       return;
     }
     setSeriesName(raw.name || "");
@@ -324,8 +310,6 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
     if (item.status !== "approved") {
       return <>{chip} {formatContributionListMeta({ kind: item.kind, status: item.status, updatedAt: item.updatedAt, short })}</>;
     }
-    const d = detailsById[item.id];
-    if (!d) return <>{chip} …</>;
     return (
       <>
         {chip}{" "}
@@ -333,8 +317,8 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
           kind: item.kind,
           status: item.status,
           updatedAt: item.updatedAt,
-          likeRatio: voteRatio(d.likeCount, d.downCount),
-          completionRate: d.completion?.rate ?? 0,
+          likeRatio: voteRatio(item.likeCount, item.downCount),
+          completionRate: item.completion?.rate ?? 0,
           short,
         })}
       </>
@@ -349,6 +333,7 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
   const selectedDraft = selectedDetail ? asContributionDraft(selectedDetail.content) : null;
   const canSaveDraft = !busy && formHasContent() && (!selectedId || selectedEditable);
   const taskHasOverlap = tab === "task" && stepHasFactionOverlap(taskStep);
+  const taskOrderInvalid = tab === "task" && !isValidOrder(taskStep.order);
   // 撤回按钮放在编辑表单最下面、保存/提交的左边（与它们同一行），而不是单独占一整行浮在
   // 表单上方——避免玩家一进编辑态就先看到一个孤立的危险操作。
   const withdrawButton = selectedDetail && !nonWithdrawableStatuses.has(selectedDetail.status)
@@ -415,19 +400,24 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
                 ) : (
                   <>
                     {tab === "task" && (
-                      <form className="stack" onSubmit={(e) => { e.preventDefault(); void saveAndSubmit(); }}>
+                      <form className="stack" noValidate onSubmit={(e) => {
+                        e.preventDefault();
+                        if (taskHasOverlap || taskOrderInvalid) { setTaskAttempted(true); return; }
+                        void saveAndSubmit();
+                      }}>
                         <StepEditor
                           config={config}
                           value={taskStep}
                           onChange={(next) => { setTaskStep(next); setDirty(true); }}
                           onError={onError}
                           showRandomPoolToggle={false}
+                          showErrors={taskAttempted}
                           rightOfPreview={<label className="checkbox-inline"><input type="checkbox" checked={taskAnon} onChange={(e) => { setTaskAnon(e.target.checked); setDirty(true); }} />匿名贡献</label>}
                         />
                         <div className="contribute-submit-row">
                           {withdrawButton}
                           <button type="button" disabled={!canSaveDraft} onClick={() => { void saveDraftOnly(); }}>保存</button>
-                          <button className="primary" disabled={busy || taskHasOverlap} type="submit">提交</button>
+                          <button className="primary" disabled={busy || taskHasOverlap || taskOrderInvalid} type="submit">提交</button>
                         </div>
                       </form>
                     )}

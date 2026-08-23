@@ -867,7 +867,7 @@ message PunishmentRandomSettings {
   double max_difficulty_overshoot = 3;
   reserved 4; // 原 series_faction_fallback_text，禁止复用
   reserved "series_faction_fallback_text";
-  // 系列投稿最低步数；<=0 时前后端都按 10 兜底。
+  // 系列投稿最低步数；<=0 时前后端都按 5 兜底。
   int32 min_series_steps = 5;
   // 系列投稿最高步数；<=0 时前后端都按 20 兜底。
   int32 max_series_steps = 6;
