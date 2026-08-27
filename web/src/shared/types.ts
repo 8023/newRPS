@@ -15,7 +15,15 @@ export type Move = "rock" | "scissors" | "paper" | "giveaway" | "forfeit" | "noM
 export type RoundResult = "A" | "B" | "draw" | "doubleLoss";
 export type GamePhase = "waiting" | "ready" | "choosing" | "result" | "punishment";
 export type SeatKey = "A" | "B";
-export type GameId = "rps" | "othello" | "tictactoe" | "liarsdice" | "gomoku" | "jungle" | "chess";
+export type GameId = "rps" | "othello" | "tictactoe" | "liarsdice" | "gomoku" | "jungle" | "chess" | "coinflip";
+/** 猜硬币的正反面："char"＝字（1元数字面）/ "flower"＝花（菊花面）。 */
+export type CoinFace = "char" | "flower" | "";
+export type CoinFlipState = {
+  guess: CoinFace;
+  result: CoinFace;
+  correct: boolean;
+  settledAt: number;
+};
 /** 排位赌分；档位由后台按游戏配置（games.json stakes），不再限定固定枚举。 */
 export type RankStake = number;
 export type OthelloCell = "black" | "white" | null;
@@ -643,6 +651,8 @@ export type RoundHistoryItem = {
   gomokuBlackSeat?: SeatKey;
   gomokuLine?: Array<{ row: number; col: number }>;
   chessWhiteSeat?: SeatKey;
+  coinFlipGuess?: CoinFace;
+  coinFlipResult?: CoinFace;
   liarsDiceWinnerId?: string;
   liarsDiceLoserId?: string;
   liarsDiceBidCount?: number;
@@ -703,6 +713,7 @@ export type RoomSnapshot = {
   gomoku?: GomokuState;
   jungle?: JungleState;
   chess?: ChessState;
+  coinFlip?: CoinFlipState;
   resultText?: string;
   punishedPlayerIds: string[];
   proofs: PunishmentProof[];
@@ -791,6 +802,7 @@ export type AppConfig = {
     description: string;
     adminPassword: string;
     anonymousContributorLabel?: string;
+    coinFlipWinnerLabel?: string;
   };
   announcementBoard: {
     enabled?: boolean;

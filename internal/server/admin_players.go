@@ -103,7 +103,7 @@ func matchAdminPlayerFilters(p *PlayerState, q adminPlayerListQuery, nowMs int64
 }
 
 // buildAdminPlayerList 在已持 s.mu 的前提下，从内存玩家表筛选/排序并截断。
-// 返回的 PublicPlayer 走 publicPlayer（展示分封顶）；排序/过滤用真实存储分。
+// 返回的 PublicPlayer 走 publicPlayerAdmin（Sort* 为真实存储分，管理员后台可见）；排序/过滤同样用真实存储分。
 func (s *Server) buildAdminPlayerList(q adminPlayerListQuery) adminPlayerListResult {
 	limit := clampAdminPlayerListLimit(q.Limit)
 	now := nowMs()
@@ -163,7 +163,7 @@ func (s *Server) buildAdminPlayerList(q adminPlayerListQuery) adminPlayerListRes
 
 	out := make([]types.PublicPlayer, 0, len(items))
 	for _, item := range items {
-		out = append(out, s.publicPlayer(item.player))
+		out = append(out, s.publicPlayerAdmin(item.player))
 	}
 	return adminPlayerListResult{
 		Players:      out,

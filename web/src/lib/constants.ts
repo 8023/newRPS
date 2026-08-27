@@ -10,6 +10,7 @@ export const defaultLiarsDiceRoomName = "新的大话骰房间";
 export const defaultGomokuRoomName = "新的五子棋房间";
 export const defaultJungleRoomName = "新的斗兽棋房间";
 export const defaultChessRoomName = "新的国际象棋房间";
+export const defaultCoinFlipRoomName = "新的猜硬币房间";
 export const maxOriginalImageBytes = 10 * 1024 * 1024;
 export const maxProofUploadBytes = 2 * 1024 * 1024;
 export const maxProofPixels = 4_000_000;

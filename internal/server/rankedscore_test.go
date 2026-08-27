@@ -89,11 +89,22 @@ func TestPublicPlayerClampsDisplayIncludingExtremes(t *testing.T) {
 	if pub.Stats.HighestScore != 4999 {
 		t.Fatalf("historical highest display should also clamp to 4999, got %d", pub.Stats.HighestScore)
 	}
-	if pub.Stats.SortRankedPoints != 8000 || pub.Stats.SortHighestScore != 8000 {
-		t.Fatalf("sort keys must keep real scores: ranked=%d highest=%d", pub.Stats.SortRankedPoints, pub.Stats.SortHighestScore)
+	// publicPlayer() 下发给普通连接：Sort* 不得带出真实分，必须与展示值一致，
+	// 否则任何玩家都能靠 player:get/players:roster 等报文读到真实积分。
+	if pub.Stats.SortRankedPoints != 4999 || pub.Stats.SortHighestScore != 4999 {
+		t.Fatalf("public sort keys must not leak real scores: ranked=%d highest=%d", pub.Stats.SortRankedPoints, pub.Stats.SortHighestScore)
 	}
 	if p.Stats.RankedPoints != 8000 {
 		t.Fatalf("underlying stored value must stay unbounded, got %d", p.Stats.RankedPoints)
+	}
+
+	// publicPlayerAdmin() 仅供管理员后台单播使用：Sort* 换回真实存储分。
+	admin := s.publicPlayerAdmin(p)
+	if admin.Stats.RankedPoints != 4999 {
+		t.Fatalf("admin display should still clamp to max 4999, got %d", admin.Stats.RankedPoints)
+	}
+	if admin.Stats.SortRankedPoints != 8000 || admin.Stats.SortHighestScore != 8000 {
+		t.Fatalf("admin sort keys must keep real scores: ranked=%d highest=%d", admin.Stats.SortRankedPoints, admin.Stats.SortHighestScore)
 	}
 
 	// NameWar 开启时下限更低。
@@ -106,8 +117,12 @@ func TestPublicPlayerClampsDisplayIncludingExtremes(t *testing.T) {
 	if pub.Stats.LowestScore != -9999 {
 		t.Fatalf("historical lowest display should clamp to nameWarMin, got %d", pub.Stats.LowestScore)
 	}
-	if pub.Stats.SortLowestScore != -12000 {
-		t.Fatalf("sort lowest must stay real -12000, got %d", pub.Stats.SortLowestScore)
+	if pub.Stats.SortLowestScore != -9999 {
+		t.Fatalf("public sort lowest must not leak real score, got %d", pub.Stats.SortLowestScore)
+	}
+	admin = s.publicPlayerAdmin(p)
+	if admin.Stats.SortLowestScore != -12000 {
+		t.Fatalf("admin sort lowest must stay real -12000, got %d", admin.Stats.SortLowestScore)
 	}
 }
 
@@ -144,9 +159,8 @@ func TestNameWarPenaltyThresholdUsesRealScore(t *testing.T) {
 	if !ptrBool(p.NameWarPunished) {
 		t.Fatal("real -5000 should trigger punishment at threshold -4999")
 	}
-	pub := s.publicPlayer(p)
-	if !s.isNameWarRenameTarget(pub) {
-		t.Fatal("rename target should use sort real score")
+	if !s.isNameWarRenameTarget(p) {
+		t.Fatal("rename target should use real stored score")
 	}
 }
 

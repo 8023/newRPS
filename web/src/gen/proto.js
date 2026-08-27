@@ -18704,6 +18704,8 @@ export const game = $root.game = (() => {
          * @property {string|null} [gomokuBlackSeat] RoundHistoryItem gomokuBlackSeat
          * @property {Array.<game.Pos.$Properties>|null} [gomokuLine] RoundHistoryItem gomokuLine
          * @property {string|null} [chessWhiteSeat] RoundHistoryItem chessWhiteSeat
+         * @property {string|null} [coinFlipGuess] RoundHistoryItem coinFlipGuess
+         * @property {string|null} [coinFlipResult] RoundHistoryItem coinFlipResult
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -19032,6 +19034,22 @@ export const game = $root.game = (() => {
         RoundHistoryItem.prototype.chessWhiteSeat = "";
 
         /**
+         * RoundHistoryItem coinFlipGuess.
+         * @member {string} coinFlipGuess
+         * @memberof game.RoundHistoryItem
+         * @instance
+         */
+        RoundHistoryItem.prototype.coinFlipGuess = "";
+
+        /**
+         * RoundHistoryItem coinFlipResult.
+         * @member {string} coinFlipResult
+         * @memberof game.RoundHistoryItem
+         * @instance
+         */
+        RoundHistoryItem.prototype.coinFlipResult = "";
+
+        /**
          * Creates a new RoundHistoryItem instance using the specified properties.
          * @function create
          * @memberof game.RoundHistoryItem
@@ -19143,6 +19161,10 @@ export const game = $root.game = (() => {
                     $root.game.Pos.encode(message.gomokuLine[i], writer.uint32(/* id 38, wireType 2 =*/306).fork(), _depth + 1).ldelim();
             if (message.chessWhiteSeat != null && $Object.hasOwnProperty.call(message, "chessWhiteSeat") && message.chessWhiteSeat !== "")
                 writer.uint32(/* id 39, wireType 2 =*/314).string(message.chessWhiteSeat);
+            if (message.coinFlipGuess != null && $Object.hasOwnProperty.call(message, "coinFlipGuess") && message.coinFlipGuess !== "")
+                writer.uint32(/* id 40, wireType 2 =*/322).string(message.coinFlipGuess);
+            if (message.coinFlipResult != null && $Object.hasOwnProperty.call(message, "coinFlipResult") && message.coinFlipResult !== "")
+                writer.uint32(/* id 41, wireType 2 =*/330).string(message.coinFlipResult);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -19503,6 +19525,24 @@ export const game = $root.game = (() => {
                             delete message.chessWhiteSeat;
                         continue;
                     }
+                case 40: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.coinFlipGuess = value;
+                        else
+                            delete message.coinFlipGuess;
+                        continue;
+                    }
+                case 41: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.coinFlipResult = value;
+                        else
+                            delete message.coinFlipResult;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -19700,6 +19740,12 @@ export const game = $root.game = (() => {
             if (message.chessWhiteSeat != null && $Object.hasOwnProperty.call(message, "chessWhiteSeat"))
                 if (!$util.isString(message.chessWhiteSeat))
                     return "chessWhiteSeat: string expected";
+            if (message.coinFlipGuess != null && $Object.hasOwnProperty.call(message, "coinFlipGuess"))
+                if (!$util.isString(message.coinFlipGuess))
+                    return "coinFlipGuess: string expected";
+            if (message.coinFlipResult != null && $Object.hasOwnProperty.call(message, "coinFlipResult"))
+                if (!$util.isString(message.coinFlipResult))
+                    return "coinFlipResult: string expected";
             return null;
         };
 
@@ -19888,6 +19934,12 @@ export const game = $root.game = (() => {
             if (object.chessWhiteSeat != null)
                 if (typeof object.chessWhiteSeat !== "string" || object.chessWhiteSeat.length)
                     message.chessWhiteSeat = $String(object.chessWhiteSeat);
+            if (object.coinFlipGuess != null)
+                if (typeof object.coinFlipGuess !== "string" || object.coinFlipGuess.length)
+                    message.coinFlipGuess = $String(object.coinFlipGuess);
+            if (object.coinFlipResult != null)
+                if (typeof object.coinFlipResult !== "string" || object.coinFlipResult.length)
+                    message.coinFlipResult = $String(object.coinFlipResult);
             return message;
         };
 
@@ -19951,6 +20003,8 @@ export const game = $root.game = (() => {
                 object.liarsDiceActualCount = 0;
                 object.gomokuBlackSeat = "";
                 object.chessWhiteSeat = "";
+                object.coinFlipGuess = "";
+                object.coinFlipResult = "";
             }
             if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
                 object.id = message.id;
@@ -20053,6 +20107,10 @@ export const game = $root.game = (() => {
             }
             if (message.chessWhiteSeat != null && $Object.hasOwnProperty.call(message, "chessWhiteSeat"))
                 object.chessWhiteSeat = message.chessWhiteSeat;
+            if (message.coinFlipGuess != null && $Object.hasOwnProperty.call(message, "coinFlipGuess"))
+                object.coinFlipGuess = message.coinFlipGuess;
+            if (message.coinFlipResult != null && $Object.hasOwnProperty.call(message, "coinFlipResult"))
+                object.coinFlipResult = message.coinFlipResult;
             return object;
         };
 
@@ -25391,6 +25449,370 @@ export const game = $root.game = (() => {
         return TicTacToeState;
     })();
 
+    game.CoinFlipState = (function() {
+
+        /**
+         * Properties of a CoinFlipState.
+         * @typedef {Object} game.CoinFlipState.$Properties
+         * @property {string|null} [guess] CoinFlipState guess
+         * @property {string|null} [result] CoinFlipState result
+         * @property {boolean|null} [correct] CoinFlipState correct
+         * @property {number|Long|null} [settledAt] CoinFlipState settledAt
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a CoinFlipState.
+         * @memberof game
+         * @interface ICoinFlipState
+         * @augments game.CoinFlipState.$Properties
+         * @deprecated Use game.CoinFlipState.$Properties instead.
+         */
+
+        /**
+         * Shape of a CoinFlipState.
+         * @typedef {game.CoinFlipState.$Properties} game.CoinFlipState.$Shape
+         */
+
+        /**
+         * Constructs a new CoinFlipState.
+         * @memberof game
+         * @classdesc Represents a CoinFlipState.
+         * @constructor
+         * @param {game.CoinFlipState.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const CoinFlipState = function (properties) {
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * CoinFlipState guess.
+         * @member {string} guess
+         * @memberof game.CoinFlipState
+         * @instance
+         */
+        CoinFlipState.prototype.guess = "";
+
+        /**
+         * CoinFlipState result.
+         * @member {string} result
+         * @memberof game.CoinFlipState
+         * @instance
+         */
+        CoinFlipState.prototype.result = "";
+
+        /**
+         * CoinFlipState correct.
+         * @member {boolean} correct
+         * @memberof game.CoinFlipState
+         * @instance
+         */
+        CoinFlipState.prototype.correct = false;
+
+        /**
+         * CoinFlipState settledAt.
+         * @member {number|Long} settledAt
+         * @memberof game.CoinFlipState
+         * @instance
+         */
+        CoinFlipState.prototype.settledAt = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * Creates a new CoinFlipState instance using the specified properties.
+         * @function create
+         * @memberof game.CoinFlipState
+         * @static
+         * @param {game.CoinFlipState.$Properties=} [properties] Properties to set
+         * @returns {game.CoinFlipState} CoinFlipState instance
+         * @type {{
+         *   (properties: game.CoinFlipState.$Shape): game.CoinFlipState & game.CoinFlipState.$Shape;
+         *   (properties?: game.CoinFlipState.$Properties): game.CoinFlipState;
+         * }}
+         */
+        CoinFlipState.create = function(properties) {
+            return new CoinFlipState(properties);
+        };
+
+        /**
+         * Encodes the specified CoinFlipState message. Does not implicitly {@link game.CoinFlipState.verify|verify} messages.
+         * @function encode
+         * @memberof game.CoinFlipState
+         * @static
+         * @param {game.CoinFlipState.$Properties} message CoinFlipState message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        CoinFlipState.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.guess != null && $Object.hasOwnProperty.call(message, "guess") && message.guess !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.guess);
+            if (message.result != null && $Object.hasOwnProperty.call(message, "result") && message.result !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.result);
+            if (message.correct != null && $Object.hasOwnProperty.call(message, "correct") && message.correct !== false)
+                writer.uint32(/* id 3, wireType 0 =*/24).bool(message.correct);
+            if (message.settledAt != null && $Object.hasOwnProperty.call(message, "settledAt") && (typeof message.settledAt === "object" ? message.settledAt.low || message.settledAt.high : message.settledAt !== 0))
+                writer.uint32(/* id 4, wireType 0 =*/32).int64(message.settledAt);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified CoinFlipState message, length delimited. Does not implicitly {@link game.CoinFlipState.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof game.CoinFlipState
+         * @static
+         * @param {game.CoinFlipState.$Properties} message CoinFlipState message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        CoinFlipState.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a CoinFlipState message from the specified reader or buffer.
+         * @function decode
+         * @memberof game.CoinFlipState
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {game.CoinFlipState & game.CoinFlipState.$Shape} CoinFlipState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        CoinFlipState.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.game.CoinFlipState(), value;
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.guess = value;
+                        else
+                            delete message.guess;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.result = value;
+                        else
+                            delete message.result;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.correct = value;
+                        else
+                            delete message.correct;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 0)
+                            break;
+                        if (typeof (value = reader.int64()) === "object" ? value.low || value.high : value !== 0)
+                            message.settledAt = value;
+                        else
+                            delete message.settledAt;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a CoinFlipState message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof game.CoinFlipState
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {game.CoinFlipState & game.CoinFlipState.$Shape} CoinFlipState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        CoinFlipState.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a CoinFlipState message.
+         * @function verify
+         * @memberof game.CoinFlipState
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        CoinFlipState.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.guess != null && $Object.hasOwnProperty.call(message, "guess"))
+                if (!$util.isString(message.guess))
+                    return "guess: string expected";
+            if (message.result != null && $Object.hasOwnProperty.call(message, "result"))
+                if (!$util.isString(message.result))
+                    return "result: string expected";
+            if (message.correct != null && $Object.hasOwnProperty.call(message, "correct"))
+                if (typeof message.correct !== "boolean")
+                    return "correct: boolean expected";
+            if (message.settledAt != null && $Object.hasOwnProperty.call(message, "settledAt"))
+                if (!$util.isInteger(message.settledAt) && !(message.settledAt && $util.isInteger(message.settledAt.low) && $util.isInteger(message.settledAt.high)))
+                    return "settledAt: integer|Long expected";
+            return null;
+        };
+
+        /**
+         * Creates a CoinFlipState message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof game.CoinFlipState
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {game.CoinFlipState} CoinFlipState
+         */
+        CoinFlipState.fromObject = function (object, _depth) {
+            if (object instanceof $root.game.CoinFlipState)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".game.CoinFlipState: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.game.CoinFlipState();
+            if (object.guess != null)
+                if (typeof object.guess !== "string" || object.guess.length)
+                    message.guess = $String(object.guess);
+            if (object.result != null)
+                if (typeof object.result !== "string" || object.result.length)
+                    message.result = $String(object.result);
+            if (object.correct != null)
+                if (object.correct)
+                    message.correct = $Boolean(object.correct);
+            if (object.settledAt != null)
+                if (typeof object.settledAt === "object" ? object.settledAt.low || object.settledAt.high : $Number(object.settledAt) !== 0)
+                    if ($util.Long)
+                        message.settledAt = $util.Long.fromValue(object.settledAt, false);
+                    else if (typeof object.settledAt === "string")
+                        message.settledAt = $parseInt(object.settledAt, 10);
+                    else if (typeof object.settledAt === "number")
+                        message.settledAt = object.settledAt;
+                    else if (typeof object.settledAt === "object")
+                        message.settledAt = new $util.LongBits(object.settledAt.low >>> 0, object.settledAt.high >>> 0).toNumber();
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a CoinFlipState message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof game.CoinFlipState
+         * @static
+         * @param {game.CoinFlipState} message CoinFlipState
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        CoinFlipState.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.defaults) {
+                object.guess = "";
+                object.result = "";
+                object.correct = false;
+                if ($util.Long) {
+                    let long = new $util.Long(0, 0, false);
+                    object.settledAt = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
+                } else
+                    object.settledAt = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+            }
+            if (message.guess != null && $Object.hasOwnProperty.call(message, "guess"))
+                object.guess = message.guess;
+            if (message.result != null && $Object.hasOwnProperty.call(message, "result"))
+                object.result = message.result;
+            if (message.correct != null && $Object.hasOwnProperty.call(message, "correct"))
+                object.correct = message.correct;
+            if (message.settledAt != null && $Object.hasOwnProperty.call(message, "settledAt"))
+                if (typeof $BigInt !== "undefined" && options.longs === $BigInt)
+                    object.settledAt = typeof message.settledAt === "number" ? $BigInt(message.settledAt) : $util.Long.fromBits(message.settledAt.low >>> 0, message.settledAt.high >>> 0, false).toBigInt();
+                else if (typeof message.settledAt === "number")
+                    object.settledAt = options.longs === $String ? $String(message.settledAt) : message.settledAt;
+                else
+                    object.settledAt = options.longs === $String ? $util.Long.prototype.toString.call(message.settledAt) : options.longs === $Number ? new $util.LongBits(message.settledAt.low >>> 0, message.settledAt.high >>> 0).toNumber() : message.settledAt;
+            return object;
+        };
+
+        /**
+         * Converts this CoinFlipState to JSON.
+         * @function toJSON
+         * @memberof game.CoinFlipState
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        CoinFlipState.prototype.toJSON = function() {
+            return CoinFlipState.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for CoinFlipState
+         * @function getTypeUrl
+         * @memberof game.CoinFlipState
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        CoinFlipState.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/game.CoinFlipState";
+        };
+
+        return CoinFlipState;
+    })();
+
     game.BoolPair = (function() {
 
         /**
@@ -26578,6 +27000,7 @@ export const game = $root.game = (() => {
          * @property {game.GomokuState.$Properties|null} [gomoku] RoomSnapshot gomoku
          * @property {game.JungleState.$Properties|null} [jungle] RoomSnapshot jungle
          * @property {game.ChessState.$Properties|null} [chess] RoomSnapshot chess
+         * @property {game.CoinFlipState.$Properties|null} [coinFlip] RoomSnapshot coinFlip
          * @property {string|null} [resultText] RoomSnapshot resultText
          * @property {Array.<string>|null} [punishedPlayerIds] RoomSnapshot punishedPlayerIds
          * @property {Array.<game.PunishmentProof.$Properties>|null} [proofs] RoomSnapshot proofs
@@ -26619,6 +27042,7 @@ export const game = $root.game = (() => {
          *   gomoku?: game.GomokuState.$Shape|null;
          *   jungle?: game.JungleState.$Shape|null;
          *   chess?: game.ChessState.$Shape|null;
+         *   coinFlip?: game.CoinFlipState.$Shape|null;
          *   resultText?: string|null;
          *   punishedPlayerIds?: Array.<string>|null;
          *   proofs?: Array.<game.PunishmentProof.$Shape>|null;
@@ -26788,6 +27212,14 @@ export const game = $root.game = (() => {
          * @instance
          */
         RoomSnapshot.prototype.chess = null;
+
+        /**
+         * RoomSnapshot coinFlip.
+         * @member {game.CoinFlipState.$Properties|null|undefined} coinFlip
+         * @memberof game.RoomSnapshot
+         * @instance
+         */
+        RoomSnapshot.prototype.coinFlip = null;
 
         /**
          * RoomSnapshot resultText.
@@ -26975,6 +27407,8 @@ export const game = $root.game = (() => {
                 $root.game.JungleState.encode(message.jungle, writer.uint32(/* id 27, wireType 2 =*/218).fork(), _depth + 1).ldelim();
             if (message.chess != null && $Object.hasOwnProperty.call(message, "chess"))
                 $root.game.ChessState.encode(message.chess, writer.uint32(/* id 28, wireType 2 =*/226).fork(), _depth + 1).ldelim();
+            if (message.coinFlip != null && $Object.hasOwnProperty.call(message, "coinFlip"))
+                $root.game.CoinFlipState.encode(message.coinFlip, writer.uint32(/* id 29, wireType 2 =*/234).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -27138,6 +27572,12 @@ export const game = $root.game = (() => {
                         if (wireType !== 2)
                             break;
                         message.chess = $root.game.ChessState.decode(reader, reader.uint32(), $undefined, _depth + 1, message.chess);
+                        continue;
+                    }
+                case 29: {
+                        if (wireType !== 2)
+                            break;
+                        message.coinFlip = $root.game.CoinFlipState.decode(reader, reader.uint32(), $undefined, _depth + 1, message.coinFlip);
                         continue;
                     }
                 case 14: {
@@ -27367,6 +27807,11 @@ export const game = $root.game = (() => {
                 if (error)
                     return "chess." + error;
             }
+            if (message.coinFlip != null && $Object.hasOwnProperty.call(message, "coinFlip")) {
+                let error = $root.game.CoinFlipState.verify(message.coinFlip, _depth + 1);
+                if (error)
+                    return "coinFlip." + error;
+            }
             if (message.resultText != null && $Object.hasOwnProperty.call(message, "resultText"))
                 if (!$util.isString(message.resultText))
                     return "resultText: string expected";
@@ -27565,6 +28010,11 @@ export const game = $root.game = (() => {
                     throw $TypeError(".game.RoomSnapshot.chess: object expected");
                 message.chess = $root.game.ChessState.fromObject(object.chess, _depth + 1);
             }
+            if (object.coinFlip != null) {
+                if (!$util.isObject(object.coinFlip))
+                    throw $TypeError(".game.RoomSnapshot.coinFlip: object expected");
+                message.coinFlip = $root.game.CoinFlipState.fromObject(object.coinFlip, _depth + 1);
+            }
             if (object.resultText != null)
                 if (typeof object.resultText !== "string" || object.resultText.length)
                     message.resultText = $String(object.resultText);
@@ -27698,6 +28148,7 @@ export const game = $root.game = (() => {
                 object.forgiveAdvantageBeneficiaryId = "";
                 object.jungle = null;
                 object.chess = null;
+                object.coinFlip = null;
             }
             if (message.id != null && $Object.hasOwnProperty.call(message, "id"))
                 object.id = message.id;
@@ -27794,6 +28245,8 @@ export const game = $root.game = (() => {
                 object.jungle = $root.game.JungleState.toObject(message.jungle, options, _depth + 1);
             if (message.chess != null && $Object.hasOwnProperty.call(message, "chess"))
                 object.chess = $root.game.ChessState.toObject(message.chess, options, _depth + 1);
+            if (message.coinFlip != null && $Object.hasOwnProperty.call(message, "coinFlip"))
+                object.coinFlip = $root.game.CoinFlipState.toObject(message.coinFlip, options, _depth + 1);
             return object;
         };
 
@@ -39201,6 +39654,7 @@ export const game = $root.game = (() => {
          * @property {string|null} [description] SiteConfig description
          * @property {string|null} [adminPassword] SiteConfig adminPassword
          * @property {string|null} [anonymousContributorLabel] SiteConfig anonymousContributorLabel
+         * @property {string|null} [coinFlipWinnerLabel] SiteConfig coinFlipWinnerLabel
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -39265,6 +39719,14 @@ export const game = $root.game = (() => {
         SiteConfig.prototype.anonymousContributorLabel = "";
 
         /**
+         * SiteConfig coinFlipWinnerLabel.
+         * @member {string} coinFlipWinnerLabel
+         * @memberof game.SiteConfig
+         * @instance
+         */
+        SiteConfig.prototype.coinFlipWinnerLabel = "";
+
+        /**
          * Creates a new SiteConfig instance using the specified properties.
          * @function create
          * @memberof game.SiteConfig
@@ -39304,6 +39766,8 @@ export const game = $root.game = (() => {
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.adminPassword);
             if (message.anonymousContributorLabel != null && $Object.hasOwnProperty.call(message, "anonymousContributorLabel") && message.anonymousContributorLabel !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.anonymousContributorLabel);
+            if (message.coinFlipWinnerLabel != null && $Object.hasOwnProperty.call(message, "coinFlipWinnerLabel") && message.coinFlipWinnerLabel !== "")
+                writer.uint32(/* id 5, wireType 2 =*/42).string(message.coinFlipWinnerLabel);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -39387,6 +39851,15 @@ export const game = $root.game = (() => {
                             delete message.anonymousContributorLabel;
                         continue;
                     }
+                case 5: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.coinFlipWinnerLabel = value;
+                        else
+                            delete message.coinFlipWinnerLabel;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -39442,6 +39915,9 @@ export const game = $root.game = (() => {
             if (message.anonymousContributorLabel != null && $Object.hasOwnProperty.call(message, "anonymousContributorLabel"))
                 if (!$util.isString(message.anonymousContributorLabel))
                     return "anonymousContributorLabel: string expected";
+            if (message.coinFlipWinnerLabel != null && $Object.hasOwnProperty.call(message, "coinFlipWinnerLabel"))
+                if (!$util.isString(message.coinFlipWinnerLabel))
+                    return "coinFlipWinnerLabel: string expected";
             return null;
         };
 
@@ -39475,6 +39951,9 @@ export const game = $root.game = (() => {
             if (object.anonymousContributorLabel != null)
                 if (typeof object.anonymousContributorLabel !== "string" || object.anonymousContributorLabel.length)
                     message.anonymousContributorLabel = $String(object.anonymousContributorLabel);
+            if (object.coinFlipWinnerLabel != null)
+                if (typeof object.coinFlipWinnerLabel !== "string" || object.coinFlipWinnerLabel.length)
+                    message.coinFlipWinnerLabel = $String(object.coinFlipWinnerLabel);
             return message;
         };
 
@@ -39500,6 +39979,7 @@ export const game = $root.game = (() => {
                 object.description = "";
                 object.adminPassword = "";
                 object.anonymousContributorLabel = "";
+                object.coinFlipWinnerLabel = "";
             }
             if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
                 object.name = message.name;
@@ -39509,6 +39989,8 @@ export const game = $root.game = (() => {
                 object.adminPassword = message.adminPassword;
             if (message.anonymousContributorLabel != null && $Object.hasOwnProperty.call(message, "anonymousContributorLabel"))
                 object.anonymousContributorLabel = message.anonymousContributorLabel;
+            if (message.coinFlipWinnerLabel != null && $Object.hasOwnProperty.call(message, "coinFlipWinnerLabel"))
+                object.coinFlipWinnerLabel = message.coinFlipWinnerLabel;
             return object;
         };
 

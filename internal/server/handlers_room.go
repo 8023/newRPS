@@ -26,10 +26,23 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	}
 	settings := p.Settings
 	gameID := settings.GameID
-	if gameID != types.GameOthello && gameID != types.GameTicTacToe && gameID != types.GameLiarsDice && gameID != types.GameGomoku && gameID != types.GameJungle && gameID != types.GameChess {
+	if gameID != types.GameOthello && gameID != types.GameTicTacToe && gameID != types.GameLiarsDice && gameID != types.GameGomoku && gameID != types.GameJungle && gameID != types.GameChess && gameID != types.GameCoinFlip {
 		gameID = types.GameRPS
 	}
 	settings.GameID = gameID
+	if gameID == types.GameCoinFlip {
+		// 猜硬币没有真人对手：结构性关闭排位/倍率/极限/平局双罚/需对手确认/每子惩罚，
+		// 并强制开启惩罚——这是它唯一的玩法内容，不靠调用点自觉。玩家发布任务模式
+		// 在下面的 PunishmentSource 校验里单独拒绝（没有对手可以发布任务）。
+		settings.EnableRanked = false
+		settings.EnableRankMultiplier = false
+		settings.RankMultiplier = 1
+		settings.EnableExtremeRanked = false
+		settings.TieDoublePunish = false
+		settings.RequireOpponentConfirm = false
+		settings.EnablePerPiecePunishment = false
+		settings.EnablePunishment = true
+	}
 	// 排位档位按游戏从 games.json 读取（后台可调），不在档位内回退默认档。
 	stakeTiers := s.stakeTiersFor(gameID)
 	if !containsInt(stakeTiers, int(settings.Stake)) {
@@ -107,6 +120,10 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	if settings.EnableExtremeRanked {
 		settings.EnableRankMultiplier = false
 		settings.RankMultiplier = 1
+	}
+	if settings.GameID == types.GameCoinFlip && settings.PunishmentSource == "player" {
+		client.reply(env.ID, nil, "猜硬币没有真人对手，不能使用玩家发布任务")
+		return
 	}
 	// 废弃的旧任务类型字段清空；按来源校验并归一新字段。
 	settings.PunishmentIDs = []string{}
@@ -232,6 +249,10 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 	}
 	if isLiarsDice {
 		s.roomNotice(room, playerShortName(player)+" 创建了大话骰房间，当前为观战。")
+	} else if settings.GameID == types.GameCoinFlip {
+		s.roomNotice(room, playerShortName(player)+" 创建了猜硬币房间，坐在参战席。")
+		// 猜硬币没有"双方坐满才开局"的等待逻辑，座位 A 一有人就直接可抛。
+		s.maybeStartChoosing(room)
 	} else {
 		s.roomNotice(room, playerShortName(player)+" 进入房间，坐在战斗席 A。")
 	}
@@ -290,7 +311,8 @@ func (s *Server) onRoomJoin(client *Client, env wsEnvelope) {
 		room.Seats[types.SeatA] = &HumanSeat{Player: s.publicPlayer(player)}
 		joinRole = "战斗席 A"
 		s.notifySeatFilled(room, types.SeatA)
-	} else if s.canAutoSeatOnJoin(room, player) && room.Seats[types.SeatB] == nil {
+	} else if room.Settings.GameID != types.GameCoinFlip && s.canAutoSeatOnJoin(room, player) && room.Seats[types.SeatB] == nil {
+		// 猜硬币没有战斗席 B（永远锁死），进房自动入座只尝试座位 A，坐不上就落观战。
 		room.Seats[types.SeatB] = &HumanSeat{Player: s.publicPlayer(player)}
 		joinRole = "战斗席 B"
 		s.notifySeatFilled(room, types.SeatB)
@@ -381,6 +403,11 @@ func (s *Server) onRoomSit(client *Client, env wsEnvelope) {
 	// 大话骰不用 A/B 座位（用参战名单），拦掉座位 RPC 以免观战者往 Seats 里注入脏数据。
 	if room.Settings.GameID == types.GameLiarsDice {
 		client.reply(env.ID, nil, "大话骰请使用「加入参战席」")
+		return
+	}
+	// 猜硬币没有战斗席 B（永远锁死，只用座位 A）。
+	if room.Settings.GameID == types.GameCoinFlip && p.Seat != types.SeatA {
+		client.reply(env.ID, nil, "猜硬币没有战斗席 B，另一位只能观战")
 		return
 	}
 	if room.Phase == types.PhasePunishment {

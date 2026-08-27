@@ -235,6 +235,7 @@ func (s *Server) roomSnapshot(room *RoomState, includeChat, includeHistory bool)
 		Gomoku:            room.Gomoku,
 		Jungle:            room.Jungle,
 		Chess:             room.Chess,
+		CoinFlip:          room.CoinFlip,
 		ResultText:        room.ResultText,
 		PunishedPlayerIDs: room.PunishedPlayerIDs,
 		Proofs:            room.Proofs,

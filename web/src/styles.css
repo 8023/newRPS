@@ -8726,6 +8726,43 @@ button.contribute-item {
   min-width: 0;
 }
 
+/* 共建列表左栏顶部的「排序按钮 + 搜索框（+ 玩家端的「＋ 投稿」入口）」一组
+   （玩家端「参与共建」与后台共建审核共用，见 ContributionListControls.tsx）：
+   投稿攒到几百条时靠滚动找一条不现实。
+
+   overflow-y/scrollbar-gutter/padding 这四行是照抄下面 .contribute-list 的，为的是右边缘
+   对齐，不是本组件自己需要滚动：.contribute-list 上的 scrollbar-gutter: stable 会**恒定**
+   预留一条滚动条轨道（这正是 stable 的语义——不管当前是否真的溢出都留着，避免出现滚动条时
+   布局横跳），而且这条轨道位于内边距盒之外，所以列表里的卡片实际比左栏窄了「滚动条宽度 +
+   padding-right」两截。轨道宽度是平台相关的（Windows 经典滚动条 15-17px，手机/Mac 的
+   overlay 滚动条则是 0），没法在 CSS 里写死一个数字去补。这里给本组容器套上同样的
+   overflow-y: auto + scrollbar-gutter: stable，就能让浏览器按它自己那套规则预留**同样宽度**
+   的轨道——本组内容永不溢出，滚动条不会真的出现，但两边收窄的量恒等，右边缘自然对齐。
+   （之前只补 padding-right: 10px 补不齐，差的正是这条滚动条轨道，手机上因为 overlay 滚动条
+   轨道宽为 0 才看着是对的。）padding-top 同理照抄，给按钮悬停上浮 1px 留余量。 */
+.contribute-list-controls {
+  display: grid;
+  gap: 8px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding-top: 2px;
+  padding-right: 10px;
+}
+
+/* 两个排序按钮均分一行：时间一档、点赞/完成一档，点击在各自档位里循环。
+   文案是「时间⬇」这种定长短标签，等宽两列不会被内容顶歪。这两个按钮不用选中态
+   着色——它们不是"筛选开关"，任何时候都各自停在某个具体档位，没有需要用颜色
+   区分的"未激活"状态，纯靠按钮文案本身说明当前档位。 */
+.contribute-sort-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.contribute-sort-row button {
+  width: 100%;
+}
+
 /* 后台共建审核左栏顶部的搜索框：外观直接吃全局 input 样式，这里只收紧一下高度，
    和下面紧凑的列表行比例更协调，不需要另起一套输入框皮肤。 */
 .contribute-list-search {
@@ -8925,6 +8962,20 @@ button.contribute-item.contribute-item-new {
   flex: none;
 }
 
+/* 后台共建审核 / 玩家「参与共建」的只读预览（ContributionPreview.tsx）用的封面缩略图，
+   与编辑表单里那个固定 38x38 的 .cover-thumb 是两码事——编辑态图小是为了跟旁边的
+   「难度」输入框同高，不占地方；预览态没有这层约束，图太小根本看不清内容，所以单独
+   开一个类，只等比缩放（不裁切），电脑端按 380px 定高、手机端按容器宽度定宽，
+   具体断点见下方 768px 媒体查询（与 .contribute-layout 切换单列同一个断点）。 */
+.contribute-preview-cover {
+  display: block;
+  height: 380px;
+  width: auto;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
 .contribute-unsaved-card {
   width: min(420px, 100%);
   display: grid;
@@ -8943,6 +8994,168 @@ button.contribute-item.contribute-item-new {
   gap: 8px;
 }
 
+/* ── 猜硬币 ─────────────────────────────────────────── */
+.coinflip-panel {
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+}
+
+.coinflip-head {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.coinflip-head h3,
+.coinflip-head p {
+  margin: 0;
+}
+
+.coinflip-stage {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 8px 0 4px;
+}
+
+/* 外层负责透视，内层负责真正的翻面旋转——perspective 必须落在父元素上才生效。 */
+.coinflip-coin {
+  width: 128px;
+  height: 128px;
+  perspective: 720px;
+}
+
+.coinflip-coin-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 1000ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.coinflip-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  backface-visibility: hidden;
+  border: 4px solid var(--border-strong);
+  box-shadow: 0 6px 16px var(--shadow), inset 0 0 0 3px var(--panel-solid);
+}
+
+/* 内圈刻线：两枚面共用，模拟真实硬币边缘的双层轧边，纯装饰，不承载内容。 */
+.coinflip-face::before {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  opacity: 0.28;
+  pointer-events: none;
+}
+
+/* 字面（1999-2018 版 1 元硬币的数字面，简化为纯数字）：蓝色调，呼应站点其它双色
+   对局元素（如井字棋 X）。 */
+.coinflip-face-char {
+  background: radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--primary) 26%, var(--panel-solid)), var(--panel-solid) 74%);
+  color: var(--primary-hover);
+}
+
+.coinflip-face-digit {
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: lining-nums;
+  transform: translateY(-1px);
+}
+
+/* 花面（菊花面）：粉色调，与字面的蓝色调形成站点惯用的双色对照，backface 旋转 180deg 后朝外。 */
+.coinflip-face-flower {
+  transform: rotateY(180deg);
+  background: radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--pink) 40%, var(--panel-solid)), var(--panel-solid) 74%);
+  color: var(--pink-border);
+}
+
+.coinflip-flower-svg {
+  width: 96px;
+  height: 96px;
+}
+
+/* 外层花瓣：大而浅，瓣尖略透到底色，撑开花型；内层叠在上面，形状更小更深，
+   两层交错旋转出层次；花心压在最上层，是三档色阶里最深的一档。 */
+.coinflip-flower-layer-outer path {
+  fill: color-mix(in srgb, var(--pink) 62%, var(--panel-solid));
+  stroke: var(--pink-border);
+  stroke-width: 0.6;
+  stroke-opacity: 0.5;
+}
+
+.coinflip-flower-layer-inner path {
+  fill: color-mix(in srgb, var(--pink) 88%, var(--pink-border));
+}
+
+.coinflip-flower-core {
+  fill: var(--pink-border);
+  stroke: color-mix(in srgb, var(--pink) 70%, white);
+  stroke-width: 1;
+  stroke-opacity: 0.6;
+}
+
+.coinflip-result-banner {
+  margin: 0;
+  border: 1px solid var(--pink-border);
+  border-radius: 8px;
+  padding: 6px 14px;
+  background: var(--notice-bg);
+  color: var(--page-text);
+  font-size: 14px;
+  font-weight: 600;
+  animation: settle-pop 420ms ease both;
+}
+
+.coinflip-result-banner.correct {
+  border-color: var(--primary);
+  color: var(--primary-hover);
+}
+
+.coinflip-choice-row {
+  display: flex;
+  gap: 10px;
+}
+
+.coinflip-choice-button {
+  min-width: 96px;
+  min-height: 76px;
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  font-size: 15px;
+  font-weight: 700;
+  border-color: var(--border-strong);
+  background: linear-gradient(180deg, var(--panel-solid), var(--panel-soft));
+}
+
+.coinflip-choice-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.coinflip-choice-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* 晕动症友好：关闭系统偏好里的动效时，硬币直接定格到最终朝向，不做旋转过渡。 */
+@media (prefers-reduced-motion: reduce) {
+  .coinflip-coin-inner {
+    transition: none;
+  }
+}
+
 @media (max-width: 768px) {
   /* 手机端「参与共建」顶部三个按钮（随机任务/系列任务/返回大厅）的一行/换行/固定宽度/
      右对齐规则统一在上面 920px 断点里定义即可覆盖到这个更窄的断点，这里不再重复/冲突
@@ -8958,6 +9171,13 @@ button.contribute-item.contribute-item-new {
 
   .contribute-split-row {
     grid-template-columns: 1fr;
+  }
+
+  /* 手机端改按宽度定尺寸：撑满所在 div 的宽度，高度跟着等比缩放，不再用电脑端的定高 380px
+     （窄屏下定高反而可能比屏幕还宽，顶出容器）。 */
+  .contribute-preview-cover {
+    width: 100%;
+    height: auto;
   }
 
   .step-columns {

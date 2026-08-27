@@ -7,7 +7,7 @@ import type {
 import { DEFAULT_NAME_WAR_PENALTY_THRESHOLD, DEFAULT_NAME_WAR_RENAME_MIN_POINTS, normalizePublicPlayer, stakeTiersFor, withPetBondDefaults, withRankedScoreDefaults } from "../lib/normalize";
 import { socket } from "../ws";
 import {
-  defaultChessRoomName, defaultGomokuRoomName, defaultJungleRoomName, defaultLiarsDiceRoomName, defaultOthelloRoomName, defaultRoomName, defaultTicTacToeRoomName,
+  defaultChessRoomName, defaultCoinFlipRoomName, defaultGomokuRoomName, defaultJungleRoomName, defaultLiarsDiceRoomName, defaultOthelloRoomName, defaultRoomName, defaultTicTacToeRoomName,
   chessBoardThemes, gameMinutesOptions, gomokuBoardThemes, jungleBoardThemes, moveSecondsOptions, othelloBoardThemes, playerSecretKey, doumiaoLinks, luv4uLinks, tictactoeBoardThemes, tokenKey
 } from "../lib/constants";
 import { ask } from "../lib/rpc";
@@ -27,6 +27,7 @@ import { ContributionVote } from "./ContributionVote";
 import { contributionStatusLabel } from "./contributeSeries";
 import type { VoteCard } from "../shared/types";
 import { LiarsDicePanel } from "./LiarsDicePanel";
+import { CoinFlipPanel, coinFaceLabel } from "./CoinFlipPanel";
 import { seriesFactionWarning, seriesFactionWarningFor } from "./seriesFaction";
 import { GomokuPanel, GomokuScore } from "./GomokuPanel";
 import { JunglePanel, JungleScore, jungleSideLabel } from "./JunglePanel";
@@ -451,7 +452,8 @@ export function GenderSelect({ config, genderId, factionId, onGenderChange }: {
 export const GenderSelectField = GenderSelect;
 
 /** 展示用战绩：缺省/非数字按 0，称号空则「暂无称号」 */
-/** 排行榜排序用真实分（有 sort* 用 sort*，否则退回展示分）。 */
+/** 排行榜排序键（有 sort* 用 sort*，否则退回展示分）。普通连接下发的 sort* 已与展示分一致，
+ * 不携带真实分——真实分只有管理员后台可见，见 server.publicPlayer/publicPlayerAdmin。 */
 export function sortRankedPointsOf(player: PublicPlayer) {
   const s = player?.stats;
   if (!s) return 0;
@@ -569,7 +571,7 @@ export function Lobby({ config, lobby, me, punishmentTagPrefs, onError, onGoRoom
                 <h3>{room.name} <ExtremeRankedBadge enabled={room.enableExtremeRanked} /> <RankMultiplierBadge multiplier={room.rankMultiplier} /></h3>
                 {room.tags?.length ? <RoomTagList tags={room.tags} /> : null}
                 <RoomVersusLine room={room} />
-                <p>{roomStatusText(room.status)} · {room.gameId === "liarsdice" ? `${room.players} 人参战` : `${room.players}/2 战斗席`} · {room.spectators} 观战</p>
+                <p>{roomStatusText(room.status)} · {room.gameId === "liarsdice" ? `${room.players} 人参战` : room.gameId === "coinflip" ? `${room.players}/1 参战席` : `${room.players}/2 战斗席`} · {room.spectators} 观战</p>
                 <RoomInfoTagList tags={lobbyRoomInfoTags(config, room)} />
               </div>
               <div className="join-box">
@@ -765,7 +767,8 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
               : next.gameId === "gomoku" ? defaultGomokuRoomName
                 : next.gameId === "jungle" ? defaultJungleRoomName
                   : next.gameId === "chess" ? defaultChessRoomName
-                    : defaultRoomName;
+                    : next.gameId === "coinflip" ? defaultCoinFlipRoomName
+                      : defaultRoomName;
       }
       if (next.gameId === "othello" || merged.gameId === "othello") {
         merged.othelloBoardTheme = merged.othelloBoardTheme || "classic";
@@ -835,6 +838,18 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
       }
       if (!merged.enableRanked) {
         merged.enableExtremeRanked = false;
+      }
+      if (merged.gameId === "coinflip") {
+        // 猜硬币没有真人对手：结构性关闭排位/倍率/极限/平局双罚/需对手确认，
+        // 并强制开启惩罚（唯一的玩法内容）；玩家发布任务没有对手可以发布，降级为随机任务。
+        merged.enableRanked = false;
+        merged.enableRankMultiplier = false;
+        merged.rankMultiplier = 1;
+        merged.enableExtremeRanked = false;
+        merged.tieDoublePunish = false;
+        merged.requireOpponentConfirm = false;
+        merged.enablePunishment = true;
+        if (merged.punishmentSource === "player") merged.punishmentSource = "random";
       }
       // 档位按游戏从服务端配置读取；不在档位内回退默认档（首个）。
       const tiers = stakeTiersFor(config, merged.gameId);
@@ -967,6 +982,7 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
               {settings.gameId === "gomoku" && <p className="hint">五子棋支持真人 1v1、观战、聊天、排位和惩罚；15x15 棋盘先连成五子者胜，可向对方请求悔棋或认输。</p>}
               {settings.gameId === "jungle" && <p className="hint">斗兽棋支持真人 1v1、观战、聊天、排位和惩罚；7×9 棋盘，先入对方兽穴或令对方无子可走者胜，可向对方请求悔棋或认输。开启白给后，轮到你时按白给值一半的概率跳过本手。</p>}
               {settings.gameId === "chess" && <p className="hint">国际象棋支持真人 1v1、观战、聊天、排位和惩罚；8×8 棋盘白方先走，将死对方的王获胜，可向对方请求悔棋或认输。</p>}
+              {settings.gameId === "coinflip" && <p className="hint">猜硬币不需要对手，一个人就能玩：坐到参战席猜「字」还是「花」，服务器立即抛硬币公开结算，猜错就会收到系统随机/系列任务；不计入排位积分、胜负场次或白给值，仍支持观战和聊天。</p>}
               {isTimedGame(settings.gameId) && (
                 <GameTimerSettings gameId={settings.gameId} settings={settings} onPatch={patch} />
               )}
@@ -1164,6 +1180,7 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
                 />
               )}
             </div>
+            {settings.gameId !== "coinflip" && (
             <div className="create-section">
               <h3>玩法</h3>
               <div className="ranked-choice-grid">
@@ -1236,6 +1253,7 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
                 </div>
               )}
             </div>
+            )}
             </div>
             <div className="create-column">
             <div className="create-section">
@@ -1246,12 +1264,20 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
                   if (value === "none") patch({ enablePunishment: false, enablePerPiecePunishment: false });
                   else patch({ punishmentSource: value as RoomSettings["punishmentSource"], enablePunishment: true });
                 }}
-                options={[
-                  { value: "none", label: "无惩罚" },
-                  { value: "random", label: "随机惩罚任务" },
-                  { value: "series", label: "系列惩罚任务" },
-                  { value: "player", label: "自定义惩罚任务" }
-                ]}
+                options={
+                  settings.gameId === "coinflip"
+                    // 猜硬币惩罚结构性常开、没有真人对手：不给"无惩罚"和"自定义惩罚任务"选项。
+                    ? [
+                      { value: "random", label: "随机惩罚任务" },
+                      { value: "series", label: "系列惩罚任务" }
+                    ]
+                    : [
+                      { value: "none", label: "无惩罚" },
+                      { value: "random", label: "随机惩罚任务" },
+                      { value: "series", label: "系列惩罚任务" },
+                      { value: "player", label: "自定义惩罚任务" }
+                    ]
+                }
               />
               {settings.gameId === "othello" && <p className="hint">黑白棋惩罚会在终局、认输、逃跑或断线判负后触发。</p>}
               {settings.gameId === "tictactoe" && <p className="hint">井字棋惩罚会在终局或断线判负后触发。</p>}
@@ -1259,6 +1285,7 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
               {settings.gameId === "jungle" && <p className="hint">斗兽棋惩罚会在终局、认输或断线判负后触发；开启每子惩罚时，被吃子也会立刻受罚（棋钟暂停，不计积分/白给）。</p>}
               {settings.gameId === "chess" && <p className="hint">国际象棋惩罚会在终局、认输或断线判负后触发；开启每子惩罚时，被吃子也会立刻受罚（棋钟暂停，不计积分/白给）。</p>}
               {settings.gameId === "liarsdice" && <p className="hint">大话骰惩罚仅对败者触发（叫点/开牌对决中的负方，或断线判负方）；其余参战玩家记平但不计分、不受罚。</p>}
+              {settings.gameId === "coinflip" && <p className="hint">猜硬币惩罚在每次猜错后立即触发，没有真人对手可以审核，提交证明即视为完成。</p>}
               {settings.enablePunishment && (
                 <>
                   {((settings.punishmentSource || "random") === "random" || settings.punishmentSource === "system") ? (
@@ -1306,7 +1333,7 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
                   ) : (
                     <p className="hint">本局结算后，由对手临时写惩罚任务；任务不会保存到后台配置。</p>
                   )}
-                  {settings.gameId !== "liarsdice" && (
+                  {settings.gameId !== "liarsdice" && settings.gameId !== "coinflip" && (
                     <>
                       <Toggle label="平局双罚" value={settings.tieDoublePunish} onChange={(value) => patch({ tieDoublePunish: value })} />
                       {settings.enableRanked && settings.tieDoublePunish && (
@@ -1314,7 +1341,9 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
                       )}
                     </>
                   )}
-                  <Toggle label="惩罚需对手确认" value={settings.requireOpponentConfirm} onChange={(value) => patch({ requireOpponentConfirm: value })} />
+                  {settings.gameId !== "coinflip" && (
+                    <Toggle label="惩罚需对手确认" value={settings.requireOpponentConfirm} onChange={(value) => patch({ requireOpponentConfirm: value })} />
+                  )}
                   <Toggle label="允许图片证明" value={settings.allowProofImage ?? true} onChange={(value) => patch({ allowProofImage: value })} />
                   {(settings.gameId === "chess" || settings.gameId === "jungle") && (
                     <>
@@ -1421,6 +1450,7 @@ export function gameIcon(gameId: RoomSettings["gameId"]): ReactNode {
   if (gameId === "jungle") return "🦁";
   if (gameId === "chess") return <ChessKnight className="game-choice-icon-chess" size={30} strokeWidth={1.9} />;
   if (gameId === "liarsdice") return "🎲";
+  if (gameId === "coinflip") return "🪙";
   // 三个手势倒三角排布（上两下一），避免挤在一行导致溢出裁切。
   return (
     <span className="game-choice-icon-rps">
@@ -1455,6 +1485,16 @@ export function RoomVersusLine({ room }: { room: LobbySnapshot["rooms"][number] 
       <div className="room-versus-line liarsdice-line" title={`大话骰 · ${room.players} 人参战`}>
         <span aria-hidden="true">🎲</span>
         <b>{room.players > 0 ? `${room.players} 人参战` : "等待玩家加入"}</b>
+      </div>
+    );
+  }
+  // 猜硬币只用参战席 A（没有 B），用单人行取代 VS 行。
+  if (room.gameId === "coinflip") {
+    const flipper = room.versus.A?.player;
+    return (
+      <div className="room-versus-line coinflip-line" title={flipper ? `${flipper.name} 独自挑战` : "等待玩家坐下"}>
+        <span aria-hidden="true">🪙</span>
+        <b>{flipper ? `${flipper.name} 独自挑战` : "等待玩家坐下"}</b>
       </div>
     );
   }
@@ -1876,7 +1916,7 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
         </div>
         <button className="soft-button" title={leaveTitle} onClick={leaveCurrentRoom}><DoorOpen size={16} /> 离开</button>
       </div>
-      {room.settings.gameId !== "liarsdice" && (
+      {room.settings.gameId !== "liarsdice" && room.settings.gameId !== "coinflip" && (
         <div className="battle-panel">
           <SeatView seat="A" room={room} me={me} onSit={() => {
             const warn = seriesFactionWarning(room, config, me);
@@ -1909,6 +1949,8 @@ export function Room({ config, room, me, lobby, onBack, onError }: { config: App
             <JunglePanel room={room} me={me} onError={onError} />
           ) : room.settings.gameId === "chess" ? (
             <ChessPanel room={room} me={me} onError={onError} />
+          ) : room.settings.gameId === "coinflip" ? (
+            <CoinFlipPanel room={room} me={me} onError={onError} />
           ) : mySeat && (
             <div className="move-panel">
               <div>
@@ -2607,6 +2649,7 @@ export function RoundHistoryCard({ item, onOpenImage }: { item: RoomSnapshot["ro
           {safe.gameId === "jungle" && <em>🦁 斗兽棋</em>}
           {safe.gameId === "chess" && <em>♔ 国际象棋</em>}
           {safe.gameId === "liarsdice" && <em>🎲 大话骰</em>}
+          {safe.gameId === "coinflip" && <em>🪙 猜硬币</em>}
           {safe.ranked && <em>🏆 {safe.gameId === "othello" ? `${safe.stake}分/子${safe.rankMultiplier && safe.rankMultiplier > 1 ? ` ×${safe.rankMultiplier}` : ""}` : `${safe.stake}分${safe.rankMultiplier && safe.rankMultiplier > 1 ? ` ×${safe.rankMultiplier}` : ""}`}</em>}
           {safe.extremeRanked && <em>⚡ 极限</em>}
           {safe.punishedNames.length > 0 && <em>🎲 惩罚</em>}
@@ -2618,7 +2661,7 @@ export function RoundHistoryCard({ item, onOpenImage }: { item: RoomSnapshot["ro
           <strong>{historySeatLabel(safe, "A")}</strong>
         </div>
         <div className="history-result">
-          <small>{safe.gameId === "othello" && safe.othelloScore ? `${safe.othelloScore.black} : ${safe.othelloScore.white}` : safe.gameId === "tictactoe" ? "3 × 3" : safe.gameId === "gomoku" ? "15 × 15" : safe.gameId === "jungle" ? "7 × 9" : safe.gameId === "chess" ? "8 × 8" : "VS"}</small>
+          <small>{safe.gameId === "othello" && safe.othelloScore ? `${safe.othelloScore.black} : ${safe.othelloScore.white}` : safe.gameId === "tictactoe" ? "3 × 3" : safe.gameId === "gomoku" ? "15 × 15" : safe.gameId === "jungle" ? "7 × 9" : safe.gameId === "chess" ? "8 × 8" : safe.gameId === "coinflip" ? "🪙" : "VS"}</small>
           <b>{safe.resultLabel || historyResultText(safe.result)}</b>
         </div>
         <div className="history-side">
@@ -2707,6 +2750,9 @@ export function historySeatLabel(item: RoomSnapshot["roundHistory"][number], sea
   if (item.gameId === "liarsdice") {
     // 大话骰对局记录里 playerA 固定是本局赢家、playerB 固定是输家（见后端 game_liarsdice.go）。
     return seat === "A" ? "🏆 胜" : "💤 负";
+  }
+  if (item.gameId === "coinflip") {
+    return seat === "A" ? `🪙 猜${coinFaceLabel(item.coinFlipGuess)}` : `开${coinFaceLabel(item.coinFlipResult)}`;
   }
   return choiceText(seat === "A" ? item.moveA : item.moveB);
 }
@@ -3437,6 +3483,7 @@ export function phaseText(phase: RoomSnapshot["phase"], gameId?: RoomSettings["g
   if (phase === "ready") return "🪑 等待坐满";
   if (phase === "choosing") {
     if (gameId === "liarsdice") return "🎲 叫点中";
+    if (gameId === "coinflip") return "🪙 可以抛硬币";
     if (gameId === "othello" || gameId === "tictactoe" || gameId === "gomoku" || gameId === "jungle" || gameId === "chess") return "♟ 对局中";
     return "🤜 出拳中";
   }
@@ -3636,44 +3683,81 @@ export function SecurityDisclaimer({ onConfirm }: { onConfirm: () => void }) {
   );
 }
 
+// 全站榜单模块级短 TTL 缓存：同一浏览器 tab 内反复点开「排行榜」不必每次都重新拉全量分页——
+// 缓存新鲜则直接复用；过期则先展示旧数据、后台悄悄重新拉一遍再原地刷新，避免空转等待。
+let rosterCache: { data: PublicPlayer[]; fetchedAt: number } | null = null;
+const ROSTER_CACHE_TTL_MS = 20_000;
+
+// 按 players:roster 分页拉取全站玩家档案。先顺序拉第 1 页拿到 total，再把剩余页一次性并发
+// 发出（服务端每页只是纯内存转换，互不依赖），把原来 N 次顺序往返的墙钟耗时压到约 2 次。
+async function fetchRosterPages(alive: () => boolean): Promise<PublicPlayer[] | null> {
+  // 与服务端 rosterMaxLimit 对齐；maxPages 对应最多 5000 人，防止异常库无限拉。
+  const pageSize = 500;
+  const maxPages = 10;
+  const first = await ask<{
+    players?: PublicPlayer[];
+    hasMore?: boolean;
+    total?: number;
+  }>("players:roster", { offset: 0, limit: pageSize });
+  if (!alive()) return null;
+  const chunks: PublicPlayer[][] = [(first?.players || []).map(normalizePublicPlayer)];
+  const total = first?.total || 0;
+  if (first?.hasMore) {
+    const offsets: number[] = [];
+    for (let offset = pageSize; offset < total && offsets.length < maxPages - 1; offset += pageSize) {
+      offsets.push(offset);
+    }
+    const rest = await Promise.all(
+      offsets.map((offset) =>
+        ask<{ players?: PublicPlayer[] }>("players:roster", { offset, limit: pageSize }).then((res) =>
+          (res?.players || []).map(normalizePublicPlayer)
+        )
+      )
+    );
+    if (!alive()) return null;
+    chunks.push(...rest);
+  }
+  return chunks.flat();
+}
+
 export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPlayer[]; onClose: () => void }) {
   const [tab, setTab] = useState<GlobalLeaderboardTab>("positive");
   const [now, setNow] = useState(Date.now());
   // 全站档案（含长期离线 + 分游戏战绩）按需分页拉取，不依赖大厅实时快照。
-  const [roster, setRoster] = useState<PublicPlayer[] | null>(null);
-  const [rosterLoading, setRosterLoading] = useState(true);
+  const [roster, setRoster] = useState<PublicPlayer[] | null>(rosterCache?.data ?? null);
+  const [rosterLoading, setRosterLoading] = useState(!rosterCache);
   const [rosterError, setRosterError] = useState("");
 
   useEffect(() => {
     let alive = true;
-    setRosterLoading(true);
+    const cached = rosterCache;
+    const cacheFresh = !!cached && Date.now() - cached.fetchedAt < ROSTER_CACHE_TTL_MS;
     setRosterError("");
-    // 与服务端 rosterMaxLimit 对齐，减少往返次数（500×10=5000 上限）
-    const pageSize = 500;
-    const maxPages = 10; // 最多 5000 人，防止异常库无限拉
+    if (cached) {
+      // 有缓存（哪怕已过期）先展示，避免每次点开都对着空列表等待。
+      setRoster(cached.data);
+      setRosterLoading(false);
+    } else {
+      setRosterLoading(true);
+    }
+    if (cacheFresh) {
+      return () => {
+        alive = false;
+      };
+    }
     (async () => {
       try {
-        const acc: PublicPlayer[] = [];
-        let offset = 0;
-        for (let page = 0; page < maxPages; page++) {
-          const res = await ask<{
-            players?: PublicPlayer[];
-            hasMore?: boolean;
-            total?: number;
-            offset?: number;
-            limit?: number;
-          }>("players:roster", { offset, limit: pageSize });
-          if (!alive) return;
-          const chunk = (res?.players || []).map(normalizePublicPlayer);
-          acc.push(...chunk);
-          if (!res?.hasMore || chunk.length === 0) break;
-          offset += chunk.length;
-        }
-        if (alive) setRoster(acc);
+        const data = await fetchRosterPages(() => alive);
+        if (!alive || !data) return;
+        rosterCache = { data, fetchedAt: Date.now() };
+        setRoster(data);
       } catch (error) {
         if (!alive) return;
-        setRosterError(error instanceof Error ? error.message : "加载排行榜失败");
-        setRoster(null);
+        // 已有缓存兜底数据时，后台刷新失败不打断展示，静默忽略即可。
+        if (!cached) {
+          setRosterError(error instanceof Error ? error.message : "加载排行榜失败");
+          setRoster(null);
+        }
       } finally {
         if (alive) setRosterLoading(false);
       }
@@ -3805,7 +3889,8 @@ export function GlobalLeaderboardPanel({ players, onClose }: { players: PublicPl
 
 export function leaderboardPlayers(players: PublicPlayer[], tab: GlobalLeaderboardTab) {
   const copy = [...players];
-  // 过滤可用展示分（已封顶）；排序一律用 sort* 真实分，避免封顶后同分乱序。
+  // 过滤可用展示分（已封顶）；排序一律用 sort*（服务端下发时已与展示值一致，不带真实分，
+  // 真实分只有管理员后台可见——见 server.publicPlayer/publicPlayerAdmin），未封顶时才等于真实分。
   if (tab === "positive") return copy.filter((player) => sortRankedPointsOf(player) > 0).sort((a, b) => sortRankedPointsOf(b) - sortRankedPointsOf(a) || b.stats.wins - a.stats.wins);
   if (tab === "negative") return copy.filter((player) => sortRankedPointsOf(player) < 0).sort((a, b) => sortRankedPointsOf(a) - sortRankedPointsOf(b) || b.stats.losses - a.stats.losses);
   if (tab === "historyPositive") return copy.filter((player) => sortHighestScoreOf(player) > 0).sort((a, b) => sortHighestScoreOf(b) - sortHighestScoreOf(a) || b.stats.wins - a.stats.wins);

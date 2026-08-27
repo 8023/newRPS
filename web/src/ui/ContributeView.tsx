@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppConfig, ContributionItem, ContributionKind, ContributionStatus, PublicPlayer } from "../shared/types";
 import { ask } from "../lib/rpc";
 import { ContributeSeriesForm } from "./ContributeSeriesForm";
 import { StepEditor } from "./StepEditor";
 import { ContributionStatusChip } from "./AppViews";
 import { ContributionPreview, asContributionDraft, type StepPreview } from "./ContributionPreview";
+import { ContributionListControls, defaultContributionSortState, sortContributionItems, type ContributionSortState } from "./ContributionListControls";
 import {
   buildSeriesContent,
   emptySeriesStep,
@@ -76,6 +77,11 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
   const [seriesTargets, setSeriesTargets] = useState<string[]>([...allFactionIds]);
   const [seriesSteps, setSeriesSteps] = useState<StepDraft[]>([emptySeriesStep(allFactionIds)]);
   const [busy, setBusy] = useState(false);
+  // 列表顶部的模糊查询 / 排序：投稿多起来之后靠滚动找一条不现实，与后台共建审核共用
+  // 同一套控件（ContributionListControls）。切换板块时一并重置，避免"随机任务板块里
+  // 按完成率排"这种在另一板块没有意义的残留状态。
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<ContributionSortState>(() => defaultContributionSortState(tab));
   const [dirty, setDirty] = useState(false);
   const [leaveConfirm, setLeaveConfirm] = useState<{ action: () => void } | null>(null);
   // selectItem 的详情拉取是异步的：如果用户在它返回前就切换了板块/选中了别的项（甚至清空了
@@ -163,6 +169,8 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
     requestLeave(() => {
       setTab(id);
       setSelected(null);
+      setSearch("");
+      setSort(defaultContributionSortState(id));
       resetFormFor(id);
     });
   }
@@ -326,7 +334,15 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
   }
 
   const currentTab = tabs.find((t) => t.id === tab)!;
-  const itemsForTab = items.filter((it) => it.kind === tab);
+  const tabItems = items.filter((it) => it.kind === tab);
+  // 查询只匹配列表标题（系列=系列名，随机任务=服务端截出的首份文案前 24 字），
+  // 与后台共建审核的查询口径一致——列表里没有的内容不参与匹配，免得搜得到却看不出来。
+  const itemsForTab = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const matched = q ? tabItems.filter((it) => (it.title || "").toLowerCase().includes(q)) : tabItems;
+    return sortContributionItems(matched, sort);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, tab, search, sort]);
   const selectedDetail = selectedId ? detailsById[selectedId] : null;
   const selectedStatus = selectedDetail?.status;
   const selectedEditable = selectedStatus ? editableStatuses.has(selectedStatus) : false;
@@ -357,6 +373,22 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
         <p className="hint">你好，{me.name}。投稿通过后才会进入正式游戏。待审内容不会被抽到。</p>
         <div className="contribute-layout">
           <div className="contribute-sidebar">
+            <ContributionListControls
+              kind={tab}
+              sort={sort}
+              onSort={setSort}
+              search={search}
+              onSearch={setSearch}
+              searchPlaceholder={tab === "series" ? "搜索系列任务标题" : "搜索随机任务文案"}
+            >
+              {/* 「投稿新 xxx」入口固定在列表上方而不是列表末尾：投稿攒到几百条之后，
+                  跟在滚动区最后的按钮要一路滑到底才够得着。放在 ContributionListControls
+                  内部（而不是与它平级）是为了跟搜索框、排序按钮共用同一份滚动条槽预留，
+                  三者与下面的列表卡片右边缘才会对齐。 */}
+              <button type="button" className="contribute-item contribute-item-new" onClick={startNew}>
+                ＋ 投稿{currentTab.noun}
+              </button>
+            </ContributionListControls>
             <div className="contribute-list">
               {itemsForTab.map((item) => (
                 <button
@@ -369,9 +401,7 @@ export function ContributeView({ config, me, onBack, onError, ensureSession }: {
                   <small className="hint">{itemMetaLine(item, true)}</small>
                 </button>
               ))}
-              <button type="button" className="contribute-item contribute-item-new" onClick={startNew}>
-                ＋ 投稿{currentTab.noun}
-              </button>
+              {tabItems.length > 0 && itemsForTab.length === 0 ? <p className="hint">没有匹配的投稿</p> : null}
             </div>
           </div>
           <div className="contribute-main">

@@ -40,7 +40,7 @@ func (s *Server) altAccountsToPublicPlayers(ids []string) []types.PublicPlayer {
 	out := make([]types.PublicPlayer, 0, len(ids))
 	for _, id := range ids {
 		if pl := s.players[id]; pl != nil {
-			out = append(out, s.publicPlayer(pl))
+			out = append(out, s.publicPlayerAdmin(pl))
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })

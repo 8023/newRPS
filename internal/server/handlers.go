@@ -118,6 +118,8 @@ func (s *Server) eventHandler(event string) (RateLimitOptions, eventHandlerFunc)
 		return RateLimitOptions{20, 10_000, 20_000}, s.onRoomMove
 	case "room:move:withdraw":
 		return RateLimitOptions{20, 10_000, 20_000}, s.onRoomMoveWithdraw
+	case "coinflip:guess":
+		return RateLimitOptions{20, 10_000, 20_000}, s.onCoinFlipGuess
 	case "othello:ready":
 		return RateLimitOptions{12, 60_000, 30_000}, s.onOthelloReady
 	case "othello:move":
@@ -657,7 +659,13 @@ func (s *Server) onPlayerUpdateProfile(client *Client, env wsEnvelope) {
 		s.logPlayerActivity("gender_change", player.ID, player.GenderLabel, oldGenderLabel, client.ipAddress, client.deviceKey, client.fingerprint, "")
 	}
 	s.refreshNameWarState(player, now)
-	if exitedHardMode {
+	// 逃跑称号与积分档称号共用 Stats.Title 这一格，优先级链是
+	// 积分档 < 逃跑的人 < 自设称号 < 主人设定 < 管理员自定义——自设/主人/管理员任一档在场
+	// 就不覆盖，与 syncTitleForRankSegment 对 TitleCustom 的处理保持一致；未被更高档覆盖时，
+	// 这里写入的文本也会在下次积分跨档触发 syncTitleForRankSegment 时被换回，不是永久贴死。
+	if exitedHardMode && !player.Stats.TitleCustom &&
+		strings.TrimSpace(player.Stats.SelfTitle) == "" &&
+		s.bestPetTitle(player.ID) == "" {
 		player.Stats.Title = s.cfg.NameWar.EscapeTitle
 		if player.Stats.Title == "" {
 			player.Stats.Title = "逃跑的人"
@@ -991,7 +999,7 @@ func (s *Server) onNameWarRenameTarget(client *Client, env wsEnvelope) {
 	}
 	renameKind := p.Kind
 	if renameKind == "" {
-		if s.isNameWarRenameTarget(s.publicPlayer(target)) {
+		if s.isNameWarRenameTarget(target) {
 			renameKind = "nameWar"
 		} else if ptrBool(target.ExtremeForceClosed) {
 			renameKind = "extreme"
@@ -1048,7 +1056,7 @@ func (s *Server) onNameWarRenameTarget(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, fmt.Sprintf("需要 %d 分以上才能修改失格者名字", renameMinPoints))
 		return
 	}
-	if !s.isNameWarRenameTarget(s.publicPlayer(target)) {
+	if !s.isNameWarRenameTarget(target) {
 		client.reply(env.ID, nil, "对方当前不是可改名失格者")
 		return
 	}

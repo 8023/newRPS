@@ -221,6 +221,8 @@ type RoomState struct {
 	Gomoku          *types.GomokuState
 	Jungle          *types.JungleState
 	Chess           *types.ChessState
+	// CoinFlip：猜硬币当前一次抛掷的展示态，见 game_coinflip.go 顶部注释。
+	CoinFlip *types.CoinFlipState
 	// chessRepetition：局面键历史，仅服务端用于三次重复和棋，不进房间快照。
 	chessRepetition []string
 	// jungleMoves/chessUndoStack/othelloUndoStack：各游戏悔棋用的服务端私有历史
@@ -379,6 +381,9 @@ type Server struct {
 	genderStore       *genderStore
 	contributionStore *contributionStore
 	contribUploadsDir string
+	// contribCountsCache：players:roster 分页拉取时，「已通过共建投稿数」是与分页无关的全站
+	// 聚合统计，短 TTL 缓存后同一次拉榜的多页请求不会把同一条 SQL 重复查好几遍（见 ws.go）。
+	contribCountsCache atomic.Pointer[contribCountsSnapshot]
 	// punishmentTasksCache / punishmentSeriesCache：启动 list 一次，admin save 后刷新，
 	// 与 s.cfg 同锁（s.mu）保护；选任务逻辑一律读缓存，不直接查 SQLite。
 	punishmentTasksCache  []types.PunishmentTaskConfig

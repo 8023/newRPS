@@ -51,7 +51,7 @@ func (s *Server) buildAdminPetBondGraph() adminPetBondGraph {
 	nodes := make([]types.PublicPlayer, 0, len(ids))
 	for _, id := range ids {
 		if p := s.players[id]; p != nil {
-			nodes = append(nodes, s.publicPlayer(p))
+			nodes = append(nodes, s.publicPlayerAdmin(p))
 		} else {
 			// 目前没有账号注销路径，这里只是防御性兜底，避免边引用的玩家 id 意外查不到时前端崩掉。
 			nodes = append(nodes, types.PublicPlayer{ID: id, Name: "已注销", DisplayName: "已注销"})

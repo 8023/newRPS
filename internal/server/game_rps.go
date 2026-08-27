@@ -175,6 +175,17 @@ func (s *Server) maybeStartChoosing(room *RoomState) {
 		}
 		return
 	}
+	if room.Settings.GameID == types.GameCoinFlip {
+		// 猜硬币不需要"准备"环节，也不需要战斗席 B：座位 A 一有人就直接可抛，
+		// 与下面 RPS 默认分支同构（不像黑白棋/象棋那样要求先 ready-up）。
+		if room.Phase == types.PhaseChoosing {
+			return
+		}
+		if room.Seats[types.SeatA] != nil {
+			s.resetCoinFlipRoom(room)
+		}
+		return
+	}
 	if room.Phase == types.PhaseChoosing && (room.Choices[types.SeatA] != "" || room.Choices[types.SeatB] != "") {
 		return
 	}
@@ -221,6 +232,16 @@ func (s *Server) prepareNextChoice(room *RoomState) {
 	}
 	if room.Settings.GameID == types.GameChess {
 		s.resetChessRoom(room)
+		return
+	}
+	if room.Settings.GameID == types.GameCoinFlip {
+		if room.Seats[types.SeatA] == nil {
+			room.Phase = types.PhaseReady
+			room.Status = "waiting"
+			room.ResultText = ""
+			return
+		}
+		s.resetCoinFlipRoom(room)
 		return
 	}
 	if room.Seats[types.SeatA] == nil || room.Seats[types.SeatB] == nil {

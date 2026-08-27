@@ -502,6 +502,16 @@ export function normalizeChess(state: RoomSnapshot["chess"]): RoomSnapshot["ches
   };
 }
 
+export function normalizeCoinFlip(state: RoomSnapshot["coinFlip"]): RoomSnapshot["coinFlip"] {
+  if (!state) return state;
+  return {
+    guess: state.guess || "",
+    result: state.result || "",
+    correct: Boolean(state.correct),
+    settledAt: Number(state.settledAt) || 0
+  };
+}
+
 export function normalizeLiarsDice(state: RoomSnapshot["liarsDice"]): RoomSnapshot["liarsDice"] {
   if (!state) return state;
   return {
@@ -551,7 +561,8 @@ export function normalizeRoomSnapshot(room: RoomSnapshot): RoomSnapshot {
     liarsDice: normalizeLiarsDice(room.liarsDice),
     gomoku: normalizeGomoku(room.gomoku),
     jungle: normalizeJungle(room.jungle),
-    chess: normalizeChess(room.chess)
+    chess: normalizeChess(room.chess),
+    coinFlip: normalizeCoinFlip(room.coinFlip)
   };
 }
 

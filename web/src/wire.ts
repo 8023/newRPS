@@ -570,6 +570,10 @@ function materializeRoom(room: any): any {
     r.chess.clockRemaining = pairsToMap(r.chess.clockRemaining, 0);
     materializeChessTree(r.chess);
   }
+  if (r.coinFlip) {
+    r.coinFlip.correct = Boolean(r.coinFlip.correct);
+    r.coinFlip.settledAt = numOr(r.coinFlip.settledAt, 0);
+  }
   // 历史里的井字连线/大话骰开牌数据同样可能丢 0 / 需要 pair 展开
   if (Array.isArray(r.roundHistory)) {
     r.roundHistory = r.roundHistory.map(fillRoundHistoryItemDefaults);

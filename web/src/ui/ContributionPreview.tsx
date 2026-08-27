@@ -85,7 +85,7 @@ function StepMeta({ step, tagLabel }: { step: StepPreview; tagLabel: (id: string
         {step.inRandomPool === false ? "不进入随机任务池" : `难度 ${step.order ?? "-"}`}
         {tags.length ? ` · 标签：${tags.join("、")}` : ""}
       </small>
-      {step.backgroundImage ? <img src={step.backgroundImage} alt="" className="cover-thumb" /> : null}
+      {step.backgroundImage ? <img src={step.backgroundImage} alt="" className="contribute-preview-cover" /> : null}
     </>
   );
 }

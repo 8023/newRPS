@@ -2,7 +2,7 @@
 
 实时联机小游戏平台：**Go 后端** + **React 前端**。
 
-主玩法：锤子剪刀布 / 黑白棋 / 井字棋 / 五子棋 / 斗兽棋 / 国际象棋 / 大话骰。含大厅、房间、聊天、观战、排位、惩罚、名字争夺战、白给、极限模式、后台配置等。仅支持真人在线对局。
+主玩法：锤子剪刀布 / 黑白棋 / 井字棋 / 五子棋 / 斗兽棋 / 国际象棋 / 大话骰 / 猜硬币。含大厅、房间、聊天、观战、排位、惩罚、名字争夺战、白给、极限模式、后台配置等。仅支持真人在线对局（猜硬币例外——单人惩罚小游戏，见下文）。
 
 ## 目录结构
 
@@ -365,6 +365,15 @@ npm run fetch-geoip   # 同时下载 config/xdb/ip2region_v4.xdb 与 ip2region_v
 - **断线判负**：断线判负的规则是"上家"（入席顺序里的前一位，固定关系，与谁最后叫过点无关）胜——`createLiarsDiceDisconnectForfeit`/`applyLiarsDiceDisconnectForfeit`，与其它三个游戏的 `DisconnectForfeit` 走独立的 `LiarsDiceDisconnectForfeit`（字段是 playerID 而非 SeatKey）。
 - **惩罚**：`punishment.go` 的 `setupPunishmentForPlayers` 从原来 Seat/RoundResult 耦合的 `setupPunishmentOrNext` 里抽出通用尾段（按 playerID 列表工作），大话骰和其它三个游戏共用这一段；`buildLiarsDicePunishmentTasks` 单独实现（赢家直接作为"玩家发布任务"模式下的任务发布人，不走 Seat 反查）。
 
+## 猜硬币（Coin Flip）
+
+唯一不需要联机对手的惩罚小游戏，核心逻辑集中在 `internal/server/game_coinflip.go`。只用战斗席 A（`Seats[B]` 永远锁死），建房自动坐上座位 A、无需 ready-up；观战者可以在座位 A 空出来后接棒坐下继续玩，房间照常出现在大厅列表和后台房间管理里。
+
+- **抛掷**：`coinflip:guess` 一次 RPC 完成"选面 + 服务端随机开出结果 + 结算"，没有像 RPS 那样的两阶段出拳/揭示流程；`RoomState.CoinFlip` 存当前一次抛掷的展示态（猜测/结果/是否猜中/落定时间），落定时间只用于前端本地重放 1 秒翻面动画，服务端不等这段时间。
+- **猜错即罚**：由于 `Seats[B]` 恒为空，`humanOpponent`/`punishmentReviewer` 天然返回 `nil`——`onPunishmentSubmit` 里 `approvedBySystem := reviewer == nil || ...` 因此自动短路成 `true`，猜硬币不需要任何额外代码就做到"提交证明立即通过"；同理 `createDisconnectForfeit` 也因为对手座位为空而天然跳过，没有断线判负。任务结算直接调用 `buildPunishmentTasksWithWinnerName`（与大话骰同构，不走 Seat/RoundResult 耦合的 `buildMatchHistoryShell`），`{winner}` 占位符固定替换成 `AppConfig.Site.CoinFlipWinnerLabel`（管理员可在后台「站点」板块自定义，默认"系统"）。
+- **结构性限制**：建房时强制 `enablePunishment=true`、结构性关闭排位/倍率/极限模式/平局双罚/需对手确认/每子惩罚；`punishmentSource` 只允许 `random`/`series`（没有真人对手，"玩家发布任务"没有意义，选了会被后端拒绝）。
+- **不计分**：不调用 `recordGameOutcome`/`applySeatOutcome`/任何排位分结算——胜负场次、`GameStats`、排位积分、白给值都不受影响；受罚次数（`PublicStats.Punishments`）与随机任务难度进度（`RoomState.PunishmentTaskProgress`）复用 `setupPunishmentForPlayers`/`pickSystemTaskForPlayerAdvancing` 的默认行为照常累加/递增，与其它游戏一致。
+
 ## 排位积分
 
 `PlayerState.Stats.RankedPoints`（`internal/server/player.go`）在数据库/内存中**永远不设上下限**——胜负结算（`updateRankedPoints`）、管理员手动改分（`setRankedPointsByAdmin`）、以及下面的每日衰减，全部直接对存储值做加减，从不 clamp。`config/json/ranked-score.json`（`types.RankedScoreConfig`：`max`/`min`/`nameWarMin`/`dailyDecayRatio`，后台「排位分设置」可调）只在**下发展示**时生效：`internal/server/player.go` 的 `publicPlayer()` 是所有出站玩家快照（大厅、房间座位、`player:get`、观战列表等）唯一的组装入口，会把真实分数的一份副本按 `max`/`min`（开启「名字争夺战」的玩家用 `nameWarMin` 代替 `min`）夹紧后再下发，真实存储值不受影响。
@@ -372,7 +381,7 @@ npm run fetch-geoip   # 同时下载 config/xdb/ip2region_v4.xdb 与 ip2region_v
 - **后台调低上/下限**：已经"超范围"的老用户分数在数据库里原样保留，只在前端展示时被新的上/下限封顶；之后正常输赢分或每日衰减，仍然直接对真实（可能超范围的）存储值结算，不会被这次展示层的调整拖拽。
 - **称号分段**：`titleSegmentFor`（`internal/server/player.go`）在真实分数落在所有称号分段范围之外时，会夹到最近的边界分段（而不是固定回退到最低档），因此称号池（`config/json/titles.json`）不需要跟着 `ranked-score.json` 的范围同步扩大。
 - **每日衰减**：`scheduleRankedDailyDecay`/`applyRankedDailyDecay`（`internal/server/player.go`）每 24 小时（对齐到 UTC 天边界，`time.AfterFunc` 定位到下一个边界后切换为 `time.Ticker`，与「极限模式」整点衰减是完全独立的两套机制）把每个玩家的真实 `RankedPoints` 乘以 `dailyDecayRatio`（默认 `0.98`）并向 0 截断小数——正负分都会朝 0 方向收缩。每个玩家用 `RankedLastDecayDay` 记录已衰减到的"天桶"，防止服务重启后重复衰减。
-- **历史最高/最低分**：`recordRankedExtremes` 持续记录真实极值（存储永不回退）；下发展示时与当前分一样按 `max`/`min`/`nameWarMin` 封顶。排行榜排序使用 `sortRankedPoints`/`sortHighestScore`/`sortLowestScore` 真实分，避免一堆人显示 4999 时名次乱序。
+- **历史最高/最低分**：`recordRankedExtremes` 持续记录真实极值（存储永不回退）；下发展示时与当前分一样按 `max`/`min`/`nameWarMin` 封顶。管理员后台保留按真实分排序的能力；普通玩家收到的公开快照会把 `sortRankedPoints`/`sortHighestScore`/`sortLowestScore` 一并按展示值封顶，避免通过未渲染字段反推出真实分。
 - **称号分段用百分比**：`config/json/titles.json` 的 `minPercent`/`maxPercent`（-100～100）相对 `ranked-score.json` 的展示上下限换算真实分所属段；改展示上下限无需改称号绝对分。极限模式的 pos/neg 系数表与同一百分比刻度对齐。
 - **管理员自定义称号**：后台「玩家管理」可直接给某个玩家填一个不在 `titles.json` 池里的称号（`editPlayer` action，`internal/server/handlers_room.go`），此时会置位 `PublicStats.TitleCustom`；`syncTitleForRankSegment`（`internal/server/player.go`）一旦发现该标记就直接跳过重算，不再随排位分升降、跨档、改性别/阵营、后台调整 `ranked-score.json` 的 `max`/`min` 而被自动改写。把后台称号输入框清空并保存会清掉该标记、立即按当前排位分重算回自动称号。前端输入框此时会用黄色边框区分，`web/src/ui/AdminViews.tsx`。
 - 「名字争夺战」失格线：`config/json/name-war.json` 的 `penaltyThreshold`（默认 `-4999`，后台可调），按**真实存储分**判定，与展示封顶无关。改名所需最低分同样在该文件里，`renameMinPoints`（默认 `500`，后台可调），只有真实分达到此值的玩家才能给失格者改名。
@@ -390,6 +399,9 @@ npm run test           # go test + 前端 build
 
 ## 最近更新记录
 
+- **新增猜硬币**：唯一不需要联机对手的惩罚小游戏，见上文「猜硬币（Coin Flip）」一节。只用战斗席 A，观战者可接棒坐下，房间照常出现在大厅与后台房间管理；猜错立即进惩罚阶段，没有真人对手，提交证明自动通过；不计入排位积分、胜负场次或白给值，受罚次数与随机任务难度进度照常累加/递增。协议新增 `CoinFlipState`（`RoomSnapshot.coin_flip`）、`RoundHistoryItem.coin_flip_guess`/`coin_flip_result`、`SiteConfig.coin_flip_winner_label`（前后端需同步发布）。
+- **公开积分字段收紧**：普通玩家的大厅、房间、资料和全站排行榜快照不再携带未封顶真实积分；管理员玩家管理、关联账号和关系图谱等专属回执仍保留真实分排序字段。名字争夺战的失格判断也直接读取服务端真实积分，展示封顶不会改变业务判定。
+- **共建列表与排行榜体验优化**：玩家端和后台共建审核列表加入标题/投稿者搜索、时间和点赞率排序，系列另支持完成率排序，新增投稿入口固定在列表顶部；全站排行榜保留短时缓存并并发拉取分页，服务端对共建统计做短 TTL 缓存，减少重复查询和打开等待。
 - **移除后台「导出配置」**：不再提供 `GET /api/config/export` 与对应的「导出配置」按钮。
 - **共建封面图访问控制按「最新版本是否仍引用」判定**：不看投稿审核状态；`sub_tasks` 中任一逻辑任务最新且 active 的版本仍引用该 URL 时即可访问。被换下、从未写入草稿或随系列缩短而失活的图片会变成不可访问的孤儿，但文件仍永久保留在磁盘。校验通过独立只读连接查询，不占用主写连接（`SetMaxOpenConns(1)`）。
 - **共建投稿审核体验优化**：后台「共建审核」新增「取消撤回」——已下架/已撤回的投稿现在可以浏览到，一键恢复上线（曾正式发布过的）或退回初审队列（从未发布过的）；系列任务编辑表单的「取消编辑」移到表单下方，发布按钮改叫「保存并批准」；系列每一步的编辑区左右两栏互换（左栏惩罚标签、右栏难度/封面图/上移下移删除添加），未勾选「同时发布到随机任务」时封面图与四个操作按钮合并成一行；投稿状态标签统一「待审批」「已驳回」文案（不再区分初审与复审）；列表日期不再显示年份，详情页保持 `YY/MM/DD`。

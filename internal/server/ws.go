@@ -551,11 +551,25 @@ func (s *Server) onPlayersRoster(client *Client, env wsEnvelope) {
 	}, "")
 }
 
+// contribCountsCacheTTLMs：players:roster 每页都会问一次「已通过共建投稿数」，但这是与
+// offset/limit 无关的全站聚合，同一次拉榜（可能 5+ 页）没必要把同一条 GROUP BY 重复查好几遍。
+// 几秒的陈旧度对排行榜这种展示性统计可以接受。
+const contribCountsCacheTTLMs = 5_000
+
+type contribCountsSnapshot struct {
+	counts map[string]int
+	atMs   int64
+}
+
 // approvedContributionCountsWithoutServerLock 供持有 s.mu 的 roster handler 调用；优先使用
 // analyticsRO，未启用独立只读连接时才退回共建主连接，但两种情况都不占着全局状态锁查询。
 func (s *Server) approvedContributionCountsWithoutServerLock() map[string]int {
 	if s.contributionStore == nil || s.contributionStore.tasks == nil {
 		return nil
+	}
+	now := nowMs()
+	if snap := s.contribCountsCache.Load(); snap != nil && now-snap.atMs < contribCountsCacheTTLMs {
+		return snap.counts
 	}
 	readDB := s.contributionStore.db
 	if s.activityRO != nil {
@@ -567,6 +581,7 @@ func (s *Server) approvedContributionCountsWithoutServerLock() map[string]int {
 	if err != nil {
 		return nil
 	}
+	s.contribCountsCache.Store(&contribCountsSnapshot{counts: counts, atMs: now})
 	return counts
 }
 

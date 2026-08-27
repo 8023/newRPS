@@ -5795,6 +5795,12 @@ export namespace game {
         /** RoundHistoryItem chessWhiteSeat. */
         chessWhiteSeat: string;
 
+        /** RoundHistoryItem coinFlipGuess. */
+        coinFlipGuess: string;
+
+        /** RoundHistoryItem coinFlipResult. */
+        coinFlipResult: string;
+
         /**
          * Creates a new RoundHistoryItem instance using the specified properties.
          * @param [properties] Properties to set
@@ -5986,6 +5992,12 @@ export namespace game {
 
             /** RoundHistoryItem chessWhiteSeat */
             chessWhiteSeat?: (string|null);
+
+            /** RoundHistoryItem coinFlipGuess */
+            coinFlipGuess?: (string|null);
+
+            /** RoundHistoryItem coinFlipResult */
+            coinFlipResult?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -7766,6 +7778,141 @@ export namespace game {
     }
 
     /**
+     * Properties of a CoinFlipState.
+     * @deprecated Use game.CoinFlipState.$Properties instead.
+     */
+    interface ICoinFlipState extends game.CoinFlipState.$Properties {
+    }
+
+    /** Represents a CoinFlipState. */
+    class CoinFlipState {
+
+        /**
+         * Constructs a new CoinFlipState.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: game.CoinFlipState.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** CoinFlipState guess. */
+        guess: string;
+
+        /** CoinFlipState result. */
+        result: string;
+
+        /** CoinFlipState correct. */
+        correct: boolean;
+
+        /** CoinFlipState settledAt. */
+        settledAt: (number|Long);
+
+        /**
+         * Creates a new CoinFlipState instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CoinFlipState instance
+         */
+        static create(properties: game.CoinFlipState.$Shape): game.CoinFlipState & game.CoinFlipState.$Shape;
+        static create(properties?: game.CoinFlipState.$Properties): game.CoinFlipState;
+
+        /**
+         * Encodes the specified CoinFlipState message. Does not implicitly {@link game.CoinFlipState.verify|verify} messages.
+         * @param message CoinFlipState message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: game.CoinFlipState.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CoinFlipState message, length delimited. Does not implicitly {@link game.CoinFlipState.verify|verify} messages.
+         * @param message CoinFlipState message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: game.CoinFlipState.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CoinFlipState message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {game.CoinFlipState & game.CoinFlipState.$Shape} CoinFlipState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): game.CoinFlipState & game.CoinFlipState.$Shape;
+
+        /**
+         * Decodes a CoinFlipState message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {game.CoinFlipState & game.CoinFlipState.$Shape} CoinFlipState
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): game.CoinFlipState & game.CoinFlipState.$Shape;
+
+        /**
+         * Verifies a CoinFlipState message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CoinFlipState message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CoinFlipState
+         */
+        static fromObject(object: { [k: string]: any }): game.CoinFlipState;
+
+        /**
+         * Creates a plain object from a CoinFlipState message. Also converts values to other types if specified.
+         * @param message CoinFlipState
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: game.CoinFlipState, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CoinFlipState to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for CoinFlipState
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace CoinFlipState {
+
+        /** Properties of a CoinFlipState. */
+        interface $Properties {
+
+            /** CoinFlipState guess */
+            guess?: (string|null);
+
+            /** CoinFlipState result */
+            result?: (string|null);
+
+            /** CoinFlipState correct */
+            correct?: (boolean|null);
+
+            /** CoinFlipState settledAt */
+            settledAt?: (number|Long|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a CoinFlipState. */
+        type $Shape = game.CoinFlipState.$Properties;
+    }
+
+    /**
      * Properties of a BoolPair.
      * @deprecated Use game.BoolPair.$Properties instead.
      */
@@ -8328,6 +8475,9 @@ export namespace game {
         /** RoomSnapshot chess. */
         chess?: (game.ChessState.$Properties|null);
 
+        /** RoomSnapshot coinFlip. */
+        coinFlip?: (game.CoinFlipState.$Properties|null);
+
         /** RoomSnapshot resultText. */
         resultText: string;
 
@@ -8493,6 +8643,9 @@ export namespace game {
             /** RoomSnapshot chess */
             chess?: (game.ChessState.$Properties|null);
 
+            /** RoomSnapshot coinFlip */
+            coinFlip?: (game.CoinFlipState.$Properties|null);
+
             /** RoomSnapshot resultText */
             resultText?: (string|null);
 
@@ -8548,6 +8701,7 @@ export namespace game {
           gomoku?: game.GomokuState.$Shape|null;
           jungle?: game.JungleState.$Shape|null;
           chess?: game.ChessState.$Shape|null;
+          coinFlip?: game.CoinFlipState.$Shape|null;
           resultText?: string|null;
           punishedPlayerIds?: string[]|null;
           proofs?: game.PunishmentProof.$Shape[]|null;
@@ -12527,6 +12681,9 @@ export namespace game {
         /** SiteConfig anonymousContributorLabel. */
         anonymousContributorLabel: string;
 
+        /** SiteConfig coinFlipWinnerLabel. */
+        coinFlipWinnerLabel: string;
+
         /**
          * Creates a new SiteConfig instance using the specified properties.
          * @param [properties] Properties to set
@@ -12622,6 +12779,9 @@ export namespace game {
 
             /** SiteConfig anonymousContributorLabel */
             anonymousContributorLabel?: (string|null);
+
+            /** SiteConfig coinFlipWinnerLabel */
+            coinFlipWinnerLabel?: (string|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

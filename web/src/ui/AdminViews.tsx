@@ -406,6 +406,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
             <label className="field-label"><span>网站说明</span><textarea value={draft.site.description} onChange={(event) => patch({ site: { ...draft.site, description: event.target.value } })} placeholder="网站说明" /></label>
             <label className="field-label"><span>管理员口令</span><input type="password" value={draft.site.adminPassword} onChange={(event) => patch({ site: { ...draft.site, adminPassword: event.target.value } })} placeholder="管理员口令" /></label>
             <label className="field-label"><span>匿名贡献者展示名</span><input value={draft.site.anonymousContributorLabel || "匿名贡献者"} onChange={(event) => patch({ site: { ...draft.site, anonymousContributorLabel: event.target.value } })} placeholder="匿名贡献者" /></label>
+            <label className="field-label"><span>猜硬币赢家展示名</span><input value={draft.site.coinFlipWinnerLabel || "系统"} onChange={(event) => patch({ site: { ...draft.site, coinFlipWinnerLabel: event.target.value } })} placeholder="系统" /></label>
           </div>
           <div className="config-section admin-section-card">
             <AdminSectionHeader title="限流策略" subtitle="按设备、IP 与资源占用范围集中管理访问限制。" />
@@ -669,8 +670,8 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
             <AdminSectionHeader title="排位分显示" subtitle="控制排行榜/个人资料等展示时的封顶值，及每日衰减比例。数据库中的存储值无限制。" />
             <div className="config-row">
               <label className="field-label"><span>展示上限</span><NumberField min={1} value={rankedScore.max} onChange={(max) => patchRankedScore({ max })} /></label>
-              <label className="field-label"><span>普通玩家展示下限</span><NumberField max={-1} value={rankedScore.min} onChange={(min) => patchRankedScore({ min })} /></label>
-              <label className="field-label"><span>名字争夺战展示下限</span><NumberField value={rankedScore.nameWarMin} onChange={(nameWarMin) => patchRankedScore({ nameWarMin })} /></label>
+              <label className="field-label"><span>展示下限</span><NumberField max={-1} value={rankedScore.min} onChange={(min) => patchRankedScore({ min })} /></label>
+              <label className="field-label"><span>名争展示下限</span><NumberField value={rankedScore.nameWarMin} onChange={(nameWarMin) => patchRankedScore({ nameWarMin })} /></label>
               <label className="field-label"><span>每日衰减比例</span><NumberField min={0.01} max={1} step={0.01} value={rankedScore.dailyDecayRatio} onChange={(dailyDecayRatio) => patchRankedScore({ dailyDecayRatio })} /></label>
             </div>
           </div>
@@ -679,7 +680,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
             <div className="config-row">
               {(draft.games || []).map((game, index) => (
                 <label className="field-label" key={game.id}>
-                  <span>{game.id === "liarsdice" ? `${game.name}（每子）` : `${game.name}（每局）`}</span>
+                  <span>{game.id === "othello" ? `${game.name}（每子）` : `${game.name}（每局）`}</span>
                   <input
                     value={(game.stakes ?? []).join(",")}
                     placeholder="如 5,10,20"
@@ -1317,7 +1318,7 @@ export function AdminPanel({ config, lobby, onBack, onError }: { config: AppConf
                     <div className="admin-room" key={room.id}>
                       <div className="admin-card-title">
                         <strong>{room.name}</strong>
-                        <small>{room.id} · {roomStatusText(room.status)} · {room.players}/2 战斗席 · {room.spectators} 观战</small>
+                        <small>{room.id} · {roomStatusText(room.status)} · {room.gameId === "liarsdice" ? `${room.players} 人参战` : room.gameId === "coinflip" ? `${room.players}/1 参战席` : `${room.players}/2 战斗席`} · {room.spectators} 观战</small>
                       </div>
                       {room.tags?.length ? <RoomTagList tags={room.tags} /> : null}
                       <RoomInfoTagList tags={lobbyRoomInfoTags(config, room)} />

@@ -515,6 +515,8 @@ message RoundHistoryItem {
   string gomoku_black_seat = 37;
   repeated Pos gomoku_line = 38;
   string chess_white_seat = 39;
+  string coin_flip_guess = 40;
+  string coin_flip_result = 41;
 }
 
 message Int32List {
@@ -627,6 +629,16 @@ message TicTacToeState {
   string winner = 9;
 }
 
+// CoinFlipState：猜硬币当前一次抛掷的展示态——单人小游戏，无战斗席 B，猜错立即进入
+// 惩罚阶段（见 RoomSnapshot.phase）。guess/result 取值 "char"（字，1元数字面）/
+// "flower"（花，菊花面）。
+message CoinFlipState {
+  string guess = 1;
+  string result = 2;
+  bool correct = 3;
+  int64 settled_at = 4;
+}
+
 message BoolPair {
   string key = 1;
   bool value = 2;
@@ -666,6 +678,7 @@ message RoomSnapshot {
   GomokuState gomoku = 24;
   JungleState jungle = 27;
   ChessState chess = 28;
+  CoinFlipState coin_flip = 29;
   string result_text = 14;
   repeated string punished_player_ids = 15;
   repeated PunishmentProof proofs = 16;
@@ -951,6 +964,8 @@ message SiteConfig {
   // admin password never sent to clients; keep empty on wire
   string admin_password = 3;
   string anonymous_contributor_label = 4;
+  // 猜硬币任务文案里 {winner} 占位符的展示名（猜硬币没有真人对手，固定由系统审批）。
+  string coin_flip_winner_label = 5;
 }
 
 message AccessControlConfig {

@@ -609,22 +609,41 @@ func (s *Server) applyGender(player *PlayerState, genderID string) {
 	player.DisplayName = s.formatDisplayName(player)
 }
 
+// publicPlayer 构建下发给普通玩家连接（大厅/房间广播、player:get、players:roster、
+// 自身操作回执等一切非管理员通道）的公开资料。真实存储分只应管理员后台可见——Sort*
+// 字段过去存的是未封顶真实分（供前端排行榜同分排序），但这几个通道都会把返回值原样
+// 发给发起请求/订阅频道的玩家本人（含 player:get 允许任意查询他人 id），等于把真实积分
+// 报文级下发给了所有人，只是当前前端没有把它渲染成文字而已。这里统一改成与展示值
+// （已按后台「排位分显示」上下限封顶）相同，排行榜同分打平退化为按封顶值比较，不再
+// 泄露真实值；管理员后台需要真实分排序/展示，见 publicPlayerAdmin。
 func (s *Server) publicPlayer(player *PlayerState) types.PublicPlayer {
 	p := player.PublicPlayer
 	p.SyncTotalsFromGameStats()
-	// 真实分留给排序；展示字段按后台配置封顶（含历史最高/最低）。
-	p.Stats.SortRankedPoints = player.Stats.RankedPoints
-	p.Stats.SortHighestScore = player.Stats.HighestScore
-	p.Stats.SortLowestScore = player.Stats.LowestScore
 	p.Stats.RankedPoints = s.displayClampScore(player, player.Stats.RankedPoints)
 	p.Stats.HighestScore = s.displayClampScore(player, player.Stats.HighestScore)
 	p.Stats.LowestScore = s.displayClampScore(player, player.Stats.LowestScore)
+	p.Stats.SortRankedPoints = p.Stats.RankedPoints
+	p.Stats.SortHighestScore = p.Stats.HighestScore
+	p.Stats.SortLowestScore = p.Stats.LowestScore
 	// 累计在线：存储值 + 当前会话（不写回存储，避免与断线累加重叠）。
 	// 量化到整分钟：毫秒级实时递增会让每次大厅/玩家广播的树哈希都变，
 	// 触发无意义的 DELTA/FULL 流量（见性能分析 #2）。
 	p.Stats.TotalOnlineMs = quantizeOnlineMs(s.effectiveOnlineMs(player))
 	// 展示称号优先级见 applyDisplayTitle：管理员自定义 > 宠物称号 > 玩家自设称号 > 积分档称号。
 	s.applyDisplayTitle(player, &p)
+	return p
+}
+
+// publicPlayerAdmin 与 publicPlayer 完全一致，唯独 Sort* 三个字段换回数据库真实存储分
+// （不封顶）。仅供已通过 isAdminSocket 校验的管理员专属 RPC 使用（onAdminListPlayers /
+// altAccountsToPublicPlayers / buildAdminPetBondGraph 等），这些回执都是单播给发起请求的
+// 管理员连接本身，不会进入任何广播频道；调用方必须自行保证这一点，不得把结果转发给
+// 普通玩家连接。
+func (s *Server) publicPlayerAdmin(player *PlayerState) types.PublicPlayer {
+	p := s.publicPlayer(player)
+	p.Stats.SortRankedPoints = player.Stats.RankedPoints
+	p.Stats.SortHighestScore = player.Stats.HighestScore
+	p.Stats.SortLowestScore = player.Stats.LowestScore
 	return p
 }
 
@@ -1288,8 +1307,11 @@ func (s *Server) nameWarRenameMinPoints() int {
 	return pts
 }
 
-func (s *Server) isNameWarRenameTarget(player types.PublicPlayer) bool {
-	// 用真实分（SortRankedPoints）判定，不用展示封顶后的 RankedPoints。
+// isNameWarRenameTarget 判定用真实存储分，不能用展示封顶后的 RankedPoints——直接吃
+// *PlayerState 而不是 types.PublicPlayer，避免绕经 publicPlayer() 时被展示封顶稀释
+// （publicPlayer() 下发给普通连接的 Sort* 字段现在等于封顶值，真实分只在 publicPlayerAdmin
+// 里保留，见该函数注释）。
+func (s *Server) isNameWarRenameTarget(player *PlayerState) bool {
 	return ptrBool(player.NameWarEnabled) && ptrBool(player.NameWarAllowRename) &&
-		ptrBool(player.NameWarPunished) && player.Stats.SortRankedPoints <= s.nameWarPenaltyThreshold()
+		ptrBool(player.NameWarPunished) && player.Stats.RankedPoints <= s.nameWarPenaltyThreshold()
 }

@@ -70,7 +70,28 @@ const (
 	GameGomoku    GameID = "gomoku"
 	GameJungle    GameID = "jungle"
 	GameChess     GameID = "chess"
+	// GameCoinFlip：猜硬币，唯一不需要联机对手的单人惩罚小游戏（详见 game_coinflip.go 顶部注释）。
+	GameCoinFlip GameID = "coinflip"
 )
+
+// CoinFace 是猜硬币的正反面标识："字"＝1999-2018 版 1 元硬币的数字面（写着"1元"），
+// "花"＝菊花面。用英文标识符是为了和 Move 等其它协议字符串枚举保持同一套风格；
+// 玩家侧文案一律显示中文"字"/"花"（title/description 明确要求，避免"正/反"引发歧义）。
+type CoinFace string
+
+const (
+	CoinFaceChar   CoinFace = "char"   // 字
+	CoinFaceFlower CoinFace = "flower" // 花
+)
+
+// CoinFlipState 是猜硬币当前一次抛掷的展示态：单人小游戏，没有战斗席 B，猜错立即进入
+// 惩罚阶段（RoomState.Phase）。房间内切换玩家（观战者接棒坐下）或再次抛掷都会整体覆盖。
+type CoinFlipState struct {
+	Guess     CoinFace `json:"guess,omitempty"`
+	Result    CoinFace `json:"result,omitempty"`
+	Correct   bool     `json:"correct,omitempty"`
+	SettledAt int64    `json:"settledAt,omitempty"`
+}
 
 type RankStake int
 type RankMultiplier int
@@ -193,12 +214,15 @@ type PublicStats struct {
 	Draws       int `json:"draws"`
 	Punishments int `json:"punishments"`
 	// RankedPoints/HighestScore/LowestScore：下发展示值（按 RankedScore 配置封顶）。
-	// 真实存储值见 Sort* 字段；排行榜排序必须用 Sort*，显示用本字段。
+	// 排行榜同分排序用 Sort*，显示用本字段。
 	RankedPoints int `json:"rankedPoints"`
 	// HighestScore/LowestScore：历史最高/最低排位分的展示值（同样按展示上下限封顶）。
 	HighestScore int `json:"highestScore"`
 	LowestScore  int `json:"lowestScore"`
-	// Sort*：数据库/内存中的真实分，仅用于排行榜排序（显示仍用上面已封顶的字段）。
+	// Sort*：排行榜同分排序用的键。数据库/内存中的真实分只应管理员后台可见——
+	// server.publicPlayer() 下发给普通连接（大厅/房间广播、player:get、players:roster 等）
+	// 时会把 Sort* 也钳成与上面已封顶的展示字段相同，避免真实分随报文泄露给非管理员；
+	// 只有 server.publicPlayerAdmin()（管理员专属单播 RPC 用）才会把 Sort* 换回真实值。
 	SortRankedPoints int    `json:"sortRankedPoints"`
 	SortHighestScore int    `json:"sortHighestScore"`
 	SortLowestScore  int    `json:"sortLowestScore"`
@@ -469,6 +493,8 @@ type RoundHistoryItem struct {
 	GomokuBlackSeat      SeatKey          `json:"gomokuBlackSeat,omitempty"`
 	GomokuLine           []Pos            `json:"gomokuLine,omitempty"`
 	ChessWhiteSeat       SeatKey          `json:"chessWhiteSeat,omitempty"`
+	CoinFlipGuess        CoinFace         `json:"coinFlipGuess,omitempty"`
+	CoinFlipResult       CoinFace         `json:"coinFlipResult,omitempty"`
 	Ranked               bool             `json:"ranked"`
 	Stake                *RankStake       `json:"stake,omitempty"`
 	RankMultiplier       *RankMultiplier  `json:"rankMultiplier,omitempty"`
@@ -811,6 +837,7 @@ type RoomSnapshot struct {
 	Gomoku            *GomokuState          `json:"gomoku,omitempty"`
 	Jungle            *JungleState          `json:"jungle,omitempty"`
 	Chess             *ChessState           `json:"chess,omitempty"`
+	CoinFlip          *CoinFlipState        `json:"coinFlip,omitempty"`
 	ResultText        string                `json:"resultText,omitempty"`
 	PunishedPlayerIDs []string              `json:"punishedPlayerIds"`
 	Proofs            []PunishmentProof     `json:"proofs"`
@@ -993,12 +1020,18 @@ type RankedScoreConfig struct {
 	DailyDecayRatio float64 `json:"dailyDecayRatio"`
 }
 
+// DefaultCoinFlipWinnerLabel：AppConfig.Site.CoinFlipWinnerLabel 留空时的兜底展示名。
+const DefaultCoinFlipWinnerLabel = "系统"
+
 type AppConfig struct {
 	Site struct {
 		Name                      string `json:"name"`
 		Description               string `json:"description"`
 		AdminPassword             string `json:"adminPassword"`
 		AnonymousContributorLabel string `json:"anonymousContributorLabel"`
+		// CoinFlipWinnerLabel：猜硬币任务文案里 {winner} 占位符的展示名——猜硬币没有真人
+		// 对手，任务恒由系统审批，占位符默认换成这个展示名（管理员可在后台自定义）。
+		CoinFlipWinnerLabel string `json:"coinFlipWinnerLabel"`
 	} `json:"site"`
 	AnnouncementBoard  AnnouncementBoard        `json:"announcementBoard"`
 	SecurityDisclaimer SecurityDisclaimerConfig `json:"securityDisclaimer"`

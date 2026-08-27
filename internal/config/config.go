@@ -507,7 +507,7 @@ func normalizeConfig(input types.AppConfig) types.AppConfig {
 	for _, g := range input.Games {
 		// 与 types.GameID / 建房列表白名单保持一致；漏写会导致 config.games 静默丢掉该玩法。
 		switch g.ID {
-		case "rps", "othello", "tictactoe", "liarsdice", "gomoku", "jungle", "chess":
+		case "rps", "othello", "tictactoe", "liarsdice", "gomoku", "jungle", "chess", "coinflip":
 		default:
 			continue
 		}
@@ -566,6 +566,10 @@ func normalizeConfig(input types.AppConfig) types.AppConfig {
 	out.Site.AnonymousContributorLabel = strings.TrimSpace(input.Site.AnonymousContributorLabel)
 	if out.Site.AnonymousContributorLabel == "" {
 		out.Site.AnonymousContributorLabel = types.DefaultAnonymousContributorLabel
+	}
+	out.Site.CoinFlipWinnerLabel = sliceRunes(strings.TrimSpace(input.Site.CoinFlipWinnerLabel), 12)
+	if out.Site.CoinFlipWinnerLabel == "" {
+		out.Site.CoinFlipWinnerLabel = types.DefaultCoinFlipWinnerLabel
 	}
 	out.AnnouncementBoard = ab
 	out.GenderFactions = genderFactions

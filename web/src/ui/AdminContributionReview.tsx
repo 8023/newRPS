@@ -4,6 +4,7 @@ import { ask } from "../lib/rpc";
 import { ContributionStatusChip, PlayerAvatar, PlayerBadge } from "./AppViews";
 import { ContributeSeriesForm } from "./ContributeSeriesForm";
 import { ContributionPreview, asContributionDraft, type StepPreview } from "./ContributionPreview";
+import { ContributionListControls, defaultContributionSortState, sortContributionItems, type ContributionSortState } from "./ContributionListControls";
 import { StepEditor } from "./StepEditor";
 import {
   contributionDraftTitle,
@@ -266,6 +267,8 @@ function SubmissionReviewPanel({ items, kind, config, password, onError, onChang
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
+  // primary 为 null = 保持 sortReviewQueue 的待审优先队列顺序；管理员点过排序按钮之后才整体重排。
+  const [sort, setSort] = useState<ContributionSortState>(() => defaultContributionSortState(kind));
   const [editing, setEditing] = useState(false);
   // 点击过一次「保存并立即发布/批准」但校验没过（难度为空/越界等）：标红对应输入框，
   // 与 ContributeSeriesForm 的 attempted 是同一套视觉语言。
@@ -281,12 +284,14 @@ function SubmissionReviewPanel({ items, kind, config, password, onError, onChang
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((it) => {
-      const t = it.title || kindLabel[it.kind] || it.kind;
-      return t.toLowerCase().includes(q) || (it.submitterName || "").toLowerCase().includes(q);
-    });
-  }, [items, search]);
+    const matched = q
+      ? items.filter((it) => {
+        const t = it.title || kindLabel[it.kind] || it.kind;
+        return t.toLowerCase().includes(q) || (it.submitterName || "").toLowerCase().includes(q);
+      })
+      : items;
+    return sortContributionItems(matched, sort);
+  }, [items, search, sort]);
 
   function factionLabel(id: string) {
     return config.genderFactions.find((f) => f.id === id)?.label || id;
@@ -391,11 +396,13 @@ function SubmissionReviewPanel({ items, kind, config, password, onError, onChang
   return (
     <div className="contribute-layout">
       <div className="contribute-sidebar">
-        <input
-          className="contribute-list-search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="搜索标题 / 投稿者"
+        <ContributionListControls
+          kind={kind}
+          sort={sort}
+          onSort={setSort}
+          search={search}
+          onSearch={setSearch}
+          searchPlaceholder={kind === "series" ? "搜索系列任务标题 / 投稿者" : "搜索随机任务文案 / 投稿者"}
         />
         <div className="contribute-list">
           {filteredItems.map((item) => (
