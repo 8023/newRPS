@@ -1,32 +1,39 @@
 <script lang="ts">
-  // 源：ui/AppViews.tsx:3581-3661
+  // 源：ui/AppViews.tsx:3581-3661。改为直接读 sessionStore.config + 操作 uiStore 的
+  // 开关状态，不再需要 config/onClose/onOpenHelp 三个 props。
   import Info from "@lucide/svelte/icons/info";
   import Coffee from "@lucide/svelte/icons/coffee";
   import Send from "@lucide/svelte/icons/send";
   import ExternalLink from "@lucide/svelte/icons/external-link";
-  import type { AppConfig } from "../../shared/types";
   import { doumiaoLinks, luv4uLinks } from "../../lib/constants";
   import { styleString } from "../../lib/style";
+  import { sessionStore } from "../../lib/stores/sessionStore.svelte";
+  import { uiStore } from "../../lib/stores/uiStore.svelte";
 
-  let { config, onClose, onOpenHelp }: { config: AppConfig; onClose: () => void; onOpenHelp?: () => void } = $props();
-
+  const config = $derived(sessionStore.config!);
   const board = $derived(config.announcementBoard);
   const showBoard = $derived(board.enabled && (board.title.trim() || board.content.trim()));
+
+  function close() {
+    uiStore.aboutOpen = false;
+  }
+  function openHelp() {
+    uiStore.aboutOpen = false;
+    uiStore.helpOpen = true;
+  }
 </script>
 
-<div class="modal-backdrop sponsor-backdrop" onclick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+<div class="modal-backdrop sponsor-backdrop" onclick={(event) => { if (event.target === event.currentTarget) close(); }}>
   <section class="sponsor-modal" onclick={(event) => event.stopPropagation()}>
     <div class="modal-title sponsor-title">
       <div>
         <h2><Info size={20} /> 关于</h2>
         <p class="hint">喜欢这个小站的话，可以在这里关注、进群或请作者喝杯咖啡。</p>
-        {#if onOpenHelp}
-          <p class="hint" style="margin-top: 0.4em">
-            第一次来？<a href="#" onclick={(e) => { e.preventDefault(); onOpenHelp?.(); }}>看看怎么玩</a>。
-          </p>
-        {/if}
+        <p class="hint" style="margin-top: 0.4em">
+          第一次来？<a href="#" onclick={(e) => { e.preventDefault(); openHelp(); }}>看看怎么玩</a>。
+        </p>
       </div>
-      <button type="button" class="icon-button" onclick={onClose}>×</button>
+      <button type="button" class="icon-button" onclick={close}>×</button>
     </div>
     {#if showBoard}
       <div class="announcement-board">

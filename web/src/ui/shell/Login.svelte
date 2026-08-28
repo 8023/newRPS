@@ -1,20 +1,22 @@
 <script lang="ts">
-  // 源：ui/AppViews.tsx:79-203
-  import type { AppConfig } from "../../shared/types";
-  import type { MeState } from "../../lib/types";
+  // 源：ui/AppViews.tsx:79-203。改为直接读写 sessionStore/uiStore，不再需要
+  // config/onDone/onError 三个 props——App.svelte 不必知道登录成功之后具体发生了什么。
   import { untrack } from "svelte";
+  import type { MeState } from "../../lib/types";
   import { ask } from "../../lib/rpc";
-  import { tokenKey, playerSecretKey } from "../../lib/constants";
-  import { cacheJoinProfile, clearPlayerIdentity, claimIdentity, joinIdentityPayload } from "../../lib/session";
+  import { tokenKey } from "../../lib/constants";
+  import { clearPlayerIdentity, claimIdentity, joinIdentityPayload } from "../../lib/session";
   import { firstFactionId, firstGenderId, nextGenderIdForFaction, genderChoiceError } from "../../lib/playerDisplay";
+  import { sessionStore } from "../../lib/stores/sessionStore.svelte";
+  import { uiStore } from "../../lib/stores/uiStore.svelte";
   import FactionSelect from "./FactionSelect.svelte";
   import GenderSelect from "./GenderSelect.svelte";
 
-  let { config, onDone, onError }: { config: AppConfig; onDone: (me: MeState) => void; onError: (message: string) => void } = $props();
+  const config = $derived(sessionStore.config!);
 
+  let name = $state("");
   // 只取一次初始值（与原 React useState(() => ...) 惰性初始化同构）：config 后续变化
   // 不应该覆盖用户已经选择的阵营/性别，untrack 显式声明"仅初始化时读取"。
-  let name = $state("");
   let factionId = $state(untrack(() => firstFactionId(config)));
   let genderId = $state(untrack(() => firstGenderId(config, firstFactionId(config))));
   let mode = $state<"new" | "restore">("new");
@@ -28,17 +30,13 @@
       pendingJoinPayload = payload;
       return;
     }
-    localStorage.setItem(tokenKey, result.token);
-    // 以服务端确认后的资料为准缓存。
-    if (result.player) cacheJoinProfile(result.player);
-    if (result.reissuedSecret) localStorage.setItem(playerSecretKey, result.reissuedSecret);
-    onDone(result);
+    sessionStore.completeManualLogin(result);
   }
 
   async function submit() {
     const genderError = genderChoiceError(config, genderId);
     if (genderError) {
-      onError(genderError);
+      uiStore.notify(genderError);
       return;
     }
     try {
@@ -53,17 +51,17 @@
           await doJoin({ name, genderId, token: localStorage.getItem(tokenKey), ...(await joinIdentityPayload()) });
           return;
         } catch (retryError) {
-          onError(retryError instanceof Error ? retryError.message : "进入失败");
+          uiStore.notify(retryError instanceof Error ? retryError.message : "进入失败");
           return;
         }
       }
-      onError(message);
+      uiStore.notify(message);
     }
   }
 
   async function submitRestore() {
     if (!restoreCode.trim()) {
-      onError("请输入认领密钥");
+      uiStore.notify("请输入认领密钥");
       return;
     }
     restoreBusy = true;
@@ -74,7 +72,7 @@
         token: localStorage.getItem(tokenKey), ...(await joinIdentityPayload())
       });
     } catch (error) {
-      onError(error instanceof Error ? error.message : "认领失败");
+      uiStore.notify(error instanceof Error ? error.message : "认领失败");
     } finally {
       restoreBusy = false;
     }
@@ -85,7 +83,7 @@
     try {
       await doJoin({ ...pendingJoinPayload, forceKick: true });
     } catch (error) {
-      onError(error instanceof Error ? error.message : "进入失败");
+      uiStore.notify(error instanceof Error ? error.message : "进入失败");
     } finally {
       pendingJoinPayload = null;
     }
