@@ -5,7 +5,6 @@
 // authors：按 playerId 索引的**当前**玩家公开资料（服务端从内存 s.players 组装，
 // 含离线玩家）。渲染时优先用调用方传入的在线名单（更实时），找不到再退回本 map。
 
-import { useSyncExternalStore } from "react";
 import { socket } from "../ws";
 import { ask } from "./rpc";
 import type { ChatMessage, PublicPlayer } from "../shared/types";
@@ -30,7 +29,7 @@ const MAX_LOADED = 800;
 const states = new Map<ChatScope, ChatState>();
 const listeners = new Map<ChatScope, Set<() => void>>();
 
-function getState(scope: ChatScope): ChatState {
+export function getState(scope: ChatScope): ChatState {
   return states.get(scope) || EMPTY;
 }
 
@@ -39,7 +38,9 @@ function setState(scope: ChatScope, next: ChatState) {
   listeners.get(scope)?.forEach((fn) => fn());
 }
 
-function subscribe(scope: ChatScope, fn: () => void): () => void {
+/** 框架无关的订阅原语：与 Svelte store 的 subscribe 契约天然兼容，
+    组件层用 lib/useChat.svelte.ts 的 useChat() 包一层 runes。 */
+export function subscribe(scope: ChatScope, fn: () => void): () => void {
   let set = listeners.get(scope);
   if (!set) {
     set = new Set();
@@ -155,14 +156,6 @@ export async function loadOlderChat(scope: ChatScope): Promise<number> {
     setState(scope, { ...getState(scope), loading: false });
     return 0;
   }
-}
-
-export function useChat(scope: ChatScope): ChatState {
-  return useSyncExternalStore(
-    (fn) => subscribe(scope, fn),
-    () => getState(scope),
-    () => EMPTY
-  );
 }
 
 /** 输入框末尾插入一个 @提及（"@昵称 "），前置内容存在时补一个空格。 */

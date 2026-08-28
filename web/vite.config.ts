@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { markdownHtml } from "./vite-plugins/markdownHtml";
 
 // 与后端 package.json build:server 脚本各自独立计算 git 短哈希：只要基于同一次
@@ -16,7 +16,7 @@ function resolveBuildId(): string {
 }
 
 export default defineConfig({
-  plugins: [markdownHtml(), react()],
+  plugins: [markdownHtml(), svelte()],
   define: {
     __APP_BUILD_ID__: JSON.stringify(resolveBuildId())
   },

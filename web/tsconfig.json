@@ -10,12 +10,31 @@
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx"
+    "types": ["svelte"]
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/ui/AdminContributionReview.tsx",
+    "src/ui/AdminViews.tsx",
+    "src/ui/AnalyticsPanel.tsx",
+    "src/ui/AppViews.tsx",
+    "src/ui/ChessPanel.tsx",
+    "src/ui/CoinFlipPanel.tsx",
+    "src/ui/ContributeSeriesForm.tsx",
+    "src/ui/ContributeView.tsx",
+    "src/ui/ContributionListControls.tsx",
+    "src/ui/ContributionPreview.tsx",
+    "src/ui/ContributionVote.tsx",
+    "src/ui/GomokuPanel.tsx",
+    "src/ui/JunglePanel.tsx",
+    "src/ui/LiarsDicePanel.tsx",
+    "src/ui/NumberField.tsx",
+    "src/ui/PetBondGraphPanel.tsx",
+    "src/ui/StepEditor.tsx"
+  ]
 }

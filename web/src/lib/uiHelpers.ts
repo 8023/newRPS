@@ -1,5 +1,3 @@
-import { type MutableRefObject, useState } from "react";
-
 export function appendCappedUnique<T extends { id: string }>(items: T[], item: T, max: number) {
   if (items.some((old) => old.id === item.id)) return items;
   return [...items, item].slice(-max);
@@ -20,7 +18,9 @@ export function scrollToBottomSoon(element: HTMLElement) {
   });
 }
 
-export function stickChatToBottom(element: HTMLElement | null, stickRef: MutableRefObject<boolean>, setSticking: (value: boolean) => void) {
+/** stickRef 是一个 `{ current: boolean }` 可变盒子（与原 React useRef 同构的约定），
+    调用方（ChatPanel）用它在 effect 之外读写「是否贴底」而不触发额外渲染。 */
+export function stickChatToBottom(element: HTMLElement | null, stickRef: { current: boolean }, setSticking: (value: boolean) => void) {
   if (!element) return;
   stickRef.current = true;
   setSticking(true);
@@ -29,7 +29,7 @@ export function stickChatToBottom(element: HTMLElement | null, stickRef: Mutable
 
 const COLLAPSE_STORAGE_PREFIX = "rps-collapse:";
 
-function readCollapsedFromStorage(key: string): boolean {
+export function readCollapsedFromStorage(key: string): boolean {
   try {
     return localStorage.getItem(COLLAPSE_STORAGE_PREFIX + key) === "1";
   } catch {
@@ -37,22 +37,10 @@ function readCollapsedFromStorage(key: string): boolean {
   }
 }
 
-// 手机端"折叠某个模块"的记忆偏好：只影响手机端展示（由 CSS 在对应断点内生效），
-// 默认展开；偏好按 key 存 localStorage，跨大厅/房间重进也能延续。
-export function useMobileCollapse(key: string) {
-  const [collapsed, setCollapsed] = useState(() => readCollapsedFromStorage(key));
-
-  function toggle() {
-    setCollapsed((old) => {
-      const next = !old;
-      try {
-        localStorage.setItem(COLLAPSE_STORAGE_PREFIX + key, next ? "1" : "0");
-      } catch {
-        // 隐私模式等场景下 localStorage 可能不可用，退化为仅本次会话记忆
-      }
-      return next;
-    });
+export function writeCollapsedToStorage(key: string, value: boolean) {
+  try {
+    localStorage.setItem(COLLAPSE_STORAGE_PREFIX + key, value ? "1" : "0");
+  } catch {
+    // 隐私模式等场景下 localStorage 可能不可用，退化为仅本次会话记忆
   }
-
-  return { collapsed, toggle };
 }
