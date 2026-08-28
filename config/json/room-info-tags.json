@@ -17,6 +17,12 @@
     "borderColor": "#c4a46a",
     "label": "国际象棋"
   },
+  "gameCoinFlip": {
+    "textColor": "#7a5c00",
+    "backgroundColor": "#fff6d8",
+    "borderColor": "#f0d27a",
+    "label": "猜硬币"
+  },
   "gameGomoku": {
     "textColor": "#3d4a29",
     "backgroundColor": "#eaf3d8",
@@ -70,6 +76,12 @@
     "backgroundColor": "#fff3c4",
     "borderColor": "#ffd875",
     "label": "出拳中"
+  },
+  "phaseChoosingCoinFlip": {
+    "textColor": "#6b4b00",
+    "backgroundColor": "#fff3c4",
+    "borderColor": "#ffd875",
+    "label": "抛硬币中"
   },
   "phaseChoosingLiarsDice": {
     "textColor": "#6b4b00",

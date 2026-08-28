@@ -15,7 +15,33 @@ const (
 	defaultGomokuRoomName    = "新的五子棋房间"
 	defaultJungleRoomName    = "新的斗兽棋房间"
 	defaultChessRoomName     = "新的国际象棋房间"
+	defaultLiarsDiceRoomName = "新的大话骰房间"
+	defaultCoinFlipRoomName  = "新的猜硬币房间"
 )
+
+// defaultRoomNameForGame 返回某游戏「未设置房名/仍是占位默认名」时应使用的占位名——
+// generatedRoomName 的兜底分支（无主题房名词库、且客户端也没带房名）必须按游戏区分，
+// 否则会把非锤子剪刀布游戏的房间兜底成"新的锤子剪刀布房间"。
+func defaultRoomNameForGame(gameID types.GameID) string {
+	switch gameID {
+	case types.GameOthello:
+		return defaultOthelloRoomName
+	case types.GameTicTacToe:
+		return defaultTicTacToeRoomName
+	case types.GameGomoku:
+		return defaultGomokuRoomName
+	case types.GameJungle:
+		return defaultJungleRoomName
+	case types.GameChess:
+		return defaultChessRoomName
+	case types.GameLiarsDice:
+		return defaultLiarsDiceRoomName
+	case types.GameCoinFlip:
+		return defaultCoinFlipRoomName
+	default:
+		return defaultRoomName
+	}
+}
 
 // activeRoomsOwnedBy 统计某玩家当前存活（未关闭，s.rooms 里还在）的房间数，
 // 用于限制单玩家同时开着的房间数量——房间创建频率限流本身不限制"攒了多少个不关"。
@@ -475,12 +501,16 @@ func (s *Server) generatedRoomName(settings types.RoomSettings) string {
 	if settings.GameID == types.GameChess && !settings.EnablePunishment {
 		return s.uniqueRoomName(defaultChessRoomName)
 	}
+	if settings.GameID == types.GameLiarsDice && !settings.EnablePunishment {
+		return s.uniqueRoomName(defaultLiarsDiceRoomName)
+	}
 	pool := s.roomNamePoolForSettings(settings)
 	if pool == nil {
-		if strings.TrimSpace(settings.Name) != "" {
-			return settings.Name
-		}
-		return defaultRoomName
+		// 唯一调用方 normalizeRoomName 只会在 settings.Name 为空、或恰好等于某个游戏的
+		// 占位默认名时才走到这里——不能把 settings.Name 原样返回：若它是别的游戏的占位名
+		// （例如前端把猜硬币房间算成了"新的锤子剪刀布房间"），原样返回等于把错误游戏的占位
+		// 名坐实成正式房名，必须按当前房间的 GameID 重新兜底。
+		return defaultRoomNameForGame(settings.GameID)
 	}
 	subject := randomFromF(pool.Subjects)
 	roomWord := randomFromF(pool.RoomWords)
@@ -502,7 +532,7 @@ func (s *Server) normalizeRoomName(settings types.RoomSettings) string {
 	if len(runes) > 24 {
 		cleanName = string(runes[:24])
 	}
-	if cleanName == "" || cleanName == defaultRoomName || cleanName == defaultOthelloRoomName || cleanName == defaultTicTacToeRoomName || cleanName == defaultGomokuRoomName || cleanName == defaultJungleRoomName || cleanName == defaultChessRoomName {
+	if cleanName == "" || cleanName == defaultRoomName || cleanName == defaultOthelloRoomName || cleanName == defaultTicTacToeRoomName || cleanName == defaultGomokuRoomName || cleanName == defaultJungleRoomName || cleanName == defaultChessRoomName || cleanName == defaultLiarsDiceRoomName || cleanName == defaultCoinFlipRoomName {
 		return s.generatedRoomName(settings)
 	}
 	return cleanName

@@ -1371,6 +1371,21 @@ export function CreateRoom({ config, me, punishmentTagPrefs, onCreated, onPunish
   );
 }
 
+/** 某游戏「无主题房名词库可用」时的占位默认房名——generateRoomName 兜底分支必须按
+ * 游戏区分，否则会把非锤子剪刀布游戏的房间兜底成「新的锤子剪刀布房间」。 */
+export function defaultRoomNameForGame(gameId: RoomSettings["gameId"]): string {
+  switch (gameId) {
+    case "othello": return defaultOthelloRoomName;
+    case "tictactoe": return defaultTicTacToeRoomName;
+    case "gomoku": return defaultGomokuRoomName;
+    case "jungle": return defaultJungleRoomName;
+    case "chess": return defaultChessRoomName;
+    case "liarsdice": return defaultLiarsDiceRoomName;
+    case "coinflip": return defaultCoinFlipRoomName;
+    default: return defaultRoomName;
+  }
+}
+
 export function generateRoomName(config: AppConfig, settings: RoomSettings) {
   if (settings.gameId === "othello" && !settings.enablePunishment) return defaultOthelloRoomName;
   if (settings.gameId === "tictactoe" && !settings.enablePunishment) return defaultTicTacToeRoomName;
@@ -1379,7 +1394,7 @@ export function generateRoomName(config: AppConfig, settings: RoomSettings) {
   if (settings.gameId === "chess" && !settings.enablePunishment) return defaultChessRoomName;
   if (settings.gameId === "liarsdice" && !settings.enablePunishment) return defaultLiarsDiceRoomName;
   const pool = roomNamePoolForSettings(config, settings);
-  if (!pool) return defaultRoomName;
+  if (!pool) return defaultRoomNameForGame(settings.gameId);
   const subject = randomItem(pool.subjects);
   const roomWord = randomItem(pool.roomWords);
   const adjective = pool.adjectives.length && Math.random() < 0.75 ? randomItem(pool.adjectives) : "";
@@ -3337,7 +3352,7 @@ function gameUndoTag(roomId: string, gameId: RoomSettings["gameId"], undoLimit?:
 
 export function roomInfoTags(config: AppConfig, room: RoomSnapshot) {
   const phaseKey = room.phase === "ready" ? "phaseReady"
-    : room.phase === "choosing" ? (room.settings.gameId === "liarsdice" ? "phaseChoosingLiarsDice" : "phaseChoosing")
+    : room.phase === "choosing" ? (room.settings.gameId === "liarsdice" ? "phaseChoosingLiarsDice" : room.settings.gameId === "coinflip" ? "phaseChoosingCoinFlip" : "phaseChoosing")
       : room.phase === "result" ? "phaseResult"
         : room.phase === "punishment" ? "phasePunishment"
           : "phaseReady";
@@ -3435,7 +3450,9 @@ export function gameInfoTag(config: AppConfig, gameId: RoomSettings["gameId"]) {
             ? roomInfoTag(config, "gameJungle", "", "🦁 ")
             : gameId === "chess"
               ? roomInfoTag(config, "gameChess", "", "♔ ")
-              : roomInfoTag(config, "gameRps");
+              : gameId === "coinflip"
+                ? roomInfoTag(config, "gameCoinFlip", "", "🪙 ")
+                : roomInfoTag(config, "gameRps");
 }
 
 /** 惩罚来源标签正文：自定义惩罚直接写“自定义惩罚”，随机任务写“#标签”（空格分隔；
@@ -5189,9 +5206,11 @@ export const roomInfoTagOrder = [
   { key: "gameJungle", label: "斗兽棋" },
   { key: "gameChess", label: "国际象棋" },
   { key: "gameLiarsDice", label: "大话骰" },
+  { key: "gameCoinFlip", label: "猜硬币" },
   { key: "phaseReady", label: "等待坐满" },
   { key: "phaseChoosing", label: "出拳中" },
   { key: "phaseChoosingLiarsDice", label: "叫点中" },
+  { key: "phaseChoosingCoinFlip", label: "抛硬币中" },
   { key: "phaseResult", label: "结算中" },
   { key: "phasePunishment", label: "惩罚阶段" },
   { key: "normal", label: "普通局" },
