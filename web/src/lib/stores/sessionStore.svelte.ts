@@ -254,6 +254,13 @@ class SessionStore {
     routerStore.goto("login");
   }
 
+  /** 个人设置保存成功 / 头像上传成功后，把服务端确认过的资料写回 me 与本地缓存。 */
+  updateMyProfile(player: PublicPlayer) {
+    if (!this.me) return;
+    this.me = { ...this.me, player };
+    cacheJoinProfile(player);
+  }
+
   onlineCount(): number {
     return lobbyOnlineCount(this.lobby);
   }

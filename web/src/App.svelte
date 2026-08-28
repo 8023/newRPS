@@ -112,6 +112,6 @@
     {#if uiStore.aboutOpen}<AboutPanel />{/if}
     {#if uiStore.helpOpen}<HelpPanel />{/if}
     {#if uiStore.profileOpen && sessionStore.me}<ProfilePanel />{/if}
-    {#if uiStore.leaderboardOpen}<GlobalLeaderboardPanel />{/if}
+    {#if uiStore.leaderboardOpen}<GlobalLeaderboardPanel players={sessionStore.leaderboardSource} />{/if}
   </main>
 {/if}
