@@ -184,12 +184,6 @@ export function phaseText(phase: RoomSnapshot["phase"], gameId?: RoomSettings["g
   return "⏳ 等待中";
 }
 
-export function roomStatusText(status: string) {
-  if (status === "playing") return "对战中";
-  if (status === "punishment") return "惩罚中";
-  return "等待中";
-}
-
 export function connectionStateText(state: "connected" | "connecting" | "disconnected") {
   if (state === "connected") return "已连接";
   if (state === "connecting") return "连接中";
