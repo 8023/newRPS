@@ -8262,6 +8262,95 @@ main {
   color: #fff;
 }
 
+/* LayerChart 封装组件（lib/charts/*.svelte）的容器样式。
+   高度由各组件按图表种类以内联 style 给出，这里只负责定位与文字外观。 */
+.layerchart-card {
+  position: relative;
+  width: 100%;
+}
+
+.layerchart-card .empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  margin: 0;
+}
+
+/* 双 Y 轴：下层是实图（左轴 + 网格 + 交互），上层只借来画右轴和右侧那条线。
+   必须绝对定位铺满下层，否则它会当成普通块级元素排在下面、被父容器的固定高度压成
+   0 高度——右轴那条线会整条消失。pointer-events:none 让指针事件穿透到下层图。 */
+.layerchart-dual-axis-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* 双轴图的图例：两个坐标系各自只认识自己那条线，LayerChart 生成不了合并图例，
+   所以手写一个，位置与其它图表 placement="top" 的内置图例对齐。 */
+.layerchart-dual-axis-legend {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--chart-ink-muted);
+  pointer-events: none;
+}
+
+.layerchart-dual-axis-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.layerchart-dual-axis-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.layerchart-tick {
+  fill: var(--chart-ink-muted);
+  font-size: 11px;
+}
+
+/* 圆环图下方的类目图例（原 recharts 版靠气泡展示占比，这里常驻显示更直观） */
+.analytics-donut-legend {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 12px;
+  font-size: 11px;
+  color: var(--chart-ink-muted);
+}
+
+.analytics-donut-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.analytics-donut-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.analytics-donut-legend em {
+  font-style: normal;
+  color: var(--chart-ink);
+  font-variant-numeric: tabular-nums;
+}
+
 /* 主宠力导向图：与数据分析面板共享 chart 配色语言 */
 .petbond-graph-edge {
   stroke: color-mix(in srgb, var(--chart-1) 55%, var(--border));

@@ -23,25 +23,25 @@
   </ChartCard>
   <ChartCard title="浏览器">
     {#snippet table()}<BucketTable rows={browsers} />{/snippet}
-    <HBarChart rows={browsers} />
+    <HBarChart rows={browsers} showPercent />
   </ChartCard>
   <ChartCard title="操作系统">
     {#snippet table()}<BucketTable rows={os} />{/snippet}
-    <HBarChart rows={os} />
+    <HBarChart rows={os} showPercent />
   </ChartCard>
 </div>
 
 <div class="analytics-row-3">
   <ChartCard title="来源 Top10">
     {#snippet table()}<BucketTable rows={referrers} />{/snippet}
-    <HBarChart rows={referrers} />
+    <HBarChart rows={referrers} showPercent />
   </ChartCard>
   <ChartCard title="省份 Top10">
     {#snippet table()}<BucketTable rows={provinces} />{/snippet}
-    <HBarChart rows={provinces} />
+    <HBarChart rows={provinces} showPercent />
   </ChartCard>
   <ChartCard title="ISP Top10">
     {#snippet table()}<BucketTable rows={isps} />{/snippet}
-    <HBarChart rows={isps} />
+    <HBarChart rows={isps} showPercent />
   </ChartCard>
 </div>

@@ -25,7 +25,7 @@
   import AdminRoomTagsSection from "./AdminRoomTagsSection.svelte";
   import AdminRoomsSection from "./AdminRoomsSection.svelte";
   import AdminContributionReview from "./AdminContributionReview.svelte";
-  import type { Component } from "svelte";
+  import { onDestroy, type Component } from "svelte";
 
   const SECTIONS_WITHOUT_SAVE = new Set<AdminSection>(["rooms", "analytics", "contributions"]);
 
@@ -67,6 +67,10 @@
     ];
   });
   const currentNav = $derived(navItems.find((item) => item.id === adminStore.activeSection) || navItems[0]);
+
+  // React 版后台状态全部属于 AdminPanel 生命周期；离开后台后必须清空口令、登录态和
+  // 未保存草稿，避免模块级单例把上一次会话带到下次挂载。
+  onDestroy(() => adminStore.resetSession());
 </script>
 
 <section class="admin-page">
@@ -74,7 +78,7 @@
     <h2><Shield size={18} /> 管理员与文本工具</h2>
     <input type="password" value={adminStore.password} oninput={(event) => (adminStore.password = event.currentTarget.value)} placeholder="管理员口令" />
     <button class="primary" onclick={() => adminStore.login()}>进入管理</button>
-    <button onclick={() => routerStore.goto("lobby")}>返回</button>
+    <button onclick={() => routerStore.leaveAdmin(Boolean(sessionStore.me), Boolean(sessionStore.room))}>返回</button>
   </div>
   {#if adminStore.logged && draft && lobby && currentNav}
     <div class="admin-tool-shell">

@@ -57,6 +57,7 @@
    * 与原版"节点集合变化时补齐新节点初始位置"的语义一致。
    * 源：ui/PetBondGraphPanel.tsx。
    */
+  import { untrack } from "svelte";
   import { forceManyBody, forceLink, forceCenter, forceCollide } from "d3-force";
   import { ForceSimulation } from "layerchart/force";
   import { ask } from "../../lib/rpc";
@@ -121,9 +122,15 @@
       return Object.assign({}, player, { x, y }) as SimPlayerNode;
     });
   });
-  const simLinks = $derived.by<SimLink[]>(() =>
-    displayGraph.edges.map((edge) => ({ source: edge.masterId, target: edge.petId, masterId: edge.masterId, petId: edge.petId, petTitle: edge.petTitle }))
-  );
+  // 只保留两端节点都在场的边：d3 的 forceLink 在 initialize 时按 id 查节点，查不到会直接
+  // 抛 "node not found" 把整个后台面板打白屏。原 React 版是手写循环 `if (!a || !b) continue`
+  // 自然跳过，这里要显式补回同样的容错，防止服务端返回不自洽的 nodes/edges 时炸掉。
+  const simLinks = $derived.by<SimLink[]>(() => {
+    const present = new Set(simNodes.map((n) => n.id));
+    return displayGraph.edges
+      .filter((edge) => present.has(edge.masterId) && present.has(edge.petId))
+      .map((edge) => ({ source: edge.masterId, target: edge.petId, masterId: edge.masterId, petId: edge.petId, petTitle: edge.petTitle }));
+  });
   const simData = $derived({ nodes: simNodes, links: simLinks });
   const forces = $derived({
     charge: forceManyBody().strength(-260).distanceMax(420),
@@ -146,6 +153,16 @@
     tickNodes = e.nodes;
     tickLinks = e.links.filter((l): l is SimLink => l != null);
   }
+
+  // 节点/边集合变化后必须给模拟"重新加热"：d3 的 alpha 会随时间衰减到 alphaMin 以下并
+  // 停表，此后 LayerChart 的 resumeDynamicSimulation() 会因 `alpha < alphaMin` 直接返回，
+  // 光换 data/forces 是不会重新开跑的——表现为添加/解除关系、切换聚焦筛选之后，新节点
+  // 僵在初始环形位置上不动。原 React 版是永不停歇的 rAF 循环，没有这个状态，所以要在这里
+  // 显式补上。只读 simData（不读 simAlpha）避免与 ForceSimulation 每 tick 回写 alpha 形成循环。
+  $effect(() => {
+    void simData;
+    untrack(() => { if (simAlpha < 0.3) simAlpha = 0.6; });
+  });
 
   $effect(() => {
     if (selectedId && visibleIds && !visibleIds.has(selectedId)) selectedId = null;

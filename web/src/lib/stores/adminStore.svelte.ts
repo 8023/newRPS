@@ -45,6 +45,42 @@ class AdminStore {
 
   #lastServerConfigText = "";
   #adminPlayersRequestGen = 0;
+  #sessionGeneration = 0;
+
+  /** 恢复 React 版 AdminPanel 卸载语义：后台口令、登录态、草稿及各分区局部状态
+      都不跨后台会话保留。递增请求代次，让已经离场的玩家列表请求不能回写新会话。 */
+  resetSession() {
+    this.#sessionGeneration += 1;
+    this.password = "";
+    this.logged = false;
+    this.draft = null;
+    this.dirty = false;
+    this.serverConfigChanged = false;
+
+    this.activeSection = "site";
+    this.activeFactionId = "";
+    this.factionSearch = "";
+    this.activeTitleId = "";
+    this.titleSearch = "";
+    this.activeTagId = "";
+    this.punishmentSearch = "";
+    this.announcementMessage = "";
+    this.announcementSeconds = "8";
+    this.activeRoomTab = "rooms";
+
+    this.playerFilters = { ...DEFAULT_ADMIN_PLAYER_FILTERS };
+    this.playerNameSearch = "";
+    this.adminPlayers = [];
+    this.adminPlayersTotal = 0;
+    this.adminPlayersTruncated = false;
+    this.adminFilterOnlineCount = 0;
+    this.adminFilterOfflineCount = 0;
+    this.adminPlayersLoading = false;
+    this.contributionCounts = { pending: 0 };
+
+    this.#lastServerConfigText = "";
+    this.#adminPlayersRequestGen += 1;
+  }
 
   /** 服务端 config:update 推送到达时的合并策略：草稿干净就直接采用新配置；草稿脏（用户
       正在改）则只标记"服务器配置已更新"，保存时会覆盖服务器这份新配置——与原 React 版
@@ -79,8 +115,10 @@ class AdminStore {
   }
 
   async login() {
+    const generation = this.#sessionGeneration;
     try {
       await ask("admin:login", { password: this.password });
+      if (generation !== this.#sessionGeneration) return;
       this.logged = true;
     } catch (error) {
       uiStore.notify(error instanceof Error ? error.message : "登录失败");
@@ -89,12 +127,14 @@ class AdminStore {
 
   async loadContributionCounts() {
     if (!this.logged) return;
+    const generation = this.#sessionGeneration;
     try {
       // 侧边栏徽标只需要一个总数，不用打开整个共建审核面板，复用同一个总览接口
       // （AdminContributionReview.svelte 展开后台数据时也走它）。
       const res = await ask<{ counts?: { task?: Record<string, number>; series?: Record<string, number> } }>(
         "admin:action", { action: "contributionPendingOverview", password: this.password }
       );
+      if (generation !== this.#sessionGeneration) return;
       const t = res.counts?.task || {};
       const s = res.counts?.series || {};
       this.contributionCounts = { pending: (Number(t.pending) || 0) + (Number(s.pending) || 0) };
@@ -105,9 +145,10 @@ class AdminStore {
 
   async save() {
     if (!this.draft) return;
+    const generation = this.#sessionGeneration;
     try {
       const response = await ask<{ config: AppConfig }>("config:save", { password: this.password, nextConfig: this.draft });
-      this.#applyServerConfig(response.config);
+      if (generation === this.#sessionGeneration) this.#applyServerConfig(response.config);
       uiStore.notify("配置保存成功");
     } catch (error) {
       uiStore.notify(error instanceof Error ? error.message : "配置保存失败");
@@ -115,10 +156,11 @@ class AdminStore {
   }
 
   async resetDefault() {
+    const generation = this.#sessionGeneration;
     try {
       // 配置已按功能拆分并原地读写，无 default/active 双轨；此处从磁盘重新加载当前文件。
       const response = await ask<{ config: AppConfig }>("config:reset", { password: this.password });
-      this.#applyServerConfig(response.config);
+      if (generation === this.#sessionGeneration) this.#applyServerConfig(response.config);
       uiStore.notify("已从磁盘重新加载配置");
     } catch (error) {
       uiStore.notify(error instanceof Error ? error.message : "重新加载配置失败");
@@ -181,6 +223,7 @@ class AdminStore {
   }
 
   async sendAnnouncement() {
+    const generation = this.#sessionGeneration;
     try {
       await ask("admin:action", {
         action: "broadcastAnnouncement",
@@ -188,7 +231,7 @@ class AdminStore {
         message: this.announcementMessage,
         durationSeconds: Number(this.announcementSeconds)
       });
-      this.announcementMessage = "";
+      if (generation === this.#sessionGeneration) this.announcementMessage = "";
       uiStore.notify("公告已发送");
     } catch (error) {
       uiStore.notify(error instanceof Error ? error.message : "公告发送失败");

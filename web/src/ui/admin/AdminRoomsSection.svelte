@@ -2,6 +2,7 @@
   // 「用户与房间」分区：三个子页签——用户管理（查询/编辑/踢出/找回密钥）、房间管理
   // （查看状态、强制结算/重开/关闭）、聊天管理（转给 AdminChatManager）。
   // 源：ui/AdminViews.tsx:1204-1341（renderUserManagement + activeSection === "rooms"）。
+  import { untrack } from "svelte";
   import { lobbyRoomInfoTags, roomStatusText } from "../../lib/roomInfoTags";
   import { ADMIN_PLAYER_FILTER_BUTTONS } from "../../lib/adminHelpers";
   import { adminStore, type AdminRoomTab as AdminRoomTabType } from "../../lib/stores/adminStore.svelte";
@@ -27,9 +28,15 @@
   ]);
   const currentManagementTab = $derived(managementTabs.find((tab) => tab.id === adminStore.activeRoomTab) || managementTabs[0]);
 
+  // 仅在切到「用户与房间」的用户管理页时拉取；过滤器切换由 togglePlayerFilter 自己负责。
+  // ⚠ loadAdminPlayers() 的默认参数会同步读 playerFilters，不 untrack 的话过滤器就成了
+  // 本 effect 的依赖，点一次过滤器会连发两次 admin:listPlayers（原 React 版 deps 只有
+  // [logged, activeSection, activeRoomTab]，刻意不含 playerFilters）。
   $effect(() => {
+    void adminStore.logged;
+    void adminStore.activeSection;
     void adminStore.activeRoomTab;
-    void adminStore.loadAdminPlayers();
+    untrack(() => adminStore.loadAdminPlayers());
   });
 
   const nameKeyword = $derived(adminStore.playerNameSearch.trim().toLowerCase());

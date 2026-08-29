@@ -11,14 +11,18 @@
   import { Chart, Spline } from "layerchart/svg";
   import { scalePoint } from "d3-scale";
   import { CHART_COLORS, formatDayTick } from "../analyticsDashboard";
+  import AnalyticsTooltip from "./AnalyticsTooltip.svelte";
 
-  let { data, x, series, height = 240, valueFormat }: {
+  let { data, x, series, height = 240, valueFormat, showPercent = false }: {
     data: Record<string, string | number>[];
     x: string;
     series: { key: string; label: string; color?: string }[];
     height?: number;
     valueFormat?: (n: number) => string;
+    showPercent?: boolean;
   } = $props();
+
+  const resolved = $derived(series.map((s, i) => ({ ...s, color: s.color ?? CHART_COLORS[i % CHART_COLORS.length] })));
 </script>
 
 <div class="layerchart-card" style={`height:${height}px`}>
@@ -31,22 +35,30 @@
       xScale={scalePoint().padding(0.5)}
       y={series.map((s) => s.key)}
       yNice
-      series={series.map((s, i) => ({ key: s.key, value: s.key, label: s.label, color: s.color ?? CHART_COLORS[i % CHART_COLORS.length] }))}
+      series={resolved.map((s) => ({ key: s.key, value: s.key, label: s.label, color: s.color }))}
       padding={{ left: 8, bottom: 24, top: 8, right: 8 }}
       axis
       grid={{ x: false }}
       legend={{ placement: "top" }}
       tooltipContext={{ mode: "band" }}
       props={{
-        xAxis: { format: (v: unknown) => formatDayTick(String(v)), tickLabelProps: { class: "layerchart-tick" } },
-        yAxis: { tickLabelProps: { class: "layerchart-tick" } },
-        tooltip: { item: { format: (v: unknown) => (valueFormat ? valueFormat(Number(v)) : String(v)) } }
+        xAxis: {
+          format: (v: unknown) => formatDayTick(String(v)),
+          // band/point 轴的 tickSpacing 默认是 null（分类轴全显），30 天数据会把 30 个日期
+          // 标签叠在一起糊成一片；给个像素间距让它按宽度自动抽稀，等价于 recharts 的默认行为。
+          tickSpacing: 60,
+          tickLabelProps: { class: "layerchart-tick" }
+        },
+        yAxis: { tickLabelProps: { class: "layerchart-tick" } }
       }}
     >
       {#snippet marks({ context })}
         {#each context.series.visibleSeries as s (s.key)}
           <Spline seriesKey={s.key} stroke={s.color} strokeWidth={2} />
         {/each}
+      {/snippet}
+      {#snippet tooltip({ context })}
+        <AnalyticsTooltip {context} xKey={x} series={resolved} {showPercent} {valueFormat} />
       {/snippet}
     </Chart>
   {/if}

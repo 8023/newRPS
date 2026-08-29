@@ -56,7 +56,7 @@
         <tbody>{#each trends as r (r.day)}<tr><td>{r.day}</td><td>{r.newUsers}</td><td>{r.oldLogin}</td></tr>{/each}</tbody>
       </table>
     {/snippet}
-    <LineTrendChart data={trends} x="day" height={220} series={[
+    <LineTrendChart data={trends} x="day" height={220} showPercent series={[
       { key: "newUsers", label: "新用户", color: "var(--chart-1)" },
       { key: "oldLogin", label: "老用户登录", color: "var(--chart-3)" }
     ]} />
@@ -69,7 +69,7 @@
         <tbody>{#each trends as r (r.day)}<tr><td>{r.day}</td><td>{r.newVisitors}</td><td>{r.returning}</td></tr>{/each}</tbody>
       </table>
     {/snippet}
-    <LineTrendChart data={trends} x="day" height={220} series={[
+    <LineTrendChart data={trends} x="day" height={220} showPercent series={[
       { key: "newVisitors", label: "新设备", color: "var(--chart-1)" },
       { key: "returning", label: "老设备", color: "var(--chart-3)" }
     ]} />

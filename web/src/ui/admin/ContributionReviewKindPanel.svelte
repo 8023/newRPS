@@ -1,5 +1,6 @@
 <script lang="ts">
   // 源：ui/AdminContributionReview.tsx:210-250
+  import { untrack } from "svelte";
   import type { AppConfig, ContributionItem } from "../../shared/types";
   import { ask } from "../../lib/rpc";
   import { kindLabel, sortReviewQueue, type JumpTarget } from "../../lib/contributionAdmin";
@@ -26,9 +27,11 @@
     }
   }
 
+  // 原 React 版 deps 是 [kind, reloadNonce]：只在 tab 切换与显式刷新时重拉。
+  // untrack 同 AdminContributionReview——reload() 同步读 password，不隔离就会被口令框逐字符触发。
   $effect(() => {
     void kind;
-    void reload();
+    untrack(() => reload());
   });
 
   function handleChanged() {

@@ -21,6 +21,8 @@ config/xdb/*.xdb
 # tooling / OS
 .omo/
 .claude/
+.agents/
+.codex/
 CLAUDE.md
 .DS_Store
 *.log

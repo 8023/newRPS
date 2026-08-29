@@ -85,7 +85,7 @@
       </table>
     {/snippet}
     <p class="analytics-inline-kpi">完成率 <strong>{((data.punishment?.doneRate || 0) * 100).toFixed(1)}%</strong></p>
-    <StackedBarChart data={punishmentRows} x="day" height={236} series={[
+    <StackedBarChart data={punishmentRows} x="day" height={236} showPercent showTotal={false} series={[
       { key: "pending", label: "进行中", color: "var(--chart-1)" },
       { key: "done", label: "完成", color: "var(--chart-3)" },
       { key: "reject", label: "驳回", color: "var(--chart-critical)" }
@@ -152,14 +152,14 @@
   <ChartCard title="对局数">
     {#snippet table()}<SeriesTable days={data.series.days} series={data.gameRounds || []} labels={GAME_LABELS} />{/snippet}
     {#if gameRoundsStable.length}
-      <StackedBarChart data={seriesToChartRows(data.series.days, gameRoundsStable)} x="day" height={240}
+      <StackedBarChart data={seriesToChartRows(data.series.days, gameRoundsStable)} x="day" height={240} showPercent
         series={gameRoundsStable.map((s) => ({ key: s.key, label: GAME_LABELS[s.key] || s.key }))} />
     {:else}<p class="empty">暂无数据</p>{/if}
   </ChartCard>
   <ChartCard title="开房数">
     {#snippet table()}<SeriesTable days={data.series.days} series={data.roomCreates || []} labels={GAME_LABELS} />{/snippet}
     {#if roomCreatesStable.length}
-      <StackedBarChart data={seriesToChartRows(data.series.days, roomCreatesStable)} x="day" height={240}
+      <StackedBarChart data={seriesToChartRows(data.series.days, roomCreatesStable)} x="day" height={240} showPercent
         series={roomCreatesStable.map((s) => ({ key: s.key, label: GAME_LABELS[s.key] || s.key }))} />
     {:else}<p class="empty">暂无数据</p>{/if}
   </ChartCard>

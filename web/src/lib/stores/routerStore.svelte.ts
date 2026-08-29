@@ -3,7 +3,6 @@
 // （App.svelte 组合层）把结论以布尔参数喂给 leaveAdmin()，路由层本身不查会话状态，
 // 避免 sessionStore ⇄ routerStore 出现循环依赖。
 import { isAdminRoute } from "../rpc";
-import { trackPageview } from "../analytics";
 
 export type AppView = "login" | "lobby" | "room" | "admin" | "contribute";
 
@@ -12,10 +11,10 @@ class RouterStore {
   keepContribute = $state(false);
   #viewBeforeAdmin: AppView = isAdminRoute() ? "login" : "lobby";
 
-  /** 唯一的视图切换入口：顺带打点 pageview，等价于原 React 版"监听 view 变化" 的 effect。 */
+  /** 唯一的视图切换入口。pageview 由 App.svelte 监听 view 的 effect 统一上报，
+      与原 React 版 useEffect([view]) 一致：同值赋值不会重复记一次浏览。 */
   goto(next: AppView) {
     this.view = next;
-    trackPageview(next);
   }
 
   openAdmin() {

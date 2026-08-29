@@ -6,6 +6,7 @@
   import { ask } from "../../../lib/rpc";
   import { formatDurationMs, funnelOrdered, labelFor, relabelBuckets, DEVICE_LABELS, VIEW_LABELS } from "../../../lib/analyticsDashboard";
   import HBarChart from "../../../lib/charts/HBarChart.svelte";
+  import FunnelTooltip from "../../../lib/charts/FunnelTooltip.svelte";
   import ChartCard from "./ChartCard.svelte";
   import BucketTable from "./BucketTable.svelte";
 
@@ -18,29 +19,38 @@
 
   let detailTab = $state<"views" | "refs" | "prov" | "sess">("views");
   let sessions = $state<AnalyticsSessionBrief[]>([]);
-  let sessionsLoaded = false;
+  let sessionsGen = 0;
 
-  async function loadSessions() {
+  async function loadSessions(forDays: number) {
+    const gen = ++sessionsGen;
     try {
-      const detail = await ask<{ recentSessions?: AnalyticsSessionBrief[] }>("admin:analyticsDetail", { days });
-      sessionsLoaded = true;
+      const detail = await ask<{ recentSessions?: AnalyticsSessionBrief[] }>("admin:analyticsDetail", { days: forDays });
+      if (gen !== sessionsGen) return;
       sessions = detail.recentSessions || [];
     } catch {
       // 主面板数据仍可用，明细失败时保留旧值
     }
   }
 
-  // 首次切到「最近会话」时立即拉取；之后同一 tab 不重复拉（父级 60s 轮询若想刷新明细，
-  // 由用户手动重新切换页签触发，与原版按 days 变化重拉的语义一致——days 变化时本组件
-  // 随父级一起重建（父级用 days 做 key），无需额外处理。
+  // 「最近会话」是独立于主快照的懒加载明细：切到该页签、或在该页签上改时间范围时重新拉取
+  // （对应原 React 版 deps [detailTab, days]），并按 60s 续拉，复现原版主轮询里
+  // `if (detailTabRef.current === "sess") 一并刷新明细` 的实时性。离开页签即停表。
   $effect(() => {
-    if (detailTab === "sess" && !sessionsLoaded) void loadSessions();
+    if (detailTab !== "sess") return;
+    const forDays = days;
+    void loadSessions(forDays);
+    const timer = setInterval(() => void loadSessions(forDays), 60_000);
+    return () => clearInterval(timer);
   });
 </script>
 
 <ChartCard title="转化漏斗">
   {#snippet table()}<BucketTable rows={funnelRows} />{/snippet}
-  <HBarChart rows={funnelRows} height={200} color="var(--chart-2)" />
+  <HBarChart rows={funnelRows} height={200} color="var(--chart-2)">
+    {#snippet tooltip({ context })}
+      <FunnelTooltip {context} steps={funnelRows} />
+    {/snippet}
+  </HBarChart>
 </ChartCard>
 
 <div class="analytics-card">

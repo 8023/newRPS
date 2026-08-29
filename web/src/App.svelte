@@ -8,11 +8,11 @@
   //   - uiStore：纯客户端 UI 状态（弹窗开关、主题、toast 触发文案）
   //   - 各视图/弹窗组件直接 import 需要的 store，不再经手 App 一层层转发 props
   // 新增视图/弹窗时，照这个模式加，不要把状态或逻辑塞回本文件。
-  import { onMount, untrack } from "svelte";
+  import { onMount, untrack, type Component } from "svelte";
   import { sessionStore } from "./lib/stores/sessionStore.svelte";
   import { routerStore } from "./lib/stores/routerStore.svelte";
   import { uiStore } from "./lib/stores/uiStore.svelte";
-  import { startAnalytics } from "./lib/analytics";
+  import { startAnalytics, trackPageview } from "./lib/analytics";
   import { ask, isAdminRoute } from "./lib/rpc";
   import SecurityDisclaimer from "./ui/shell/SecurityDisclaimer.svelte";
   import TopBar from "./ui/shell/TopBar.svelte";
@@ -23,7 +23,6 @@
   import Login from "./ui/shell/Login.svelte";
   import Lobby from "./ui/lobby/Lobby.svelte";
   import Room from "./ui/room/Room.svelte";
-  import AdminPanel from "./ui/admin/AdminPanel.svelte";
   import ContributeView from "./ui/contribute/ContributeView.svelte";
   import AboutPanel from "./ui/about/AboutPanel.svelte";
   import HelpPanel from "./ui/about/HelpPanel.svelte";
@@ -33,6 +32,37 @@
   onMount(() => {
     startAnalytics();
     sessionStore.connect();
+  });
+
+  // 与 React 版 useEffect([view]) 一致：初次挂载上报初始页，之后仅在主视图真正变化时
+  // 上报。同值的 room:update 不会使依赖失效，因此不会把房态推送误算成页面浏览。
+  $effect(() => {
+    trackPageview(routerStore.view);
+  });
+
+  // 弹窗浏览同样保持 React 版的四个窄依赖 effect；无论从哪个入口打开，都只在
+  // false -> true 时上报一次。
+  $effect(() => {
+    if (uiStore.profileOpen) trackPageview("profile");
+  });
+  $effect(() => {
+    if (uiStore.leaderboardOpen) trackPageview("leaderboard");
+  });
+  $effect(() => {
+    if (uiStore.aboutOpen) trackPageview("about");
+  });
+  $effect(() => {
+    if (uiStore.helpOpen) trackPageview("help");
+  });
+
+  // 后台整体单独打包，普通玩家不会下载后台配置、用户管理和关系图等代码。
+  let AdminPanelComponent = $state<Component | null>(null);
+  $effect(() => {
+    if (routerStore.view === "admin" && sessionStore.lobby && !AdminPanelComponent) {
+      import("./ui/admin/AdminPanel.svelte").then((module) => {
+        AdminPanelComponent = module.default;
+      });
+    }
   });
 
   // 各 store 的订阅式副作用：每个都只是"挂载一次、返回清理函数"，具体逻辑在对应 store
@@ -103,7 +133,11 @@
       <Room />
     {/if}
     {#if routerStore.view === "admin" && sessionStore.lobby}
-      <AdminPanel />
+      {#if AdminPanelComponent}
+        <AdminPanelComponent />
+      {:else}
+        <div class="loading">正在加载后台管理…</div>
+      {/if}
     {/if}
     {#if routerStore.view === "room" && !sessionStore.room}
       <section class="panel">你暂时不在房间里。</section>

@@ -5,6 +5,7 @@
    * （数据库保留、普通玩家读不到），删除后端会主动推 chat:deleted 通知在线客户端摘除本地视图。
    * 源：ui/AdminViews.tsx:1481-1724。onError/action 原为 props，现直接用 uiStore/adminStore。
    */
+  import { untrack } from "svelte";
   import type { PublicPlayer } from "../../shared/types";
   import { ask } from "../../lib/rpc";
   import { displayPlayerName } from "../../lib/playerDisplay";
@@ -57,8 +58,11 @@
   }
 
   // 进入页签时拉最近消息；之后只在点「检索」、切换范围开关或加载更多时再请求。
+  // ⚠ runSearch 会同步读取 author/text/room/lobbyOnly/includeDeleted 来拼请求体，若不
+  // untrack，这些输入框每敲一个字符都会让本 effect 失效并重新发一次 admin:chatSearch
+  // （原 React 版依赖数组是 []，只在挂载时跑一次）。下面那个开关 effect 同理。
   $effect(() => {
-    void runSearch(0, false);
+    untrack(() => runSearch(0, false));
   });
 
   let skipToggleSearch = true;
@@ -69,7 +73,7 @@
       skipToggleSearch = false;
       return;
     }
-    void runSearch(0, false);
+    untrack(() => runSearch(0, false));
   });
 
   function toggleSelect(key: string) {

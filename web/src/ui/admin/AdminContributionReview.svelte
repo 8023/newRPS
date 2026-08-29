@@ -1,6 +1,7 @@
 <script lang="ts">
   // 「共建审核」分区：待处理总览 + 随机任务/系列任务两个审核队列。
   // 源：ui/AdminContributionReview.tsx:82-148。
+  import { untrack } from "svelte";
   import type { ContributionStatus } from "../../shared/types";
   import { ask } from "../../lib/rpc";
   import { reviewQueueCounts, type JumpTarget, type PendingOverviewResponse } from "../../lib/contributionAdmin";
@@ -27,8 +28,11 @@
       uiStore.notify(e instanceof Error ? e.message : "加载失败");
     }
   }
+  // 只在挂载时拉一次（原 React 版 deps 是 [overviewNonce]）；之后由子面板的 onChanged
+  // 直接调用 refreshOverview。untrack 是必需的——refreshOverview 同步读 adminStore.password
+  // 拼请求体，否则登录后在常驻的口令框里每敲一个字符都会重发一次总览请求。
   $effect(() => {
-    void refreshOverview();
+    untrack(() => refreshOverview());
   });
 
   function jumpTo(kind: "task" | "series", status: ContributionStatus) {

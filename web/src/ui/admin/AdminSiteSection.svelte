@@ -72,6 +72,17 @@
       <textarea value={draft.announcementBoard.content} maxlength="800" oninput={(event) => adminStore.patch({ announcementBoard: { ...draft.announcementBoard, content: event.currentTarget.value } })} placeholder="写下想让玩家看到的内容"></textarea>
     </label>
   </div>
+  <div class="admin-announcement-card">
+    <div class="admin-card-title">
+      <strong>安全与免责声明</strong>
+      <small>每天每个浏览器显示一次，建角色前也会显示；文案固定，仅可整体开关</small>
+    </div>
+    <Toggle
+      label="开启安全声明"
+      value={draft.securityDisclaimer.enabled ?? false}
+      onChange={(enabled) => adminStore.patch({ securityDisclaimer: { enabled } })}
+    />
+  </div>
   <div class={draft.accessControl?.registrationDisabled ? "admin-announcement-card admin-preview-card-warning" : "admin-announcement-card"}>
     <div class="admin-card-title">
       <strong>新用户注册开关</strong>

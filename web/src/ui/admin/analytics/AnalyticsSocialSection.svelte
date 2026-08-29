@@ -23,11 +23,11 @@
 <div class="analytics-row-2">
   <ChartCard title="会话时长分布">
     {#snippet table()}<BucketTable rows={data.sessionBuckets || []} />{/snippet}
-    <ColoredBarChart rows={data.sessionBuckets || []} />
+    <ColoredBarChart rows={data.sessionBuckets || []} valueLabel="会话数" />
   </ChartCard>
   <ChartCard title="证明耗时分布">
     {#snippet table()}<BucketTable rows={data.punishment?.proofMs || []} />{/snippet}
-    <ColoredBarChart rows={data.punishment?.proofMs || []} />
+    <ColoredBarChart rows={data.punishment?.proofMs || []} valueLabel="次数" />
   </ChartCard>
 </div>
 

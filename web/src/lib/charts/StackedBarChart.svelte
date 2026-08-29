@@ -9,8 +9,9 @@
   import { Chart, Bars } from "layerchart/svg";
   import { scaleBand } from "d3-scale";
   import { CHART_COLORS, formatDayTick } from "../analyticsDashboard";
+  import AnalyticsTooltip from "./AnalyticsTooltip.svelte";
 
-  let { data, x, series, height = 220, layout = "stack", angledLabels = false }: {
+  let { data, x, series, height = 220, layout = "stack", angledLabels = false, showPercent = false, showTotal = true }: {
     data: Record<string, string | number>[];
     x: string;
     series: { key: string; label: string; color?: string }[];
@@ -18,7 +19,12 @@
     layout?: "stack" | "group";
     /** 类目较多时横轴文字倾斜显示（热门惩罚标签）。 */
     angledLabels?: boolean;
+    showPercent?: boolean;
+    /** 「惩罚任务」那张图原版刻意不显示合计（发布量=三段之和，重复信息），故可关。 */
+    showTotal?: boolean;
   } = $props();
+
+  const resolved = $derived(series.map((s, i) => ({ ...s, color: s.color ?? CHART_COLORS[i % CHART_COLORS.length] })));
 </script>
 
 <div class="layerchart-card" style={`height:${height}px`}>
@@ -31,7 +37,7 @@
       xScale={scaleBand().padding(0.35)}
       y={series.map((s) => s.key)}
       yNice
-      series={series.map((s, i) => ({ key: s.key, value: s.key, label: s.label, color: s.color ?? CHART_COLORS[i % CHART_COLORS.length] }))}
+      series={resolved.map((s) => ({ key: s.key, value: s.key, label: s.label, color: s.color }))}
       seriesLayout={layout}
       padding={{ left: 8, bottom: angledLabels ? 48 : 24, top: 8, right: 8 }}
       axis
@@ -41,6 +47,9 @@
       props={{
         xAxis: {
           format: (v: unknown) => formatDayTick(String(v)),
+          // 倾斜标签的图（热门惩罚标签，最多 10 条）要全显；日期轴则按像素间距抽稀，
+          // 否则 30 天会渲染 30 个标签叠成一片（band 轴的 tickSpacing 默认是 null）。
+          tickSpacing: angledLabels ? null : 60,
           tickLabelProps: angledLabels ? { class: "layerchart-tick", textAnchor: "end", transform: "rotate(-25)" } : { class: "layerchart-tick" }
         },
         yAxis: { tickLabelProps: { class: "layerchart-tick" } }
@@ -54,6 +63,9 @@
             rounded={(d: any) => (context.series.isStackTop(s.key, d) ? "edge" : "none")}
           />
         {/each}
+      {/snippet}
+      {#snippet tooltip({ context })}
+        <AnalyticsTooltip {context} xKey={x} series={resolved} {showTotal} {showPercent} />
       {/snippet}
     </Chart>
   {/if}

@@ -5,8 +5,16 @@
   import { Chart, Bars } from "layerchart/svg";
   import { scaleBand } from "d3-scale";
   import { SEQ_COLORS } from "../analyticsDashboard";
+  import AnalyticsTooltip from "./AnalyticsTooltip.svelte";
 
-  let { rows, height = 220 }: { rows: { key: string; value: number }[]; height?: number } = $props();
+  let { rows, height = 220, valueLabel = "数量" }: {
+    rows: { key: string; value: number }[];
+    height?: number;
+    valueLabel?: string;
+  } = $props();
+
+  // 占比分母是所有桶的合计，而不是当前这一根柱子——与原版 percentTotal 语义一致。
+  const bucketTotal = $derived(rows.reduce((sum, r) => sum + r.value, 0));
 </script>
 
 <div class="layerchart-card" style={`height:${height}px`}>
@@ -32,6 +40,15 @@
              （等价于 recharts 的 <Cell fill=... /> 逐格覆盖，见 Bars.base.svelte 的
              `fill ?? c.series?.color ?? ctx.cGet(d)` 兜底链）。 -->
         <Bars radius={4} rounded="top" />
+      {/snippet}
+      {#snippet tooltip({ context })}
+        <AnalyticsTooltip
+          {context}
+          xKey="key"
+          series={[{ key: "value", label: valueLabel, color: "var(--chart-seq-4)" }]}
+          showPercent
+          percentTotal={bucketTotal}
+        />
       {/snippet}
     </Chart>
   {/if}
