@@ -1,6 +1,6 @@
 # 抖喵游戏屋
 
-实时联机小游戏平台：**Go 后端** + **React 前端**。
+实时联机小游戏平台：**Go 后端** + **Svelte 前端**。
 
 主玩法：锤子剪刀布 / 黑白棋 / 井字棋 / 五子棋 / 斗兽棋 / 国际象棋 / 大话骰 / 猜硬币。含大厅、房间、聊天、观战、排位、惩罚、名字争夺战、白给、极限模式、后台配置等。仅支持真人在线对局（猜硬币例外——单人惩罚小游戏，见下文）。
 
@@ -21,11 +21,12 @@
 ├── config/
 │   ├── json/            # 按功能拆分的配置 JSON（原地读写，无 active/default 双轨）
 │   └── xdb/             # IP 归属地库（gitignore；npm run fetch-geoip）
-├── web/                 # 前端（Vite + React + TS）
+├── web/                 # 前端（Vite + Svelte 5 + TS）
 │   ├── src/
-│   │   ├── App.tsx      # 壳：会话恢复 / 视图路由 / 顶栏
-│   │   ├── lib/         # session、rpc、normalize、format、proofImage…
-│   │   ├── ui/AppViews  # 登录/大厅/房间/后台等页面与组件
+│   │   ├── App.svelte   # 壳：组合根，只接线 store 生命周期与视图路由
+│   │   ├── main.ts      # 入口
+│   │   ├── lib/         # session、rpc、normalize、format、proofImage、stores/（uiStore/routerStore/sessionStore/adminStore）…
+│   │   ├── ui/          # 按页面/关注点拆分的目录：shell/lobby/room/games/contribute/social/profile/admin/about
 │   │   ├── ws.ts / wire.ts / delta.ts
 │   │   └── shared/types.ts
 │   ├── index.html
@@ -383,7 +384,7 @@ npm run fetch-geoip   # 同时下载 config/xdb/ip2region_v4.xdb 与 ip2region_v
 - **每日衰减**：`scheduleRankedDailyDecay`/`applyRankedDailyDecay`（`internal/server/player.go`）每 24 小时（对齐到 UTC 天边界，`time.AfterFunc` 定位到下一个边界后切换为 `time.Ticker`，与「极限模式」整点衰减是完全独立的两套机制）把每个玩家的真实 `RankedPoints` 乘以 `dailyDecayRatio`（默认 `0.98`）并向 0 截断小数——正负分都会朝 0 方向收缩。每个玩家用 `RankedLastDecayDay` 记录已衰减到的"天桶"，防止服务重启后重复衰减。
 - **历史最高/最低分**：`recordRankedExtremes` 持续记录真实极值（存储永不回退）；下发展示时与当前分一样按 `max`/`min`/`nameWarMin` 封顶。管理员后台保留按真实分排序的能力；普通玩家收到的公开快照会把 `sortRankedPoints`/`sortHighestScore`/`sortLowestScore` 一并按展示值封顶，避免通过未渲染字段反推出真实分。
 - **称号分段用百分比**：`config/json/titles.json` 的 `minPercent`/`maxPercent`（-100～100）相对 `ranked-score.json` 的展示上下限换算真实分所属段；改展示上下限无需改称号绝对分。极限模式的 pos/neg 系数表与同一百分比刻度对齐。
-- **管理员自定义称号**：后台「玩家管理」可直接给某个玩家填一个不在 `titles.json` 池里的称号（`editPlayer` action，`internal/server/handlers_room.go`），此时会置位 `PublicStats.TitleCustom`；`syncTitleForRankSegment`（`internal/server/player.go`）一旦发现该标记就直接跳过重算，不再随排位分升降、跨档、改性别/阵营、后台调整 `ranked-score.json` 的 `max`/`min` 而被自动改写。把后台称号输入框清空并保存会清掉该标记、立即按当前排位分重算回自动称号。前端输入框此时会用黄色边框区分，`web/src/ui/AdminViews.tsx`。
+- **管理员自定义称号**：后台「玩家管理」可直接给某个玩家填一个不在 `titles.json` 池里的称号（`editPlayer` action，`internal/server/handlers_room.go`），此时会置位 `PublicStats.TitleCustom`；`syncTitleForRankSegment`（`internal/server/player.go`）一旦发现该标记就直接跳过重算，不再随排位分升降、跨档、改性别/阵营、后台调整 `ranked-score.json` 的 `max`/`min` 而被自动改写。把后台称号输入框清空并保存会清掉该标记、立即按当前排位分重算回自动称号。前端输入框此时会用黄色边框区分，`web/src/ui/admin/AdminPlayerEditor.svelte`。
 - 「名字争夺战」失格线：`config/json/name-war.json` 的 `penaltyThreshold`（默认 `-4999`，后台可调），按**真实存储分**判定，与展示封顶无关。改名所需最低分同样在该文件里，`renameMinPoints`（默认 `500`，后台可调），只有真实分达到此值的玩家才能给失格者改名。
 
 ## 构建与测试
@@ -431,6 +432,6 @@ npm run test           # go test + 前端 build
 - **随机惩罚标签偏好**：改为浏览器本地保存（`localStorage`），不再落玩家档案、不再跨设备同步（schema v30 废弃旧偏好表）；建房惩罚入口合并为无惩罚/随机/系列/玩家发布四选一；房间内可直接发大厅聊天。
 - **惩罚任务系统重做**：`punishmentSource` 三态改为 `random`（原 `system`）/ `series`/`player`；随机任务改标签化三态筛选 + 按房间走的倒伽马难度加权，新增按玩家个人进度推进的系列任务模式。任务池/系列详情迁出 `AppConfig` 落 SQLite（`punishment_tasks` / `punishment_series`，schema v22–v26），`punishments.json` 只保留 `tags` + 全局难度；建房选系列用公开摘要 `punishmentSeriesSummaries`；后台重排为「惩罚配置 / 系列任务 / 任务池」三个 tab。
 - **前后端版本一致性提示**：后端 `-ldflags` 注入 git 短哈希、前端 `vite.config.ts` 同步注入，连接建立与心跳 ping 携带构建版本，前端检测到与后端不一致时展示横幅提示手动刷新（不自动强刷）。
-- **用户分析 + 后台图表面板**：前端埋点与审计表聚合、ip2region 归属地（`config/xdb/ip2region_v4.xdb` 必需 + 可选 `ip2region_v6.xdb`）、日聚合三层架构、`/admin`「数据分析」分区（recharts）；转化漏斗重定义、新增用户留存矩阵与单房对局统计。升级须一次性放置 xdb 或设 `ANALYTICS_GEO_ENABLED=0`。
+- **用户分析 + 后台图表面板**：前端埋点与审计表聚合、ip2region 归属地（`config/xdb/ip2region_v4.xdb` 必需 + 可选 `ip2region_v6.xdb`）、日聚合三层架构、`/admin`「数据分析」分区（LayerChart）；转化漏斗重定义、新增用户留存矩阵与单房对局统计。升级须一次性放置 xdb 或设 `ANALYTICS_GEO_ENABLED=0`。
 
 详见 [CHANGELOG.md](./CHANGELOG.md)。

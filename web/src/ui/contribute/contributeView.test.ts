@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 
 describe("contribute view markup", () => {
   it("keeps withdraw, save, submit in that order inside the submit row", () => {
-    const src = readFileSync(new URL("./ContributeView.tsx", import.meta.url), "utf8");
+    const src = readFileSync(new URL("./ContributeView.svelte", import.meta.url), "utf8");
     const submitRow = src.indexOf("contribute-submit-row");
-    const withdraw = src.indexOf("{withdrawButton}", submitRow);
+    const withdraw = src.indexOf("{@render withdrawButton()}", submitRow);
     const save = src.indexOf(">保存<", withdraw);
     const submit = src.indexOf(">提交<", save);
     expect(submitRow).toBeGreaterThan(0);
@@ -18,41 +18,41 @@ describe("contribute view markup", () => {
     expect(src).toContain("内容尚未保存");
     expect(src).toContain("contribute-unsaved-card");
     expect(src).toContain(">放弃<");
-    expect(src).toContain("requestLeave(onBack)");
+    expect(src).toContain("requestLeave(");
   });
 
   it("no longer offers a gender contribution tab (feature removed)", () => {
-    const src = readFileSync(new URL("./ContributeView.tsx", import.meta.url), "utf8");
+    const src = readFileSync(new URL("./ContributeView.svelte", import.meta.url), "utf8");
     expect(src).not.toContain('"gender"');
     expect(src).not.toContain("性别共建");
   });
 
   it("shows the selected title and a meta line led by the shared status chip", () => {
-    const src = readFileSync(new URL("./ContributeView.tsx", import.meta.url), "utf8");
+    const src = readFileSync(new URL("./ContributeView.svelte", import.meta.url), "utf8");
     expect(src).toContain("contribute-detail-head");
     expect(src).toContain("contributionDraftTitle(selectedDraft)");
     // 状态药丸徽标现在和后台共建审核复用同一个 ContributionStatusChip 组件，
-    // 放在列表/详情第二行开头（如"待审批 · 26/08/20"），不再各写一份 <span className="status-chip">。
+    // 放在列表/详情第二行开头（如"待审批 · 26/08/20"），不再各写一份 <span class="status-chip">。
     expect(src).toContain("ContributionStatusChip");
-    expect(src).not.toContain("status-chip");
+    expect(src).not.toContain('class="status-chip"');
   });
 
   it("preserves an existing cover opacity when reopening a draft", () => {
-    const src = readFileSync(new URL("./ContributeView.tsx", import.meta.url), "utf8");
+    const src = readFileSync(new URL("./ContributeView.svelte", import.meta.url), "utf8");
     expect(src).toContain('backgroundOpacity: typeof raw.backgroundOpacity === "number" ? raw.backgroundOpacity : base.backgroundOpacity');
   });
 });
 
 describe("series step toolbar markup", () => {
   it("puts move/delete/add on each step and drops the old add/delete buttons", () => {
-    const src = readFileSync(new URL("./ContributeSeriesForm.tsx", import.meta.url), "utf8");
+    const src = readFileSync(new URL("./ContributeSeriesForm.svelte", import.meta.url), "utf8");
     expect(src).toContain(">上移<");
     expect(src).toContain(">下移<");
     expect(src).toContain(">删除<");
     expect(src).toContain(">添加<");
     expect(src).not.toContain("删除这步");
     expect(src).not.toContain("添加步骤");
-    const extra = src.indexOf("{extraSubmitActions}");
+    const extra = src.indexOf("{#if extraSubmitActions}");
     const save = src.indexOf("{saveDraftLabel}", extra);
     const submit = src.indexOf("{submitLabel}", save);
     expect(extra).toBeGreaterThan(0);
@@ -68,7 +68,7 @@ describe("series step toolbar markup", () => {
 
 describe("step editor field order", () => {
   it("renders punishment tags above difficulty and cover", () => {
-    const src = readFileSync(new URL("./StepEditor.tsx", import.meta.url), "utf8");
+    const src = readFileSync(new URL("./StepEditor.svelte", import.meta.url), "utf8");
     const tags = src.indexOf("<legend>惩罚标签</legend>");
     const difficulty = src.indexOf("难度 1-99");
     const cover = src.indexOf("<span>封面图</span>");

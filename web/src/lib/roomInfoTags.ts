@@ -32,6 +32,14 @@ export const roomInfoTagOrder = [
   { key: "textProofOnly", label: "仅文字证明" }
 ];
 
+// 称号标签按赋予来源着色的固定 4 档；顺序即后台"称号池"里色卡的展示顺序。源：ui/AppViews.tsx:5232。
+export const titleTagStyleOrder = [
+  { key: "system", label: "系统默认" },
+  { key: "self", label: "自定义" },
+  { key: "master", label: "主人赋予" },
+  { key: "admin", label: "管理员赋予" }
+];
+
 export function defaultRoomInfoTagStyle(label: string): RoomInfoTagStyle {
   return { label, textColor: "#4d5c6f", backgroundColor: "#eef3f8", borderColor: "#c9d6e4" };
 }

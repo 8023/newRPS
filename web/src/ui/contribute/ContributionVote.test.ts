@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { formatVoteStats } from "./ContributionVote";
+import { formatVoteStats } from "./ContributionVote.svelte";
 
 describe("formatVoteStats", () => {
   it("shows empty copy when nobody voted", () => {
@@ -12,12 +12,13 @@ describe("formatVoteStats", () => {
   });
 });
 
-// 钉住 stale-state 回归：ContributionVote 用 useState(card) 播种本地 current，只在首次
-// 挂载时生效；父组件若传入新 card，必须显式同步。这里不引入 DOM 测试依赖，直接钉住 effect。
+// 钉住 stale-state 回归：ContributionVote 用 $state(untrack(() => card)) 播种本地 current，
+// 只在首次挂载时生效；父组件若传入新 card，必须显式用 $effect 同步（Svelte 5 版的等价物是
+// React useState(card) 播种 + useEffect(() => setCurrent(card), [card]) 同步）。
 describe("ContributionVote markup", () => {
   it("keeps current state synced to the card prop via an effect", () => {
-    const src = readFileSync(new URL("./ContributionVote.tsx", import.meta.url), "utf8");
-    expect(src).toContain("useState(card)");
-    expect(src).toMatch(/useEffect\(\(\) => \{\s*setCurrent\(card\);\s*\}, \[card\]\);/);
+    const src = readFileSync(new URL("./ContributionVote.svelte", import.meta.url), "utf8");
+    expect(src).toContain("$state(untrack(() => card))");
+    expect(src).toMatch(/\$effect\(\(\) => \{\s*current = card;\s*\}\);/);
   });
 });

@@ -17,12 +17,5 @@
     "types": ["svelte"]
   },
   "include": ["src"],
-  "exclude": [
-    "src/**/*.test.ts",
-    "src/ui/AdminContributionReview.tsx",
-    "src/ui/AdminViews.tsx",
-    "src/ui/AnalyticsPanel.tsx",
-    "src/ui/AppViews.tsx",
-    "src/ui/PetBondGraphPanel.tsx"
-  ]
+  "exclude": ["src/**/*.test.ts"]
 }
