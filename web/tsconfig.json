@@ -23,12 +23,6 @@
     "src/ui/AdminViews.tsx",
     "src/ui/AnalyticsPanel.tsx",
     "src/ui/AppViews.tsx",
-    "src/ui/ContributeSeriesForm.tsx",
-    "src/ui/ContributeView.tsx",
-    "src/ui/ContributionListControls.tsx",
-    "src/ui/ContributionPreview.tsx",
-    "src/ui/NumberField.tsx",
-    "src/ui/PetBondGraphPanel.tsx",
-    "src/ui/StepEditor.tsx"
+    "src/ui/PetBondGraphPanel.tsx"
   ]
 }
