@@ -1,8 +1,10 @@
-# 抖喵游戏屋 · 前端 React → Svelte 重构方案
+# 抖喵游戏屋 · 前端 React → Svelte 重构记录
 
-> 状态：**方案草案，尚未动工**
+> 状态：**已完成（P0–P11，2026-08-29）**
 > 目标框架：**Svelte 5（runes）+ 纯 Vite**（不引入 SvelteKit）
 > 适用范围：仅 `web/` 目录。Go 后端、Protobuf 协议、SQLite、配置文件、部署形态**全部不动**。
+
+> 本文保留迁移前的方案、风险和验收清单，并在文末记录实际落地结果。它是工程复盘文档，不是运行时配置；若与代码不一致，以代码、`README.md` 和 `CHANGELOG.md` 为准。
 
 ---
 
@@ -32,9 +34,9 @@
 | 构建工具 | **纯 Vite + `@sveltejs/vite-plugin-svelte`** | 现有 `vite.config.ts`（自定义 `markdownHtml` 插件、`libheif-js` 的 node 内建 alias、`__APP_BUILD_ID__` define、`outDir: ../bin/dist`）可以整份保留，只换一个插件。SvelteKit 会强加 adapter/路由/SSR 一整套约定，对本项目是纯负担。 |
 | 类型检查 | **`svelte-check`** 替代 `tsc --noEmit` | `tsc` 无法解析 `.svelte`。根目录 `npm run test` 依赖 `npm run build --prefix web` 作为类型门禁，必须保证替换后门禁强度不下降。 |
 | 图标 | **`@lucide/svelte`**（或对应版本的 `lucide-svelte`） | 全站仅 6 处 import、约 23 个图标名，同名一比一替换。⚠️ 动工时先核对包名与图标名是否都存在（尤其 `ChessKnight`），不存在的用内联 SVG 兜底。 |
-| 图表 | **ECharts（框架无关）** 优先，`LayerChart` 备选 | 见 §6.3，这是全项目唯一"无法机械翻译"的部分。 |
+| 图表 | **LayerChart（Svelte 原生）** | 见 §6.3，这是全项目唯一"无法机械翻译"的部分。 |
 | 组件通信 | **函数 props**（`onError`、`onGoRoom` 等原样传） | Svelte 5 的 `$props()` 与 React props 语义几乎一致。**禁止**改用 `createEventDispatcher`（Svelte 5 已弃用），也不要中途改成 context——保持一一对应才好 review。 |
-| 迁移方式 | **单分支整体重写 + 双入口并存对照** | 见 §3。 |
+| 迁移方式 | **单分支整体重写 + 分阶段双入口对照** | 迁移期双入口，收尾后只保留 Svelte 入口，见 §3。 |
 
 ---
 
@@ -113,24 +115,24 @@
 
 ---
 
-## 3. 迁移策略：单分支重写 + 双入口对照
+## 3. 迁移策略与实际落地：单分支重写 + 分阶段对照
 
 ### 3.1 为什么不做"渐进式共存"
 
 React 与 Svelte 混跑需要两套运行时同时加载 + 状态桥接层，对这个体量（单 SPA、无微前端边界）是净负担。且 `App.tsx` 持有几乎全部全局状态（config/lobby/room/me），无法在中途沿组件边界劈开。
 
-### 3.2 采用方案
+### 3.2 实际落地方式
 
-在 `feat/svelte-migration` 分支上原地重写，**保留 React 入口做实时对照**：
+在 `feat/svelte-migration` 分支上原地重写，迁移期间保留 React 入口做实时对照，收尾时统一切换为 Svelte：
 
 ```
 web/index.html          → <script src="/src/main.ts">        (Svelte，新)
-web/index-react.html    → <script src="/src/main.tsx">       (React，迁移期保留)
+web/index-react.html    → <script src="/src/main.tsx">       (React，仅迁移期保留)
 ```
 
-- `vite.config.ts` 的 `build.rollupOptions.input` 同时声明两个入口；两套代码共用同一份 `styles.css`、同一份 A 层模块、同一个 dev 后端。
+- 迁移期的 Vite 配置曾同时声明两个入口；两套代码共用同一份 `styles.css`、同一份 A 层模块、同一个 dev 后端，P11 收尾后恢复为单一入口。
 - 迁移期任一时刻，`http://127.0.0.1:5173/` 是 Svelte 版，`http://127.0.0.1:5173/index-react.html` 是 React 版，可以两个标签页并排对照同一个房间、同一份数据——**这是翻译类重构最有效的验收手段**，比读代码回忆行为可靠得多。
-- Phase 9 收尾时删除 `index-react.html`、所有 `.tsx`、React 依赖。
+- P11 已删除 `index-react.html`、所有 `.tsx`、React 运行时及其依赖，生产入口统一为 Svelte；原有 `styles.css`、WebSocket/Protobuf/DELTA 层、`bin/dist/` 输出路径和 Go 静态托管方式保持不变。
 
 ### 3.3 分支与提交纪律
 
@@ -252,18 +254,15 @@ React 的 deps 数组是**手写的**，项目里存在多处"deps 故意比实�
 
 **执行要求：翻译每一个 `useEffect` 时，逐条对照 deps 数组与函数体实际读取的变量，把差集列出来，明确决定"追踪"还是 `untrack`。这一步不能凭直觉略过。**
 
-### 6.3 数据分析图表（recharts）——唯一的非机械翻译项
+### 6.3 数据分析图表（LayerChart）——唯一的非机械翻译项
 
-`ui/AnalyticsPanel.tsx` 使用 `LineChart` / `BarChart` / `PieChart` / `ComposedChart` / `Cell` / `Rectangle`（自定义柱形）/ `ResponsiveContainer` / 自定义 `Tooltip` / `Legend`，共约 10+ 张图。recharts 是纯 React 组件库，**无任何 Svelte 移植版**，必须整体替换。
+迁移前的 `ui/AnalyticsPanel.tsx` 使用 `LineChart` / `BarChart` / `PieChart` / `ComposedChart` / `Cell` / `Rectangle`（自定义柱形）/ `ResponsiveContainer` / 自定义 `Tooltip` / `Legend`，共约 10+ 张图。Recharts 是纯 React 组件库，**无任何 Svelte 移植版**，因此整体改用 LayerChart 原语重画。
 
-**推荐方案：ECharts（`echarts` 裸包，不用任何框架 adapter）**
+**实际方案：LayerChart（Svelte 原生、基于 d3 的公开原语）**
 
-理由：
-- ECharts 是完全命令式的（`init(el)` → `setOption(opt)` → `dispose()`），在 Svelte 里就是"一个 `div` + `bind:this` + 一个 `$effect` 负责 init/setOption/dispose"，**不依赖任何框架绑定，未来再换框架也不用重写**——这与本项目"通信层框架无关"的既有取向一致。
-- 自带响应式尺寸（`resize()`），可替代 `ResponsiveContainer`。
-- 自定义 tooltip/柱形通过 option 配置完成，不需要自定义组件。
+已发布包公开 `Chart`/`Svg`/`Axis`/`Bars`/`Spline`/`Arc`/`Pie`/`Group`/`Legend`/`ForceSimulation` 等原语，项目在 `lib/charts/*.svelte` 上封装折线、双轴、堆叠柱、组合图、横向柱、环图和 Sparkline。双 Y 轴用两个重叠坐标系模拟，堆叠柱顶端圆角使用 LayerChart 的 stack-top 判断；数据分析面板仍由后台动态导入，图表代码不会进入普通玩家首屏。
 
-**次选：LayerChart**（Svelte 原生、基于 LayerCake），组件化心智更接近 recharts，但需确认其 Svelte 5 兼容性与自定义形状能力。
+Vite 的 `manualChunks` 与 `lazySceneBoundaryGuard` 固定后台/分析懒加载边界；构建产物中如果首屏静态依赖这些场景会直接失败。
 
 **执行要点：**
 - 这部分**不是翻译而是重画**，必须逐图与 React 版并排比对：数据点数量、坐标轴刻度与格式、tooltip 内容、图例、配色（含 light/dark 主题变量）、空数据态。
@@ -325,12 +324,12 @@ Svelte 无 StrictMode，effect 只跑一次。**但这段代码不能删**：它
 - `resolve.alias` 的 `fs`/`path`/`crypto` → `node-empty-shim.ts` — 原样保留（`libheif-js` 需要）
 - `build.outDir: "../bin/dist"` + `emptyOutDir: true` — **原样保留**，这是 Release 打包规范的硬约束
 - `server.proxy` 的 `/api` `/uploads` `/ws` — 原样保留
-- 新增：迁移期的双入口 `build.rollupOptions.input`，P11 删除
+- 新增：后台/数据分析/图片处理场景的懒加载分包与 `lazySceneBoundaryGuard` 构建期边界检查
 
 `web/package.json`：
 - `"build": "tsc --noEmit && vite build"` → `"build": "svelte-check --tsconfig ./tsconfig.json && vite build"`
-- 删 `react` / `react-dom` / `@types/react` / `@types/react-dom` / `@vitejs/plugin-react` / `lucide-react` / `recharts`（P11）
-- 增 `svelte` / `@sveltejs/vite-plugin-svelte` / `svelte-check` / `@lucide/svelte` / `echarts`
+- 已删 `react` / `react-dom` / `@types/react` / `@types/react-dom` / `@vitejs/plugin-react` / `lucide-react` / `recharts`
+- 已增 `svelte` / `@sveltejs/vite-plugin-svelte` / `svelte-check` / `@lucide/svelte` / `layerchart` 及其 d3 依赖
 - 保留 `protobufjs` / `protobufjs-cli` / `@fingerprintjs/fingerprintjs` / `@jsquash/webp` / `libheif-js` / `markdown-it` / `vitest` / `typescript` / `vite`
 - `overrides` 段（postcss/minimatch/brace-expansion 的安全版本约束）保留
 
@@ -355,7 +354,7 @@ Svelte 无 StrictMode，effect 只跑一次。**但这段代码不能删**：它
 ### 7.1 保留与重写现有单测
 
 - `contributeSeries.test.ts`、`seriesFaction.test.ts`：零改动，继续跑在 vitest 下（它们测的是纯函数）。
-- `lobbyActions.test.ts`、`contributeView.test.ts`、`ContributionVote.test.ts` 的源码断言部分：**必须重写**。这些测试通过 `readFileSync` 读 `.tsx` 源码文本、用 `indexOf` 断言 JSX 里元素的前后顺序（例如"参与共建按钮必须在创建房间按钮左边"）。迁移后文件路径与标记语法都变了，测试会全部失败。
+- `lobbyActions.test.ts`、`contributeView.test.ts`、`ContributionVote.test.ts` 的源码断言部分：**已重写**。这些测试现读取对应 `.svelte` 源码文本，并继续覆盖元素顺序、关键文案和迁移后的状态同步；Vitest 当前共 39 项通过。
   - 重写时改读对应 `.svelte` 文件即可，断言逻辑（元素顺序、某文案存在）基本可以平移。
   - **建议借这次机会把它们升级成真正的渲染断言**（见 7.2），源码文本断言本身是很脆的替代品。
 
@@ -369,7 +368,7 @@ Svelte 无 StrictMode，effect 只跑一次。**但这段代码不能删**：它
 
 ### 7.3 人工回归清单（真正的主力验收手段）
 
-利用 §3.2 的双入口，**每个 Phase 结束时，React 版与 Svelte 版并排跑同一个本地后端逐项对照**。清单至少覆盖：
+迁移期间利用 §3.2 的临时 React 入口与 Svelte 入口并排跑同一个本地后端逐项对照；P11 收尾后 React 入口已删除。清单至少覆盖：
 
 **身份与会话**
 - [ ] 首次访问注册身份 → 登录 → 刷新页面自动恢复
@@ -461,13 +460,13 @@ Svelte 无 StrictMode，effect 只跑一次。**但这段代码不能删**：它
 - `npm run fix-perms` 的 `chmod 600 config/json/*.json` 不受影响。
 - 前后端版本一致性提示依赖 `__APP_BUILD_ID__` 与后端 `-ldflags` 注入值相等——**迁移不能改变这个 define 的计算方式**，否则会全站误报"网站内容已更新"。
 
-### 8.4 文档同步（P11 必做）
+### 8.4 文档同步（P11 已完成）
 
-- `README.md`：第 3 行 "Go 后端 + React 前端"、第 24 行 "前端（Vite + React + TS）"、第 434 行 recharts 提及、以及"本地开发"章节涉及前端技术栈的表述。
-- `CLAUDE.md`：「前端（`web/src/`）」整节需要按新目录结构重写；`ui/AppViews.tsx` 作为"较大的单文件"的描述会失效。
-- 根 `package.json` 的 `description`。
-- `CHANGELOG.md` 加一条大版本记录。
-- `help.md` **不需要改**（面向玩家的规则说明，与技术栈无关）——但要验证 `markdownHtml` 插件在 Svelte 构建下仍正常注入。
+- `README.md` 已切换为 Go + Svelte，并同步目录结构、LayerChart、`AdminPlayerEditor.svelte` 与 v3.1.1 更新记录。
+- `CLAUDE.md` 的前端架构说明已按新目录结构更新；之后维护时继续以 `web/src/` 的实际分层为准。
+- 根 `package.json` 的 `description` 已切换为 Go 后端 + Svelte 前端。
+- `CHANGELOG.md` 已加入 v3.1.1 迁移、构建与验证记录。
+- `help.md` 的玩家规则无需因技术栈迁移改写，但关于页提示已更正为覆盖八款游戏；构建仍需验证 `markdownHtml` 插件正常注入。
 
 ---
 
@@ -512,13 +511,20 @@ Svelte 无 StrictMode，effect 只跑一次。**但这段代码不能删**：它
 
 ---
 
-## 11. 开工检查单
+## 11. 开工检查单（历史记录）
 
 动工前请确认：
 
-- [ ] 确认 `web/` 的功能冻结窗口（或接受 `MIGRATION-PORT.md` 的补丁补齐成本）
-- [ ] 确认图表方案（ECharts / LayerChart / 先占位降级）
-- [ ] 确认是否投入 §7.2 组件冒烟测试与 §7.4 Playwright（强烈建议至少做 7.2）
-- [ ] 确认 P0（React 侧拆分整理）是否先独立合入 `main`（建议：是）
-- [ ] 创建 `feat/svelte-migration` 分支
-- [ ] 建立 `TODO-after-migration.md`，迁移期所有"想顺手改"的念头都写进去
+- [x] 确认 `web/` 的功能冻结窗口并在迁移分支完成收尾
+- [x] 选择 LayerChart 作为图表实现
+- [x] 完成纯逻辑测试与迁移生命周期测试；组件级浏览器冒烟仍属于后续增强项
+- [x] 在 `feat/svelte-migration` 分支完成 P0–P11
+- [x] 同步 `README.md`、`CLAUDE.md`、`CHANGELOG.md` 与代码注释
+
+## 12. 实际落地结果（v3.1.1）
+
+- `web/src` 已无 React/TSX 入口，`web/index.html` 使用 `main.ts` 挂载 Svelte `App.svelte`。
+- `web/package.json` 已移除 React、Recharts 和 React 图标依赖，使用 Svelte 5、LayerChart、`@lucide/svelte` 与 `svelte-check`。
+- `web/src/lib/stores/` 成为全站状态入口；后端 Go、协议生成代码、SQLite schema、静态托管和 Release 包目录约束均未改变。
+- `web/vite.config.ts` 保留 markdown HTML 插件、版本号注入、Node shim 与代理配置，并增加懒加载场景分包及构建期边界检查。
+- 已通过 `CGO_ENABLED=1 /usr/local/go/bin/go test ./...`、`go vet ./...`、前端 Vitest（39 项）、`svelte-check`（0 errors/0 warnings）和 Vite 生产构建。

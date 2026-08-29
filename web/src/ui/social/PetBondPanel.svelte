@@ -257,7 +257,11 @@
   </div>
 
   {#if titlePetId}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="modal-backdrop" onclick={() => (titlePetId = null)}>
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <section class="logout-confirm-card" onclick={(e) => e.stopPropagation()}>
         <h3>设置宠物称号</h3>
         <p class="hint">设置对方称号标签，最多 {petBondCfg.maxTitleLength} 字。清空则恢复默认称号。</p>

@@ -2,6 +2,7 @@ import { getBrowserFingerprint } from "../fingerprint";
 import { playerIdKey, playerSecretKey, punishmentTagPrefsKey, tokenKey } from "./constants";
 import { socket } from "../ws";
 import { ask } from "./rpc";
+import { disablePushSubscription } from "./pushNotify";
 
 export function randomUuid() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
@@ -248,7 +249,6 @@ export async function claimIdentity(code: string): Promise<{ playerId: string; p
 export async function logout() {
   // 先解绑本机 Web Push，避免登出后仍收到旧账号通知（不写入「用户主动停止」标记）。
   try {
-    const { disablePushSubscription } = await import("./pushNotify");
     await disablePushSubscription({ markStopped: false });
   } catch {
     // 推送清理失败不阻断登出。

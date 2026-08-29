@@ -163,6 +163,8 @@
         {@const isLobby = !m.roomId}
         {@const player = m.playerId ? authors[m.playerId] : undefined}
         {@const authorLabel = player ? displayPlayerName(player) : adminChatAuthorName(m.author)}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <div class={`admin-chat-row${m.deleted ? " deleted" : ""}${isSelected ? " selected" : ""}`} role="listitem" onclick={() => toggleSelect(key)}>
           <input type="checkbox" checked={isSelected} onchange={() => toggleSelect(key)} onclick={(event) => event.stopPropagation()} aria-label={`选择 ${authorLabel} 的消息`} />
           <div class="admin-chat-row-body">

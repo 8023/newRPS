@@ -409,6 +409,7 @@
 <div class="petbond-graph-wrap" bind:clientWidth={svgWidth}>
   <ForceSimulation data={simData} {forces} bind:alpha={simAlpha} onTick={onTick}>
     {#snippet children()}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <svg
         bind:this={svgEl}
         viewBox={`0 0 ${svgWidth} ${HEIGHT}`}
@@ -440,6 +441,8 @@
             {@const my = ((a.y ?? 0) + (b.y ?? 0)) / 2}
             <g>
               <line {x1} {y1} {x2} {y2} class="petbond-graph-edge" marker-end="url(#petbond-arrow)" />
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <g transform={`translate(${mx}, ${my})`} class="petbond-graph-edge-label" onclick={() => removeRelation(link.masterId, link.petId)}>
                 <title>{link.petTitle ? `称号：${link.petTitle} · 点击解除` : "点击解除关系"}</title>
                 <rect x={-11} y={-11} width={22} height={22} rx={11} />
@@ -456,6 +459,7 @@
             height={AVATAR_SIZE + 26}
             class={`petbond-graph-node${node.id === selectedId ? " selected" : ""}`}
           >
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div class="petbond-graph-node-inner" onpointerdown={(event) => onNodePointerDown(node.id, event)}>
               <PlayerAvatar player={node} size={AVATAR_SIZE} />
               <span class="petbond-graph-node-label">{node.name}</span>

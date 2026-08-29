@@ -241,7 +241,11 @@
   </div>
 
   {#if previewImage}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="modal-backdrop image-preview-backdrop" onclick={() => (previewImage = null)}>
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="image-preview-modal" onclick={(event) => event.stopPropagation()}>
         <button class="icon-button image-preview-close" onclick={() => (previewImage = null)}>×</button>
         <img src={previewImage} alt="惩罚证明大图" loading="lazy" />

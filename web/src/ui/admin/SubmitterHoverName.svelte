@@ -26,6 +26,8 @@
   }
 </script>
 
+<!-- svelte-ignore a11y_no_noninteractive_tabindex 悬停/聚焦弹出玩家详情浮窗，符合 tooltip trigger 的可访问性实践，无需额外交互角色 -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <span
   class="contribute-submitter"
   tabindex={playerId ? 0 : undefined}

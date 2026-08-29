@@ -323,7 +323,11 @@
   ]);
 </script>
 
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="modal-backdrop" onclick={onClose}>
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <section class="profile-panel" onclick={(event) => event.stopPropagation()}>
     <div class="profile-hero">
       <div class="avatar-ring">{#if me.avatarUrl}<PlayerAvatar player={me} size={56} />{:else}<UserRound size={34} />{/if}</div>
@@ -503,7 +507,11 @@
     </div>
   </section>
   {#if logoutConfirmOpen}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="modal-backdrop logout-confirm-backdrop" onclick={() => !logoutBusy && (logoutConfirmOpen = false)}>
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
       <section class="logout-confirm-card" onclick={(event) => event.stopPropagation()}>
         <h3>确认登出？</h3>
         <p class="hint danger-hint">

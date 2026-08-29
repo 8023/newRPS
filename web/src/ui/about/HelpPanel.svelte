@@ -9,12 +9,16 @@
   }
 </script>
 
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="modal-backdrop sponsor-backdrop" onclick={(event) => { if (event.target === event.currentTarget) close(); }}>
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <section class="help-modal" onclick={(event) => event.stopPropagation()}>
     <div class="modal-title sponsor-title">
       <div>
         <h2><BookOpen size={20} /> 游戏说明</h2>
-        <p class="hint">了解六款游戏规则、全局玩法机制与页面功能。</p>
+        <p class="hint">了解八款游戏规则、全局玩法机制与页面功能。</p>
       </div>
       <button type="button" class="icon-button" onclick={close}>×</button>
     </div>

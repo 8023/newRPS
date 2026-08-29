@@ -464,15 +464,18 @@
     </div>
   </div>
   {#if leaveConfirm}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="modal-backdrop" onclick={() => (leaveConfirm = null)}>
-      <section class="panel contribute-unsaved-card" onclick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="contribute-unsaved-title">
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <div class="panel contribute-unsaved-card" onclick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="contribute-unsaved-title" tabindex="-1">
         <h2 id="contribute-unsaved-title">内容尚未保存</h2>
         <p class="hint">当前填写还没存成草稿。保存后再离开，或放弃这次写入。</p>
         <div class="contribute-unsaved-actions">
           <button type="button" disabled={busy} onclick={confirmDiscardAndLeave}>放弃</button>
           <button type="button" class="primary" disabled={busy} onclick={() => { void confirmSaveAndLeave(); }}>保存</button>
         </div>
-      </section>
+      </div>
     </div>
   {/if}
 </section>

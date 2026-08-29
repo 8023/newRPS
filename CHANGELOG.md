@@ -1,5 +1,29 @@
 # 更新记录
 
+### v3.1.1（2026-08-29）
+
+本版本完成前端从 React 到 Svelte 5 的整体迁移，保持 Go 后端、Protobuf 通信、业务状态与部署产物路径不变；同时收尾修正前端构建边界、无障碍检查与登出推送清理。
+
+#### 前端重构
+
+- **React → Svelte 5**：登录、大厅、房间、8 款游戏、聊天、个人资料、社交、共建、后台与数据分析全部改由 Svelte 5（runes）组件承载；状态按 `uiStore` / `routerStore` / `sessionStore` / `adminStore` 分层，保留原有页面路由、协议调用、主题与交互行为。
+- **组件目录化**：前端从原先的集中式 TSX 页面拆分为 `shell`、`lobby`、`room`、`games`、`chat`、`contribute`、`social`、`profile`、`about`、`admin` 等按功能组织的 Svelte 组件，图表封装统一使用 LayerChart。
+- **依赖与入口切换**：移除 React、Recharts 及对应 Vite/图标依赖，改用 Svelte、`@lucide/svelte` 与 LayerChart；入口切换为 `main.ts`，`svelte-check` 纳入前端构建类型门禁，前端产物仍输出到 `bin/dist/`。
+
+#### 构建与兼容性修正
+
+- **懒加载边界守卫**：Vite 构建新增后台与数据分析场景的手动分包规则，并在构建期检查首屏是否反向静态引用懒加载场景；WebP、HEIF 图片处理保持独立按需加载。
+- **登出清理推送订阅**：Web Push 解绑改为静态导入，登出时仍会先清理当前设备订阅，失败不阻断身份凭据清理。
+- **可访问性检查**：为弹窗遮罩、图谱交互节点、管理聊天列表等必须响应指针事件的非语义容器补充局部 Svelte 检查说明，保留键盘可操作控件的语义。
+- **对局说明提示**：关于页明确提示说明文档覆盖全部 8 款游戏。
+
+#### 验证
+
+- `CGO_ENABLED=1 /usr/local/go/bin/go test ./...`
+- `git diff --check`
+- `TMPDIR=/tmp TMP=/tmp TEMP=/tmp npm run test --prefix web`（6 个文件、39 项测试）
+- `TMPDIR=/tmp TMP=/tmp TEMP=/tmp npm run build --prefix web`（`svelte-check` 0 errors/0 warnings，Vite 构建通过；懒加载 chunk 已生成）
+
 ### v2.8.4（2026-08-28）
 
 修正新建猜硬币/大话骰房间在无主题房名词库时被错误兜底成「新的锤子剪刀布房间」的问题。

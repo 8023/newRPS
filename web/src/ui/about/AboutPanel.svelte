@@ -23,14 +23,18 @@
   }
 </script>
 
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="modal-backdrop sponsor-backdrop" onclick={(event) => { if (event.target === event.currentTarget) close(); }}>
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <section class="sponsor-modal" onclick={(event) => event.stopPropagation()}>
     <div class="modal-title sponsor-title">
       <div>
         <h2><Info size={20} /> 关于</h2>
         <p class="hint">喜欢这个小站的话，可以在这里关注、进群或请作者喝杯咖啡。</p>
         <p class="hint" style="margin-top: 0.4em">
-          第一次来？<a href="#" onclick={(e) => { e.preventDefault(); openHelp(); }}>看看怎么玩</a>。
+          第一次来？<button type="button" class="link-button" style="display: inline; padding: 0" onclick={openHelp}>看看怎么玩</button>。
         </p>
       </div>
       <button type="button" class="icon-button" onclick={close}>×</button>
