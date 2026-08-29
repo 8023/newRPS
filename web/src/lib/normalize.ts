@@ -378,6 +378,12 @@ export function normalizeLobbySnapshot(snapshot: LobbySnapshot, old?: LobbySnaps
 export function normalizeRoundHistoryItem(item: RoomSnapshot["roundHistory"][number]): RoomSnapshot["roundHistory"][number] {
   return {
     ...item,
+    // at 声明为 number，但线上会拿到十进制字符串："1788002325326"——protojson 按规范把
+    // int64 编成字符串，房间频道那条 Struct/DELTA 路径不像 decodeEnvelope 那样有
+    // longs:Number 兜底，字符串就这么原样透传上来了。而 new Date("1788002325326") 是按
+    // 日期字符串解析的，直接得到 Invalid Date（不是按纪元毫秒）。这里统一收成数字，
+    // 渲染方就不必各自防一遍。
+    at: statNum(item.at, 0),
     punishmentTasks: item.punishmentTasks || [],
     punishedNames: item.punishedNames || [],
     proofs: item.proofs || [],

@@ -31,3 +31,11 @@ export function formatOnlineDuration(ms: number) {
   return remHour ? `${days} 天 ${remHour} 小时` : `${days} 天`;
 }
 
+
+/** 对局记录卡片上的时刻。时间戳缺失/非法时返回「时间未知」而不是让 toLocaleTimeString
+    吐出 "Invalid Date"——与 formatAdminChatTime、formatContributionDay 的兜底口径一致。 */
+export function formatHistoryTime(at: number): string {
+  const ms = Number(at);
+  if (!Number.isFinite(ms) || ms <= 0) return "时间未知";
+  return new Date(ms).toLocaleTimeString();
+}

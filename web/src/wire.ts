@@ -381,7 +381,10 @@ function materializePlayer(player: any): any {
   if (!player || typeof player !== "object") return player;
   const p = { ...player };
   for (const k of PLAYER_BOOL_FIELDS) if (p[k] === undefined) p[k] = false;
-  for (const k of PLAYER_NUM_FIELDS) if (p[k] === undefined) p[k] = 0;
+  // 用 numOr 而不是只补 undefined：这里面全是 int64 字段，protojson 会把它们编成十进制
+  // 字符串，若原样透传，new Date(profileUpdatedAt) 这类用法就会得到 Invalid Date
+  // （对局记录的 at 就踩过这个坑，见 normalizeRoundHistoryItem）。
+  for (const k of PLAYER_NUM_FIELDS) p[k] = numOr(p[k], 0);
   if (typeof p.genderId !== "string") p.genderId = "";
   p.stats = materializePublicStats(p.stats);
   p.gameStats = materializeGameStats(p.gameStats);
@@ -591,6 +594,8 @@ function fillRoundHistoryItemDefaults(item: any): any {
   if (!item || typeof item !== "object") return item;
   return {
     ...item,
+    // int64 在 protojson 里是十进制字符串，同样按数字收口（见 normalizeRoundHistoryItem 注释）
+    at: numOr(item.at, 0),
     stake: numOr(item.stake, 0),
     rankMultiplier: numOr(item.rankMultiplier, 0),
     effectiveStake: numOr(item.effectiveStake, 0),

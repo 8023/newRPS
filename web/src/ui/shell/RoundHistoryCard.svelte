@@ -2,6 +2,7 @@
   // 源：ui/AppViews.tsx:2648-2773
   import type { RoomSnapshot } from "../../shared/types";
   import { normalizeRoundHistoryItem } from "../../lib/normalize";
+  import { formatHistoryTime } from "../../lib/format";
   import { historyProofStatusLabel, historyResultText, historySeatLabel, taskTextOnly } from "../../lib/gameDisplay";
   import { styleString } from "../../lib/style";
   import { coinFaceLabel } from "../games/CoinFlipPanel.svelte";
@@ -19,7 +20,7 @@
   <header class="history-card-head">
     <div>
       <b>第 {safe.round} 局</b>
-      <small>{new Date(safe.at).toLocaleTimeString()}</small>
+      <small>{formatHistoryTime(safe.at)}</small>
     </div>
     <div class="history-tags">
       {#if safe.gameId === "othello"}<em>⚫⚪ 黑白棋</em>{/if}
