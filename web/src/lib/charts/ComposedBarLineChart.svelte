@@ -8,8 +8,9 @@
   import { scaleBand } from "d3-scale";
   import { CHART_COLORS, formatDayTick } from "../analyticsDashboard";
   import AnalyticsTooltip from "./AnalyticsTooltip.svelte";
+  import ChartLegend from "./ChartLegend.svelte";
 
-  let { data, x, barSeries, line, height = 260 }: {
+  let { data, x, barSeries, line, height = 264 }: {
     data: Record<string, string | number>[];
     x: string;
     barSeries: { key: string; label: string }[];
@@ -21,11 +22,11 @@
   const minutes = (n: number) => `${n.toFixed(1)} 分钟`;
 </script>
 
-<div class="layerchart-card layerchart-dual-axis" style={`height:${height}px`}>
+<div class="layerchart-card layerchart-dual-axis layerchart-composed layerchart-with-legend" style={`height:${height}px`}>
   {#if data.length === 0}
     <p class="empty">暂无数据</p>
   {:else}
-    <Chart
+    <div class="layerchart-plot"><Chart
       {data}
       x={x}
       xScale={scaleBand().padding(0.35)}
@@ -33,10 +34,9 @@
       yNice
       series={resolvedBars.map((s) => ({ key: s.key, value: s.key, label: s.label, color: s.color }))}
       seriesLayout="stack"
-      padding={{ left: 8, bottom: 24, top: 22, right: 32 }}
+      padding={{ left: 8, bottom: 24, top: 8, right: 32 }}
       axis
       grid={{ x: false }}
-      legend={{ placement: "top" }}
       tooltipContext={{ mode: "band" }}
       props={{
         xAxis: { format: (v: unknown) => formatDayTick(String(v)), tickSpacing: 60, tickLabelProps: { class: "layerchart-tick" } },
@@ -62,7 +62,7 @@
         y={line.key}
         yNice
         series={[{ key: line.key, value: line.key, label: line.label, color: line.color }]}
-        padding={{ left: 8, bottom: 24, top: 22, right: 32 }}
+        padding={{ left: 8, bottom: 24, top: 8, right: 32 }}
         axis="y"
         grid={false}
         tooltipContext={false}
@@ -70,12 +70,10 @@
         props={{ yAxis: { placement: "right", tickLabelProps: { class: "layerchart-tick" } } }}
       >
         {#snippet marks({ context })}
-          <Spline seriesKey={line.key} stroke={line.color} strokeWidth={2} />
+          <Spline seriesKey={line.key} stroke={line.color} strokeWidth={2.25} />
         {/snippet}
       </Chart>
-    </div>
-    <div class="layerchart-dual-axis-legend">
-      <span><i style={`background:${line.color}`}></i>{line.label}</span>
-    </div>
+    </div></div>
+    <ChartLegend items={[...resolvedBars.map((s) => ({ key: s.key, label: s.label, color: s.color })), { key: line.key, label: line.label, color: line.color }]} />
   {/if}
 </div>

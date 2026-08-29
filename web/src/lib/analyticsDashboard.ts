@@ -1,4 +1,4 @@
-// 后台「数据分析」面板的纯逻辑辅助：标签翻译、格式化、行/表格数据整形。
+// 后台「数据分析」面板的纯逻辑辅助：标签翻译、格式化、图表/明细数据整形。
 // 源：ui/AnalyticsPanel.tsx 顶部散落的纯函数（不含任何 recharts/组件相关代码）。
 // 注意与 lib/analytics.ts 不是同一个东西——那个是客户端埋点上报（track/startAnalytics），
 // 这里是后台统计仪表盘自己的展示层辅助，两者互不相关，只是命名相近，故意分开成两个文件
@@ -12,7 +12,7 @@ export const SEQ_COLORS = ["var(--chart-seq-1)", "var(--chart-seq-2)", "var(--ch
 // game_id 为空的历史脏数据），图例/表头需要中文名，不能直接展示英文标识符。
 export const GAME_LABELS: Record<string, string> = {
   rps: "猜拳", othello: "黑白棋", tictactoe: "井字棋", gomoku: "五子棋",
-  jungle: "斗兽棋", chess: "国际象棋", liarsdice: "大话骰", unknown: "未知游戏"
+  jungle: "斗兽棋", chess: "国际象棋", liarsdice: "大话骰", coinflip: "猜硬币", unknown: "未知游戏"
 };
 
 // data.profileChanges / data.nameWarGiveaway 的 series key 是 player_activity_events.action
@@ -29,7 +29,7 @@ export const ACTIVITY_LABELS: Record<string, string> = {
 // 见 internal/server/useragent.go），面板展示需要中文。
 export const DEVICE_LABELS: Record<string, string> = { mobile: "手机", tablet: "平板", desktop: "电脑" };
 
-// data.viewPv 的 key 是前端路由/弹窗名，"明细·页面浏览" 表格需要中文页面名。
+// data.viewPv 的 key 是前端路由/弹窗名，"明细·页面浏览" 需要中文页面名。
 export const VIEW_LABELS: Record<string, string> = {
   login: "登录页", lobby: "大厅", room: "房间", admin: "后台管理",
   profile: "个人资料", leaderboard: "排行榜", about: "关于", help: "游戏说明"

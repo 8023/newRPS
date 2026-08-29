@@ -1,6 +1,6 @@
 <script lang="ts">
   // 转化漏斗 + 明细（页面浏览/来源/省份/最近会话）。最近会话是懒加载的独立请求，只在切到
-  // 这个子页签时才拉取——与主快照的 60s 轮询分开，避免明细表格长期占带宽。
+  // 这个子页签时才拉取——与主快照的 60s 轮询分开，避免最近会话明细长期占带宽。
   // 源：ui/AnalyticsPanel.tsx 452-469、934-996（detailTab 状态与相关 effect）。
   import type { AnalyticsRangeView, AnalyticsSessionBrief } from "../../../shared/types";
   import { ask } from "../../../lib/rpc";
@@ -45,8 +45,7 @@
 </script>
 
 <ChartCard title="转化漏斗">
-  {#snippet table()}<BucketTable rows={funnelRows} />{/snippet}
-  <HBarChart rows={funnelRows} height={200} color="var(--chart-2)">
+  <HBarChart rows={funnelRows} height={200} color="var(--chart-1)">
     {#snippet tooltip({ context })}
       <FunnelTooltip {context} steps={funnelRows} />
     {/snippet}

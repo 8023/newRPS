@@ -10,8 +10,9 @@
   import { scaleBand } from "d3-scale";
   import { CHART_COLORS, formatDayTick } from "../analyticsDashboard";
   import AnalyticsTooltip from "./AnalyticsTooltip.svelte";
+  import ChartLegend from "./ChartLegend.svelte";
 
-  let { data, x, series, height = 220, layout = "stack", angledLabels = false, showPercent = false, showTotal = true }: {
+  let { data, x, series, height = 238, layout = "stack", angledLabels = false, showPercent = false, showTotal = true }: {
     data: Record<string, string | number>[];
     x: string;
     series: { key: string; label: string; color?: string }[];
@@ -27,11 +28,11 @@
   const resolved = $derived(series.map((s, i) => ({ ...s, color: s.color ?? CHART_COLORS[i % CHART_COLORS.length] })));
 </script>
 
-<div class="layerchart-card" style={`height:${height}px`}>
+<div class="layerchart-card layerchart-with-legend" style={`height:${height}px`}>
   {#if data.length === 0}
     <p class="empty">暂无数据</p>
   {:else}
-    <Chart
+    <div class="layerchart-plot"><Chart
       {data}
       x={x}
       xScale={scaleBand().padding(0.35)}
@@ -42,7 +43,6 @@
       padding={{ left: 8, bottom: angledLabels ? 48 : 24, top: 8, right: 8 }}
       axis
       grid={{ x: false }}
-      legend={{ placement: "top" }}
       tooltipContext={{ mode: "band" }}
       props={{
         xAxis: {
@@ -67,6 +67,7 @@
       {#snippet tooltip({ context })}
         <AnalyticsTooltip {context} xKey={x} series={resolved} {showTotal} {showPercent} />
       {/snippet}
-    </Chart>
+    </Chart></div>
+    <ChartLegend items={resolved.map((s) => ({ key: s.key, label: s.label, color: s.color }))} />
   {/if}
 </div>

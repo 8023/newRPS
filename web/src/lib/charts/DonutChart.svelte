@@ -9,8 +9,9 @@
    */
   import { Chart, Group, Arc } from "layerchart/svg";
   import { CHART_COLORS, formatNum } from "../analyticsDashboard";
+  import ChartLegend from "./ChartLegend.svelte";
 
-  let { rows, size = 200 }: { rows: { key: string; value: number }[]; size?: number } = $props();
+  let { rows, size = 176 }: { rows: { key: string; value: number }[]; size?: number } = $props();
 
   const total = $derived(rows.reduce((s, r) => s + r.value, 0));
   const arcs = $derived.by(() => {
@@ -54,8 +55,4 @@
     <span>合计</span>
   </div>
 </div>
-<ul class="analytics-donut-legend">
-  {#each arcs as a (a.key)}
-    <li><i style={`background:${a.color}`}></i>{a.key}<em>{(a.fraction * 100).toFixed(1)}%</em></li>
-  {/each}
-</ul>
+<ChartLegend items={arcs.map((a) => ({ key: a.key, label: a.key, color: a.color, value: `${(a.fraction * 100).toFixed(1)}%` }))} />

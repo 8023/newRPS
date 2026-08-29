@@ -7876,38 +7876,48 @@ main {
   --chart-ink: var(--page-text);
   --chart-ink-muted: var(--muted);
   /* 分类色：固定槽位顺序，永不循环、永不按排名分配 */
-  --chart-1: #2a78d6;
-  --chart-2: #eb6834;
-  --chart-3: #1baf7a;
-  --chart-4: #eda100;
-  --chart-5: #e87ba4;
-  --chart-6: #008300;
+  --chart-1: #3f9ddd;
+  --chart-2: #df78a7;
+  --chart-3: #38aa8c;
+  --chart-4: #dda13a;
+  --chart-5: #8073d3;
+  --chart-6: #52aabc;
   /* 顺序色阶（单色相蓝，浅→深），用于有序桶/热力图 */
-  --chart-seq-1: #86b6ef;
-  --chart-seq-2: #5598e7;
-  --chart-seq-3: #3987e5;
-  --chart-seq-4: #2a78d6;
-  --chart-seq-5: #256abf;
-  --chart-seq-6: #1c5cab;
-  --chart-seq-7: #184f95;
+  --chart-seq-1: #c8e7fb;
+  --chart-seq-2: #a9d3f2;
+  --chart-seq-3: #86c0e9;
+  --chart-seq-4: #6fafe2;
+  --chart-seq-5: #599dda;
+  --chart-seq-6: #468bce;
+  --chart-seq-7: #3979bc;
   /* 状态色：只表示好/坏，绝不当第 7 个系列色用 */
-  --chart-good: #0ca30c;
-  --chart-critical: #d03b3b;
+  --chart-good: #1f9665;
+  --chart-critical: #d95772;
 }
 
 :root[data-theme="dark"] {
-  --chart-1: #3987e5;
-  --chart-2: #d95926;
-  --chart-3: #199e70;
-  --chart-4: #c98500;
-  --chart-5: #d55181;
-  --chart-6: #008300;
+  --chart-1: #5db6e9;
+  --chart-2: #e889b6;
+  --chart-3: #55c2a2;
+  --chart-4: #e6b05a;
+  --chart-5: #9a8be0;
+  --chart-6: #6abacb;
+  --chart-good: #48b886;
+  --chart-critical: #e87389;
 }
 
 .analytics-panel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
+  min-width: 0;
+}
+
+.analytics-description {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .analytics-loading {
@@ -7921,6 +7931,11 @@ main {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
+  border-radius: 12px;
+  background:
+    linear-gradient(110deg, color-mix(in srgb, var(--primary) 9%, var(--panel-solid)), color-mix(in srgb, var(--pink) 12%, var(--panel-solid)));
+  padding: 8px 10px;
 }
 
 .analytics-filters button {
@@ -7928,19 +7943,22 @@ main {
   background: var(--button-bg);
   color: var(--page-text);
   border-radius: 999px;
-  padding: 6px 12px;
+  min-height: 30px;
+  padding: 5px 12px;
   cursor: pointer;
   font-size: 13px;
 }
 
 .analytics-filters button.active,
 .analytics-filters button:hover {
-  background: var(--button-hover);
-  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--primary) 16%, var(--panel-solid));
+  border-color: color-mix(in srgb, var(--primary) 70%, var(--border));
 }
 
 .analytics-filters button.active {
-  outline: 2px solid color-mix(in srgb, var(--chart-1) 45%, transparent);
+  color: color-mix(in srgb, var(--page-text) 78%, var(--primary));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent);
+  font-weight: 700;
 }
 
 .analytics-updated {
@@ -7952,25 +7970,55 @@ main {
 .analytics-grid {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   transition: opacity 0.2s ease;
+  min-width: 0;
+}
+
+.analytics-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin-top: 4px;
+}
+
+.analytics-section-heading::after {
+  content: "";
+  height: 1px;
+  flex: 1 1 auto;
+  min-width: 24px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 42%, var(--border)), transparent);
+}
+
+.analytics-section-heading strong {
+  color: var(--page-text);
+  font-size: 14px;
+  letter-spacing: .02em;
+}
+
+.analytics-section-heading span {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .analytics-stats-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 .analytics-stat {
-  background: var(--panel-solid);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 12px 14px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--primary) 7%, var(--panel-solid)), color-mix(in srgb, var(--pink) 8%, var(--panel-solid)));
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+  border-radius: 14px;
+  padding: 13px 15px 10px;
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-height: 110px;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--shadow) 55%, transparent);
 }
 
 .analytics-stat-label {
@@ -8000,20 +8048,23 @@ main {
 }
 
 .analytics-spark {
-  height: 36px;
+  height: 32px;
   margin-top: auto;
+  opacity: .88;
 }
 
 .analytics-row-2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
+  min-width: 0;
 }
 
 .analytics-row-3 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
+  min-width: 0;
 }
 
 @media (max-width: 960px) {
@@ -8022,14 +8073,20 @@ main {
   .analytics-row-3 {
     grid-template-columns: 1fr;
   }
+
+  .analytics-stats-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .analytics-card {
-  background: var(--panel-solid);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 12px 14px 16px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--primary) 4%, var(--panel-solid)), var(--panel-solid) 32%);
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
+  border-radius: 14px;
+  padding: 15px 18px 18px;
   min-width: 0;
+  box-shadow: 0 9px 24px color-mix(in srgb, var(--shadow) 48%, transparent);
 }
 
 .analytics-card-head {
@@ -8037,23 +8094,24 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  min-width: 0;
 }
 
 .analytics-card-head h3 {
   margin: 0;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 750;
   color: var(--chart-ink);
 }
 
-.analytics-table-toggle,
 .analytics-tabs button {
-  border: 1px solid var(--border);
-  background: var(--button-bg);
+  border: 1px solid color-mix(in srgb, var(--primary) 26%, var(--border));
+  background: color-mix(in srgb, var(--primary) 6%, var(--button-bg));
   color: var(--muted);
   border-radius: 8px;
-  padding: 4px 10px;
+  min-height: 28px;
+  padding: 3px 10px;
   font-size: 12px;
   cursor: pointer;
 }
@@ -8067,7 +8125,7 @@ main {
 .analytics-tabs button.active {
   color: var(--chart-ink);
   border-color: var(--border-strong);
-  background: var(--button-hover);
+  background: color-mix(in srgb, var(--primary) 15%, var(--button-hover));
 }
 
 .analytics-data-table {
@@ -8096,11 +8154,11 @@ main {
 }
 
 .analytics-tooltip {
-  background: var(--panel-solid);
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  padding: 8px 10px;
-  box-shadow: 0 6px 20px var(--shadow);
+  background: color-mix(in srgb, var(--panel-solid) 96%, var(--primary));
+  border: 1px solid color-mix(in srgb, var(--primary) 44%, var(--border-strong));
+  border-radius: 10px;
+  padding: 9px 11px;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--shadow) 82%, transparent);
   color: var(--chart-ink);
   font-size: 12px;
   min-width: 120px;
@@ -8172,7 +8230,7 @@ main {
 }
 
 .analytics-donut-center strong {
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   font-variant-numeric: proportional-nums;
 }
 
@@ -8198,8 +8256,9 @@ main {
 
 .analytics-heatmap {
   display: grid;
-  gap: 2px;
-  min-width: 360px;
+  grid-auto-rows: 24px;
+  gap: 3px;
+  min-width: 620px;
   font-size: 10px;
 }
 
@@ -8218,11 +8277,11 @@ main {
 }
 
 .analytics-heatmap-cell {
-  aspect-ratio: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 3px;
+  min-height: 24px;
+  border-radius: 5px;
   background: color-mix(in srgb, var(--chart-seq-1) 18%, transparent);
   color: var(--chart-ink);
   font-variant-numeric: tabular-nums;
@@ -8267,6 +8326,21 @@ main {
 .layerchart-card {
   position: relative;
   width: 100%;
+  min-width: 0;
+  --color-surface-content: var(--chart-axis);
+  --color-surface-100: var(--chart-surface);
+}
+
+.layerchart-with-legend {
+  display: flex;
+  flex-direction: column;
+}
+
+.layerchart-plot {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
 }
 
 .layerchart-card .empty {
@@ -8286,69 +8360,99 @@ main {
   pointer-events: none;
 }
 
-/* 双轴图的图例：两个坐标系各自只认识自己那条线，LayerChart 生成不了合并图例，
-   所以手写一个，位置与其它图表 placement="top" 的内置图例对齐。 */
-.layerchart-dual-axis-legend {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+/* 统一静态图例：所有类型都放在绘图区下方，不承担筛选交互。 */
+.analytics-chart-legend {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 8px 2px 0;
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 5px 14px;
+  border-top: 1px solid color-mix(in srgb, var(--chart-grid) 48%, transparent);
   font-size: 11px;
   color: var(--chart-ink-muted);
-  pointer-events: none;
 }
 
-.layerchart-dual-axis-legend span {
+.analytics-chart-legend li {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  min-width: 0;
+  line-height: 1.35;
 }
 
-.layerchart-dual-axis-legend i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+.analytics-chart-legend i {
+  width: 14px;
+  height: 3px;
+  border-radius: 999px;
   flex-shrink: 0;
+}
+
+.analytics-chart-legend em {
+  color: var(--chart-ink);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
 }
 
 .layerchart-tick {
   fill: var(--chart-ink-muted);
-  font-size: 11px;
+  font-size: 10.5px;
+  font-weight: 450;
 }
 
-/* 圆环图下方的类目图例（原 recharts 版靠气泡展示占比，这里常驻显示更直观） */
-.analytics-donut-legend {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 4px 12px;
-  font-size: 11px;
-  color: var(--chart-ink-muted);
+.layerchart-card :is(.lc-spline, .lc-line) {
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.analytics-donut-legend li {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+.layerchart-card :is(.lc-grid-y-rule, .lc-grid-x-rule) {
+  --stroke-color: color-mix(in srgb, var(--chart-grid) 62%, transparent);
 }
 
-.analytics-donut-legend i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
+.layerchart-card :is(.lc-axis-tick, .lc-axis-rule) {
+  --stroke-color: color-mix(in srgb, var(--chart-axis) 72%, transparent);
 }
 
-.analytics-donut-legend em {
-  font-style: normal;
-  color: var(--chart-ink);
-  font-variant-numeric: tabular-nums;
+@media (max-width: 700px) {
+  .analytics-filters {
+    align-items: stretch;
+  }
+
+  .analytics-updated {
+    flex-basis: 100%;
+    margin-left: 2px;
+    line-height: 1.5;
+  }
+
+  .analytics-section-heading {
+    gap: 7px;
+  }
+
+  .analytics-section-heading span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .analytics-card {
+    padding: 13px 12px 15px;
+  }
+
+  .analytics-card-head {
+    align-items: flex-start;
+  }
+
+  .analytics-tabs {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 520px) {
+  .analytics-stats-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* 主宠力导向图：与数据分析面板共享 chart 配色语言 */

@@ -7,7 +7,7 @@
   import { SEQ_COLORS } from "../analyticsDashboard";
   import AnalyticsTooltip from "./AnalyticsTooltip.svelte";
 
-  let { rows, height = 220, valueLabel = "数量" }: {
+  let { rows, height = 204, valueLabel = "数量" }: {
     rows: { key: string; value: number }[];
     height?: number;
     valueLabel?: string;

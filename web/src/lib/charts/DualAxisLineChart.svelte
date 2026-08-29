@@ -11,8 +11,9 @@
   import { scalePoint } from "d3-scale";
   import { formatDayTick } from "../analyticsDashboard";
   import AnalyticsTooltip from "./AnalyticsTooltip.svelte";
+  import ChartLegend from "./ChartLegend.svelte";
 
-  let { data, x, left, right, height = 220 }: {
+  let { data, x, left, right, height = 226 }: {
     data: Record<string, string | number>[];
     x: string;
     left: { key: string; label: string; color: string };
@@ -23,18 +24,18 @@
   const xScaleFactory = () => scalePoint().padding(0.5);
 </script>
 
-<div class="layerchart-card layerchart-dual-axis" style={`height:${height}px`}>
+<div class="layerchart-card layerchart-dual-axis layerchart-with-legend" style={`height:${height}px`}>
   {#if data.length === 0}
     <p class="empty">暂无数据</p>
   {:else}
-    <Chart
+    <div class="layerchart-plot"><Chart
       {data}
       x={x}
       xScale={xScaleFactory()}
       y={left.key}
       yNice
       series={[{ key: left.key, value: left.key, label: left.label, color: left.color }]}
-      padding={{ left: 8, bottom: 24, top: 22, right: 32 }}
+      padding={{ left: 8, bottom: 24, top: 8, right: 32 }}
       axis
       grid={{ x: false }}
       tooltipContext={{ mode: "band" }}
@@ -45,7 +46,7 @@
       }}
     >
       {#snippet marks({ context })}
-        <Spline seriesKey={left.key} stroke={left.color} strokeWidth={2} />
+        <Spline seriesKey={left.key} stroke={left.color} strokeWidth={2.25} />
       {/snippet}
       <!-- 气泡由下层这张图统一渲染，但两条线都列出来：上层只是借来画右轴的透明叠层，
            自身 tooltipContext=false，若不在这里手动补上 right 系列，悬停就只看得到左轴那条
@@ -64,7 +65,7 @@
         y={right.key}
         yNice
         series={[{ key: right.key, value: right.key, label: right.label, color: right.color }]}
-        padding={{ left: 8, bottom: 24, top: 22, right: 32 }}
+        padding={{ left: 8, bottom: 24, top: 8, right: 32 }}
         axis="y"
         grid={false}
         tooltipContext={false}
@@ -72,13 +73,10 @@
         props={{ yAxis: { placement: "right", tickLabelProps: { class: "layerchart-tick" } } }}
       >
         {#snippet marks({ context })}
-          <Spline seriesKey={right.key} stroke={right.color} strokeWidth={2} />
+          <Spline seriesKey={right.key} stroke={right.color} strokeWidth={2.25} />
         {/snippet}
       </Chart>
-    </div>
-    <div class="layerchart-dual-axis-legend">
-      <span><i style={`background:${left.color}`}></i>{left.label}</span>
-      <span><i style={`background:${right.color}`}></i>{right.label}</span>
-    </div>
+    </div></div>
+    <ChartLegend items={[{ key: left.key, label: left.label, color: left.color }, { key: right.key, label: right.label, color: right.color }]} />
   {/if}
 </div>

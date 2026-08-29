@@ -24,12 +24,6 @@
 
 <div class="analytics-row-2">
   <ChartCard title="用户与会话">
-    {#snippet table()}
-      <table class="analytics-data-table">
-        <thead><tr><th>日期</th><th>日活</th><th>会话</th><th>登录用户</th></tr></thead>
-        <tbody>{#each trends as r (r.day)}<tr><td>{r.day}</td><td>{r.dau}</td><td>{r.sessions}</td><td>{r.loggedDau}</td></tr>{/each}</tbody>
-      </table>
-    {/snippet}
     <LineTrendChart data={trends} x="day" series={[
       { key: "dau", label: "日活", color: "var(--chart-1)" },
       { key: "sessions", label: "会话", color: "var(--chart-2)" },
@@ -38,38 +32,20 @@
   </ChartCard>
 
   <ChartCard title="页面浏览量">
-    {#snippet table()}
-      <table class="analytics-data-table">
-        <thead><tr><th>日期</th><th>浏览量</th></tr></thead>
-        <tbody>{#each trends as r (r.day)}<tr><td>{r.day}</td><td>{r.pageviews}</td></tr>{/each}</tbody>
-      </table>
-    {/snippet}
     <LineTrendChart data={trends} x="day" series={[{ key: "pageviews", label: "页面浏览", color: "var(--chart-1)" }]} />
   </ChartCard>
 </div>
 
 <div class="analytics-row-2">
   <ChartCard title="新老用户">
-    {#snippet table()}
-      <table class="analytics-data-table">
-        <thead><tr><th>日期</th><th>新用户</th><th>老用户登录</th></tr></thead>
-        <tbody>{#each trends as r (r.day)}<tr><td>{r.day}</td><td>{r.newUsers}</td><td>{r.oldLogin}</td></tr>{/each}</tbody>
-      </table>
-    {/snippet}
-    <LineTrendChart data={trends} x="day" height={220} showPercent series={[
+    <LineTrendChart data={trends} x="day" height={210} showPercent series={[
       { key: "newUsers", label: "新用户", color: "var(--chart-1)" },
       { key: "oldLogin", label: "老用户登录", color: "var(--chart-3)" }
     ]} />
   </ChartCard>
 
   <ChartCard title="新老设备">
-    {#snippet table()}
-      <table class="analytics-data-table">
-        <thead><tr><th>日期</th><th>新设备</th><th>老设备</th></tr></thead>
-        <tbody>{#each trends as r (r.day)}<tr><td>{r.day}</td><td>{r.newVisitors}</td><td>{r.returning}</td></tr>{/each}</tbody>
-      </table>
-    {/snippet}
-    <LineTrendChart data={trends} x="day" height={220} showPercent series={[
+    <LineTrendChart data={trends} x="day" height={210} showPercent series={[
       { key: "newVisitors", label: "新设备", color: "var(--chart-1)" },
       { key: "returning", label: "老设备", color: "var(--chart-3)" }
     ]} />

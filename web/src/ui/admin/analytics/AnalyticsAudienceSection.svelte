@@ -5,7 +5,6 @@
   import DonutChart from "../../../lib/charts/DonutChart.svelte";
   import HBarChart from "../../../lib/charts/HBarChart.svelte";
   import ChartCard from "./ChartCard.svelte";
-  import BucketTable from "./BucketTable.svelte";
 
   let { data }: { data: AnalyticsRangeView } = $props();
   const devices = $derived(relabelBuckets(data.devices || [], DEVICE_LABELS));
@@ -18,30 +17,24 @@
 
 <div class="analytics-row-3">
   <ChartCard title="设备类型">
-    {#snippet table()}<BucketTable rows={devices} />{/snippet}
     <DonutChart rows={devices} />
   </ChartCard>
   <ChartCard title="浏览器">
-    {#snippet table()}<BucketTable rows={browsers} />{/snippet}
     <HBarChart rows={browsers} showPercent />
   </ChartCard>
   <ChartCard title="操作系统">
-    {#snippet table()}<BucketTable rows={os} />{/snippet}
     <HBarChart rows={os} showPercent />
   </ChartCard>
 </div>
 
 <div class="analytics-row-3">
   <ChartCard title="来源 Top10">
-    {#snippet table()}<BucketTable rows={referrers} />{/snippet}
     <HBarChart rows={referrers} showPercent />
   </ChartCard>
   <ChartCard title="省份 Top10">
-    {#snippet table()}<BucketTable rows={provinces} />{/snippet}
     <HBarChart rows={provinces} showPercent />
   </ChartCard>
   <ChartCard title="ISP Top10">
-    {#snippet table()}<BucketTable rows={isps} />{/snippet}
-    <HBarChart rows={isps} showPercent />
+    <HBarChart rows={isps} showPercent maxLabelChars={9} />
   </ChartCard>
 </div>
