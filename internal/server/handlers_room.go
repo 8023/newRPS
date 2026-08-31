@@ -2409,6 +2409,7 @@ func (s *Server) onAdminAction(client *Client, env wsEnvelope) {
 		pl.ClaimKey = randomClaimKey()
 		s.markPlayerDirty(pl)
 		s.requestPersist("lazy")
+		s.securityLog("admin_show_claim_key", map[string]any{"ip": client.ipAddress, "targetPlayerId": pl.ID})
 		client.reply(env.ID, map[string]any{"claimKey": pl.ClaimKey, "playerId": pl.PlayerID}, "")
 		return
 	}

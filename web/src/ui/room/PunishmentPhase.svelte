@@ -28,6 +28,7 @@
   let proofText = $state("");
   let proofImage = $state("");
   let proofSubmitting = $state(false);
+  let imageUploading = $state(false);
   let redoInputs = $state<Record<string, string>>({});
   let taskInputs = $state<Record<string, string>>({});
 
@@ -37,6 +38,7 @@
 
   async function uploadImage(file: File) {
     let localPreview = "";
+    imageUploading = true;
     try {
       const uploadFile = await prepareProofImageForUpload(file);
       // 立刻本地预览（blob，不显示「加载中」）
@@ -60,6 +62,7 @@
       proofImage = "";
       uiStore.notify(error instanceof Error ? error.message : "图片上传失败");
     } finally {
+      imageUploading = false;
       if (localPreview) {
         const url = localPreview;
         window.setTimeout(() => URL.revokeObjectURL(url), 3000);
@@ -71,6 +74,12 @@
     const text = proofText.trim();
     if (!text) {
       uiStore.notify("请填写文字证明");
+      return;
+    }
+    // 图片还在上传时 proofImage 是本地 blob 预览，服务端 safeUploadURL 会直接拒绝——
+    // 弱网/HEIC 转码慢时很容易点提交就报「图片地址无效」，这里等上传完成再放行。
+    if (imageUploading) {
+      uiStore.notify("图片正在上传，请稍候再提交");
       return;
     }
     if (proofSubmitting) return;
@@ -186,8 +195,8 @@
             {:else}
               <p class="hint">本房间关闭了图片证明，只需要提交文字证明。</p>
             {/if}
-            <button type="button" class="primary" disabled={proofSubmitting} onclick={() => void submitProof()}>
-              {proofSubmitting ? "提交中…" : "提交证明"}
+            <button type="button" class="primary" disabled={proofSubmitting || imageUploading} onclick={() => void submitProof()}>
+              {proofSubmitting ? "提交中…" : imageUploading ? "图片上传中…" : "提交证明"}
             </button>
           </div>
         {/if}

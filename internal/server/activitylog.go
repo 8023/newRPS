@@ -130,14 +130,16 @@ func writeActivityLog(table string, header []string, fields []string) {
 		return
 	}
 
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	// 内容含 IP/指纹/SID 等安全事件字段，权限与 config/*.json、database.db 等敏感文件
+	// 保持一致（0600），不给同机其它系统用户留可读窗口。
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return
 	}
 	defer f.Close()
 
 	_, _ = f.WriteString(formatLogfmtLine(now, header, fields) + "\n")
-	_ = os.Chmod(path, 0o644)
+	_ = os.Chmod(path, 0o600)
 }
 
 // formatLogfmtLine 把 header/fields 对齐后的一行渲染成 logfmt 风格纯文本：

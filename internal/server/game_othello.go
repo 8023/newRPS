@@ -790,6 +790,18 @@ func (s *Server) finishOthelloGame(room *RoomState) {
 	if room.Settings.EnableRanked {
 		room.ResultText += "（实时结算：" + othelloRankedText(room.Othello) + "）"
 	}
+	// 极限连胜：与其它四款回合制游戏的正常终局路径保持一致（此前只有断线判负路径调用，
+	// 导致黑白棋正常分出胜负不清连胜、不叠层/崩盘，与 help.md 描述不符）。
+	streakText := ""
+	if room.Settings.EnableRanked && result != types.ResultDraw {
+		winnerSeat := types.SeatKey(result)
+		loserSeat := oppositeSeat(winnerSeat)
+		winner := s.humanPlayerFromSeat(room, winnerSeat)
+		loser := s.humanPlayerFromSeat(room, loserSeat)
+		s.resetExtremeWinStreak(loser)
+		streakText = s.applyExtremeWinStreakRisk(room, winner)
+	}
+	room.ResultText += streakText
 	playerA, playerB := s.applySeatOutcome(room, result)
 	room.ResultText += othelloSettlementSummary(room.Othello)
 	s.refreshHumans(playerA, playerB)
@@ -877,11 +889,22 @@ func (s *Server) forceEndOthelloGame(room *RoomState, result types.RoundResult, 
 	}
 	// 与 applySeatOutcome 一致：按游戏记分项并同步总榜
 	s.applySeatOutcome(room, result)
+	// 极限连胜：见 finishOthelloGame 同名注释，管理员强制判定同样是正常终局，须与其它
+	// 四款回合制游戏的管理员判定路径一致。
+	streakText := ""
+	if room.Settings.EnableRanked && (result == types.ResultA || result == types.ResultB) {
+		winnerSeat := types.SeatKey(result)
+		loserSeat := oppositeSeat(winnerSeat)
+		winner := s.humanPlayerFromSeat(room, winnerSeat)
+		loser := s.humanPlayerFromSeat(room, loserSeat)
+		s.resetExtremeWinStreak(loser)
+		streakText = s.applyExtremeWinStreakRisk(room, winner)
+	}
 	rankedText := ""
 	if room.Settings.EnableRanked {
 		rankedText = "；实时结算：" + othelloRankedText(room.Othello) + rankedFloorText + escapePenaltyText
 	}
-	room.ResultText = fmt.Sprintf("%s：黑 %d，白 %d%s%s", label, blackCount, whiteCount, rankedText, othelloSettlementSummary(room.Othello))
+	room.ResultText = fmt.Sprintf("%s：黑 %d，白 %d%s%s%s", label, blackCount, whiteCount, rankedText, streakText, othelloSettlementSummary(room.Othello))
 	if playerA != nil {
 		s.refreshPlayerSnapshots(playerA)
 	}

@@ -43,11 +43,17 @@
 
   // 数据分析图表库单独成一个 chunk，只有管理员点开「数据分析」时才下载，连管理员改配置
   // 都不会加载——对应原版 React 的 lazy(() => import("./AnalyticsPanel"))。
+  // 鼠标移到侧栏「数据分析」上（或键盘聚焦到它）就先把 chunk 拉下来并求值：从悬停到点下去
+  // 通常有一两百毫秒，正好覆盖掉这半秒的下载 + 解析，真点下去时组件已经就绪；没碰过这一项
+  // 的管理员依然一个字节都不会下载。
   let AnalyticsPanelComponent = $state<Component<{ config: import("../../shared/types").AppConfig; onError: (message: string) => void }> | null>(null);
+  let analyticsChunk: Promise<unknown> | null = null;
+  function preloadAnalyticsPanel() {
+    analyticsChunk ??= import("./AnalyticsPanel.svelte").then((m) => (AnalyticsPanelComponent = m.default as typeof AnalyticsPanelComponent));
+    return analyticsChunk;
+  }
   $effect(() => {
-    if (adminStore.activeSection === "analytics" && !AnalyticsPanelComponent) {
-      import("./AnalyticsPanel.svelte").then((m) => (AnalyticsPanelComponent = m.default as typeof AnalyticsPanelComponent));
-    }
+    if (adminStore.activeSection === "analytics" && !AnalyticsPanelComponent) void preloadAnalyticsPanel();
   });
 
   const navItems = $derived.by((): Array<{ id: AdminSection; label: string; detail: string }> => {
@@ -84,7 +90,12 @@
     <div class="admin-tool-shell">
       <nav class="admin-sidebar" aria-label="后台配置分类">
         {#each navItems as item (item.id)}
-          <button class={adminStore.activeSection === item.id ? "active" : ""} onclick={() => (adminStore.activeSection = item.id)}>
+          <button
+            class={adminStore.activeSection === item.id ? "active" : ""}
+            onclick={() => (adminStore.activeSection = item.id)}
+            onpointerenter={item.id === "analytics" ? () => void preloadAnalyticsPanel() : undefined}
+            onfocus={item.id === "analytics" ? () => void preloadAnalyticsPanel() : undefined}
+          >
             <span>{item.label}</span>
             <small>{item.detail}</small>
           </button>

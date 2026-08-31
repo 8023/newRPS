@@ -4,7 +4,7 @@
   // 源：ui/AnalyticsPanel.tsx 452-469、934-996（detailTab 状态与相关 effect）。
   import type { AnalyticsRangeView, AnalyticsSessionBrief } from "../../../shared/types";
   import { ask } from "../../../lib/rpc";
-  import { formatDurationMs, funnelOrdered, labelFor, relabelBuckets, DEVICE_LABELS, VIEW_LABELS } from "../../../lib/analyticsDashboard";
+  import { formatDurationMs, funnelOrdered, labelFor, relabelBuckets, DEVICE_LABELS, PLOT_HEIGHT_DISTRIBUTION, VIEW_LABELS } from "../../../lib/analyticsDashboard";
   import HBarChart from "../../../lib/charts/HBarChart.svelte";
   import FunnelTooltip from "../../../lib/charts/FunnelTooltip.svelte";
   import ChartCard from "./ChartCard.svelte";
@@ -44,8 +44,8 @@
   });
 </script>
 
-<ChartCard title="转化漏斗">
-  <HBarChart rows={funnelRows} height={200} color="var(--chart-1)">
+<ChartCard title="转化漏斗" minHeight={PLOT_HEIGHT_DISTRIBUTION}>
+  <HBarChart rows={funnelRows} color="var(--chart-1)">
     {#snippet tooltip({ context })}
       <FunnelTooltip {context} steps={funnelRows} />
     {/snippet}

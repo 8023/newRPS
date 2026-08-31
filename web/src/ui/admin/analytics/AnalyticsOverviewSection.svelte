@@ -38,14 +38,14 @@
 
 <div class="analytics-row-2">
   <ChartCard title="新老用户">
-    <LineTrendChart data={trends} x="day" height={210} showPercent series={[
+    <LineTrendChart data={trends} x="day" showPercent series={[
       { key: "newUsers", label: "新用户", color: "var(--chart-1)" },
       { key: "oldLogin", label: "老用户登录", color: "var(--chart-3)" }
     ]} />
   </ChartCard>
 
   <ChartCard title="新老设备">
-    <LineTrendChart data={trends} x="day" height={210} showPercent series={[
+    <LineTrendChart data={trends} x="day" showPercent series={[
       { key: "newVisitors", label: "新设备", color: "var(--chart-1)" },
       { key: "returning", label: "老设备", color: "var(--chart-3)" }
     ]} />

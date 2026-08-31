@@ -136,6 +136,10 @@
     }
     try {
       await ask("room:leave", {});
+      // 与 room:closed / player:kicked 的处理保持一致：本地房态必须清掉，否则退房后
+      // 若有一条乱序 room:update 命中同一房间 ID，或后台「返回」按钮凭 Boolean(room)
+      // 判断，都会把人拽回一个已经离开的过期房间 UI。
+      sessionStore.room = null;
       routerStore.goto("lobby");
     } catch (error) {
       onError(error instanceof Error ? error.message : "离开房间失败");

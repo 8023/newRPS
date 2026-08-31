@@ -14,7 +14,12 @@
   const HEIGHT = 690;
   const NODE_RADIUS = 18;
   const AVATAR_SIZE = 36;
+  // 每个节点的头像+昵称卡片是宽 92px 的 foreignObject，节点中心水平方向的安全边距要留半个
+  // 卡片宽度，否则贴边节点的卡片会被 .petbond-graph-wrap 的 overflow:hidden 切掉一截。
+  const HALF_NODE_WIDTH = 46;
   const DRAG_CLICK_THRESHOLD = 5;
+  // ForceSimulation 的 onTick 事件里 simulation 字段的最小可用形状，避免整包引入 d3-force 的类型。
+  type SimulationLike = { nodes: () => SimPlayerNode[] };
 
   /** 以 rootId 为中心，把主/宠边当无向图做 BFS，收集 depth 跳以内可达的玩家 id。
    * depth=2 时会自然覆盖"主人的主人""主人的其它宠物""宠物的其它主人"等场景——
@@ -143,11 +148,32 @@
   let tickNodes = $state<SimPlayerNode[]>([]);
   let tickLinks = $state<SimLink[]>([]);
 
-  function onTick(e: { nodes: SimPlayerNode[]; links: (SimLink | undefined)[] }) {
-    const maxX = Math.max(AVATAR_SIZE, svgWidth - AVATAR_SIZE);
+  // ForceSimulation 每次把 $derived 产出的 data.nodes 交给 d3 之后，暴露给 onTick 回调的
+  // `nodes`/`links` 快照，会经过 Svelte 自身状态代理再包一层——拖拽时经它取到的节点对象与
+  // d3 内部 simulation.nodes() 实际持有、tick() 真正读写 fx/fy 的对象并非同一引用，直接改
+  // 前者不会反映到物理模拟上（表现为拖拽完全不生效）。onTick 顺手记下 simulation 实例，
+  // findNode() 优先从 simulation.nodes() 里查，保证改的就是 d3 tick() 会用到的那个对象。
+  let sim: SimulationLike | null = null;
+
+  // 与卡片可见区域对齐的坐标夹紧——不仅自由飘动的节点要夹紧（onTick 里对未固定节点生效），
+  // 拖拽中被 fx/fy 钉住的节点也必须同样夹紧，否则可以被拖出 .petbond-graph-wrap 的可视区域：
+  // 一旦飘出去，节点会被 overflow:hidden 裁没、且其 foreignObject 落在 SVG 视口之外，既不可
+  // 见也点不到，松手后若模拟因 alpha 提前衰减到阈值以下而停摆，就再也回不到画面里了。
+  function clampNodeX(x: number) {
+    const maxX = Math.max(HALF_NODE_WIDTH, svgWidth - HALF_NODE_WIDTH);
+    return Math.min(maxX, Math.max(HALF_NODE_WIDTH, x));
+  }
+  function clampNodeY(y: number) {
+    return Math.min(HEIGHT - AVATAR_SIZE - 16, Math.max(AVATAR_SIZE, y));
+  }
+
+  function onTick(e: { nodes: SimPlayerNode[]; links: (SimLink | undefined)[]; simulation: SimulationLike }) {
+    sim = e.simulation;
     for (const node of e.nodes) {
-      if (node.fx == null) node.x = Math.min(maxX, Math.max(AVATAR_SIZE, node.x ?? 0));
-      if (node.fy == null) node.y = Math.min(HEIGHT - AVATAR_SIZE - 16, Math.max(AVATAR_SIZE, node.y ?? 0));
+      if (node.fx == null) node.x = clampNodeX(node.x ?? 0);
+      else node.fx = node.x = clampNodeX(node.fx);
+      if (node.fy == null) node.y = clampNodeY(node.y ?? 0);
+      else node.fy = node.y = clampNodeY(node.fy);
       positions.set(node.id, { x: node.x ?? 0, y: node.y ?? 0 });
     }
     tickNodes = e.nodes;
@@ -260,8 +286,8 @@
   let dragStart = { x: 0, y: 0 };
   let dragOffset = { x: 0, y: 0 };
 
-  function findNode(id: string) {
-    return tickNodes.find((n) => n.id === id) ?? simNodes.find((n) => n.id === id);
+  function findNode(id: string): SimPlayerNode | undefined {
+    return sim?.nodes().find((n) => n.id === id) ?? tickNodes.find((n) => n.id === id) ?? simNodes.find((n) => n.id === id);
   }
 
   function onNodePointerDown(playerId: string, event: PointerEvent) {
@@ -273,8 +299,8 @@
     if (node) {
       const point = toSvgPoint(event.clientX, event.clientY);
       dragOffset = { x: (node.x ?? 0) - point.x, y: (node.y ?? 0) - point.y };
-      node.fx = node.x;
-      node.fy = node.y;
+      node.fx = clampNodeX(node.x ?? 0);
+      node.fy = clampNodeY(node.y ?? 0);
       simAlpha = Math.max(simAlpha, 0.3);
     }
   }
@@ -287,8 +313,8 @@
     const dy = event.clientY - dragStart.y;
     if (Math.abs(dx) + Math.abs(dy) > DRAG_CLICK_THRESHOLD) dragMoved = true;
     const point = toSvgPoint(event.clientX, event.clientY);
-    node.fx = point.x + dragOffset.x;
-    node.fy = point.y + dragOffset.y;
+    node.fx = clampNodeX(point.x + dragOffset.x);
+    node.fy = clampNodeY(point.y + dragOffset.y);
     simAlpha = Math.max(simAlpha, 0.3);
   }
 
@@ -453,7 +479,7 @@
         {/each}
         {#each tickNodes as node (node.id)}
           <foreignObject
-            x={(node.x ?? svgWidth / 2) - 46}
+            x={(node.x ?? svgWidth / 2) - HALF_NODE_WIDTH}
             y={(node.y ?? HEIGHT / 2) - AVATAR_SIZE / 2 - 4}
             width={92}
             height={AVATAR_SIZE + 26}

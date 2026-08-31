@@ -300,6 +300,11 @@ func (s *Server) markPersistDirty() {
 }
 
 func (s *Server) writeSnapshot() {
+	// 串行化整个"捕获脏集合 + 落盘"过程：requestPersist("important") 允许并发
+	// 触发多个 writeSnapshot goroutine，若不加这把锁，后捕获、先落盘的旧快照
+	// 可能覆盖先捕获、后落盘的新快照（典型场景：连续两次排位结算）。
+	s.persistWriteMu.Lock()
+	defer s.persistWriteMu.Unlock()
 	// 仅在序列化期间持 s.mu；磁盘 I/O 放到锁外，避免拖慢全服。
 	s.mu.Lock()
 	// 有脏集合 → 只写脏项；无脏集合（漏 mark 或关停全量）→ 全量，保证不丢档。

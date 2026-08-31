@@ -107,6 +107,21 @@ func (c *Client) reply(id int64, data any, errMsg string) {
 	_ = c.writeBinary(out)
 }
 
+// replyRaw 与 reply 等价，但直接收下调用方已经编好的 RawBody。用于把重量级载荷的
+// protobuf 编码搬出全局锁——handleWSEvent 全程持 s.mu，在锁里做几毫秒的编码会让
+// 全站的对局/聊天一起等（见 analyticsSnapshot.encoded）。
+func (c *Client) replyRaw(id int64, body *wire.RawBody) {
+	if id == 0 {
+		return
+	}
+	out, err := proto.Marshal(&wire.Envelope{Id: id, Kind: wire.PayloadKind_KIND_RAW, RawBody: body})
+	if err != nil {
+		c.reply(id, nil, "服务器响应序列化失败")
+		return
+	}
+	_ = c.writeBinary(out)
+}
+
 func (c *Client) inRoom(room string) bool {
 	_, ok := c.rooms[room]
 	return ok

@@ -6,11 +6,11 @@
    */
   import { Chart, Bars, Spline } from "layerchart/svg";
   import { scaleBand } from "d3-scale";
-  import { CHART_COLORS, formatDayTick } from "../analyticsDashboard";
+  import { CHART_COLORS, PLOT_HEIGHT_TREND, VALUE_AXIS_GUTTER, formatDayTick } from "../analyticsDashboard";
   import AnalyticsTooltip from "./AnalyticsTooltip.svelte";
   import ChartLegend from "./ChartLegend.svelte";
 
-  let { data, x, barSeries, line, height = 264 }: {
+  let { data, x, barSeries, line, height = PLOT_HEIGHT_TREND }: {
     data: Record<string, string | number>[];
     x: string;
     barSeries: { key: string; label: string }[];
@@ -22,7 +22,7 @@
   const minutes = (n: number) => `${n.toFixed(1)} 分钟`;
 </script>
 
-<div class="layerchart-card layerchart-dual-axis layerchart-composed layerchart-with-legend" style={`height:${height}px`}>
+<div class="layerchart-card layerchart-dual-axis layerchart-composed layerchart-with-legend" style={`min-height:${height}px`}>
   {#if data.length === 0}
     <p class="empty">暂无数据</p>
   {:else}
@@ -34,7 +34,7 @@
       yNice
       series={resolvedBars.map((s) => ({ key: s.key, value: s.key, label: s.label, color: s.color }))}
       seriesLayout="stack"
-      padding={{ left: 8, bottom: 24, top: 8, right: 32 }}
+      padding={{ left: VALUE_AXIS_GUTTER, bottom: 24, top: 8, right: VALUE_AXIS_GUTTER }}
       axis
       grid={{ x: false }}
       tooltipContext={{ mode: "band" }}
@@ -62,7 +62,7 @@
         y={line.key}
         yNice
         series={[{ key: line.key, value: line.key, label: line.label, color: line.color }]}
-        padding={{ left: 8, bottom: 24, top: 8, right: 32 }}
+        padding={{ left: VALUE_AXIS_GUTTER, bottom: 24, top: 8, right: VALUE_AXIS_GUTTER }}
         axis="y"
         grid={false}
         tooltipContext={false}

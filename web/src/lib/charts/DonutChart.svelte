@@ -27,7 +27,9 @@
 </script>
 
 <div class="analytics-donut-wrap">
-  <div style={`width:${size}px;height:${size}px;margin:0 auto`}>
+  <!-- 数值覆盖层锚在圆环这一层而不是外层：外层要跟着卡片一起被拉伸（同一行的卡片等高），
+       锚在外层的话圆环停在上方、"合计"却掉到拉伸后的正中间，两者会错位。 -->
+  <div class="analytics-donut-ring" style={`width:${size}px;height:${size}px`}>
     <Chart data={rows} x="key" y="value" padding={4} axis={false} grid={false} tooltipContext={false}>
       {#snippet marks()}
         <Group center>
@@ -49,10 +51,10 @@
         </Group>
       {/snippet}
     </Chart>
-  </div>
-  <div class="analytics-donut-center">
-    <strong>{formatNum(total)}</strong>
-    <span>合计</span>
+    <div class="analytics-donut-center">
+      <strong>{formatNum(total)}</strong>
+      <span>合计</span>
+    </div>
   </div>
 </div>
 <ChartLegend items={arcs.map((a) => ({ key: a.key, label: a.key, color: a.color, value: `${(a.fraction * 100).toFixed(1)}%` }))} />

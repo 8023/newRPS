@@ -185,7 +185,9 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	ipAddress := clientIP(r)
 	fp := r.Header.Get("X-Browser-Fingerprint")
 	if fp == "" {
-		// JSON body 可选 { "fingerprint": "..." }
+		// JSON body 可选 { "fingerprint": "..." }；上限硬顶 body 大小，避免无认证的匿名端点
+		// 被灌超大/超长 body 消耗内存带宽（其它 POST 接口都已有 MaxBytesReader，这里补齐）。
+		r.Body = http.MaxBytesReader(w, r.Body, 4*1024)
 		var body struct {
 			Fingerprint string `json:"fingerprint"`
 		}

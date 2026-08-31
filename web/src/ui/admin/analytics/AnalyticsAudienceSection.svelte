@@ -1,7 +1,7 @@
 <script lang="ts">
   // 设备类型/浏览器/操作系统/来源/省份/ISP 分布。源：ui/AnalyticsPanel.tsx 638-648。
   import type { AnalyticsRangeView } from "../../../shared/types";
-  import { relabelBuckets, DEVICE_LABELS } from "../../../lib/analyticsDashboard";
+  import { relabelBuckets, DEVICE_LABELS, PLOT_HEIGHT_DISTRIBUTION } from "../../../lib/analyticsDashboard";
   import DonutChart from "../../../lib/charts/DonutChart.svelte";
   import HBarChart from "../../../lib/charts/HBarChart.svelte";
   import ChartCard from "./ChartCard.svelte";
@@ -16,25 +16,25 @@
 </script>
 
 <div class="analytics-row-3">
-  <ChartCard title="设备类型">
+  <ChartCard title="设备类型" minHeight={PLOT_HEIGHT_DISTRIBUTION}>
     <DonutChart rows={devices} />
   </ChartCard>
-  <ChartCard title="浏览器">
+  <ChartCard title="浏览器" minHeight={PLOT_HEIGHT_DISTRIBUTION}>
     <HBarChart rows={browsers} showPercent />
   </ChartCard>
-  <ChartCard title="操作系统">
+  <ChartCard title="操作系统" minHeight={PLOT_HEIGHT_DISTRIBUTION}>
     <HBarChart rows={os} showPercent />
   </ChartCard>
 </div>
 
 <div class="analytics-row-3">
-  <ChartCard title="来源 Top10">
+  <ChartCard title="来源 Top10" minHeight={PLOT_HEIGHT_DISTRIBUTION}>
     <HBarChart rows={referrers} showPercent />
   </ChartCard>
-  <ChartCard title="省份 Top10">
+  <ChartCard title="省份 Top10" minHeight={PLOT_HEIGHT_DISTRIBUTION}>
     <HBarChart rows={provinces} showPercent />
   </ChartCard>
-  <ChartCard title="ISP Top10">
-    <HBarChart rows={isps} showPercent maxLabelChars={9} />
+  <ChartCard title="ISP Top10" minHeight={PLOT_HEIGHT_DISTRIBUTION}>
+    <HBarChart rows={isps} showPercent />
   </ChartCard>
 </div>

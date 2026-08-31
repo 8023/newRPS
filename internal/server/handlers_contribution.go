@@ -133,6 +133,10 @@ func (s *Server) onContributionSaveDraft(client *Client, env wsEnvelope) {
 		client.reply(env.ID, nil, err.Error())
 		return
 	}
+	// 编辑已通过的投稿会插入一个 status=draft 的新版本，按设计这条内容应立刻从随机池/
+	// 系列摘要里消失（见 CLAUDE.md「共建投稿」一节），不刷新缓存的话旧文案会一直可选中
+	// 到下次审核动作或重启为止。withdraw 已有同样的刷新，这里补齐 saveDraft 路径。
+	s.reloadPunishmentCaches()
 	item.SubmitterName = s.playerName(item.SubmitterID)
 	client.reply(env.ID, item, "")
 }

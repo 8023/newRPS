@@ -4,10 +4,10 @@
   // 用 <Cell fill={SEQ_COLORS[i % SEQ_COLORS.length]} /> 逐格上色的 BarChart。
   import { Chart, Bars } from "layerchart/svg";
   import { scaleBand } from "d3-scale";
-  import { SEQ_COLORS } from "../analyticsDashboard";
+  import { PLOT_HEIGHT_DISTRIBUTION, SEQ_COLORS, VALUE_AXIS_GUTTER } from "../analyticsDashboard";
   import AnalyticsTooltip from "./AnalyticsTooltip.svelte";
 
-  let { rows, height = 204, valueLabel = "数量" }: {
+  let { rows, height = PLOT_HEIGHT_DISTRIBUTION, valueLabel = "数量" }: {
     rows: { key: string; value: number }[];
     height?: number;
     valueLabel?: string;
@@ -17,11 +17,11 @@
   const bucketTotal = $derived(rows.reduce((sum, r) => sum + r.value, 0));
 </script>
 
-<div class="layerchart-card" style={`height:${height}px`}>
+<div class="layerchart-card" style={`min-height:${height}px`}>
   {#if rows.length === 0}
     <p class="empty">暂无数据</p>
   {:else}
-    <Chart
+    <div class="layerchart-plot"><Chart
       data={rows}
       x="key"
       y="value"
@@ -29,7 +29,7 @@
       cRange={SEQ_COLORS}
       xScale={scaleBand().padding(0.3)}
       yNice
-      padding={{ left: 8, bottom: 20, top: 8, right: 8 }}
+      padding={{ left: VALUE_AXIS_GUTTER, bottom: 20, top: 8, right: 8 }}
       axis
       grid={{ x: false }}
       tooltipContext={{ mode: "band" }}
@@ -50,6 +50,6 @@
           percentTotal={bucketTotal}
         />
       {/snippet}
-    </Chart>
+    </Chart></div>
   {/if}
 </div>

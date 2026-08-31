@@ -476,6 +476,11 @@ type Server struct {
 	persistDirty       bool
 	persistScheduled   bool
 	immediateScheduled bool
+	// persistWriteMu：串行化 writeSnapshot 的实际执行（捕获脏集合 + 落盘），
+	// 防止 requestPersist("important") 并发触发的两个 goroutine 乱序落盘——
+	// 后捕获、先落盘的旧快照会覆盖新数据。不与 persistMu 合并，因为 persistMu
+	// 只保护调度标志位，锁粒度很小；这里要盖住整个"捕获+I/O"过程。
+	persistWriteMu sync.Mutex
 	// 活动日志异步落盘队列（Run 启动消费者）
 	logCh chan activityLogEntry
 

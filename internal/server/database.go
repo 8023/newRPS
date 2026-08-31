@@ -47,6 +47,12 @@ func openDatabase(dataDir string) (*sql.DB, error) {
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
+	// 库里明文存着玩家长期密钥（PlayerSecrets/ClaimKey）等身份凭据，权限收紧到 0600，
+	// 与 config/*.json、session.secret、VAPID 密钥等其它敏感文件保持一致（见 fix-perms，
+	// 那个脚本目前只 chmod 了 config/json/*.json，没覆盖这个库文件）。WAL 边车文件同理。
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		_ = os.Chmod(path+suffix, 0o600)
+	}
 	return db, nil
 }
 

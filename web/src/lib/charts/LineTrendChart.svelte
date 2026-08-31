@@ -10,11 +10,11 @@
    */
   import { Chart, Spline } from "layerchart/svg";
   import { scalePoint } from "d3-scale";
-  import { CHART_COLORS, formatDayTick } from "../analyticsDashboard";
+  import { CHART_COLORS, PLOT_HEIGHT_TREND, VALUE_AXIS_GUTTER, formatDayTick } from "../analyticsDashboard";
   import AnalyticsTooltip from "./AnalyticsTooltip.svelte";
   import ChartLegend from "./ChartLegend.svelte";
 
-  let { data, x, series, height = 236, valueFormat, showPercent = false }: {
+  let { data, x, series, height = PLOT_HEIGHT_TREND, valueFormat, showPercent = false }: {
     data: Record<string, string | number>[];
     x: string;
     series: { key: string; label: string; color?: string }[];
@@ -26,7 +26,7 @@
   const resolved = $derived(series.map((s, i) => ({ ...s, color: s.color ?? CHART_COLORS[i % CHART_COLORS.length] })));
 </script>
 
-<div class="layerchart-card layerchart-with-legend" style={`height:${height}px`}>
+<div class="layerchart-card layerchart-with-legend" style={`min-height:${height}px`}>
   {#if data.length === 0}
     <p class="empty">暂无数据</p>
   {:else}
@@ -38,7 +38,7 @@
         y={series.map((s) => s.key)}
         yNice
         series={resolved.map((s) => ({ key: s.key, value: s.key, label: s.label, color: s.color }))}
-        padding={{ left: 8, bottom: 24, top: 8, right: 8 }}
+        padding={{ left: VALUE_AXIS_GUTTER, bottom: 24, top: 8, right: 8 }}
         axis
         grid={{ x: false }}
         tooltipContext={{ mode: "band" }}

@@ -21,7 +21,14 @@ func (s *Server) onAdminAnalytics(client *Client, env wsEnvelope) {
 		default:
 		}
 	}
-	client.reply(env.ID, snap.forRange(clampAnalyticsDays(q.Days)), "")
+	days := clampAnalyticsDays(q.Days)
+	// 快照发布时已经把三档时间范围各编好一份（见 analyticsSnapshot.encoded）：这里只查表，
+	// 不在全局锁里重新做那 ~2.3ms 的 Struct 编码。取不到（编码曾失败）才退回即时编码。
+	if body := snap.encoded[days]; body != nil {
+		client.replyRaw(env.ID, body)
+		return
+	}
+	client.reply(env.ID, snap.forRange(days), "")
 }
 
 // onAdminAnalyticsDetail 返回明细表 / 最近会话等。

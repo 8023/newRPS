@@ -802,6 +802,10 @@ func (s *Server) onGiveawaySubmitBoard(client *Client, env wsEnvelope) {
 	player.GiveawayBoardLikeWindowStartedAt = int64Ptr(now)
 	player.GiveawayBoardLikesThisHour = intPtr(0)
 	s.logPlayerActivity("giveaway_board_submit", player.ID, player.Name, "", client.ipAddress, client.deviceKey, client.fingerprint, cleanBoardText)
+	// GiveawayBoard* 按设计 12 小时有效期跨重启存活（见 persist.go 注释），此前漏标脏，
+	// 重启会直接丢板。onGiveawayVote 的点赞/倒赞改值走 addGiveawayValue 已自带标脏，不受影响。
+	s.markPlayerDirty(player)
+	s.requestPersist("lazy")
 	s.refreshPlayerSnapshots(player)
 	s.broadcastPlayerUpdate(player)
 	client.reply(env.ID, map[string]any{"player": s.publicPlayer(player)}, "")
@@ -1040,6 +1044,8 @@ func (s *Server) onNameWarRenameTarget(client *Client, env wsEnvelope) {
 		target.ExtremeRenamedByName = playerShortName(actor)
 		s.refreshNameWarState(target, now)
 		target.DisplayName = s.formatDisplayName(target)
+		s.markPlayerDirty(target)
+		s.requestPersist("lazy")
 		s.refreshPlayerSnapshots(target)
 		s.broadcastPlayerUpdate(target)
 		client.reply(env.ID, map[string]any{"ok": true}, "")
@@ -1078,6 +1084,11 @@ func (s *Server) onNameWarRenameTarget(client *Client, env wsEnvelope) {
 	actor.NameWarRenameCount = intPtr(ptrInt(actor.NameWarRenameCount) + 1)
 	target.DisplayName = s.formatDisplayName(target)
 	s.logPlayerActivity("nameWar_rename", target.ID, cleanName, oldDisplayName, client.ipAddress, client.deviceKey, client.fingerprint, "")
+	// 惩罚名/保护期/改名额度都要跨重启存活（见 persist.go 的 NameWar* 字段），此前漏标脏
+	// 导致重启后这些状态全部回滚，攻击者甚至可以借重启清空自己的改名额度。
+	s.markPlayerDirty(target)
+	s.markPlayerDirty(actor)
+	s.requestPersist("lazy")
 	s.refreshPlayerSnapshots(target)
 	s.broadcastPlayerUpdate(target)
 	client.reply(env.ID, map[string]any{"ok": true}, "")

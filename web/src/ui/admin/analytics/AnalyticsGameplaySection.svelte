@@ -61,7 +61,7 @@
 
   <ChartCard title="惩罚任务">
     <p class="analytics-inline-kpi">完成率 <strong>{((data.punishment?.doneRate || 0) * 100).toFixed(1)}%</strong></p>
-    <StackedBarChart data={punishmentRows} x="day" height={220} showPercent showTotal={false} series={[
+    <StackedBarChart data={punishmentRows} x="day" showPercent showTotal={false} series={[
       { key: "pending", label: "进行中", color: "var(--chart-1)" },
       { key: "done", label: "完成", color: "var(--chart-3)" },
       { key: "reject", label: "驳回", color: "var(--chart-critical)" }
@@ -71,13 +71,15 @@
 
 <div class="analytics-row-2">
   <ChartCard title="热门惩罚标签">
-    <StackedBarChart data={tagCompareRows.slice(0, 10)} x="key" height={238} angledLabels series={[
+    <HBarChart rows={tagCompareRows.slice(0, 10)} showPercent series={[
       { key: "include", label: "选中", color: "var(--chart-1)" },
       { key: "exclude", label: "拒绝", color: "var(--chart-critical)" }
     ]} />
   </ChartCard>
   <ChartCard title="热门系列任务">
-    <HBarChart rows={seriesRows} height={238} />
+    <!-- showLegend：左边「热门惩罚标签」有图例，这张单系列图补一条同高的图例，
+         两张图的横轴才落在同一条线上。 -->
+    <HBarChart rows={seriesRows} showLegend valueLabel="选中次数" />
   </ChartCard>
 </div>
 
@@ -103,13 +105,13 @@
 <div class="analytics-row-2">
   <ChartCard title="对局数">
     {#if gameRoundsStable.length}
-      <StackedBarChart data={seriesToChartRows(data.series.days, gameRoundsStable)} x="day" height={220} showPercent
+      <StackedBarChart data={seriesToChartRows(data.series.days, gameRoundsStable)} x="day" showPercent
         series={gameRoundsStable.map((s) => ({ key: s.key, label: GAME_LABELS[s.key] || s.key }))} />
     {:else}<p class="empty">暂无数据</p>{/if}
   </ChartCard>
   <ChartCard title="开房数">
     {#if roomCreatesStable.length}
-      <StackedBarChart data={seriesToChartRows(data.series.days, roomCreatesStable)} x="day" height={220} showPercent
+      <StackedBarChart data={seriesToChartRows(data.series.days, roomCreatesStable)} x="day" showPercent
         series={roomCreatesStable.map((s) => ({ key: s.key, label: GAME_LABELS[s.key] || s.key }))} />
     {:else}<p class="empty">暂无数据</p>{/if}
   </ChartCard>

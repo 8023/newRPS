@@ -1,25 +1,23 @@
 <script lang="ts">
   /**
-   * 堆叠/分组柱状图：惩罚任务发布构成、热门惩罚标签选中/拒绝对照、对局数/开房数按游戏堆叠
-   * 都是这一种形态。写法参照 LayerChart 官方 charts/BarChart 的核心组合（Chart+Bars），
+   * 堆叠/分组柱状图：惩罚任务发布构成、对局数/开房数按游戏堆叠都是这一种形态（横轴恒为
+   * 日期；类目型的对照图走横向的 HBarChart）。写法参照 LayerChart 官方 charts/BarChart 的核心组合（Chart+Bars），
    * `rounded` 用 `context.series.isStackTop(seriesKey, d)` 逐行判断——只有真正露在柱子顶端
    * 的那一段带圆角，与原 React 版手写的 StackedSegment 是同一视觉语言，这个判断本身就是
    * LayerChart 内置能力，不需要再手搓。源：ui/AnalyticsPanel.tsx 多处 <BarChart stackId="a">。
    */
   import { Chart, Bars } from "layerchart/svg";
   import { scaleBand } from "d3-scale";
-  import { CHART_COLORS, formatDayTick } from "../analyticsDashboard";
+  import { CHART_COLORS, PLOT_HEIGHT_TREND, VALUE_AXIS_GUTTER, formatDayTick } from "../analyticsDashboard";
   import AnalyticsTooltip from "./AnalyticsTooltip.svelte";
   import ChartLegend from "./ChartLegend.svelte";
 
-  let { data, x, series, height = 238, layout = "stack", angledLabels = false, showPercent = false, showTotal = true }: {
+  let { data, x, series, height = PLOT_HEIGHT_TREND, layout = "stack", showPercent = false, showTotal = true }: {
     data: Record<string, string | number>[];
     x: string;
     series: { key: string; label: string; color?: string }[];
     height?: number;
     layout?: "stack" | "group";
-    /** 类目较多时横轴文字倾斜显示（热门惩罚标签）。 */
-    angledLabels?: boolean;
     showPercent?: boolean;
     /** 「惩罚任务」那张图原版刻意不显示合计（发布量=三段之和，重复信息），故可关。 */
     showTotal?: boolean;
@@ -28,7 +26,7 @@
   const resolved = $derived(series.map((s, i) => ({ ...s, color: s.color ?? CHART_COLORS[i % CHART_COLORS.length] })));
 </script>
 
-<div class="layerchart-card layerchart-with-legend" style={`height:${height}px`}>
+<div class="layerchart-card layerchart-with-legend" style={`min-height:${height}px`}>
   {#if data.length === 0}
     <p class="empty">暂无数据</p>
   {:else}
@@ -40,17 +38,17 @@
       yNice
       series={resolved.map((s) => ({ key: s.key, value: s.key, label: s.label, color: s.color }))}
       seriesLayout={layout}
-      padding={{ left: 8, bottom: angledLabels ? 48 : 24, top: 8, right: 8 }}
+      padding={{ left: VALUE_AXIS_GUTTER, bottom: 24, top: 8, right: 8 }}
       axis
       grid={{ x: false }}
       tooltipContext={{ mode: "band" }}
       props={{
         xAxis: {
           format: (v: unknown) => formatDayTick(String(v)),
-          // 倾斜标签的图（热门惩罚标签，最多 10 条）要全显；日期轴则按像素间距抽稀，
-          // 否则 30 天会渲染 30 个标签叠成一片（band 轴的 tickSpacing 默认是 null）。
-          tickSpacing: angledLabels ? null : 60,
-          tickLabelProps: angledLabels ? { class: "layerchart-tick", textAnchor: "end", transform: "rotate(-25)" } : { class: "layerchart-tick" }
+          // band 轴的 tickSpacing 默认是 null（分类轴全显），30 天数据会把 30 个日期标签
+          // 叠在一起糊成一片；给个像素间距让它按宽度自动抽稀。
+          tickSpacing: 60,
+          tickLabelProps: { class: "layerchart-tick" }
         },
         yAxis: { tickLabelProps: { class: "layerchart-tick" } }
       }}

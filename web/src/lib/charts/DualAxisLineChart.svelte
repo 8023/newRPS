@@ -9,11 +9,11 @@
    */
   import { Chart, Spline } from "layerchart/svg";
   import { scalePoint } from "d3-scale";
-  import { formatDayTick } from "../analyticsDashboard";
+  import { PLOT_HEIGHT_TREND, VALUE_AXIS_GUTTER, formatDayTick } from "../analyticsDashboard";
   import AnalyticsTooltip from "./AnalyticsTooltip.svelte";
   import ChartLegend from "./ChartLegend.svelte";
 
-  let { data, x, left, right, height = 226 }: {
+  let { data, x, left, right, height = PLOT_HEIGHT_TREND }: {
     data: Record<string, string | number>[];
     x: string;
     left: { key: string; label: string; color: string };
@@ -24,7 +24,7 @@
   const xScaleFactory = () => scalePoint().padding(0.5);
 </script>
 
-<div class="layerchart-card layerchart-dual-axis layerchart-with-legend" style={`height:${height}px`}>
+<div class="layerchart-card layerchart-dual-axis layerchart-with-legend" style={`min-height:${height}px`}>
   {#if data.length === 0}
     <p class="empty">暂无数据</p>
   {:else}
@@ -35,7 +35,7 @@
       y={left.key}
       yNice
       series={[{ key: left.key, value: left.key, label: left.label, color: left.color }]}
-      padding={{ left: 8, bottom: 24, top: 8, right: 32 }}
+      padding={{ left: VALUE_AXIS_GUTTER, bottom: 24, top: 8, right: VALUE_AXIS_GUTTER }}
       axis
       grid={{ x: false }}
       tooltipContext={{ mode: "band" }}
@@ -65,7 +65,7 @@
         y={right.key}
         yNice
         series={[{ key: right.key, value: right.key, label: right.label, color: right.color }]}
-        padding={{ left: 8, bottom: 24, top: 8, right: 32 }}
+        padding={{ left: VALUE_AXIS_GUTTER, bottom: 24, top: 8, right: VALUE_AXIS_GUTTER }}
         axis="y"
         grid={false}
         tooltipContext={false}

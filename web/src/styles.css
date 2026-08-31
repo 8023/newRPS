@@ -4838,6 +4838,11 @@ main {
 .punishment-card-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* 默认 stretch 会把矮的一侧拉伸到与对侧等高的行高，再层层传导到内部
+     task-card/proof 等子块，撑出巨量空白；改成 start 后每张卡片各自
+     按自身内容定高，行高仍取两者最大值，多出的空间落在网格间隙里，
+     而不是被摊进卡片内部。 */
+  align-items: start;
   gap: 10px;
 }
 
@@ -7050,6 +7055,13 @@ main {
     grid-template-columns: 1fr;
   }
 
+  /* .punishment-card-grid.double 的两类选择器特异性比上面这条 .punishment-card-grid
+     高，即便同在本媒体查询内也会覆盖掉它，导致窄屏依然分两列——这里单独针对
+     .double 再覆盖一次，让窄屏下强制单列（原左列在上、原右列在下）。 */
+  .punishment-card-grid.double {
+    grid-template-columns: 1fr;
+  }
+
   /* 标题、口令输入框各自占一整行；「进入管理」「返回」两个按钮换到 2 列网格，
      自动落进标题/输入框之后的下一行，左右对半分——而不是各自单独占一整行。 */
   .admin-login-card {
@@ -8084,9 +8096,29 @@ main {
     linear-gradient(180deg, color-mix(in srgb, var(--primary) 4%, var(--panel-solid)), var(--panel-solid) 32%);
   border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
   border-radius: 14px;
-  padding: 15px 18px 18px;
+  padding: 15px;
   min-width: 0;
   box-shadow: 0 9px 24px color-mix(in srgb, var(--shadow) 48%, transparent);
+  /* 网格默认把同一行的卡片拉到等高；卡片内部再用弹性列让正文吃掉多出来的高度，
+     这样同一行两张图的绘图区、横轴、图例才会齐平——各组件写死 px 高度时，
+     226 和 236 的差就直接暴露成"左右两张图坐标轴不在一条线上"。 */
+  display: flex;
+  flex-direction: column;
+}
+
+.analytics-card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* 未挂载图表时的占位块：只占位，不做闪烁动画（一屏十几个骨架同时呼吸很吵）。 */
+.analytics-card-skeleton {
+  flex: 1 1 auto;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--chart-grid) 26%, transparent);
 }
 
 .analytics-card-head {
@@ -8215,7 +8247,16 @@ main {
 }
 
 .analytics-donut-wrap {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.analytics-donut-ring {
   position: relative;
+  flex: 0 0 auto;
 }
 
 .analytics-donut-center {
@@ -8327,14 +8368,14 @@ main {
   position: relative;
   width: 100%;
   min-width: 0;
+  /* 组件内联给的是 min-height（"这类图至少多高"），实际高度由卡片正文的剩余空间决定。 */
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
   --color-surface-content: var(--chart-axis);
   --color-surface-100: var(--chart-surface);
 }
 
-.layerchart-with-legend {
-  display: flex;
-  flex-direction: column;
-}
 
 .layerchart-plot {
   position: relative;
@@ -8363,28 +8404,33 @@ main {
 /* 统一静态图例：所有类型都放在绘图区下方，不承担筛选交互。 */
 .analytics-chart-legend {
   list-style: none;
-  margin: 12px 0 0;
-  padding: 8px 2px 0;
+  /* 不画与绘图区之间的分隔线：横轴本身已经是视觉分界，再加一条线会让每张卡多出一条
+     跟数据无关的横线，同一行两张图的线还常常对不齐。 */
+  margin: 8px 0 0;
+  padding: 0 2px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 5px 14px;
-  border-top: 1px solid color-mix(in srgb, var(--chart-grid) 48%, transparent);
+  /* 列间距按"八款游戏 + 房间均值"这条最长的图例定：九项刚好排得下一行，绘图区就不会
+     被挤掉一行的高度，同一行左右两张卡的横轴才对得齐。 */
+  gap: 4px 9px;
   font-size: 11px;
   color: var(--chart-ink-muted);
+  /* 统一预留一行图例的高度：单系列图（只有一条图例）与多系列图的绘图区因此一样高。 */
+  min-height: 17px;
 }
 
 .analytics-chart-legend li {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
   line-height: 1.35;
 }
 
 .analytics-chart-legend i {
-  width: 14px;
+  width: 12px;
   height: 3px;
   border-radius: 999px;
   flex-shrink: 0;

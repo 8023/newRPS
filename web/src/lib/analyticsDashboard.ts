@@ -8,6 +8,18 @@ import type { AnalyticsBucket, AnalyticsNamedSeries, AnalyticsRangeView } from "
 export const CHART_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "var(--chart-6)"];
 export const SEQ_COLORS = ["var(--chart-seq-1)", "var(--chart-seq-2)", "var(--chart-seq-3)", "var(--chart-seq-4)", "var(--chart-seq-5)", "var(--chart-seq-6)"];
 
+// 面板里同一类图表必须长得一样高，否则同一行左右两张卡的坐标轴、图例会错位（各组件
+// 以前各带一个 226/236/238/264 的默认值，调用处还要再各自覆盖，结果每张图都不一样）。
+// 这两个值是 min-height：卡片在网格里会被拉伸到同行最高，绘图区再 flex 撑满剩余空间，
+// 所以同一行的绘图区尺寸恒定一致，这里只决定"一行整体至少多高"。
+/** 按天趋势/柱状（折线、双轴、堆叠柱、柱+线）统一绘图高度。 */
+export const PLOT_HEIGHT_TREND = 236;
+/** 分布类（横向条形、分桶柱状）统一绘图高度——比趋势图矮一档，类目数远少于 30 天。 */
+export const PLOT_HEIGHT_DISTRIBUTION = 204;
+/** 数值 Y 轴留给刻度文字的左边距。太小会把 "3,000" 这种宽标签截断在卡片外（padding
+    只有 8 时，热门惩罚标签那张图的纵轴显示成 "0,000"）；统一取值顺带对齐各图绘图区左沿。 */
+export const VALUE_AXIS_GUTTER = 34;
+
 // data.gameRounds / data.roomCreates 的 series key 是后端存的 gameId（"unknown" 为
 // game_id 为空的历史脏数据），图例/表头需要中文名，不能直接展示英文标识符。
 export const GAME_LABELS: Record<string, string> = {

@@ -7,6 +7,9 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/doumiao/newRPS/internal/pbconv"
+	"github.com/doumiao/newRPS/internal/wire"
 )
 
 // 日聚合 metric 常量（EAV key 见 plan）。
@@ -95,6 +98,26 @@ type analyticsSnapshot struct {
 	LiveOnline int
 	LiveRooms  int
 	LiveBonds  int
+	// encoded 是 forRange 结果预先编好的 protobuf 载荷，键是 clampAnalyticsDays 的三个
+	// 取值（7/30/90）。onAdminAnalytics 全程持有 s.mu（handleWSEvent 的粗粒度全局锁），
+	// 而把 90 天视图转成 protobuf Struct 要 ~2.3ms、3 万次分配——那是所有人的对局、聊天、
+	// 落子都在等的 2.3ms。快照发布后就不可变，所以在后台聚合协程里一次性编好，
+	// RPC 侧只做一次 map 查表。
+	encoded map[int]*wire.RawBody
+}
+
+// buildEncodedViews 在后台聚合协程里预编码三档时间范围的应答载荷（见 encoded 字段注释）。
+// 编码失败不影响快照发布：onAdminAnalytics 查不到就退回原来的即时编码路径。
+func (snap *analyticsSnapshot) buildEncodedViews() {
+	encoded := make(map[int]*wire.RawBody, 3)
+	for _, days := range []int{7, 30, 90} {
+		body, err := pbconv.BuildRawBody("", snap.forRange(days))
+		if err != nil {
+			continue
+		}
+		encoded[days] = body
+	}
+	snap.encoded = encoded
 }
 
 type punishmentPoolGrowth struct {
@@ -837,6 +860,7 @@ func (s *Server) rebuildUnsealedAndPublish() {
 		s.errorLog("analytics_build_snapshot_failed", err.Error())
 		return
 	}
+	snap.buildEncodedViews()
 	s.analyticsSnap.Store(snap)
 }
 

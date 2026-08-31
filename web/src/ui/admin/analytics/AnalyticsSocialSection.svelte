@@ -2,7 +2,7 @@
   // 会话/证明耗时分布、名争·白给、主宠关系、用户信息变更、聊天活跃/人数、单房对局。
   // 源：ui/AnalyticsPanel.tsx 755-932。
   import type { AnalyticsRangeView } from "../../../shared/types";
-  import { ACTIVITY_LABELS, CHART_COLORS, orderSeriesStably, seriesToChartRows } from "../../../lib/analyticsDashboard";
+  import { ACTIVITY_LABELS, CHART_COLORS, PLOT_HEIGHT_DISTRIBUTION, orderSeriesStably, seriesToChartRows } from "../../../lib/analyticsDashboard";
   import ColoredBarChart from "../../../lib/charts/ColoredBarChart.svelte";
   import LineTrendChart from "../../../lib/charts/LineTrendChart.svelte";
   import DualAxisLineChart from "../../../lib/charts/DualAxisLineChart.svelte";
@@ -19,10 +19,10 @@
 </script>
 
 <div class="analytics-row-2">
-  <ChartCard title="会话时长分布">
+  <ChartCard title="会话时长分布" minHeight={PLOT_HEIGHT_DISTRIBUTION}>
     <ColoredBarChart rows={data.sessionBuckets || []} valueLabel="会话数" />
   </ChartCard>
-  <ChartCard title="证明耗时分布">
+  <ChartCard title="证明耗时分布" minHeight={PLOT_HEIGHT_DISTRIBUTION}>
     <ColoredBarChart rows={data.punishment?.proofMs || []} valueLabel="次数" />
   </ChartCard>
 </div>
@@ -63,7 +63,7 @@
   </ChartCard>
 
   <ChartCard title="聊天人数">
-    <LineTrendChart data={speakersRows} x="day" height={210} series={[
+    <LineTrendChart data={speakersRows} x="day" series={[
       { key: "lobby", label: "大厅发言人", color: "var(--chart-1)" },
       { key: "room", label: "房间发言人", color: "var(--chart-2)" }
     ]} />
