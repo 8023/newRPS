@@ -169,7 +169,14 @@
 
   function onTick(e: { nodes: SimPlayerNode[]; links: (SimLink | undefined)[]; simulation: SimulationLike }) {
     sim = e.simulation;
-    for (const node of e.nodes) {
+    // 必须夹紧 e.simulation.nodes() 里的真实节点对象，而不是 e.nodes——后者是 LayerChart
+    // 内部 $state 代理产出的渲染快照，其属性写入只落在代理自己的影子存储里（见上面 sim/
+    // findNode 那段注释的同一个坑），下一次 tick 时物理引擎仍会从未被夹紧的真实坐标继续
+    // 演算。被挤压节点的斥力速度不会因为显示层的夹紧而衰减，真实坐标可以持续漂出可视区域，
+    // 只是每次渲染前"看起来"被拉回——直到某次 tick 之间的位移大到夹紧来不及生效。拖拽之所以
+    // 不受影响，是因为 onNodePointerDown/onSvgPointerMove 已经通过 findNode() 直接操作了
+    // 真实对象的 fx/fy。
+    for (const node of e.simulation.nodes()) {
       if (node.fx == null) node.x = clampNodeX(node.x ?? 0);
       else node.fx = node.x = clampNodeX(node.fx);
       if (node.fy == null) node.y = clampNodeY(node.y ?? 0);

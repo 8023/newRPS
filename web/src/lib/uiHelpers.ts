@@ -1,13 +1,3 @@
-export function appendCappedUnique<T extends { id: string }>(items: T[], item: T, max: number) {
-  if (items.some((old) => old.id === item.id)) return items;
-  return [...items, item].slice(-max);
-}
-
-export function prependCappedUnique<T extends { id: string }>(items: T[], item: T, max: number) {
-  if (items.some((old) => old.id === item.id)) return items;
-  return [item, ...items].slice(0, max);
-}
-
 export function isNearScrollBottom(element: HTMLElement, threshold = 72) {
   return element.scrollHeight - element.scrollTop - element.clientHeight < threshold;
 }

@@ -424,10 +424,6 @@ func (s *Server) scheduleOthelloSettlement(room *RoomState) {
 }
 
 func (s *Server) settleOthelloPendingMove(room *RoomState, mode, reason string) (bool, string) {
-	return s.settleOthelloPendingMoveClean(room, mode, reason)
-}
-
-func (s *Server) settleOthelloPendingMoveClean(room *RoomState, mode, reason string) (bool, string) {
 	if room.Othello == nil || room.Othello.PendingSettlement == nil {
 		return false, "当前没有待结算落子"
 	}
@@ -511,7 +507,7 @@ func (s *Server) flushOthelloPendingSettlement(room *RoomState) {
 	if room.Othello == nil || room.Othello.PendingSettlement == nil {
 		return
 	}
-	s.settleOthelloPendingMoveClean(room, "normal", "cleanup")
+	s.settleOthelloPendingMove(room, "normal", "cleanup")
 }
 
 func (s *Server) applyOthelloForfeitRankedFloor(room *RoomState, winnerSeat, loserSeat types.SeatKey) string {

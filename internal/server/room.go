@@ -76,7 +76,7 @@ func occupantName(occupant SeatOccupant) string {
 	if occupant == nil {
 		return "空位"
 	}
-	return occupant.(*HumanSeat).Player.DisplayName
+	return occupant.Player.DisplayName
 }
 
 // occupantShortName 返回座位玩家的短名（不含性别/称号，名争惩罚态下为惩罚名），
@@ -88,7 +88,7 @@ func occupantShortName(occupant SeatOccupant) string {
 	if occupant == nil {
 		return "空位"
 	}
-	p := occupant.(*HumanSeat).Player
+	p := occupant.Player
 	if ptrBool(p.NameWarPunished) && p.NameWarPenaltyName != "" {
 		return p.NameWarPenaltyName
 	}
@@ -221,7 +221,7 @@ func (s *Server) roomSnapshot(room *RoomState, includeChat, includeHistory bool)
 		if occ == nil {
 			seats[seat] = nil
 		} else {
-			seats[seat] = occ.(*HumanSeat).Player
+			seats[seat] = occ.Player
 		}
 	}
 	ready := map[types.SeatKey]bool{
@@ -512,18 +512,14 @@ func (s *Server) generatedRoomName(settings types.RoomSettings) string {
 		// 名坐实成正式房名，必须按当前房间的 GameID 重新兜底。
 		return defaultRoomNameForGame(settings.GameID)
 	}
-	subject := randomFromF(pool.Subjects)
-	roomWord := randomFromF(pool.RoomWords)
+	subject := randomFrom(pool.Subjects)
+	roomWord := randomFrom(pool.RoomWords)
 	adjective := ""
-	if len(pool.Adjectives) > 0 && randFloat() < 0.75 {
-		adjective = randomFromF(pool.Adjectives)
+	if len(pool.Adjectives) > 0 && mrand.Float64() < 0.75 {
+		adjective = randomFrom(pool.Adjectives)
 	}
 	base := adjective + subject + roomWord
 	return s.uniqueRoomName(base)
-}
-
-func randFloat() float64 {
-	return mrand.Float64()
 }
 
 func (s *Server) normalizeRoomName(settings types.RoomSettings) string {
@@ -548,12 +544,12 @@ func (s *Server) randomRoomBackground(settings types.RoomSettings) string {
 	}
 	if src == "series" {
 		if series := s.findSeriesByID(settings.PunishmentSeriesID); series != nil && len(series.RoomBackgroundImages) > 0 {
-			return randomFromF(series.RoomBackgroundImages)
+			return randomFrom(series.RoomBackgroundImages)
 		}
 		return ""
 	}
 	if tag := s.firstTagWithBackground(settings.PunishmentTagsIncluded); tag != nil {
-		return randomFromF(tag.RoomBackgroundImages)
+		return randomFrom(tag.RoomBackgroundImages)
 	}
 	return ""
 }
@@ -644,7 +640,7 @@ func (s *Server) clearSeatForPlayer(room *RoomState, seat types.SeatKey) {
 		delete(room.GiveawayBoostedBySeat, seat)
 	}
 	room.SeatedScore[seat] = 0
-	room.SeatStats[seat] = emptySeatStats()
+	room.SeatStats[seat] = types.SeatStats{}
 	if room.ForgiveAdvantage != nil && leavingID != "" {
 		if room.ForgiveAdvantage.BeneficiaryID == leavingID || room.ForgiveAdvantage.TargetID == leavingID {
 			room.ForgiveAdvantage = nil

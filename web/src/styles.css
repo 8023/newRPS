@@ -250,6 +250,9 @@ main {
   width: 34px;
   min-height: 34px;
   padding: 0;
+  /* 弹窗标题栏（.modal-title 等）把它当 flex item 用，窄屏下文字区挤占空间时
+     默认 flex-shrink:1 会压缩宽度而 min-height 不让高度跟着缩，挤成竖条。 */
+  flex-shrink: 0;
 }
 
 .player-badge {
@@ -367,55 +370,12 @@ main {
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
 }
 
-.gender-female {
-  color: #8a3158;
-  background: #ffe2ef;
-  border-color: #f3a9ca;
-}
-
-.gender-male {
-  color: #225c8d;
-  background: #dff2ff;
-  border-color: #92cdf2;
-}
-
-.gender-secret,
-.gender-other {
-  color: #5d516f;
-  background: #eeeaf7;
-  border-color: #cfc4e4;
-}
-
-:root[data-theme="dark"] .gender-female,
-:root[data-theme="dark"] .gender-male,
-:root[data-theme="dark"] .gender-secret,
-:root[data-theme="dark"] .gender-other {
-  color: #f3f8ff;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
-}
-
 /* 称号标签颜色改为服务端下发的行内样式（PublicStats.titleColors），深色模式下同样直接叠加轻微
    饱和度/阴影而不覆写颜色本身，避免后台自定义的配色在深色主题下失真。 */
 :root[data-theme="dark"] .title-chip {
   filter: brightness(0.92) saturate(1.08);
   box-shadow: inset 0 0 0 999px rgba(0, 0, 0, 0.12);
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
-}
-
-:root[data-theme="dark"] .gender-female {
-  background: #6b2948;
-  border-color: #ff8fbd;
-}
-
-:root[data-theme="dark"] .gender-male {
-  background: #1e4d73;
-  border-color: #7fd0ff;
-}
-
-:root[data-theme="dark"] .gender-secret,
-:root[data-theme="dark"] .gender-other {
-  background: #44375c;
-  border-color: #c7b5ff;
 }
 
 .soft-button {
@@ -827,22 +787,12 @@ main {
   margin: 14px 0;
 }
 
-.compact-stats {
-  grid-template-columns: minmax(140px, 180px);
-  margin: 8px 0 12px;
-}
-
 .stat {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px;
   background: var(--panel-soft);
   min-height: 72px;
-}
-
-.compact-stats .stat {
-  min-height: 50px;
-  padding: 9px 10px;
 }
 
 .stat span {
@@ -854,7 +804,6 @@ main {
 .create-box,
 .side-column,
 .admin-page,
-.config-editor,
 .actions-panel {
   display: grid;
   gap: 10px;
@@ -969,13 +918,6 @@ main {
 .pet-bond-row-actions .small {
   font-size: 12px;
   padding: 4px 8px;
-}
-
-.pet-bond-title-tag {
-  margin-left: 6px;
-  color: var(--muted);
-  font-style: normal;
-  font-size: 12px;
 }
 
 .pet-bond-player-info {
@@ -1690,34 +1632,6 @@ main {
 
 .name-war-loser-panel .mobile-collapsible-body>.hint {
   margin-block: 0;
-}
-
-.giveaway-placeholder-panel {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  gap: 10px;
-  min-height: 180px;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--primary) 14%, transparent), color-mix(in srgb, var(--pink) 18%, transparent)),
-    var(--panel-solid);
-}
-
-.giveaway-placeholder-panel h2 {
-  margin: 0;
-  color: var(--page-text);
-  font-size: 18px;
-  line-height: 1.25;
-}
-
-.giveaway-placeholder-panel>div {
-  display: grid;
-  place-content: center;
-  gap: 8px;
-  text-align: center;
-  border: 1px dashed color-mix(in srgb, var(--primary) 45%, var(--border));
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--panel-soft) 76%, transparent);
-  padding: 14px;
 }
 
 .name-war-loser-panel h2 {
@@ -2830,22 +2744,6 @@ main {
   border: 2px solid rgba(255, 255, 255, .7);
 }
 
-.othello-legend {
-  width: min(100%, 680px);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.othello-legend span {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--panel-soft);
-  padding: 5px 9px;
-  font-size: 12px;
-  font-weight: 800;
-}
-
 .tictactoe-panel {
   display: grid;
   gap: 14px;
@@ -3022,22 +2920,6 @@ main {
 .tictactoe-cell:not(:disabled):hover {
   background: var(--ttt-hover, color-mix(in srgb, #8b5cf6 14%, var(--panel-solid)));
   transform: none;
-}
-
-.tictactoe-legend {
-  width: min(100%, 560px);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.tictactoe-legend span {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--panel-soft);
-  padding: 5px 9px;
-  font-size: 12px;
-  font-weight: 800;
 }
 
 .gomoku-panel {
@@ -3343,29 +3225,6 @@ main {
   transform: translate(-50%, -50%) rotate(-45deg);
 }
 
-.gomoku-legend {
-  width: min(100%, 620px);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chess-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.gomoku-legend span,
-.chess-legend span {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--panel-soft);
-  padding: 5px 9px;
-  font-size: 12px;
-  font-weight: 800;
-}
-
 /* ── 斗兽棋 ─────────────────────────────────────────── */
 .jungle-panel {
   --jungle-content-max: 460px;
@@ -3664,22 +3523,6 @@ main {
   color: var(--jungle-b-text, #f0f4f8);
 }
 
-.jungle-legend {
-  width: min(100%, var(--jungle-content-max));
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.jungle-legend span {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--panel-soft);
-  padding: 5px 9px;
-  font-size: 12px;
-  font-weight: 800;
-}
-
 .jungle-rules-hint {
   width: min(100%, var(--jungle-content-max));
   margin: 8px 0 0;
@@ -3808,7 +3651,6 @@ main {
 .chess-request-card,
 .chess-restart-button,
 .chess-risk-actions,
-.chess-legend,
 .chess-rules-hint {
   width: min(100%, var(--chess-content-max));
 }
@@ -4180,12 +4022,6 @@ main {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
-}
-
-.room-bottom {
-  display: grid;
-  grid-template-columns: 1fr 260px 1fr;
-  gap: 14px;
 }
 
 .round-history {
@@ -5034,12 +4870,6 @@ main {
   display: none;
 }
 
-.punishment-choice-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-}
-
 .punishment-tag-tri-grid {
   display: flex;
   flex-wrap: wrap;
@@ -5071,122 +4901,6 @@ main {
   background: var(--reject);
   border-color: var(--reject-border);
   color: var(--page-text);
-}
-
-.admin-subtab-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 12px 0;
-  align-items: center;
-}
-
-.admin-subtab-row button.active {
-  background: var(--primary);
-  border-color: var(--primary-hover);
-  color: #fff;
-}
-
-.admin-subtab-row .subtab-save {
-  margin-left: auto;
-}
-
-.punishment-choice-card {
-  min-height: 104px;
-  display: grid;
-  grid-template-rows: auto auto;
-  align-content: center;
-  align-items: center;
-  justify-content: stretch;
-  justify-items: start;
-  gap: 7px;
-  text-align: left;
-  width: 100%;
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 13px 18px;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--pink) 24%, var(--panel-solid)), color-mix(in srgb, var(--primary) 16%, var(--panel-solid)));
-}
-
-.punishment-choice-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: var(--punishment-bg);
-  background-size: cover;
-  background-position: center;
-  opacity: var(--punishment-bg-opacity, 0.26);
-}
-
-.punishment-choice-card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: color-mix(in srgb, var(--panel-solid) 82%, transparent);
-}
-
-.punishment-choice-card span,
-.punishment-choice-card small,
-.punishment-choice-card em,
-.punishment-choice-meta {
-  position: relative;
-  z-index: 1;
-}
-
-.punishment-choice-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.punishment-choice-card em {
-  justify-self: start;
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--panel-solid) 72%, transparent);
-  color: var(--muted);
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 900;
-  line-height: 1;
-  padding: 5px 8px;
-}
-
-.punishment-choice-card.active em {
-  border-color: color-mix(in srgb, var(--primary) 75%, var(--border));
-  background: color-mix(in srgb, var(--primary) 18%, var(--panel-solid));
-  color: var(--primary-strong);
-}
-
-.punishment-choice-card span {
-  color: var(--page-text);
-  font-size: 15px;
-  font-weight: 900;
-  line-height: 1.25;
-  padding-bottom: 3px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-}
-
-.punishment-choice-card small {
-  color: var(--muted);
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  max-width: 95%;
-}
-
-.punishment-choice-card.active {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 24%, transparent);
-}
-
-.punishment-admin-preview {
-  max-width: 420px;
 }
 
 .ranked-choice-grid {
@@ -5565,13 +5279,6 @@ main {
   font-weight: 700;
 }
 
-.config-editor textarea {
-  min-height: 520px;
-  font-family: "SFMono-Regular", Consolas, monospace;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
 .hint,
 .empty {
   color: var(--muted);
@@ -5596,8 +5303,7 @@ main {
 
 .admin-editor-head,
 .admin-section-header,
-.admin-card-title,
-.admin-manage-row {
+.admin-card-title {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -5674,12 +5380,6 @@ main {
 .admin-list-section {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-}
-
-.admin-action-tabs {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -6243,35 +5943,6 @@ main {
   fill: color-mix(in srgb, var(--primary) 55%, var(--border));
 }
 
-.admin-action-tabs button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 40px;
-  border-color: var(--border);
-  background: var(--panel-solid);
-  font-weight: 900;
-}
-
-.admin-action-tabs button.active {
-  border-color: var(--blue-border);
-  background: color-mix(in srgb, var(--primary) 14%, var(--panel-solid));
-  box-shadow: 0 0 0 3px rgba(116, 199, 255, 0.18);
-}
-
-.admin-action-tabs em {
-  min-width: 22px;
-  border-radius: 999px;
-  background: var(--panel-soft);
-  color: var(--muted);
-  font-size: 12px;
-  font-style: normal;
-  line-height: 1;
-  padding: 5px 7px;
-  text-align: center;
-}
-
 .admin-announcement-card {
   display: grid;
   gap: 10px;
@@ -6472,20 +6143,6 @@ main {
   color: #ffd7e7;
 }
 
-.admin-danger-row {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin: -2px 0 8px;
-}
-
-.tiny-danger-button {
-  margin-left: auto;
-  padding: 6px 9px;
-  font-size: 12px;
-  line-height: 1;
-}
-
 .admin-sticky-actions {
   position: sticky;
   bottom: calc(10px + env(safe-area-inset-bottom));
@@ -6609,12 +6266,6 @@ main {
   white-space: nowrap;
 }
 
-.variant-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
 .color-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -6629,8 +6280,7 @@ main {
   min-width: 0;
 }
 
-.color-input span,
-.variant-grid span {
+.color-input span {
   color: var(--muted);
   font-size: 13px;
   min-width: 0;
@@ -6648,39 +6298,6 @@ main {
   min-width: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
-}
-
-.variant-grid label {
-  display: grid;
-  gap: 5px;
-}
-
-.variant-grid textarea {
-  min-height: 74px;
-}
-
-.faction-checkbox-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  margin-top: 4px;
-}
-
-.faction-checkbox {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-.punishment-task-list {
-  display: grid;
-  gap: 10px;
-}
-
-.punishment-task-editor {
-  background: color-mix(in srgb, var(--panel-solid) 92%, var(--primary));
 }
 
 .punishment-manager {
@@ -6738,110 +6355,6 @@ main {
 
 .punishment-detail-panel {
   gap: 12px;
-}
-
-.punishment-task-editor summary {
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: center;
-}
-
-.punishment-task-editor summary small:not(.danger-hint) {
-  color: var(--muted);
-}
-
-.punishment-step-summary-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-/* 上移/下移/添加/删除固定分组、贴右对齐，不随 space-between 被拉开。 */
-.punishment-step-summary-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-}
-
-.punishment-task-editor[open] {
-  gap: 10px;
-}
-
-.task-picker-selected {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 10px 0;
-}
-
-.task-picker-chip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--panel-soft);
-  font-size: 13px;
-}
-
-.task-picker-chip>span:first-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.task-picker-chip-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-}
-
-.task-picker-panel {
-  margin-top: 10px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--panel-soft);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.task-picker-list {
-  max-height: 240px;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.task-picker-item {
-  flex-shrink: 0;
-  text-align: left;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--panel-solid);
-}
-
-.task-picker-item:hover {
-  border-color: var(--primary);
-}
-
-.task-picker-item small,
-.task-picker-item .hint {
-  color: var(--muted);
-  font-size: 12px;
 }
 
 .task-card,
@@ -7044,14 +6557,11 @@ main {
   .battle-panel,
   .move-panel,
   .room-content-grid,
-  .room-bottom,
   .admin-tool-shell,
   .punishment-manager,
   .ranked-choice-grid,
   .punishment-card-grid,
-  .punishment-choice-grid,
-  .color-grid,
-  .variant-grid {
+  .color-grid {
     grid-template-columns: 1fr;
   }
 
@@ -7195,10 +6705,6 @@ main {
     margin-left: 0;
   }
 
-  .admin-action-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .admin-management-nav {
     grid-template-columns: 1fr;
   }
@@ -7243,30 +6749,6 @@ main {
 
   .profile-edit-grid {
     grid-template-columns: 1fr;
-  }
-
-  .punishment-choice-card {
-    min-height: 118px;
-    gap: 7px;
-    padding: 14px 16px;
-  }
-
-  .punishment-choice-card::before {
-    opacity: min(0.46, calc(var(--punishment-bg-opacity, 0.26) + 0.14));
-  }
-
-  .punishment-choice-card::after {
-    background: linear-gradient(90deg, color-mix(in srgb, var(--panel-solid) 88%, transparent), color-mix(in srgb, var(--panel-solid) 62%, transparent));
-  }
-
-  .punishment-choice-card span {
-    font-size: 14px;
-    padding-bottom: 2px;
-  }
-
-  .punishment-choice-card small {
-    font-size: 12px;
-    -webkit-line-clamp: 2;
   }
 
   .punishment-index-panel {
@@ -8180,11 +7662,6 @@ main {
   font-weight: 600;
 }
 
-.analytics-table-scroll {
-  overflow: auto;
-  max-height: 280px;
-}
-
 .analytics-tooltip {
   background: color-mix(in srgb, var(--panel-solid) 96%, var(--primary));
   border: 1px solid color-mix(in srgb, var(--primary) 44%, var(--border-strong));
@@ -9072,10 +8549,6 @@ button.contribute-item.contribute-item-new {
 }
 
 .contribute-split-row>* {
-  min-width: 0;
-}
-
-.contribute-preview-row-side {
   min-width: 0;
 }
 

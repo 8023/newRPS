@@ -129,7 +129,7 @@ func (s *Server) onPetBondForceGiveaway(client *Client, env wsEnvelope) {
 			}
 			pending.Forced = "giveaway"
 			pending.ForcedByMasterName = masterName
-			if ok, errMsg := s.settleOthelloPendingMoveClean(room, "giveaway", "masterForce"); !ok {
+			if ok, errMsg := s.settleOthelloPendingMove(room, "giveaway", "masterForce"); !ok {
 				client.reply(env.ID, nil, errMsg)
 				return
 			}

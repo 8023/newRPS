@@ -154,12 +154,6 @@ func randomFrom[T any](values []T) T {
 	return values[int(b[0])%len(values)]
 }
 
-// randomFromF 历史上用纳秒取模选择，连续调用（同一房名的多个词）随机性极差；
-// 改为走 crypto/rand 的 randomFrom。
-func randomFromF[T any](values []T) T {
-	return randomFrom(values)
-}
-
 func oppositeSeat(seat types.SeatKey) types.SeatKey {
 	if seat == types.SeatA {
 		return types.SeatB
@@ -174,14 +168,6 @@ func randomSeat() types.SeatKey {
 		return types.SeatA
 	}
 	return types.SeatB
-}
-
-func emptySeatStats() types.SeatStats {
-	return types.SeatStats{}
-}
-
-func freshGameStats() types.GameStats {
-	return types.GameStats{}
 }
 
 // recordGameOutcome 记一局某游戏的胜/负/平，并同步合计到 Stats.Wins/Losses/Draws。

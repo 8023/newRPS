@@ -1,7 +1,7 @@
 // 座位制游戏（RPS/黑白棋/井字棋/五子棋/斗兽棋/国际象棋）通用的纯展示函数：出拳文案、
 // 房间玩家名单、惩罚审批/发布任务权限判定、对局记录文案、棋盘主题样式。
 // 源：ui/AppViews.tsx 散落各处（Room/RoundHistoryCard/SeatView 等组件之间共用）。
-import type { ChessPiece, CoinFace, JungleAnimal, Move, PublicPlayer, RoomSettings, RoomSnapshot, SeatKey, SeatOccupant } from "../shared/types";
+import type { ChessPiece, CoinFace, Move, PublicPlayer, RoomSettings, RoomSnapshot, SeatKey, SeatOccupant } from "../shared/types";
 import {
   chessBoardThemes, gomokuBoardThemes, jungleBoardThemes, othelloBoardThemes, tictactoeBoardThemes
 } from "./constants";
@@ -279,14 +279,6 @@ export function chessThemeStyle(themeId?: RoomSettings["chessBoardTheme"]): Reco
     "--chess-hover": theme.hover, "--chess-check": theme.check,
     ...chessSquareHintStyle("light", theme.light), ...chessSquareHintStyle("dark", theme.dark)
   };
-}
-
-export function parseJungleCell(cell: string | null | undefined): { side: SeatKey; animal: JungleAnimal } | null {
-  if (!cell) return null;
-  const [side, animal] = cell.split(":");
-  const ranks: Record<string, number> = { rat: 1, cat: 2, dog: 3, wolf: 4, leopard: 5, tiger: 6, lion: 7, elephant: 8 };
-  if ((side !== "A" && side !== "B") || !(animal in ranks)) return null;
-  return { side: side as SeatKey, animal: animal as JungleAnimal };
 }
 
 export function parseChessCell(cell: string | null | undefined): { color: "white" | "black"; piece: string } | null {

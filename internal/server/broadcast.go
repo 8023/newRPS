@@ -45,7 +45,7 @@ func (s *Server) recordBroadcast(typ string, bytes int) {
 }
 
 // lobbyLivePlayerWindowMs：离线玩家仍出现在大厅实时快照的最长窗口。
-// 与前端 isRenameTargetVisible / isNameWarLoserVisible（30 分钟）对齐。
+// 与前端近期可点名、改名和名争展示的 30 分钟窗口对齐。
 const lobbyLivePlayerWindowMs int64 = 30 * 60 * 1000
 
 // lobbyPlayerInLiveSnapshot 判断玩家是否应进入大厅实时通道：
@@ -163,7 +163,7 @@ func (s *Server) lobbySeatSummary(occupant SeatOccupant) any {
 		return nil
 	}
 	// 大厅对阵只嵌精简玩家
-	p := occupant.(*HumanSeat).Player
+	p := occupant.Player
 	return map[string]any{"player": types.ToLobbyPlayer(p)}
 }
 

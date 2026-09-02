@@ -1,5 +1,28 @@
 # 更新记录
 
+### v3.1.4（2026-09-02）
+
+本版本整理上一轮重构遗留的无调用代码和样式，并修复主宠关系图谱的节点边界处理；不改变 Protobuf 协议、数据库结构、发布产物路径或玩家端玩法。
+
+#### 代码精简与依赖
+
+- **删除无调用前端代码**：移除 React/Svelte 迁移后已没有组件引用的旧样式、展示辅助函数和表单样式，减少维护面与 CSS 产物体积。
+- **收窄无必要抽象**：Go 座位占用从单一实现接口收窄为 `*HumanSeat` 别名，直接使用已有空统计值；删除纯转发随机函数和无调用构造器，保留现有 `HumanSeat` 包装、座位访问形状和协议转换。
+- **移除直接依赖**：`d3-shape` 不再作为前端顶层依赖；当前代码未直接导入它，LayerChart 所需的传递依赖仍由依赖树提供。
+- **使用标准库测试辅助**：delta 测试改用 Go 标准库 `bytes.Contains`，删除重复的手写字节查找实现。
+
+#### 主宠关系图谱
+
+- **节点边界修复**：坐标夹紧现在直接写回 d3 `ForceSimulation` 实际持有的节点对象，拖拽和力模拟都不会再把节点逐步推到可视区域之外；节点仍可在原有边界内正常移动。
+
+#### 验证
+
+- `CGO_ENABLED=1 /usr/local/go/bin/go test ./...`
+- `CGO_ENABLED=1 /usr/local/go/bin/go vet ./...`
+- `TMPDIR=/tmp TMP=/tmp TEMP=/tmp npm run test --prefix web`（39 项测试）
+- `TMPDIR=/tmp TMP=/tmp TEMP=/tmp npm run build --prefix web`（`svelte-check` 0 errors/0 warnings，Vite 构建通过）
+- `git diff --check`
+
 ### v3.1.3（2026-08-31）
 
 本版本在 v3.1.2 的数据分析面板基础上继续优化后台响应速度与图表布局，同时修复若干持久化、安全边界和房间交互问题；不改变分析指标口径或 Protobuf 协议。

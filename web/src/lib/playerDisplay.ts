@@ -73,10 +73,6 @@ export function genderChoiceError(config: AppConfig, genderId: string) {
   return "";
 }
 
-export function isValidGenderChoice(config: AppConfig, genderId: string) {
-  return genderChoiceError(config, genderId) === "";
-}
-
 /** 排行榜排序键（有 sort* 用 sort*，否则退回展示分）。普通连接下发的 sort* 已与展示分一致，
  * 不携带真实分——真实分只有管理员后台可见，见 server.publicPlayer/publicPlayerAdmin。 */
 export function sortRankedPointsOf(player: PublicPlayer) {
@@ -139,12 +135,6 @@ export function winRateText(player: PublicPlayer) {
 export function isNameWarLoser(player: PublicPlayer) {
   // 失格目标以 nameWarPunished 为准；分值线由服务端按真实分 + penaltyThreshold 判定。
   return Boolean(player.nameWarEnabled && player.nameWarAllowRename && player.nameWarPunished);
-}
-
-export function isNameWarLoserVisible(player: PublicPlayer, now = Date.now()) {
-  if (!isNameWarLoser(player)) return false;
-  if (player.connected) return true;
-  return Boolean(player.disconnectedAt && now - player.disconnectedAt <= 1_800_000);
 }
 
 export function isExtremeRenameTarget(player: PublicPlayer) {

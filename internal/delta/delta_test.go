@@ -1,6 +1,7 @@
 package delta
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
@@ -82,7 +83,7 @@ func TestHashNoHTMLEscape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytesContain(raw, []byte(`\u0026`)) {
+	if bytes.Contains(raw, []byte(`\u0026`)) {
 		t.Fatalf("unexpected HTML escape in %s", raw)
 	}
 	// 往返后哈希不变
@@ -113,25 +114,4 @@ func TestDiffMapRemove(t *testing.T) {
 	if h1 != h2 {
 		t.Fatalf("after remove %s != %s ops=%v", h1, h2, ops)
 	}
-}
-
-func bytesContain(b, sub []byte) bool {
-	return len(b) >= len(sub) && (string(b) == string(sub) || len(sub) == 0 ||
-		(len(b) > 0 && containsBytes(b, sub)))
-}
-
-func containsBytes(b, sub []byte) bool {
-	for i := 0; i+len(sub) <= len(b); i++ {
-		ok := true
-		for j := 0; j < len(sub); j++ {
-			if b[i+j] != sub[j] {
-				ok = false
-				break
-			}
-		}
-		if ok {
-			return true
-		}
-	}
-	return false
 }

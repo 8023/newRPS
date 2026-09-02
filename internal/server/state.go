@@ -180,15 +180,16 @@ func (p *PlayerState) removePlayerSecret(secret string) {
 	p.PlayerSecrets = out
 }
 
-// SeatOccupant is a human player snapshot in a battle seat (nil = empty).
-type SeatOccupant interface {
-	GetID() string
-}
-
-// HumanSeat wraps a public player snapshot in a seat.
+// HumanSeat wraps a public player snapshot in a seat. It remains a concrete
+// wrapper so existing seat construction and GetID call sites keep their shape.
 type HumanSeat struct {
 	Player types.PublicPlayer
 }
+
+// SeatOccupant is a human player snapshot in a battle seat (nil = empty).
+// There is only one occupant kind, so keep the name as a concrete alias rather
+// than carrying a one-implementation interface through every room map.
+type SeatOccupant = *HumanSeat
 
 func (h *HumanSeat) GetID() string { return h.Player.ID }
 

@@ -903,7 +903,7 @@ func (s *Server) createPlayer(name, genderID, token string, identityPlayerID, id
 				Title:          title,
 				TitleSegmentID: titleSegID,
 			},
-			GameStats: freshGameStats(),
+			GameStats: types.GameStats{},
 		},
 		Token:      token,
 		Persistent: persistent,

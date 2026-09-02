@@ -207,7 +207,7 @@ func (s *Server) onRoomCreate(client *Client, env wsEnvelope) {
 		Choices: map[types.SeatKey]types.Move{}, PunishedPlayerIDs: []string{}, Proofs: []types.PunishmentProof{},
 		Score:        map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0},
 		SeatedScore:  map[types.SeatKey]int{types.SeatA: 0, types.SeatB: 0},
-		SeatStats:    map[types.SeatKey]types.SeatStats{types.SeatA: emptySeatStats(), types.SeatB: emptySeatStats()},
+		SeatStats:    map[types.SeatKey]types.SeatStats{types.SeatA: {}, types.SeatB: {}},
 		RoundHistory: []types.RoundHistoryItem{}, LockedSeatIDs: map[string]struct{}{},
 		DisconnectForfeits: map[string]DisconnectForfeit{}, CreatedAt: nowMs(),
 		// PunishmentTaskProgress 零值即 nil map，按玩家 ID 懒初始化，随房间存活期累积，销毁即释放。
@@ -461,7 +461,7 @@ func (s *Server) onRoomSit(client *Client, env wsEnvelope) {
 	room.Ready[p.Seat] = false
 	delete(room.Choices, p.Seat)
 	room.SeatedScore[p.Seat] = 0
-	room.SeatStats[p.Seat] = emptySeatStats()
+	room.SeatStats[p.Seat] = types.SeatStats{}
 	s.roomNotice(room, fmt.Sprintf("%s 坐到战斗席 %s。", playerShortName(player), p.Seat))
 	s.notifySeatFilled(room, p.Seat)
 	if room.Settings.GameID == types.GameOthello && room.Seats[types.SeatA] != nil && room.Seats[types.SeatB] != nil && room.Phase != types.PhaseChoosing {

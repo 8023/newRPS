@@ -29,10 +29,6 @@ export function setPushPreferencesCache(next: PushPreferences) {
   prefs = next;
 }
 
-export function getPushPreferencesCache() {
-  return prefs;
-}
-
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
   if (typeof Notification === "undefined") return "denied";
   if (Notification.permission !== "default") return Notification.permission;
